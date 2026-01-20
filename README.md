@@ -1,6 +1,6 @@
-# 🧠 HIVE-MIND V3 : L'IA Sociale & Autonome pour WhatsApp
+# 🧠 HIVE-MIND V1 : L'IA Sociale & Autonome pour WhatsApp
 
-![Version](https://img.shields.io/badge/Version-3.0.0-blue.svg)
+![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)
 ![Type](https://img.shields.io/badge/Status-Agentic_Level_5-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
