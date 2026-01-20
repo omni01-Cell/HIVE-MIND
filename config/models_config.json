@@ -1,0 +1,573 @@
+{
+    "reglages_generaux": {
+        "familles_prioritaires": [
+            "gemini",
+            "openai",
+            "mistral",
+            "anthropic",
+            "kimi",
+            "github",
+            "groq"
+        ],
+        "mode_proactif": true,
+        "embeddings": {
+            "primary": {
+                "provider": "gemini",
+                "model": "gemini-embedding-001",
+                "dimensions": 1024,
+                "task_types": true
+            },
+            "fallback": {
+                "provider": "openai",
+                "model": "text-embedding-3-small",
+                "dimensions": 1024
+            }
+        },
+        "quota_safety": {
+            "comment": "Marges de sécurité pour le routeur Zero-429. Valeurs = pourcentage de marge.",
+            "rpm_margin": 0.20,
+            "tpm_margin": 0.10,
+            "rpd_margin": 0.05,
+            "emergency_rpm_margin": 0.05,
+            "emergency_tpm_margin": 0.05,
+            "emergency_rpd_margin": 0.02
+        }
+    },
+    "familles": {
+        "anthropic": {
+            "nom_affiche": "Anthropic Claude",
+            "modeles": [
+                {
+                    "id": "claude-4-5-opus-20251124",
+                    "description": "Le sommet du raisonnement et de l'autonomie agentique.",
+                    "types": [
+                        "chat",
+                        "vision",
+                        "computer_use",
+                        "reasoning"
+                    ]
+                },
+                {
+                    "id": "claude-4-5-sonnet-20250929",
+                    "description": "Équilibre parfait pour le codage et les tâches complexes.",
+                    "types": [
+                        "chat",
+                        "agent"
+                    ],
+                    "quota": {
+                        "rpm": 5,
+                        "tpm": 100000,
+                        "rpd": 500
+                    }
+                }
+            ]
+        },
+        "gemini": {
+            "nom_affiche": "Google Gemini",
+            "modeles": [
+                {
+                    "id": "gemini-3-flash-preview",
+                    "description": "Modèle Flagship ultra-rapide (2026 Standard).",
+                    "types": [
+                        "agentic",
+                        "chat",
+                        "reasoning",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 5,
+                        "tpm": 250000,
+                        "rpd": 20
+                    }
+                },
+                {
+                    "id": "gemini-2.5-flash",
+                    "description": "Excellente alternative rapide et multimodale.",
+                    "types": [
+                        "chat",
+                        "vision",
+                        "live_api"
+                    ],
+                    "quota": {
+                        "rpm": 5,
+                        "tpm": 250000,
+                        "rpd": 20
+                    }
+                },
+                {
+                    "id": "gemini-2.5-flash-native-audio-preview-12-2025",
+                    "description": "Audio Natif HD via Live API. 30 voix HD, détection émotion, tool calling audio.",
+                    "types": [
+                        "live_api",
+                        "audio_native",
+                        "tts",
+                        "transcription",
+                        "realtime"
+                    ],
+                    "voices": [
+                        "Zephyr",
+                        "Puck",
+                        "Kore",
+                        "Achernar",
+                        "Achird",
+                        "Algenib"
+                    ],
+                    "quota": {
+                        "rpm": 9999,
+                        "tpm": 1000000,
+                        "rpd": 9999
+                    }
+                },
+                {
+                    "id": "gemini-2.5-flash-lite",
+                    "description": "Version légère pour tâches simples, quota généreux.",
+                    "types": [
+                        "chat",
+                        "fast"
+                    ],
+                    "quota": {
+                        "rpm": 10,
+                        "tpm": 250000,
+                        "rpd": 20
+                    }
+                },
+                {
+                    "id": "gemini-embedding-001",
+                    "description": "Modèle d'embedding (Texte vers Vecteur).",
+                    "types": [
+                        "embedding"
+                    ],
+                    "quota": {
+                        "rpm": 100,
+                        "tpm": 30000,
+                        "rpd": 1000
+                    }
+                },
+                {
+                    "id": "gemma-3-12b-it",
+                    "description": "Modèle ouvert puissant.",
+                    "types": [
+                        "chat",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 15000,
+                        "rpd": 14400
+                    }
+                },
+                {
+                    "id": "gemini-2.5-flash-tts",
+                    "description": "TTS haute performance avec contrôle par prompt naturel (30 voix, <300ms latence).",
+                    "types": [
+                        "tts"
+                    ],
+                    "quota": {
+                        "rpm": 100,
+                        "tpm": 500000,
+                        "rpd": 1000
+                    }
+                },
+                {
+                    "id": "gemini-2.5-flash-lite-preview-tts",
+                    "description": "TTS ultra-rapide pour applications temps réel.",
+                    "types": [
+                        "tts"
+                    ],
+                    "quota": {
+                        "rpm": 200,
+                        "tpm": 1000000,
+                        "rpd": 2000
+                    }
+                }
+            ]
+        },
+        "openai": {
+            "nom_affiche": "OpenAI ChatGPT",
+            "modeles": [
+                {
+                    "id": "gpt-5.2",
+                    "description": "Modèle flagship : planification et raisonnement pur.",
+                    "types": [
+                        "chat",
+                        "vision",
+                        "reasoning",
+                        "function_calling"
+                    ],
+                    "quota": {
+                        "rpm": 60,
+                        "tpm": 150000,
+                        "rpd": 10000
+                    }
+                },
+                {
+                    "id": "gpt-5-mini",
+                    "description": "Intelligence de pointe optimisée pour la rapidité.",
+                    "types": [
+                        "chat",
+                        "reasoning"
+                    ]
+                }
+            ]
+        },
+        "mistral": {
+            "nom_affiche": "Mistral AI",
+            "modeles": [
+                {
+                    "id": "mistral-large-latest",
+                    "description": "Modèle large très performant (Flagship).",
+                    "types": [
+                        "chat",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 5,
+                        "tpm": 500000,
+                        "rpd": 1000
+                    }
+                },
+                {
+                    "id": "codestral-latest",
+                    "description": "Spécialiste en code (Coding).",
+                    "types": [
+                        "chat",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 10,
+                        "tpm": 200000,
+                        "rpd": 2000
+                    }
+                },
+                {
+                    "id": "mistral-small-latest",
+                    "description": "Modèle rapide et performant (Small).",
+                    "types": [
+                        "chat"
+                    ],
+                    "quota": {
+                        "rpm": 10,
+                        "tpm": 500000,
+                        "rpd": 1000
+                    }
+                },
+                {
+                    "id": "open-mistral-nemo",
+                    "description": "Modèle 'Open' très efficace (Free Tier friendly).",
+                    "types": [
+                        "chat"
+                    ],
+                    "quota": {
+                        "rpm": 60,
+                        "tpm": 1000000,
+                        "rpd": 10000
+                    }
+                }
+            ]
+        },
+        "kimi": {
+            "nom_affiche": "Kimi Code (Coding Agents)",
+            "base_url": "https://api.kimi.com/coding/v1",
+            "modeles": [
+                {
+                    "id": "kimi-for-coding",
+                    "description": "Kimi K2 Turbo: Spécialiste Agentique, 256k Context, Raisonnement Longue Durée.",
+                    "types": [
+                        "chat",
+                        "coding",
+                        "agentic",
+                        "reasoning"
+                    ],
+                    "quota": {
+                        "rpm": 50,
+                        "tpm": 1000000,
+                        "rpd": 5000
+                    }
+                }
+            ]
+        },
+        "moonshot": {
+            "nom_affiche": "Moonshot AI",
+            "base_url": "https://api.moonshot.ai/v1",
+            "modeles": [
+                {
+                    "id": "moonshot-v1-8k",
+                    "description": "Modèle standard avec 8K contexte.",
+                    "types": [
+                        "chat"
+                    ],
+                    "quota": {
+                        "rpm": 3,
+                        "tpm": 32000,
+                        "rpd": 200
+                    }
+                },
+                {
+                    "id": "moonshot-v1-32k",
+                    "description": "Modèle avec 32K contexte pour documents longs.",
+                    "types": [
+                        "chat",
+                        "long_context"
+                    ],
+                    "quota": {
+                        "rpm": 3,
+                        "tpm": 32000,
+                        "rpd": 200
+                    }
+                },
+                {
+                    "id": "moonshot-v1-128k",
+                    "description": "Modèle avec 128K contexte ultra-long.",
+                    "types": [
+                        "chat",
+                        "long_context"
+                    ],
+                    "quota": {
+                        "rpm": 3,
+                        "tpm": 128000,
+                        "rpd": 200
+                    }
+                }
+            ]
+        },
+        "github": {
+            "nom_affiche": "GitHub Models (Free Tier)",
+            "base_url": "https://models.inference.ai.azure.com",
+            "modeles": [
+                {
+                    "id": "Phi-4",
+                    "description": "Microsoft Phi-4 (Logic / Code)",
+                    "types": [
+                        "chat",
+                        "coding",
+                        "reasoning"
+                    ],
+                    "quota": {
+                        "rpm": 15,
+                        "tpm": 128000,
+                        "rpd": 150
+                    }
+                },
+                {
+                    "id": "Llama-3.3-70B-Instruct",
+                    "description": "Meta Llama 3.3 70B (Generalist)",
+                    "types": [
+                        "chat",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 10,
+                        "tpm": 8000,
+                        "rpd": 50
+                    }
+                },
+                {
+                    "id": "DeepSeek-V3",
+                    "description": "DeepSeek V3 (Reasoning)",
+                    "types": [
+                        "chat",
+                        "reasoning"
+                    ],
+                    "quota": {
+                        "rpm": 10,
+                        "tpm": 8000,
+                        "rpd": 50
+                    }
+                },
+                {
+                    "id": "DeepSeek-R1",
+                    "description": "DeepSeek R1 (Advanced Reasoning)",
+                    "types": [
+                        "chat",
+                        "reasoning"
+                    ],
+                    "quota": {
+                        "rpm": 10,
+                        "tpm": 8000,
+                        "rpd": 50
+                    }
+                },
+                {
+                    "id": "Cohere-Command-R",
+                    "description": "Cohere Command R (RAG/Cit.)",
+                    "types": [
+                        "chat"
+                    ],
+                    "quota": {
+                        "rpm": 15,
+                        "tpm": 128000,
+                        "rpd": 150
+                    }
+                },
+                {
+                    "id": "gpt-4o-mini",
+                    "description": "GPT-4o Mini (OpenAI via GitHub)",
+                    "types": [
+                        "chat"
+                    ],
+                    "quota": {
+                        "rpm": 15,
+                        "tpm": 130000,
+                        "rpd": 150
+                    }
+                }
+            ]
+        },
+        "groq": {
+            "nom_affiche": "Groq Cloud (LPU)",
+            "base_url": "https://api.groq.com/openai/v1",
+            "modeles": [
+                {
+                    "id": "llama-3.3-70b-versatile",
+                    "description": "Llama 3.3 70B (Fast & Smart)",
+                    "types": [
+                        "chat",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 15000,
+                        "rpd": 14400
+                    }
+                },
+                {
+                    "id": "llama-3.1-8b-instant",
+                    "description": "Llama 3.1 8B (Ultra Fast)",
+                    "types": [
+                        "chat"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 15000,
+                        "rpd": 14400
+                    }
+                },
+                {
+                    "id": "mixtral-8x7b-32768",
+                    "description": "Mixtral 8x7B (Long Context)",
+                    "types": [
+                        "chat",
+                        "long_context"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 15000,
+                        "rpd": 14400
+                    }
+                },
+                {
+                    "id": "gemma2-9b-it",
+                    "description": "Google Gemma 2 9B",
+                    "types": [
+                        "chat"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 15000,
+                        "rpd": 14400
+                    }
+                }
+            ]
+        },
+        "huggingface": {
+            "provider": "huggingface",
+            "description": "Modèles open-source via Hugging Face Router",
+            "models": [
+                {
+                    "id": "meta-llama/Meta-Llama-3-8B-Instruct",
+                    "description": "Llama 3 8B (Bon équilibre)",
+                    "types": [
+                        "chat"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 100000,
+                        "rpd": 1000
+                    }
+                },
+                {
+                    "id": "moonshotai/Kimi-K2-Instruct-0905",
+                    "description": "Kimi K2 (Découverte)",
+                    "type": "chat",
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 100000,
+                        "rpd": 1000
+                    }
+                }
+            ]
+        }
+    },
+    "voice_provider": {
+        "tts_models": [
+            {
+                "provider": "minimax",
+                "model": "speech-02-hd",
+                "priority": 1,
+                "voice_id": "erina-clone"
+            },
+            {
+                "provider": "gemini",
+                "model": "gemini-2.5-flash-tts",
+                "priority": 2,
+                "voice": "Aoede"
+            },
+            {
+                "provider": "gemini",
+                "model": "gemini-2.5-flash-lite-preview-tts",
+                "priority": 3,
+                "voice": "Aoede"
+            },
+            {
+                "provider": "gtts",
+                "model": "gtts",
+                "priority": 99
+            }
+        ],
+        "stt_models": [
+            {
+                "provider": "groq",
+                "model": "whisper-large-v3",
+                "priority": 1,
+                "language": "fr"
+            }
+        ],
+        "gemini_voices": [
+            "Aoede",
+            "Zephyr",
+            "Callirhoe",
+            "Autonoe",
+            "Despina",
+            "Erinome",
+            "Leda",
+            "Kore",
+            "Vindemiatrix",
+            "Charon",
+            "Puck",
+            "Fenrir",
+            "Orus",
+            "Enceladus",
+            "Iapetus",
+            "Umbriel",
+            "Zubenelgenubi",
+            "Achernar",
+            "Algieba",
+            "Algenib",
+            "Rasalgethi",
+            "Laomedeia",
+            "Alnilam",
+            "Schedar",
+            "Gacrux",
+            "Pulcherrima",
+            "Achird",
+            "Sadachbia",
+            "Sadaltager",
+            "Sulafar"
+        ],
+        "minimax_config": {
+            "speed": 1.0,
+            "pitch": 0,
+            "vol": 1.0
+        }
+    }
+}

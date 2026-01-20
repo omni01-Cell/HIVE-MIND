@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Session & Auth
+auth_info/
+session/
+
+# Environment
+.env
+
+# Generated files
+logs/
+temp/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
