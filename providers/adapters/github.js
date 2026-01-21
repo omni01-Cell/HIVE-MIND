@@ -32,7 +32,11 @@ export default {
             }
         }
 
-        const response = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+        // Utiliser le base_url de la config ou le défaut d'Azure
+        const baseUrl = options.familyConfig?.base_url || 'https://models.inference.ai.azure.com';
+        const url = baseUrl.endsWith('/') ? `${baseUrl}chat/completions` : `${baseUrl}/chat/completions`;
+
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,

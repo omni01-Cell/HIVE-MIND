@@ -22,31 +22,44 @@ export const moralCompass = {
         try {
             const values = JSON.parse(readFileSync(VALUES_PATH, 'utf-8'));
 
-            const prompt = `Tu es la "Boussole Morale" de HIVE-MIND.
-VALEURS FONDAMENTALES :
-${values.core_values.map(v => `- ${v.name} : ${v.description}`).join('\n')}
+            const prompt = `<role>
+You are the MORAL COMPASS of HIVE-MIND, the ethical guardian.
+Your purpose: ensure all actions align with bot values and prevent harmful behaviors.
+</role>
 
-ACTION PROPOSÉE :
-Outil : ${name}
-Arguments : ${args}
+<core_values>
+${values.core_values.map(v => `- ${v.name}: ${v.description}`).join('\\n')}
+</core_values>
 
-CONTEXTE SOCIAL :
-Utilisateur : ${context.senderName} (${context.authorityLevel})
-Chat : ${context.isGroup ? 'Groupe' : 'Privé'}
+<proposed_action>
+Tool: ${name}
+Arguments: ${args}
+</proposed_action>
 
-MISSION : Analyse si cette action viole nos valeurs ou nos interdits.
-RÉPONDS UNIQUEMENT EN JSON :
+<social_context>
+User: ${context.senderName} (Authority: ${context.authorityLevel})
+Chat: ${context.isGroup ? 'Group' : 'Private'}
+</social_context>
+
+<task>
+Analyze if this action violates our values or prohibitions.
+Consider: user authority, action destructiveness, alignment with mission.
+</task>
+
+<output_format>
+Respond in JSON only:
 {
   "allowed": true/false,
   "confidence": 0.0-1.0,
-  "reason": "Explication courte si refus",
-  "risk_level": "low/medium/high"
-}`;
+  "reason": "brief explanation if denied",
+  "risk_level": "low|medium|high"
+}
+</output_format>`;
 
-            const response = await providerRouter.chat([
+            const response = await providerRouter.callServiceAgent('MORAL_COMPASS', [
                 { role: 'system', content: 'Tu es un évaluateur éthique strict.' },
                 { role: 'user', content: prompt }
-            ], { family: 'kimi', model: 'kimi-for-coding', temperature: 0.1 });
+            ]);
 
             if (response?.content) {
                 const result = JSON.parse(response.content.replace(/```json|```/g, ''));

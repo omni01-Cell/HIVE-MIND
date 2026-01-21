@@ -1,18 +1,16 @@
 // plugins/web_search/index.js
-import fs from 'fs';
-import path from 'path';
 
 export default {
     name: 'web_search',
-    description: 'Effectue des recherches Google pour obtenir des informations à jour.',
-    version: '1.0.0',
+    description: 'Effectue des recherches web via DuckDuckGo pour obtenir des informations à jour.',
+    version: '2.0.0',
     enabled: true,
 
     toolDefinition: {
         type: 'function',
         function: {
             name: 'search_web',
-            description: 'Effectue une recherche sur Internet. À utiliser quand tu ne connais pas la réponse ou pour des informations d\'actualité (météo, sport, news).',
+            description: 'Accède au Web en temps réel pour vérifier des faits, chercher des actualités, la météo, des définitions, ou des infos post-2023.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -39,62 +37,13 @@ export default {
             // transport.sendPresenceUpdate(chatId, 'composing'); 
         }
 
-        console.log(`[WebSearch] Recherche: "${query}"`);
+        console.log(`[WebSearch] 🦆 Recherche DuckDuckGo: "${query}"`);
 
-        // 1. Tenter Google Search (Prioritaire)
-        try {
-            const credPath = path.join(process.cwd(), 'config', 'credentials.json');
-            let apiKey, cseId;
-
-            if (fs.existsSync(credPath)) {
-                const creds = JSON.parse(fs.readFileSync(credPath, 'utf-8'));
-                const apiKeyKey = creds.google_search?.apiKey;
-                const cseIdKey = creds.google_search?.cseId;
-                apiKey = process.env[apiKeyKey] || process.env.GOOGLE_SEARCH_API_KEY || apiKeyKey;
-                cseId = process.env[cseIdKey] || process.env.GOOGLE_SEARCH_CSE_ID || cseIdKey;
-            } else {
-                apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-                cseId = process.env.GOOGLE_SEARCH_CSE_ID;
-            }
-
-            if (!apiKey || !cseId || apiKey.includes('VOTRE_')) {
-                throw new Error("Clés Google manquantes (passage au fallback)");
-            }
-
-            const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cseId}&q=${encodeURIComponent(query)}&num=${Math.min(num_results, 5)}`;
-            const response = await fetch(url);
-
-            if (!response.ok) {
-                if (response.status === 429 || response.status === 403) {
-                    console.warn(`[WebSearch] Quota Google atteint (${response.status}), bascule sur DuckDuckGo.`);
-                    throw new Error("Quota Google");
-                }
-                const errText = await response.text();
-                throw new Error(`Google API Error: ${response.status} - ${errText}`);
-            }
-
-            const data = await response.json();
-            if (!data.items || data.items.length === 0) {
-                return { success: true, message: `Aucun résultat Google pour "${query}".` };
-            }
-
-            const results = data.items.map(item => {
-                return `Titre: ${item.title}\nLien: ${item.link}\nExtrait: ${item.snippet}\n---`;
-            }).join('\n');
-
-            return {
-                success: true,
-                message: `🔎 Résultats Google pour "${query}":\n\n${results}`
-            };
-
-        } catch (error) {
-            console.warn(`[WebSearch] Echec Google (${error.message}). Tentative DuckDuckGo...`);
-            return await this.searchDuckDuckGo(query, num_results);
-        }
+        return await this.searchDuckDuckGo(query, num_results);
     },
 
     /**
-     * Fallback gratuit via DuckDuckGo HTML
+     * Recherche via DuckDuckGo HTML (scraping)
      */
     async searchDuckDuckGo(query, num_results) {
         try {
@@ -105,7 +54,12 @@ export default {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Upgrade-Insecure-Requests": "1",
+                    "Origin": "https://html.duckduckgo.com",
+                    "Referer": "https://html.duckduckgo.com/"
                 },
                 body: body
             });
@@ -142,10 +96,10 @@ export default {
             };
 
         } catch (e) {
-            console.error('[WebSearch] Fallback DDG échoué:', e);
+            console.error('[WebSearch] ❌ Erreur DuckDuckGo:', e.message);
             return {
                 success: false,
-                message: "Désolé, la recherche a échoué sur Google et DuckDuckGo.",
+                message: `Erreur technique lors de la recherche web (${e.message}). Essaye de reformuler ou demande-moi autre chose.`,
                 gracefulDegradation: true
             };
         }

@@ -25,24 +25,39 @@ export class DeepResearchAgent {
         console.log(`[DeepResearch] 🚀 Démarrage session pour: "${query}"`);
 
         // 1. Initialiser le System Prompt spécialisé
-        const systemPrompt = `
-Tu es "Kimi Deep Search", un agent d'élite spécialisé dans l'investigation exhaustive.
-TON OBJECTIF : Produire un rapport détaillé (équivalent 8-15 pages) sur le sujet demandé, en ne te basant QUE sur des faits vérifiés.
+        const systemPrompt = `<role>
+You are "Kimi Deep Search", an elite investigative research agent.
+Your goal: produce a detailed report (equivalent to 8-15 pages) on the requested subject, based ONLY on verified facts.
+</role>
 
-### RÈGLES CRITIQUES :
-1. **DOUTE SYSTÉMATIQUE** : Ne réponds jamais de mémoire immédiate. Vérifie tout.
-2. **ITÉRATION** : Ta méthode est : Penser -> Chercher -> Lire -> Penser -> Chercher -> ...
-3. **CROISEMENT** : Ne valide une info que si tu as 3 sources distinctes.
-4. **FORMAT** : Tu dois produire du Markdown riche (Titres, Listes, Tableaux).
+<context>
+This is a deep research session where thoroughness beats speed.
+Users expect comprehensive, multi-sourced, factual reports with proper citations.
+</context>
 
-### MODÈLE DE PENSÉE (Thinking Process)
-Avant chaque action, utilise la balise <thought> pour planifier :
+<critical_rules>
+1. SYSTEMATIC VERIFICATION: Always verify information through searches. Use your search tool for every claim.
+2. ITERATIVE METHOD: Think → Search → Read → Think → Search → Repeat
+3. CROSS-REFERENCING: Validate each fact with 3 distinct sources minimum
+4. OUTPUT FORMAT: Rich Markdown (Headings, Lists, Tables, Citations)
+</critical_rules>
+
+<thinking_process>
+Before each action, use <thought> tags to plan:
 <thought>
-- Ce que je sais déjà : [Résumé]
-- Ce qu'il me manque : [Lacunes]
-- Stratégie : [Prochaine recherche spécifique]
+- What I know so far: [Summary]
+- What I'm missing: [Gaps]
+- Strategy: [Next specific search]
 </thought>
-        `;
+</thinking_process>
+
+<output_constraints>
+- Length: Comprehensive report (8-15 pages equivalent)
+- Format: Markdown with proper structure
+- Sources: Cite every major claim
+- Style: Factual, objective, academic tone
+</output_constraints>
+`;
 
         this.history = [
             { role: 'system', content: systemPrompt },
@@ -55,7 +70,7 @@ Avant chaque action, utilise la balise <thought> pour planifier :
 
         // Outils disponibles pour cet agent (Web Search uniquement pour l'instant)
         // On récupère l'outil web_search du plugin web_search
-        const { pluginLoader } = await import('../../core/loader.js');
+        const { pluginLoader } = await import('../loader.js');
         const webSearchPlugin = pluginLoader.get('web_search');
 
         // On construit la définition de l'outil pour l'IA
@@ -156,7 +171,8 @@ Avant chaque action, utilise la balise <thought> pour planifier :
         }
 
         // Nettoyage des balises <thought> du rapport final
-        finalReport = finalReport.replace(/<thought>[\s\S]*?<\/thought>/g, '').trim();
+        const thoughtRegex = /<(think|thought|thinking)>[\s\S]*?<\/\1>/gi;
+        finalReport = finalReport.replace(thoughtRegex, '').trim();
 
         return finalReport;
     }

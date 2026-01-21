@@ -34,22 +34,44 @@ export const dreamService = {
                 return;
             }
 
-            const prompt = `Tu es le "Subconscient" de HIVE-MIND.
-Voici les logs d'erreurs et d'actions des dernières 24h :
-${recentErrors.map(e => `- Tool: ${e.tool}, Error: ${e.error}`).join('\n')}
+            const prompt = `<role>
+You are the SUBCONSCIOUS of HIVE-MIND, the nightly reflection process that learns from mistakes.
+Your analysis directly improves tomorrow's performance by identifying patterns in failures.
+</role>
 
-Leçons actuelles :
+<context>
+This is HIVE-MIND's self-improvement loop. Every night, you analyze today's errors to extract actionable lessons.
+These lessons become permanent knowledge that prevents future mistakes.
+</context>
+
+<error_logs>
+${recentErrors.map(e => `- Tool: ${e.tool}, Error: ${e.error}`).join('\\n')}
+</error_logs>
+
+<current_lessons>
 ${currentLessons}
+</current_lessons>
 
-MISSION : Étudie ces erreurs. Identifie les patterns récurrents (mauvais paramètres, mauvais outils choisis, limitations techniques).
-RÉDIGE une liste de 3 à 5 leçons CRITIQUES et ACTIONNABLES pour ne pas répéter ces erreurs demain.
+<task>
+Analyze error patterns to extract actionable lessons.
+Focus on: recurring issues, wrong tool selections, parameter mistakes, technical limitations.
+Create 3-5 CRITICAL, ACTIONABLE lessons to prevent repetition.
+</task>
 
-Format : Markdown pur, liste à puces, sois très direct.`;
+<output_constraints>
+- Format: Markdown bullet points ONLY
+- Length: Maximum 10 bullet points total
+- Style: Concise, imperative (e.g., "Avoid X when Y", "Always check Z before...")
+- NO verbose explanations, NO introductions, NO conclusions
+- Focus ONLY on specific, actionable lessons
+</output_constraints>
 
-            const response = await providerRouter.chat([
+Lessons:`;
+
+            const response = await providerRouter.callServiceAgent('DREAM_SERVICE', [
                 { role: 'system', content: 'Tu es le module de réflexion interne du bot.' },
                 { role: 'user', content: prompt }
-            ], { family: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.1 });
+            ]);
 
             if (response?.content) {
                 const newLessons = `# Lessons Learned (Updated: ${new Date().toLocaleDateString()})\n\n${response.content}`;

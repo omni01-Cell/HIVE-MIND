@@ -36,10 +36,173 @@
             "comment": "Stratégie de traitement audio: natif (Gemini Live) vs cascade (STT->LLM->TTS)",
             "prefer_native": true,
             "fallback_to_cascade": true,
-            "native_for_groups": false,
+            "native_for_groups": true,
             "preserve_emotions": true,
             "max_native_duration_seconds": 60,
             "native_voice": "Aoede"
+        },
+        "service_agents": {
+            "EXECUTOR": {
+                "family": "kimi",
+                "model": "kimi-for-coding",
+                "fallback": "qwen/qwen3-32b",
+                "temperature": 0.7
+            },
+            "CRITIC": {
+                "family": "mistral",
+                "model": "codestral-latest",
+                "fallback": "groq/gpt-oss-120b",
+                "temperature": 0.2
+            },
+            "OBSERVER": {
+                "family": "groq",
+                "model": "qwen/qwen3-32b",
+                "fallback": "groq/llama-3.1-8b-instant",
+                "temperature": 0.1
+            },
+            "PLANNER": {
+                "family": "kimi",
+                "model": "kimi-for-coding",
+                "fallback": "mistral-large-latest",
+                "temperature": 0.5
+            },
+            "DREAM_SERVICE": {
+                "family": "groq",
+                "model": "qwen/qwen3-32b",
+                "fallback": "mistral-large-latest",
+                "temperature": 0.8
+            },
+            "MORAL_COMPASS": {
+                "family": "groq",
+                "model": "openai/gpt-oss-120b",
+                "fallback": "kimi-for-coding",
+                "temperature": 0.3
+            },
+            "ACTION_EVALUATOR": {
+                "family": "groq",
+                "model": "qwen/qwen3-32b",
+                "fallback": "openai/gpt-oss-120b",
+                "temperature": 0.4
+            },
+            "CLASSIFIER": {
+                "family": "groq",
+                "model": "llama-3.1-8b-instant",
+                "fallback": "qwen/qwen3-32b",
+                "temperature": 0
+            },
+            "TAG_SERVICE": {
+                "family": "groq",
+                "model": "llama-3.1-8b-instant",
+                "fallback": "qwen/qwen3-32b",
+                "temperature": 0
+            },
+            "STT_SERVICE": {
+                "family": "groq",
+                "model": "whisper-large-v3-turbo",
+                "fallback": "whisper-large-v3",
+                "temperature": 0
+            }
+        },
+        "chat_agents": {
+            "categories": {
+                "CODING": {
+                    "primary": "kimi-for-coding",
+                    "fallback": "codestral-latest",
+                    "description": "Code complexe, algorithmes, debugging"
+                },
+                "REASONING": {
+                    "primary": "groq/gpt-oss-120b",
+                    "fallback": "qwen/qwen3-32b",
+                    "description": "Logique, mathématiques, raisonnement profond"
+                },
+                "FAST_CHAT": {
+                    "primary": "gemini-2.5-flash-lite",
+                    "fallback": "qwen/qwen3-32b",
+                    "description": "Salutations, questions simples, chat rapide"
+                },
+                "MULTIMODAL": {
+                    "primary": "microsoft/Phi-4-multimodal-instruct",
+                    "fallback": "gemini-2.5-flash",
+                    "description": "Texte + Image + Audio combinés"
+                },
+                "VISION": {
+                    "primary": "gemini-2.5-flash",
+                    "fallback": "microsoft/Phi-4-multimodal-instruct",
+                    "description": "Analyse d'images, OCR, génération visuelle"
+                },
+                "AGENTIC": {
+                    "primary": "kimi-for-coding",
+                    "fallback": "mistral-large-latest",
+                    "description": "Tâches multi-étapes, planification autonome"
+                },
+                "CREATIVITY": {
+                    "primary": "qwen/qwen3-32b",
+                    "fallback": "gemini-2.5-flash-lite",
+                    "description": "Rédaction créative, storytelling, poésie"
+                }
+            }
+        },
+        "model_capabilities": {
+            "kimi-for-coding": {
+                "service_roles": [
+                    "EXECUTOR",
+                    "PLANNER"
+                ],
+                "chat_categories": [
+                    "CODING",
+                    "AGENTIC"
+                ],
+                "primary_strength": "256K context + quotas généreux (50 RPM)"
+            },
+            "qwen/qwen3-32b": {
+                "service_roles": [
+                    "OBSERVER",
+                    "DREAM_SERVICE",
+                    "ACTION_EVALUATOR"
+                ],
+                "chat_categories": [
+                    "REASONING",
+                    "FAST_CHAT",
+                    "CREATIVITY"
+                ],
+                "primary_strength": "Raisonnement rapide + 60 RPM"
+            },
+            "codestral-latest": {
+                "service_roles": [
+                    "CRITIC"
+                ],
+                "chat_categories": [
+                    "CODING"
+                ],
+                "primary_strength": "Expert code + analyse risques"
+            },
+            "groq/gpt-oss-120b": {
+                "service_roles": [
+                    "MORAL_COMPASS"
+                ],
+                "chat_categories": [
+                    "REASONING"
+                ],
+                "primary_strength": "Raisonnement éthique de pointe"
+            },
+            "microsoft/Phi-4-multimodal-instruct": {
+                "service_roles": [],
+                "chat_categories": [
+                    "MULTIMODAL",
+                    "VISION"
+                ],
+                "primary_strength": "Trimodal 128K (texte+vision+audio)"
+            },
+            "groq/llama-3.1-8b-instant": {
+                "service_roles": [
+                    "CLASSIFIER",
+                    "TAG_SERVICE"
+                ],
+                "chat_categories": [
+                    "FAST_CHAT"
+                ],
+                "primary_strength": "Ultra-rapide pour tâches simples"
+            }
         }
     },
     "familles": {
@@ -138,7 +301,11 @@
                         "rpm": 10,
                         "tpm": 250000,
                         "rpd": 20
-                    }
+                    },
+                    "specialties": [
+                        "FAST_RESPONDER",
+                        "CLASSIFIER"
+                    ]
                 },
                 {
                     "id": "gemini-embedding-001",
@@ -345,6 +512,26 @@
                     }
                 },
                 {
+                    "id": "microsoft/Phi-4-multimodal-instruct",
+                    "description": "Microsoft Phi-4 Multimodal (5.6B SLM): Vision + Audio + Texte unifiés. 128K context, OCR, ASR, raisonnement croisé multimodal. Optimisé edge/faible latence.",
+                    "types": [
+                        "chat",
+                        "coding",
+                        "reasoning",
+                        "vision",
+                        "audio",
+                        "transcription",
+                        "long_context",
+                        "multimodal",
+                        "edge"
+                    ],
+                    "quota": {
+                        "rpm": 15,
+                        "tpm": 130000,
+                        "rpd": 150
+                    }
+                },
+                {
                     "id": "Llama-3.3-70B-Instruct",
                     "description": "Meta Llama 3.3 70B (Generalist)",
                     "types": [
@@ -450,13 +637,116 @@
                         "tpm": 15000,
                         "rpd": 14400
                     }
+                },
+                {
+                    "id": "groq/compound",
+                    "description": "Groq Compound (Agentic): Web Search, Python, Browsing, Wolfram.",
+                    "types": [
+                        "chat",
+                        "agentic",
+                        "search",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 70000,
+                        "rpd": 250
+                    }
+                },
+                {
+                    "id": "groq/compound-mini",
+                    "description": "Groq Compound Mini: Rapide, Mono-tool (Search/Code).",
+                    "types": [
+                        "chat",
+                        "agentic",
+                        "fast"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 70000,
+                        "rpd": 250
+                    }
+                },
+                {
+                    "id": "openai/gpt-oss-120b",
+                    "description": "OpenAI GPT-OSS 120B: Frontier-grade agentic, advanced reasoning, 131K context.",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic",
+                        "coding",
+                        "math"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "rpd": 1000,
+                        "tpm": 8000,
+                        "tpd": 200000
+                    }
+                },
+                {
+                    "id": "openai/gpt-oss-20b",
+                    "description": "OpenAI GPT-OSS 20B: Balanced reasoning, ultra-fast inference.",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "fast",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "rpd": 1000,
+                        "tpm": 8000,
+                        "tpd": 200000
+                    }
+                },
+                {
+                    "id": "qwen/qwen3-32b",
+                    "description": "Qwen 3 32B: Modèle de raisonnement rapide avec groq speed.",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "fast",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 60,
+                        "tpm": 6000,
+                        "rpd": 1000
+                    }
+                },
+                {
+                    "id": "whisper-large-v3",
+                    "description": "Whisper Large V3: Transcription audio précise.",
+                    "types": [
+                        "transcription",
+                        "stt"
+                    ],
+                    "quota": {
+                        "rpm": 20,
+                        "rpd": 2000
+                    }
+                },
+                {
+                    "id": "whisper-large-v3-turbo",
+                    "description": "Whisper Large V3 Turbo: Transcription audio ultra-rapide.",
+                    "types": [
+                        "transcription",
+                        "stt",
+                        "fast"
+                    ],
+                    "quota": {
+                        "rpm": 20,
+                        "rpd": 2000
+                    }
                 }
             ]
         },
         "huggingface": {
+            "nom_affiche": "Hugging Face",
             "provider": "huggingface",
             "description": "Modèles open-source via Hugging Face Router",
-            "models": [
+            "modeles": [
                 {
                     "id": "meta-llama/Meta-Llama-3-8B-Instruct",
                     "description": "Llama 3 8B (Bon équilibre)",

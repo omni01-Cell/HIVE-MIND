@@ -31,12 +31,31 @@ export class ExplicitPlanner {
 
         // Estimation rapide de complexité via IA
         try {
-            const prompt = `Estime le nombre d'outils nécessaires pour cette tâche.
-Tâche: "${userMessage}"
+            const prompt = `<task>
+You are estimating task complexity for HIVE-MIND's explicit planner.
+Your estimate determines if multi-step planning is needed.
+</task>
 
-Outils disponibles: ${tools.slice(0, 10).map(t => t.name).join(', ')}...
+<user_request>
+"${userMessage}"
+</user_request>
 
-Réponds UNIQUEMENT avec un nombre entier (ex: 2)`;
+<available_tools>
+${tools.slice(0, 10).map(t => t.name).join(', ')}...
+</available_tools>
+
+<estimation_criteria>
+Count tools needed:
+- 1 tool = Simple, direct action
+- 2-3 tools = Medium, sequential steps
+- 4+ tools = Complex, requires explicit planning
+</estimation_criteria>
+
+<output_format>
+Respond with ONLY an integer number (e.g., 2)
+</output_format>
+
+Estimate:`;
 
             const response = await providerRouter.chat([
                 { role: 'system', content: 'Tu es un estimateur de complexité.' },
@@ -61,28 +80,44 @@ Réponds UNIQUEMENT avec un nombre entier (ex: 2)`;
         console.log('[Planner] 📋 Création du plan...');
 
         try {
-            const planPrompt = `Tu es le PLANIFICATEUR du système HIVE-MIND.
+            const planPrompt = `<role>
+You are HIVE-MIND's PLANNER agent for multi-step tasks.
+Your plan quality determines execution success. Excellence in task decomposition is critical.
+</role>
 
-Objectif: ${goal}
+<long_horizon_context>
+This is a complex task requiring incremental progress across multiple steps.
+Focus on steady advances: break down into manageable chunks, maintain clear dependencies.
+Your plan will be executed sequentially with state tracking between steps.
+</long_horizon_context>
 
-Outils disponibles:
+<goal>
+${goal}
+</goal>
+
+<available_tools>
 ${context.tools.slice(0, 15).map(t => `- ${t.name}: ${t.description}`).join('\n')}
+</available_tools>
 
-Mission:
-1. Décompose l'objectif en étapes séquentielles
-2. Pour chaque étape, identifie:
-   - L'action à exécuter
-   - L'outil à utiliser
-   - Les dépendances (quelle étape doit être complétée avant)
-   - Le temps estimé (en secondes)
+<planning_instructions>
+1. Decompose goal into sequential steps
+2. For each step identify:
+   - Specific action to execute
+   - Tool to use (from available list)
+   - Dependencies (which steps must complete first)
+   - Time estimate (realistic, in seconds)
+3. Order steps by dependencies (prerequisites first)
+4. Validate each step can be executed with available tools
+</planning_instructions>
 
-Format JSON:
+<output_format>
+Respond in JSON only:
 {
   "steps": [
     {
       "id": 1,
-      "action": "Description de l'action",
-      "tool": "nom_outil",
+      "action": "Clear action description",
+      "tool": "tool_name",
       "params": {"key": "value"},
       "estimated_time": 10,
       "depends_on": []
@@ -90,7 +125,10 @@ Format JSON:
   ],
   "total_time_estimate": 30,
   "complexity": "low|medium|high"
-}`;
+}
+</output_format>
+
+Plan:`;
 
             const response = await providerRouter.chat([
                 { role: 'system', content: 'Tu es un planificateur expert en décomposition de tâches.' },
@@ -102,23 +140,38 @@ Format JSON:
             }
 
             // Nettoyage robuste : Extraire uniquement ce qui ressemble à du JSON
-            const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-            const planText = jsonMatch ? jsonMatch[0] : response.content;
+            let planText = response.content;
+
+            // 1. Tenter d'extraire via balises markdown ```json ... ```
+            const markdownMatch = planText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (markdownMatch && markdownMatch[1]) {
+                planText = markdownMatch[1];
+            } else {
+                // 2. Sinon, chercher le premier { et le dernier }
+                const jsonMatch = planText.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    planText = jsonMatch[0];
+                }
+            }
 
             let plan;
             try {
-                // Tentative de parsing standard
+                // Nettoyage final (espaces, sauts de ligne parasites)
+                planText = planText.trim();
                 plan = JSON.parse(planText);
             } catch (e) {
-                // Si échec, tentative de nettoyage des clés sans guillemets (erreur commune LLM)
+                console.warn('[Planner] ⚠️ Échec parsing JSON standard, tentative de nettoyage...');
                 try {
+                    // Si échec, tentative de nettoyage des clés sans guillemets (erreur commune LLM)
                     const fixedJson = planText
                         .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Ajout guillemets aux clés
-                        .replace(/'/g, '"'); // Remplacement simple quotes par double quotes
+                        .replace(/'/g, '"') // Remplacement simple quotes par double quotes
+                        .replace(/,\s*([}\]])/g, '$1'); // Suppression virgules traînantes
                     plan = JSON.parse(fixedJson);
                 } catch (innerE) {
-                    console.error('[Planner] Erreur parsing JSON (tronqué ou invalide):', e.message);
-                    console.log('[Planner] Contenu brut reçu:', response.content.substring(0, 200) + '...');
+                    console.error('[Planner] ❌ Erreur fatale parsing JSON:', innerE.message);
+                    console.log('[Planner] Début contenu:', planText.substring(0, 100));
+                    console.log('[Planner] Fin contenu:', planText.substring(planText.length - 100));
                     throw new Error('AI response is not valid JSON');
                 }
             }
@@ -287,14 +340,40 @@ Format JSON:
     async _replan(originalPlan, executionLog, context) {
         console.log('[Planner] 🔄 Replanification...');
 
-        const replanPrompt = `Plan original échoué. Analyse et propose un nouveau plan.
+        const replanPrompt = `<role>
+You are HIVE-MIND's adaptive PLANNER recovering from execution failure.
+Your replan must learn from errors and propose a viable alternative path.
+</role>
 
-Objectif: ${originalPlan.goal}
-Étapes complétées: ${executionLog.completed.join(', ')}
-Étapes échouées: ${executionLog.failed.join(', ')}
+<original_goal>
+${originalPlan.goal}
+</original_goal>
 
-Propose un plan alternatif qui évite les échecs précédents.
-Format JSON identique au plan original.`;
+<execution_results>
+Completed steps: ${executionLog.completed.join(', ') || 'none'}
+Failed steps: ${executionLog.failed.join(', ')}
+</execution_results>
+
+<replanning_strategy>
+1. Analyze WHY failures occurred
+2. Propose alternative approach avoiding same errors
+3. Consider:
+   - Different tool selection
+   - Modified parameters
+   - Alternative step ordering
+   - Simpler intermediate goals
+</replanning_strategy>
+
+<output_format>
+Respond in JSON (same format as original plan):
+{
+  "steps": [...],
+  "total_time_estimate": X,
+  "complexity": "low|medium|high"
+}
+</output_format>
+
+New plan:`;
 
         try {
             const response = await providerRouter.chat([

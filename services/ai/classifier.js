@@ -1,5 +1,4 @@
-
-import { GoogleGenerativeAI } from '@google/generative-ai';
+// services/ai/classifier.js
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -8,113 +7,182 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Service de Classification "Smart Router" (Niveau 3)
- * Utilise Gemini 3 Flash pour choisir le meilleur expert.
+ * Aide le routeur à choisir la meilleure famille d'experts.
  */
 class ClassifierService {
     constructor() {
-        this.client = null;
-        this.model = null;
         this.config = null;
         this._loadConfig();
     }
 
+    /**
+     * Charge la configuration des modèles pour avoir les descriptions
+     */
     _loadConfig() {
         try {
-            // Charger les clés API
-            const credsPath = join(__dirname, '..', '..', 'config', 'credentials.json');
-            const creds = JSON.parse(readFileSync(credsPath, 'utf-8'));
-
-            // Résoudre variable d'environnement
-            let apiKey = creds.familles_ia?.gemini;
-            if (apiKey && apiKey.startsWith('VOTRE_') && process.env[apiKey]) {
-                apiKey = process.env[apiKey];
-            }
-
-            if (apiKey) {
-                const genAI = new GoogleGenerativeAI(apiKey);
-                // Utilisation spécifique de Gemini 3 Flash (Preview)
-                this.model = genAI.getGenerativeModel({
-                    model: 'gemini-3-flash-preview',
-                    generationConfig: { temperature: 1.0 }
-                });
-            }
-
-            // Charger les descriptions des modèles
             const configPath = join(__dirname, '..', '..', 'config', 'models_config.json');
             this.config = JSON.parse(readFileSync(configPath, 'utf-8'));
-
         } catch (e) {
-            console.warn('[Classifier] Erreur init:', e.message);
+            console.warn('[Classifier] Erreur chargement config:', e.message);
+        }
+    }
+
+    /**
+     * Détecte la catégorie Level 3 pour classification chat
+     * @param {string} query - La requête utilisateur
+     * @param {object} router - Instance du ProviderRouter
+     * @returns {Promise<string>} - Catégorie détectée
+     */
+    async detectCategory(query, router) {
+        const categories = this.config?.reglages_generaux?.chat_agents?.categories;
+
+        if (!categories) {
+            console.warn('[Classifier] Aucune catégorie chat configurée, fallback FAST_CHAT');
+            return 'FAST_CHAT';
+        }
+
+        const categoriesInfo = Object.entries(categories)
+            .map(([id, cat]) => `- ${id}: ${cat.description}`)
+            .join('\\n');
+
+        const prompt = `<task>
+You are the Classification Expert for HIVE-MIND, an AI bot routing system.
+Your classification is CRITICAL: it determines which specialized model handles the request, directly impacting response quality and speed.
+</task>
+
+<context>
+HIVE-MIND uses a multi-model architecture where different AI models specialize in different tasks (coding, reasoning, vision, etc.).
+Your job: route each user query to the optimal category so the right expert model is selected.
+</context>
+
+<available_categories>
+${categoriesInfo}
+</available_categories>
+
+<user_query>
+"${query}"
+</user_query>
+
+<decision_criteria>
+Classify based on primary intent:
+- Code, algorithms, debugging → CODING
+- Math, logic, deep reasoning → REASONING
+- Greetings, simple questions → FAST_CHAT
+- Image/photo analysis → VISION
+- Audio, voice, transcription → MULTIMODAL
+- Multi-step planning tasks → AGENTIC
+- Creative writing, stories → CREATIVITY
+
+If uncertain, default to FAST_CHAT for simple queries or REASONING for complex ones.
+</decision_criteria>
+
+<output_format>
+Respond with the category ID in UPPERCASE only.
+Maximum length: 1 word.
+Format: CATEGORY_NAME
+Example: CODING
+</output_format>
+
+Category:`;
+
+        try {
+            const response = await router.callServiceAgent('CLASSIFIER', [
+                { role: 'user', content: prompt }
+            ]);
+
+            const category = response.content?.trim().toUpperCase().replace(/['\"`]/g, '');
+
+            if (categories[category]) {
+                console.log(`[Classifier] 📂 Catégorie détectée: ${category}`);
+                return category;
+            } else {
+                console.warn(`[Classifier] Catégorie invalide: "${category}", fallback FAST_CHAT`);
+                return 'FAST_CHAT';
+            }
+        } catch (error) {
+            console.error('[Classifier] Erreur détection catégorie:', error.message);
+            return 'FAST_CHAT';
         }
     }
 
     /**
      * Classe la requête pour choisir le meilleur modèle parmi les disponibles
      * @param {string} query - La demande de l'utilisateur
-     * @param {string[]} availableFamilies - Liste des familles disponibles (ex: ['gemini', 'openai'])
+     * @param {string[]} availableFamilies - Liste des familles disponibles
+     * @param {object} router - Instance du ProviderRouter pour l'exécution
      * @returns {Promise<string|null>} - L'ID de la famille choisie (ex: 'gemini')
      */
-    async classify(query, availableFamilies) {
-        if (!this.model) {
-            console.warn('[Classifier] Modèle non initialisé, skip.');
-            return null;
-        }
-
-        // Si une seule famille dispo, pas de choix à faire
+    async classify(query, availableFamilies, router) {
+        if (!availableFamilies || availableFamilies.length === 0) return null;
         if (availableFamilies.length === 1) return availableFamilies[0];
-        if (availableFamilies.length === 0) return null;
 
-        // Construire la liste des candidats avec leurs descriptions
         let candidatesInfo = "";
         for (const familyId of availableFamilies) {
-            const familyConf = this.config.familles[familyId];
+            const familyConf = this.config?.familles[familyId];
             if (familyConf) {
-                // On prend la description du premier modèle ou de la famille
                 const desc = familyConf.modeles?.[0]?.description || "Modèle IA standard";
-                candidatesInfo += `- ID: ${familyId} (${familyConf.nom_affiche}) : ${desc}\n`;
+                candidatesInfo += `- ID: ${familyId} (${familyConf.nom_affiche}) : ${desc}\\n`;
+            } else {
+                candidatesInfo += `- ID: ${familyId} : Modèle externe disponible\\n`;
             }
         }
 
-        const prompt = `
-Role: Ordonnanceur IA Expert.
-Tâche: Choisir la MEILLEURE famille de modèles pour répondre à la requête utilisateur, parmi les candidats disponibles.
+        const prompt = `<task>
+You are the Expert Model Router for HIVE-MIND.
+Your selection determines which AI family processes this request. Choose wisely: the right match maximizes quality, the wrong one wastes resources.
+</task>
 
-[CANDIDATS DISPONIBLES]
+<context>
+HIVE-MIND has access to multiple AI model families with different strengths.
+Your job: match the user's query to the BEST available family based on their capabilities.
+</context>
+
+<available_models>
 ${candidatesInfo}
+</available_models>
 
-[REQUÊTE UTILISATEUR]
+<user_query>
 "${query}"
+</user_query>
 
-[CRITÈRES DE DÉCISION]
-1. Code complexe -> Privilégier Mistral/Codestral ou Claude Sonnet.
-2. Raisonnement logique / Math -> Privilégier OpenAI o1/GPT-4 ou Claude Opus.
-3. Créativité / Rdaction -> Claude Opus ou Gemini.
-4. Rapidité / Chat simple -> Gemini Flash ou GPT-mini.
-5. Vision (Images) -> Gemini ou Claude ou GPT-4o.
-6. Si la requête est floue ou simple "Bonjour", choisir le moins cher/plus rapide.
+<selection_criteria>
+Match query type to model strength:
+- Kimi: Complex code, long context tasks
+- Groq models: Fast reasoning, general chat
+- Mistral: Code quality, technical tasks
+- Gemini: Vision, multimodal, fast responses
+- Anthropic: Deep reasoning, analysis
 
-Réponds UNIQUEMENT par l'ID exact de la famille choisie (ex: "gemini"). Rien d'autre.
-Meilleur ID:`;
+Choose the specialist that best fits the query's primary need.
+</selection_criteria>
+
+<output_format>
+Respond with ONLY the family ID (lowercase). No explanation.
+Example: gemini
+</output_format>
+
+Best family ID:`;
 
         try {
-            const result = await this.model.generateContent(prompt);
-            const response = result.response;
-            const text = response.text().trim().toLowerCase().replace(/['"`]/g, ''); // Nettoyage
+            const response = await router.callServiceAgent('CLASSIFIER', [
+                { role: 'user', content: prompt }
+            ]);
 
-            // Vérifier si la réponse est un ID valide
+            const text = response.content?.trim().toLowerCase().replace(/['\"`]/g, '');
+
             if (availableFamilies.includes(text)) {
-                console.log(`[Classifier] 🧠 Choix intelligent: ${text} pour "${query.substring(0, 30)}..."`);
+                console.log(`[Classifier] 🧠 Choix expert: ${text} pour "${query.substring(0, 30)}..."`);
                 return text;
             } else {
                 console.warn(`[Classifier] Réponse invalide: "${text}". Fallback sur ${availableFamilies[0]}`);
                 return availableFamilies[0];
             }
-
         } catch (error) {
-            console.error('[Classifier] Erreur génération:', error.message);
-            return null; // Le router gérera le fallback
+            console.error('[Classifier] Erreur classification:', error.message);
+            return null;
         }
     }
 }
 
 export const classifier = new ClassifierService();
+export default classifier;

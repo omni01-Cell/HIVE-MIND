@@ -73,11 +73,9 @@ Services cognitifs pour enrichir l'expérience.
 
 | Outil | Description | Exemple naturel |
 | :--- | :--- | :--- |
-| **Recherche Web** | Cherche sur Google (Actus, Météo, Faits). | "Qui a gagné le match ?" / "Météo Paris" |
+| **Recherche Web** | Cherche sur DuckDuckGo (Actus, Météo, Faits). | "Qui a gagné le match ?" / "Météo Paris" |
 | **Mémoire Long Terme** | Se souvient des faits passés. | "Qu'est-ce que je t'ai dit hier ?" |
 | **Mémoire Groupe** | Connaît les membres et le contexte. | "Qui est admin ici ?" |
-
-*(Note: La clé API Google Search doit être configurée dans credentials.json)*
 
 ---
 

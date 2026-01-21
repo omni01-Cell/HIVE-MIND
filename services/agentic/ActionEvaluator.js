@@ -86,25 +86,47 @@ export class ActionEvaluator {
 
         // Analyse rapide par l'IA
         try {
-            const prompt = `Évalue la qualité de ce résultat d'outil sur une échelle de 0 à 1.
+            const prompt = `<role>
+You are the Quality Evaluator for HIVE-MIND tool executions.
+Your scores directly influence tool selection optimization. Accurate scoring improves future performance.
+</role>
 
+<context>
+This evaluation helps HIVE-MIND learn which tools perform well.
+Low scores flag under-performing tools; high scores reinforce successful ones.
+</context>
+
+<tool_execution>
 Tool: ${action.tool}
 Input: ${JSON.stringify(action.params).substring(0, 200)}
 Output: ${JSON.stringify(action.result).substring(0, 500)}
+</tool_execution>
 
-Critères:
-- Pertinence par rapport à l'input
-- Complétude de la réponse
-- Absence d'erreurs
+<evaluation_criteria>
+Score from 0.0 to 1.0 based on weighted criteria:
+1. Relevance to input (40% weight): Does output match what input requested?
+2. Completeness (30% weight): Are all required elements present?
+3. Correctness (30% weight): Is the output error-free and accurate?
 
-Réponds UNIQUEMENT avec un nombre entre 0 et 1 (ex: 0.85)`;
+Calibration examples:
+- 0.0-0.2: Failed execution, wrong/irrelevant result
+- 0.3-0.5: Partial success, missing key elements
+- 0.6-0.7: Good result with minor issues
+- 0.8-0.9: Very good, nearly complete and accurate
+- 0.95-1.0: Excellent, perfect execution
+</evaluation_criteria>
 
-            const response = await providerRouter.chat([
+<output_format>
+Respond with ONLY a decimal number between 0.0 and 1.0 (e.g., 0.75).
+No explanation, no text, just the score.
+</output_format>
+
+Score:`;
+
+            const response = await providerRouter.callServiceAgent('ACTION_EVALUATOR', [
                 { role: 'system', content: 'Tu es un évaluateur de qualité objectif.' },
                 { role: 'user', content: prompt }
-            ], {
-                temperature: 0.1
-            });
+            ]);
 
             if (!response?.content) return 0.5;
 

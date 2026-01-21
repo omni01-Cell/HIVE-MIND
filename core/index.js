@@ -94,7 +94,18 @@ class BotCore {
     constructor() {
         this.transport = baileysTransport;
         this.isReady = false;
+
+        // [FEEDBACK FIRST] Constantes pour réponse rapide < 30s
+        this.FEEDBACK_TIMEOUT_MS = 25000; // 25 secondes max avant accusé de réception
+        this.QUICK_ACKNOWLEDGMENTS = [
+            "Je réfléchis... 🤔",
+            "Laisse-moi 2 secondes... 💭",
+            "Je cherche ça... 🔍",
+            "Hmm, intéressant... 🧐",
+            "Un instant... ⏳"
+        ];
     }
+
 
     /**
      * Initialise tous les composants
@@ -570,6 +581,10 @@ class BotCore {
         // Indicateur de frappe
         await this.transport.setPresence(chatId, 'composing');
 
+        // [FEEDBACK FIRST] Variables de contrôle pour la réponse rapide
+        let feedbackTimeoutId = null;
+        const feedbackState = { sent: false };
+
         try {
             // ========== GESTION AUDIO NATIF (Gemini Live) ==========
             // Si le message a été marqué par Baileys comme devant utiliser le mode natif
@@ -718,6 +733,11 @@ class BotCore {
                 }
             }
 
+
+            // [AGENTIC SWITCH] Classification précoce pour choisir la stratégie
+            // On le fait AVANT le RAG et le contexte lourd pour une meilleure réactivité
+            const complexity = await this._classifyComplexity(typeof text === 'string' ? text : "");
+
             // 3. Récupération du contexte hybride
             const shortTermContext = await workingMemory.getContext(chatId);
             const context = await this._buildContext(chatId, message, shortTermContext);
@@ -731,7 +751,6 @@ class BotCore {
             }
 
             // Phase 2 RAG: Sélection dynamique des outils pertinents
-            // Si la table bot_tools n'est pas encore indexée, fallback vers tous les outils
             const relevantTools = await pluginLoader.getRelevantTools(
                 typeof userContent === 'string' ? userContent : text, // Texte de la requête
                 5,  // Limite d'outils pertinents
@@ -756,9 +775,33 @@ class BotCore {
                 { role: 'user', content: userContent }
             ];
 
-            // [AGENTIC SWITCH] Classification précoce pour choisir la stratégie
-            const complexity = await this._classifyComplexity(typeof text === 'string' ? text : "");
-            const isAgenticForce = !complexity || complexity === 'AGENTIC';
+            // ========== [FEEDBACK FIRST] Garantie de réponse < 30 secondes ==========
+            // On wrap tout le traitement IA dans une promesse et on race contre un timeout
+            // feedbackState est défini plus haut pour être accessible dans le catch
+
+            // Construire les options de réponse maintenant (pour le fallback aussi)
+            let replyOptions = {};
+            if (isGroup) {
+                const strategy = await workingMemory.getReplyStrategy(chatId, message);
+                if (strategy.useQuote && message.raw) {
+                    replyOptions.reply = message.raw;
+                }
+                if (strategy.useMention && sender) {
+                    replyOptions.mentions = [sender];
+                }
+            }
+
+            // Timeout qui envoie un accusé de réception
+            feedbackTimeoutId = setTimeout(async () => {
+                if (!feedbackState.sent) {
+                    const ack = this.QUICK_ACKNOWLEDGMENTS[Math.floor(Math.random() * this.QUICK_ACKNOWLEDGMENTS.length)];
+                    console.log(`[FeedbackFirst] ⏰ Timeout atteint (${this.FEEDBACK_TIMEOUT_MS}ms), envoi accusé: "${ack}"`);
+                    await this.transport.sendText(chatId, ack, replyOptions);
+                    feedbackState.sent = true;
+                    // Réactiver l'indicateur de frappe pour montrer qu'on continue à travailler
+                    await this.transport.setPresence(chatId, 'composing');
+                }
+            }, this.FEEDBACK_TIMEOUT_MS);
 
             // On désactive la boucle lourde si c'est une requête standard, 
             // mais on garde les outils dispo pour des actions simples (ex: réactions)
@@ -768,11 +811,13 @@ class BotCore {
             const MAX_ITERATIONS = 10;
             let usedFamily = null;
 
+
+
             if (complexity === 'STANDARD') {
                 console.log(`[Agent] ⚡ Fast-Path: Traitement Standard (Outils inclus)`);
-                // APPEL UNIQUE (Single Pass) avec outils
+                // Pour le mode STANDARD, on force une famille ultra-rapide (Groq) pour court-circuiter le Smart Router L3
                 const response = await providerRouter.chat(conversationHistory, {
-                    family: usedFamily,
+                    family: 'groq',
                     tools: relevantTools
                 });
 
@@ -1155,16 +1200,20 @@ class BotCore {
             }
 
             // [AGENTIC] Nettoyage de la pensée interne (Invisible pour l'utilisateur)
-            // On conserve la pensée dans les logs mais on la retire du message WhatsApp
-            if (finalResponse?.includes('<thought>')) {
-                console.log('[Agent] 🧠 Pensée détectée:', finalResponse.match(/<thought>[\s\S]*?<\/thought>/g));
-                finalResponse = finalResponse.replace(/<thought>[\s\S]*?<\/thought>/g, '').trim();
+            // Supporte <think>, <thought>, <thinking> (DeepSeek, Gemini, etc.)
+            const thoughtRegex = /<(think|thought|thinking)>[\s\S]*?<\/\1>/gi;
+            if (thoughtRegex.test(finalResponse)) {
+                const thoughts = finalResponse.match(thoughtRegex);
+                console.log('[Agent] 🧠 Pensée détectée et filtrée:', thoughts ? thoughts.length : 0);
 
-                // Si après nettoyage il ne reste rien, mais qu'il y a eu de l'activité, on ne return pas direct
+                finalResponse = finalResponse.replace(thoughtRegex, '').trim();
+
+                // Si après nettoyage il ne reste rien, mais qu'il y a eu de l'activité
                 if (!finalResponse) {
                     if (iterations > 0) {
                         finalResponse = "*(Réflexion terminée sans réponse textuelle)*";
                     } else {
+                        // Cas rare: Le modèle n'a renvoyé QUE de la pensée sans tool call ni réponse
                         return;
                     }
                 }
@@ -1172,28 +1221,16 @@ class BotCore {
 
             if (!finalResponse) return;
 
-            // ========== ADAPTIVE REPLY STRATEGY ==========
-            // Appliquer quote/mention selon l'activité du groupe
-            let replyOptions = {};
-
-            if (isGroup) {
-                const strategy = await workingMemory.getReplyStrategy(chatId, message);
-
-                if (strategy.useQuote && message.raw) {
-                    replyOptions.reply = message.raw;
-                }
-
-                if (strategy.useMention && sender) {
-                    replyOptions.mentions = [sender];
-                }
-            }
+            // ========== [FEEDBACK FIRST] Nettoyer le timeout et envoyer la réponse ==========
+            clearTimeout(feedbackTimeoutId);
+            feedbackState.sent = true; // Empêcher l'envoi de l'accusé de réception tardif
 
             // [MESSAGE SPLITTING] Découper les messages longs en plusieurs parties
             const { splitMessage } = await import('../utils/messageSplitter.js');
             const messageParts = splitMessage(finalResponse, 1500);
 
             for (let i = 0; i < messageParts.length; i++) {
-                // Quote seulement sur la première partie
+                // Quote seulement sur la première partie (replyOptions déjà défini plus haut)
                 await this.transport.sendText(chatId, messageParts[i], i === 0 ? replyOptions : {});
 
                 // Petit délai naturel entre les parties (sauf la dernière)
@@ -1230,6 +1267,7 @@ class BotCore {
             // await db.log('message', ...);
 
         } catch (error) {
+            clearTimeout(feedbackTimeoutId); // Important: Clear timeout on error
             console.error('[Core] Erreur traitement:', error);
             await this.transport.sendText(chatId, "Oups, j'ai bugué 😅 Réessaie !");
             await this.transport.setPresence(chatId, 'paused');

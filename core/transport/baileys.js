@@ -197,6 +197,13 @@ class BaileysTransport extends EventEmitter {
                 const remoteJid = msg.key.remoteJid;
                 const sender = msg.key.participant || msg.key.remoteJid;
                 const senderName = msg.pushName || sender.split('@')[0];
+
+                // Vérification de sécurité: msg.message peut être undefined/null
+                if (!msg.message) {
+                    console.warn('[Baileys] ⚠️ Message reçu sans contenu (msg.message undefined)');
+                    continue;
+                }
+
                 const messageType = Object.keys(msg.message)[0];
                 const pushName = msg.pushName;
                 const chatId = remoteJid;

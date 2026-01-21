@@ -50,18 +50,11 @@ export default {
         }
 
         try {
-            // Import dynamique de wikipedia
-            const wikiImport = await import('wikipedia');
-            const wiki = wikiImport.default || wikiImport;
+            // Import dynamique de wikipedia (méthode corrigée)
+            const { default: wiki } = await import('wikipedia');
 
-            // Tentative sécurisée de changer la langue
-            try {
-                if (typeof wiki.setLang === 'function') {
-                    await wiki.setLang(lang);
-                }
-            } catch (langError) {
-                console.warn('[Wikipedia] Impossible de définir la langue:', langError.message);
-            }
+            // Définir la langue
+            wiki.setLang(lang);
 
             // Recherche
             const searchResults = await wiki.search(query);

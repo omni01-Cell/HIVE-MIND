@@ -4,6 +4,7 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { classifier } from '../services/ai/classifier.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +39,96 @@ class ProviderRouter {
      */
     registerAdapter(familyName, adapter) {
         this.adapters.set(familyName, adapter);
+    }
+
+    /**
+     * Parse un model string pour extraire family et model
+     * Ex: "qwen/qwen3-32b" → { family: "groq", model: "qwen/qwen3-32b" }
+     * Ex: "kimi-for-coding" → { family: "kimi", model: "kimi-for-coding" }
+     */
+    parseModelString(modelStr) {
+        // Chercher dans toutes les familles
+        for (const [familyName, familyConfig] of Object.entries(modelsConfig.familles)) {
+            const model = familyConfig.modeles?.find(m => m.id === modelStr);
+            if (model) {
+                return { family: familyName, model: modelStr };
+            }
+        }
+
+        // Si pas trouvé, retourner null
+        console.warn(`[Router] ⚠️ Modèle ${modelStr} non trouvé dans la config`);
+        return null;
+    }
+
+    /**
+     * Appel direct d'un service agent (sans classification Level 3)
+     * Utilise le modèle assigné + fallback automatique si nécessaire
+     */
+    async callServiceAgent(serviceName, messages, options = {}) {
+        const agent = modelsConfig.reglages_generaux.service_agents?.[serviceName];
+
+        if (!agent) {
+            throw new Error(`[Router] Service agent "${serviceName}" non trouvé dans models_config.json`);
+        }
+
+        console.log(`[Router] 🔧 Service Agent: ${serviceName} → ${agent.model}`);
+
+        // Préparer la cascade: primary → fallback
+        const modelsToTry = [agent.model];
+        if (agent.fallback) {
+            modelsToTry.push(agent.fallback);
+        }
+
+        let lastError = null;
+
+        for (const modelStr of modelsToTry) {
+            const parsed = this.parseModelString(modelStr);
+            if (!parsed) {
+                console.warn(`[Router] ⚠️ Modèle ${modelStr} invalide, skip`);
+                continue;
+            }
+
+            try {
+                // Appel avec température du service
+                const result = await this.chat(messages, {
+                    ...options,
+                    family: parsed.family,
+                    model: parsed.model,
+                    temperature: agent.temperature ?? options.temperature,
+                    isServiceAgent: true, // Flag pour éviter classification
+                    isFallback: modelStr === agent.fallback
+                });
+
+                if (modelStr === agent.fallback) {
+                    console.log(`[Router] ⚠️ ${serviceName} utilisé fallback: ${modelStr}`);
+                }
+
+                return result;
+            } catch (error) {
+                console.warn(`[Router] ❌ ${serviceName}/${modelStr} échec: ${error.message}`);
+                lastError = error;
+            }
+        }
+
+        throw new Error(`[Router] 🛑 Service ${serviceName} échec total. Dernière erreur: ${lastError?.message}`);
+    }
+
+    /**
+     * Retourne les modèles candidats pour une catégorie chat Level 3
+     */
+    getChatCandidates(category) {
+        const categoryConfig = modelsConfig.reglages_generaux.chat_agents?.categories?.[category];
+
+        if (!categoryConfig) {
+            console.warn(`[Router] ⚠️ Catégorie chat "${category}" introuvable`);
+            return null;
+        }
+
+        return {
+            primary: categoryConfig.primary,
+            fallback: categoryConfig.fallback,
+            description: categoryConfig.description
+        };
     }
 
     /**
@@ -224,30 +315,56 @@ class ProviderRouter {
         }
 
         // =========================================================
-        // NIVEAU 3: CLASSIFICATION RAPIDE (Active)
+        // NIVEAU 3: DÉTECTION CATÉGORIE + MODÈLES PRÉCIS
         // =========================================================
-        // Si on n'a pas de famille forcée, on utilise Gemini Flash pour choisir le meilleur expert
+        // Si on n'a pas de famille/modèle forcé, on détecte la catégorie 
+        // et on récupère les 2 modèles précis (primary + fallback)
 
-        if (!options.family && availableFamilies.length > 1) {
-            console.time('[Router] Classification');
-            const bestChoice = await this._classifyRequest(messages, availableFamilies);
-            console.timeEnd('[Router] Classification');
+        // SKIP Level 3 si c'est un appel de service agent (déjà spécifique)
+        if (!options.family && !options.model && !options.isClassifierCall && !options.isServiceAgent) {
+            console.time('[Router] Détection catégorie');
+            const lastMsg = messages[messages.length - 1]?.content || "";
 
-            if (bestChoice && bestChoice.model && availableFamilies.includes(bestChoice.family)) {
-                console.log(`[Router] 🧠 Smart Router a choisi: ${bestChoice.model} (${bestChoice.family})`);
+            try {
+                const category = await classifier.detectCategory(lastMsg, this);
+                console.timeEnd('[Router] Détection catégorie');
 
-                // On force l'utilisation de CE modèle spécifique
-                options.model = bestChoice.model;
-                options.family = bestChoice.family;
+                if (category) {
+                    const candidates = this.getChatCandidates(category);
 
-                // On réorganise la liste pour mettre la famille choisie en premier
-                // Les autres restent en fallback
-                availableFamilies = [
-                    bestChoice.family,
-                    ...availableFamilies.filter(f => f !== bestChoice.family)
-                ];
-            } else {
-                console.log(`[Router] Classification neutre ou échouée, conservation ordre par défaut.`);
+                    if (candidates && candidates.primary) {
+                        console.log(`[Router] 🎯 Catégorie détectée: ${category}`);
+                        console.log(`[Router] 📋 Modèles: ${candidates.primary} (fallback: ${candidates.fallback})`);
+
+                        // Parser le primary model pour extraire famille + model ID
+                        const primaryParsed = this.parseModelString(candidates.primary);
+                        const fallbackParsed = candidates.fallback ? this.parseModelString(candidates.fallback) : null;
+
+                        if (primaryParsed) {
+                            options.family = primaryParsed.family;
+                            options.model = primaryParsed.model;
+
+                            // Réorganiser availableFamilies pour mettre le choix en premier
+                            if (availableFamilies.includes(primaryParsed.family)) {
+                                availableFamilies = [primaryParsed.family, ...availableFamilies.filter(f => f !== primaryParsed.family)];
+                            }
+
+                            // Si fallback disponible et différent, l'ajouter
+                            if (fallbackParsed && fallbackParsed.family !== primaryParsed.family) {
+                                if (availableFamilies.includes(fallbackParsed.family)) {
+                                    availableFamilies = [
+                                        primaryParsed.family,
+                                        fallbackParsed.family,
+                                        ...availableFamilies.filter(f => f !== primaryParsed.family && f !== fallbackParsed.family)
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn(`[Router] ⚠️ Échec détection catégorie: ${err.message}`);
+                // Fallback: continuer avec availableFamilies par défaut
             }
         }
 
@@ -266,6 +383,10 @@ class ProviderRouter {
             }
 
             const adapter = this.adapters.get(family);
+            if (!adapter) {
+                console.warn(`[Router] ⚠️ Adaptateur manquant pour ${family}, passage à la famille suivante...`);
+                continue;
+            }
             const familyConfig = this.getFamilyConfig(family);
 
             // Modèles à tester pour cette famille
@@ -499,130 +620,13 @@ class ProviderRouter {
     }
 
     /**
-     * NIVEAU 3: Classification de la requête par IA
-     * Utilise un petit modèle ultra-rapide (Groq Llama Instant OU Gemini 3 Flash) pour router intelligemment.
-     * Retourne un MODÈLE SPÉCIFIQUE avec sa famille, pas juste une famille.
+     * Méthode dépréciée au profit de classifier.js
+     *@deprecated Utiliser classifier.classify(query, candidates, router)
      */
     async _classifyRequest(messages, candidates) {
-        // 1. Construire la liste complète des modèles disponibles avec métadonnées
-        const allAvailableModels = [];
-
-        for (const family of candidates) {
-            const familyConfig = this.getFamilyConfig(family);
-            if (!familyConfig?.modeles) continue;
-
-            const chatModels = familyConfig.modeles
-                .filter(m => m.types?.includes('chat')) // Seulement les modèles de chat
-                .map(m => ({
-                    id: m.id,
-                    family: family,
-                    description: m.description || 'Modèle généraliste',
-                    types: m.types || ['chat']
-                }));
-
-            allAvailableModels.push(...chatModels);
-        }
-
-        if (allAvailableModels.length === 0) return null;
-
-        // 2. Configuration des modèles pour le cerveau du router (ultra-rapides)
-        const routerCandidates = [
-            { provider: 'groq', model: 'llama-3.1-8b-instant' },     // Priorité 1: Groq LPU Ultra Fast
-            { provider: 'gemini', model: 'gemini-3-flash-preview' }, // Priorité 2: Gemini Flash
-        ];
-
-        // 3. Trouver le premier modèle de routing disponible
-        let selectedRouter = null;
-        const { container } = await import('../core/ServiceContainer.js');
-        let quotaManager = null;
-
-        try {
-            if (container.has('quotaManager')) quotaManager = container.get('quotaManager');
-        } catch (e) { }
-
-        for (const candidate of routerCandidates) {
-            // Vérifier si le provider est disponible
-            if (!this.adapters.has(candidate.provider) || !this.isAvailable(candidate.provider)) {
-                continue;
-            }
-
-            // Vérifier les quotas si quotaManager disponible
-            if (quotaManager) {
-                const isAvailable = await quotaManager.isModelAvailable(candidate.model);
-                if (!isAvailable) continue;
-            }
-
-            // Ce modèle est dispo !
-            selectedRouter = candidate;
-            break;
-        }
-
-        if (!selectedRouter) {
-            // console.log('[Router] Classification skipped (No fast router available)');
-            return null; // Pas de router rapide dispo
-        }
-
-        // 4. Construire le prompt DYNAMIQUEMENT à partir des métadonnées du config
-        const modelsList = allAvailableModels.map(m => {
-            const typesStr = m.types.join(', ');
-            return `- ${m.id}: "${m.description}" | Types: ${typesStr}`;
-        }).join('\n');
-
-        const lastMessage = messages[messages.length - 1].content;
-
-        const systemPrompt = `Tu es le "Smart Router" du système HIVE-MIND.
-Ta mission: Analyser la demande de l'utilisateur et choisir le MEILLEUR MODÈLE SPÉCIFIQUE parmi les candidats.
-
-Modèles disponibles:
-${modelsList}
-
-Instructions:
-- Lis la description et les types de chaque modèle
-- Match les types avec la demande (ex: "coding" → cherche type 'coding')
-- Choisis le modèle le PLUS ADAPTÉ
-- Par défaut, privilégie les modèles rapides (flash, fast dans description)
-
-Réponds UNIQUEMENT au format JSON strict:
-{ "reason": "court motif de ton choix", "selected_model": "nom-exact-du-modele" }`;
-
-        try {
-            const adapter = this.adapters.get(selectedRouter.provider);
-            const apiKey = this.getApiKey(selectedRouter.provider);
-
-            const routingOptions = {
-                model: selectedRouter.model,
-                apiKey,
-                temperature: 0.2, // Très déterministe
-                maxTokens: 150
-            };
-
-            const response = await adapter.chat([
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: `Demande: "${lastMessage.substring(0, 500)}..."` }
-            ], routingOptions);
-
-            const text = response.content.replace(/```json|```/g, '').trim();
-            const result = JSON.parse(text);
-
-            // 5. Trouver le modèle sélectionné et retourner {model, family}
-            const selectedModelId = result.selected_model;
-            const modelInfo = allAvailableModels.find(m => m.id === selectedModelId);
-
-            if (modelInfo) {
-                console.log(`[Router] 🎯 Smart Router sélectionné: ${modelInfo.id} (${modelInfo.family}) - ${result.reason}`);
-                return {
-                    model: modelInfo.id,
-                    family: modelInfo.family
-                };
-            }
-
-            return null;
-
-        } catch (e) {
-            // Silencieux car c'est une optimisation optionnelle
-            // console.error('[Router] Classification error:', e.message);
-            return null;
-        }
+        const lastMsg = messages[messages.length - 1]?.content || "";
+        const family = await classifier.classify(lastMsg, candidates, this);
+        return family ? { family } : null;
     }
 
     /**

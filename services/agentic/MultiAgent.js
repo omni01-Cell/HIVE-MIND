@@ -63,40 +63,45 @@ export class LightweightMultiAgent {
         const params = JSON.parse(toolCall.function.arguments || '{}');
 
         try {
-            const criticPrompt = `Tu es le CRITIQUE du système HIVE-MIND.
-Mission: Analyser ce plan d'action et identifier les RISQUES.
+            const criticPrompt = `<role>
+You are the CRITIC agent in HIVE-MIND's safety system.
+Your purpose: prevent destructive actions by identifying risks BEFORE execution.
+</role>
 
-Action proposée:
-- Outil: ${toolName}
-- Paramètres: ${JSON.stringify(params)}
+<proposed_action>
+Tool: ${toolName}
+Parameters: ${JSON.stringify(params)}
+</proposed_action>
 
-Contexte:
-- Expéditeur: ${context.senderName}
-- Autorité: ${context.authorityLevel}
-- Groupe: ${context.isGroup ? 'Oui' : 'Non'}
-- Chat ID: ${context.chatId}
+<context>
+User: ${context.senderName} (Authority: ${context.authorityLevel})
+Chat Type: ${context.isGroup ? 'Group' : 'Private'}
+Chat ID: ${context.chatId}
+</context>
 
-Questions critiques:
-1. Y a-t-il un risque de régression? (bannir la mauvaise personne, supprimer le mauvais message, etc.)
-2. Cette action viole-t-elle les valeurs du bot ou pourrait-elle nuire à la mission?
-3. L'utilisateur a-t-il l'autorité suffisante pour cette action?
-4. Y a-t-il une alternative plus sûre ou moins destructive?
+<evaluation_criteria>
+Analyze these risk vectors:
+1. Regression Risk: Could this target the wrong person/message?
+2. Ethical Violation: Does this breach bot values or mission?
+3. Authority Check: Does user have sufficient permissions?
+4. Safer Alternative: Is there a less destructive approach?
+</evaluation_criteria>
 
-Réponds en JSON:
+<output_format>
+Respond in JSON only:
 {
   "approved": true/false,
   "risk_level": "low|medium|high|critical",
   "concerns": ["concern1", "concern2"],
-  "alternative": "suggestion alternative si approved=false",
+  "alternative": "suggestion if approved=false",
   "confidence": 0.0-1.0
-}`;
+}
+</output_format>`;
 
-            const response = await providerRouter.chat([
+            const response = await providerRouter.callServiceAgent('CRITIC', [
                 { role: 'system', content: 'Tu es un agent critique et prudent. Ta priorité est la sécurité et l\'éthique.' },
                 { role: 'user', content: criticPrompt }
-            ], {
-                temperature: 0.2 // Très déterministe
-            });
+            ]);
 
             if (!response?.content) {
                 throw new Error('Critic response is empty');
@@ -136,34 +141,41 @@ Réponds en JSON:
         console.log('[MultiAgent] 👀 Observation de cohérence...');
 
         try {
-            const observerPrompt = `Tu es l'OBSERVATEUR du système HIVE-MIND.
-Mission: Vérifier si cette action est COHÉRENTE avec l'historique récent.
+            const observerPrompt = `<role>
+You are the OBSERVER agent in HIVE-MIND's coherence system.
+Your purpose: detect behavioral contradictions and prevent erratic actions.
+</role>
 
-Action actuelle:
-- Outil: ${execution.tool}
-- Paramètres: ${JSON.stringify(execution.params).substring(0, 200)}
+<current_action>
+Tool: ${execution.tool}
+Parameters: ${JSON.stringify(execution.params).substring(0, 200)}
+</current_action>
 
-Historique récent (5 dernières actions):
-${history.slice(-5).map(h => `- ${h.tool}: ${h.result_summary || 'N/A'} (${h.success ? 'succès' : 'échec'})`).join('\n')}
+<recent_history>
+Last 5 actions:
+${history.slice(-5).map(h => `- ${h.tool}: ${h.result_summary || 'N/A'} (${h.success ? 'success' : 'fail'})`).join('\\n')}
+</recent_history>
 
-Détecte les incohérences:
-- Contradictions (ex: "Je vais t'aider" puis ban immédiat)
-- Actions répétitives inutiles (même recherche 3x de suite)
-- Changements de cap brutaux sans raison
+<detection_criteria>
+Flag incoherences:
+- Contradictions: "I'll help you" followed by immediate ban
+- Repetitions: Same search 3x in a row without reason
+- Erratic shifts: Sudden direction changes without justification
+</detection_criteria>
 
-Réponds en JSON:
+<output_format>
+Respond in JSON only:
 {
   "coherent": true/false,
-  "warning": "description du problème si incohérent",
+  "warning": "description if incoherent",
   "severity": "low|medium|high"
-}`;
+}
+</output_format>`;
 
-            const response = await providerRouter.chat([
+            const response = await providerRouter.callServiceAgent('OBSERVER', [
                 { role: 'system', content: 'Tu détectes les incohérences comportementales.' },
                 { role: 'user', content: observerPrompt }
-            ], {
-                temperature: 0.1
-            });
+            ]);
 
             if (!response?.content) {
                 throw new Error('Observer response is empty');

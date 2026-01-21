@@ -98,11 +98,7 @@ export const config = {
         anthropic: process.env.ANTHROPIC_KEY || resolveEnvValue(credentials.familles_ia?.anthropic),
         groq: process.env.GROQ_KEY || resolveEnvValue(credentials.familles_ia?.groq),
         mistral: process.env.MISTRAL_KEY || resolveEnvValue(credentials.familles_ia?.mistral),
-        minimax: process.env.MINIMAX_KEY || resolveEnvValue(credentials.familles_ia?.minimax),
-        googleSearch: {
-            apiKey: process.env.GOOGLE_SEARCH_API_KEY,
-            cseId: process.env.GOOGLE_SEARCH_CSE_ID
-        }
+        minimax: process.env.MINIMAX_KEY || resolveEnvValue(credentials.familles_ia?.minimax)
     },
 
     // === Modèles IA ===
