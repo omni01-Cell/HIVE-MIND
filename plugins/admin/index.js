@@ -150,6 +150,12 @@ export default {
             pattern: /^\.deleted$/i,
             name: 'admin_show_deleted',
             extractArgs: () => ({})
+        },
+        // PV Audio Control (Global Admin Only)
+        {
+            pattern: /^\.pv\.audio\.(on|off|status)$/i,
+            name: 'admin_pv_audio',
+            extractArgs: (match) => ({ action: match[1].toLowerCase() })
         }
     ],
 
@@ -186,13 +192,16 @@ export default {
                 return await this._setVoiceMode(args.mode);
 
             case 'admin_audio_perm':
-                return await this._setAudioPermission(args.permission, context.chatId);
+                return await this._setAudioPermission(args.permission, context.chatId, context.isGroup);
 
             case 'admin_antidelete':
                 return await this._toggleAntiDelete(args.action, context.chatId);
 
             case 'admin_show_deleted':
                 return await this._showDeletedMessages(context.chatId);
+
+            case 'admin_pv_audio':
+                return await this._setPvAudio(args.action, sender);
 
             default:
                 return { success: false, message: `Commande inconnue: ${toolName}` };
@@ -337,9 +346,22 @@ export default {
      * Change les permissions audio pour un groupe
      * @param {string} permission - 'all' | 'admins_only' | 'none' | 'status'
      * @param {string} groupJid - JID du groupe
+     * @param {boolean} isGroup - Est-ce un groupe ?
      */
-    async _setAudioPermission(permission, groupJid) {
+    async _setAudioPermission(permission, groupJid, isGroup) {
         try {
+            // VÉRIFICATION: Cette commande ne fonctionne qu'en groupe
+            if (!isGroup) {
+                return {
+                    success: false,
+                    message: `❌ Cette commande ne fonctionne qu'en **groupe**.\n\n` +
+                        `Pour gérer les vocaux en PV, utilisez:\n` +
+                        `• \`.pv.audio.status\` - Voir le statut\n` +
+                        `• \`.pv.audio.off\` - Désactiver (Global Admin)\n` +
+                        `• \`.pv.audio.on\` - Réactiver (Global Admin)`
+                };
+            }
+
             // Si c'est une demande de status
             if (permission === 'status') {
                 const currentPerm = await workingMemory.getAudioPermission(groupJid);
@@ -350,7 +372,7 @@ export default {
                 };
                 return {
                     success: true,
-                    message: `🔊 **Permissions Audio**\n\n${permLabels[currentPerm] || permLabels['all']}\n\n` +
+                    message: `🔊 **Permissions Audio (Groupe)**\n\n${permLabels[currentPerm] || permLabels['all']}\n\n` +
                         `Commandes:\n` +
                         `• \`.mute.audio_for_none\` - Bloque les non-admins\n` +
                         `• \`.mute.audio_for_all\` - Bloque tout le monde\n` +
@@ -370,6 +392,52 @@ export default {
             return {
                 success: true,
                 message: `✅ Permission audio mise à jour\n\n${permLabels[permission]}`
+            };
+        } catch (error) {
+            return { success: false, message: `Erreur: ${error.message}` };
+        }
+    },
+
+    /**
+     * Gère les vocaux en PV (Global Admin Only)
+     * @param {string} action - 'on' | 'off' | 'status'
+     * @param {string} senderJid - JID de l'expéditeur
+     */
+    async _setPvAudio(action, senderJid) {
+        try {
+            // Vérifier que c'est un Global Admin
+            const isGlobalAdmin = await adminService.isGlobalAdmin(senderJid);
+
+            if (action === 'status') {
+                // Le status est accessible à tout le monde
+                const isDisabled = await workingMemory.isPvAudioDisabled();
+                return {
+                    success: true,
+                    message: `🎤 **Vocaux en PV**\n\n` +
+                        `Statut: ${isDisabled ? '🔴 DÉSACTIVÉS globalement' : '🟢 ACTIVÉS'}\n\n` +
+                        `En PV, les vocaux sont transcrits directement sans restriction de mode.\n` +
+                        (isGlobalAdmin
+                            ? `\nCommandes Global Admin:\n• \`.pv.audio.off\` - Désactiver\n• \`.pv.audio.on\` - Réactiver`
+                            : `\n_(Seuls les Global Admins peuvent modifier ce paramètre)_`)
+                };
+            }
+
+            // Pour on/off, il faut être Global Admin
+            if (!isGlobalAdmin) {
+                return {
+                    success: false,
+                    message: `❌ **Accès refusé**\n\nSeuls les **Global Admins** peuvent activer/désactiver les vocaux en PV.`
+                };
+            }
+
+            const disable = action === 'off';
+            await workingMemory.setPvAudioDisabled(disable);
+
+            return {
+                success: true,
+                message: disable
+                    ? `🔴 **Vocaux PV DÉSACTIVÉS**\n\nLes vocaux en messages privés ne seront plus transcrits.`
+                    : `🟢 **Vocaux PV ACTIVÉS**\n\nLes vocaux en messages privés seront à nouveau transcrits.`
             };
         } catch (error) {
             return { success: false, message: `Erreur: ${error.message}` };

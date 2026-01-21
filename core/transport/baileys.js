@@ -1,4 +1,3 @@
-// core/transport/baileys.js
 // Implémentation concrète du transport utilisant @whiskeysockets/baileys
 
 import {
@@ -14,6 +13,7 @@ import qrcode from 'qrcode-terminal';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { EventEmitter } from 'events';
 
 // DTC Phase 1: Nouveaux services unifiés
 // import { userService } from '../../services/userService.js'; // REMOVED FOR DI
@@ -23,6 +23,9 @@ import { formatToWhatsApp } from '../../utils/helpers.js';
 import { workingMemory } from '../../services/workingMemory.js';
 import { botIdentity } from '../../utils/botIdentity.js';
 import { resolveMentionsInText } from '../../utils/fuzzyMatcher.js';
+
+// NOUVEAU: Import config centralisée pour Audio Strategy
+import { config as globalConfig } from '../../config/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -42,8 +45,9 @@ try {
     };
 }
 
-class BaileysTransport {
+class BaileysTransport extends EventEmitter {
     constructor() {
+        super();
         this.sock = null;
         this.messageCallback = null;
         this.groupEventCallback = null;
@@ -51,6 +55,10 @@ class BaileysTransport {
         this.backlogMessagesIgnored = 0; // Compteur de messages ignorés
         this.container = null; // DI Container
         this.isConnecting = false; // Guard to prevent parallel connections
+        // State management
+        this.state = null;
+        this.saveCreds = null;
+        this.reconnectAttempts = 0;
     }
 
     setContainer(container) {
@@ -73,48 +81,57 @@ class BaileysTransport {
      * Connecte au service WhatsApp via Baileys
      */
     async connect(sessionPath = 'session') {
+        const self = this; // Capture du contexte pour les callbacks
+
         // Guard: Prevent multiple simultaneous connection attempts
-        if (this.isConnecting) {
+        if (self.isConnecting) {
             console.log('[Baileys] ⏳ Connexion déjà en cours, ignoré.');
             return;
         }
-        this.isConnecting = true;
+        self.isConnecting = true;
 
         // Cleanup: End previous socket to prevent listener accumulation
-        if (this.sock) {
+        if (self.sock) {
             try {
-                this.sock.ev.removeAllListeners();
-                this.sock.end(new Error('Reconnecting'));
+                self.sock.ev.removeAllListeners();
+                self.sock.end(new Error('Reconnecting'));
             } catch (e) { /* ignore cleanup errors */ }
-            this.sock = null;
+            self.sock = null;
         }
 
         // Connexion silencieuse pour ne pas casser la barre de progression
-
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+        self.state = state;
+        self.saveCreds = saveCreds;
+
         const { version } = await fetchLatestBaileysVersion();
 
-        this.sock = makeWASocket({
-            auth: state,
+        self.sock = makeWASocket({
+            auth: self.state,
             logger: pino({ level: 'silent' }),
+            printQRInTerminal: true,
+            browser: [config.bot_name || "HIVE-MIND", "Chrome", "1.0.0"],
+            // Augmenter le timeout pour éviter les déconnexions intempestives
+            connectTimeoutMs: 60000,
+            defaultQueryTimeoutMs: 60000,
+            keepAliveIntervalMs: 10000,
+            emitOwnEvents: true,
+            markOnlineOnConnect: true,
+            retryRequestDelayMs: 5000,
             version: version,
-            syncFullAppState: false, // Désactivé pour éviter les logs verbeux "Closing session"
-            printQRInTerminal: false // On gère nous-même le QR
+            syncFullAppState: false // Désactivé pour éviter les logs verbeux
         });
 
         // Sauvegarde automatique des credentials
-        this.sock.ev.on('creds.update', saveCreds);
+        self.sock.ev.on('creds.update', self.saveCreds);
 
         // Gestion de la connexion
-        this.sock.ev.on('connection.update', (update) => {
+        self.sock.ev.on('connection.update', (update) => {
             const { connection, lastDisconnect, qr } = update;
 
             if (qr) {
-                // Affichage manuel du QR Code dans le terminal
-                console.log('👇 Scannez le QR Code ci-dessous avec WhatsApp :');
+                console.log('SCANNEZ CE QR CODE AVEC WHATSAPP :');
                 qrcode.generate(qr, { small: true });
-
-                // On garde aussi le système d'événements
                 eventBus.publish(BotEvents.QR_RECEIVED, qr);
             }
 
@@ -125,231 +142,262 @@ class BaileysTransport {
                 console.log(`[Baileys] 🔌 Déconnexion (statusCode: ${statusCode || 'undefined'}, reason: ${lastDisconnect?.error?.message || 'unknown'})`);
                 eventBus.publish(BotEvents.DISCONNECTED, { shouldReconnect });
 
+                // Gérer le cas spécifique "Stream Errored" qui boucle
+                if (lastDisconnect.error?.message === 'Stream Errored (conflict)') {
+                    console.log('⚠️ Conflit de stream détecté, attente avant reconnexion...');
+                    self.isConnecting = false;
+                    setTimeout(() => self.connect(sessionPath), 5000);
+                    return;
+                }
+
                 // Reset guard to allow reconnection
-                this.isConnecting = false;
+                self.isConnecting = false;
 
                 if (shouldReconnect) {
-                    const delayMs = 3000; // Increased delay
+                    // Backoff exponentiel
+                    const delayMs = Math.min(1000 * Math.pow(2, self.reconnectAttempts || 0), 30000);
+                    self.reconnectAttempts = (self.reconnectAttempts || 0) + 1;
+
                     console.log(`🔄 Reconnexion dans ${delayMs / 1000}s...`);
 
                     setTimeout(() => {
-                        this.connect(sessionPath).catch(err => console.error('Echec reconnexion:', err));
+                        self.connect(sessionPath).catch(err => console.error('Echec reconnexion:', err));
                     }, delayMs);
                 } else {
                     console.log('[Baileys] ⛔ Déconnexion définitive (loggedOut)');
                 }
             } else if (connection === 'open') {
                 console.log('✅ Connecté à WhatsApp !');
-                this.isConnecting = false;
-                this.connectionTime = Math.floor(Date.now() / 1000);
-                this.backlogMessagesIgnored = 0;
+                self.isConnecting = false;
+                self.reconnectAttempts = 0;
+                self.connectionTime = Math.floor(Date.now() / 1000);
+                self.backlogMessagesIgnored = 0;
 
                 // [CONSCIOUSNESS] Définir l'identité du bot
-                if (this.container && this.container.has('consciousness')) {
-                    const consciousness = this.container.get('consciousness');
-                    consciousness.setIdentity(this.sock.user);
+                if (self.container && self.container.has('consciousness')) {
+                    const consciousness = self.container.get('consciousness');
+                    consciousness.setIdentity(self.sock.user);
                 }
 
                 // Mettre le bot "En ligne" pour montrer qu'il est réveillé
-                this.sock.sendPresenceUpdate('available');
+                self.sock.sendPresenceUpdate('available');
 
                 eventBus.publish(BotEvents.CONNECTED);
             }
         });
 
         // Écoute des messages
-        this.sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        self.sock.ev.on('messages.upsert', async ({ messages, type }) => {
             if (type !== 'notify') return;
 
             for (const msg of messages) {
                 if (msg.key.fromMe) continue;
 
-                const chatId = msg.key.remoteJid;
-                const senderId = msg.key.participant || msg.key.remoteJid;
+                // Extraction des variables de base immédiate
+                const remoteJid = msg.key.remoteJid;
+                const sender = msg.key.participant || msg.key.remoteJid;
+                const senderName = msg.pushName || sender.split('@')[0];
+                const messageType = Object.keys(msg.message)[0];
+                const pushName = msg.pushName;
+                const chatId = remoteJid;
                 const isGroup = chatId.endsWith('@g.us');
+                const senderId = sender;
 
                 // 1. MISE À JOUR SOCIALE (USER)
-                // DTC Phase 1: Utiliser userService (via DI)
-                if (this.userService) {
-                    await this.userService.recordInteraction(senderId, msg.pushName, isGroup ? chatId : null);
+                if (self.userService) {
+                    await self.userService.recordInteraction(senderId, msg.pushName, isGroup ? chatId : null);
                 }
 
                 // 2. AUTO-DISCOVERY (GROUPES)
-                // Si c'est un groupe, vérifions si on le connaît ou s'il faut le rafraîchir
-                // 2. AUTO-DISCOVERY (GROUPES)
-                // Si c'est un groupe, vérifions si on le connaît ou s'il faut le rafraîchir
-                if (isGroup && this.groupService) {
-                    const needsUpdate = await this.groupService.needsUpdate(chatId);
+                if (isGroup && self.groupService) {
+                    const needsUpdate = await self.groupService.needsUpdate(chatId);
 
                     if (needsUpdate) {
                         try {
                             console.log(`[Discovery] Scan du groupe ${chatId} en cours...`);
-                            // Appel API WhatsApp (C'est la seule fois qu'on le fait, ensuite c'est en cache)
-                            const metadata = await this.sock.groupMetadata(chatId);
-                            await this.groupService.updateGroup(chatId, metadata);
+                            const metadata = await self.sock.groupMetadata(chatId);
+                            await self.groupService.updateGroup(chatId, metadata);
                         } catch (err) {
                             console.error(`[Discovery] Echec recup metadata groupe: ${err.message}`);
                         }
                     }
                 }
 
-                // ⚡ Filtre anti-backlog : Ignorer les messages trop anciens
-                if (config.backlog_protection?.enabled && this.connectionTime) {
+                // ⚡ Filtre anti-backlog
+                if (config.backlog_protection?.enabled && self.connectionTime) {
                     const messageTimestamp = msg.messageTimestamp;
                     const now = Math.floor(Date.now() / 1000);
                     const messageAge = now - messageTimestamp;
                     const threshold = config.backlog_protection.message_stale_threshold_seconds;
 
                     if (messageAge > threshold) {
-                        this.backlogMessagesIgnored++;
-                        console.log(`[Baileys] 🚫 Message ignoré (${messageAge}s ancien, seuil: ${threshold}s) - Total ignorés: ${this.backlogMessagesIgnored}`);
-                        continue; // Passer au message suivant sans traiter celui-ci
+                        self.backlogMessagesIgnored++;
+                        console.log(`[Baileys] 🚫 Message ignoré (${messageAge}s ancien)`);
+                        continue;
                     }
                 }
 
-                // 3. TRANSCRIPTION VOCALE (STT) - V5 (Modes: restricted/full + Permissions)
-                // Si c'est un message audio, on applique la logique selon le mode configuré
+                // 3. TRANSCRIPTION & AUDIO HANDLING (V6)
                 const isAudio = msg.message?.audioMessage;
                 let transcribedText = null;
 
-                if (isAudio && this.container?.has('transcriptionService')) {
-                    const voiceConfig = config.voice_transcription || {};
-                    const mode = voiceConfig.mode || 'restricted';
-                    // Utiliser les variantes dynamiques de botIdentity
-                    const nameVariants = botIdentity.vocalVariants;
+                // Préparer normalizedMsg
+                const normalizedMsg = {
+                    id: msg.key.id,
+                    chatId: remoteJid, // CRITICAL: Propagate chatId
+                    remoteJid: remoteJid,
+                    sender: sender,
+                    senderName: senderName,
+                    pushName: pushName,
+                    fromMe: msg.key.fromMe || false,
+                    isGroup: isGroup,
+                    timestamp: msg.messageTimestamp,
+                    type: messageType,
+                    raw: msg
+                };
 
-                    // PERMISSION CHECK: Vérifier si l'utilisateur a le droit d'envoyer des vocaux
-                    const audioPermission = await workingMemory.getAudioPermission(chatId);
+                try {
+                    if (isAudio && self.container?.has('transcriptionService')) {
+                        // ========== PV (MESSAGES PRIVÉS) ==========
+                        if (!isGroup) {
+                            const pvAudioDisabled = await workingMemory.isPvAudioDisabled();
 
-                    if (audioPermission === 'none') {
-                        console.log(`[Baileys] ⏭️ Audio ignoré (permission: none pour ce groupe)`);
-                        // Continue sans transcrire
-                    } else if (audioPermission === 'admins_only') {
-                        // Vérifier si l'expéditeur est admin du groupe
-                        const isAdmin = await this._isUserAdmin(chatId, senderId);
-                        if (!isAdmin) {
-                            console.log(`[Baileys] ⏭️ Audio ignoré (permission: admins_only, user non admin)`);
-                            // Continue sans transcrire
-                        }
-                    }
+                            if (pvAudioDisabled) {
+                                console.log(`[Baileys] ⏭️ Audio PV ignoré (désactivé globalement)`);
+                            } else {
+                                const audioStrategy = globalConfig.models?.reglages_generaux?.audio_strategy || {};
+                                const useNativeAudio = audioStrategy.prefer_native && self.container?.has('geminiLiveProvider');
 
-                    // MODE RESTRICTED: Transcrire seulement si c'est une réponse au bot
-                    let shouldTranscribe = (mode === 'full' && audioPermission !== 'none');
-
-                    if (audioPermission === 'admins_only') {
-                        const isAdmin = await this._isUserAdmin(chatId, senderId);
-                        if (!isAdmin) shouldTranscribe = false;
-                    }
-
-                    if (mode === 'restricted' && audioPermission !== 'none') {
-                        // Vérifier si l'audio est une réponse (quoted) à un message du bot
-                        const quotedInfo = msg.message?.audioMessage?.contextInfo;
-                        if (quotedInfo?.participant) {
-                            const rawBotId = this.sock?.user?.id;
-                            const botLid = this.sock?.user?.lid;
-                            const quotedSender = quotedInfo.participant;
-
-                            // Comparer avec le JID ou LID du bot
-                            const botMatch = (rawBotId && quotedSender.includes(rawBotId.split(':')[0]?.split('@')[0])) ||
-                                (botLid && quotedSender.includes(botLid.split(':')[0]?.split('@')[0]));
-
-                            if (botMatch) {
-                                // Vérifier permission admin si nécessaire
-                                if (audioPermission === 'admins_only') {
-                                    const isAdmin = await this._isUserAdmin(chatId, senderId);
-                                    if (isAdmin) {
-                                        console.log(`[Baileys] 🎤 Mode restricted + admins_only: Audio admin répond au bot`);
-                                        shouldTranscribe = true;
+                                if (useNativeAudio) {
+                                    console.log(`[Baileys] 🎙️ Mode Audio NATIF détecté (Gemini Live)`);
+                                    try {
+                                        const buffer = await downloadMediaMessage(
+                                            msg, 'buffer', {}, { reuploadRequest: self.sock.updateMediaMessage, logger: pino({ level: 'silent' }) }
+                                        );
+                                        normalizedMsg.audioBuffer = buffer;
+                                        normalizedMsg.useNativeAudio = true;
+                                        normalizedMsg.text = '[AUDIO_NATIVE]';
+                                        console.log(`[Baileys] ✅ Buffer audio prêt pour traitement natif (${buffer.length} bytes)`);
+                                    } catch (err) {
+                                        console.error(`[Baileys] ❌ Erreur téléchargement audio natif: ${err.message}`);
+                                        if (audioStrategy.fallback_to_cascade) {
+                                            console.log(`[Baileys] 🔄 Fallback vers mode cascade`);
+                                            // Fallback logique dessous...
+                                        }
                                     }
-                                } else {
-                                    console.log(`[Baileys] 🎤 Mode restricted: Audio répond au bot, transcription...`);
-                                    shouldTranscribe = true;
+                                }
+
+                                // CASCADE
+                                if (!normalizedMsg.useNativeAudio) {
+                                    console.log(`[Baileys] 🎤 Audio PV détecté, transcription directe...`);
+                                    try {
+                                        const buffer = await downloadMediaMessage(
+                                            msg, 'buffer', {}, { reuploadRequest: self.sock.updateMediaMessage, logger: pino({ level: 'silent' }) }
+                                        );
+                                        const { writeFileSync, unlinkSync, mkdirSync, existsSync } = await import('fs');
+
+                                        const tempDir = join(__dirname, '..', '..', 'temp', 'stt');
+                                        if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+                                        const tempPath = join(tempDir, `stt_pv_${msg.key.id}.ogg`);
+                                        writeFileSync(tempPath, buffer);
+                                        const transcriptionService = self.container.get('transcriptionService');
+                                        transcribedText = await transcriptionService.transcribe(tempPath);
+                                        console.log(`[Baileys] 🗣️ Transcription PV: "${transcribedText}"`);
+                                        try { unlinkSync(tempPath); } catch (e) { }
+                                    } catch (err) {
+                                        console.error(`[Baileys] ❌ Erreur STT PV: ${err.message}`);
+                                    }
+                                }
+                            }
+                        }
+                        // ========== GROUPES ==========
+                        else {
+                            const groupService = self.container?.get('groupService');
+                            const groupSettings = groupService ? await groupService.getGroupSettings(groupId) : {};
+                            const mode = groupSettings?.audio_mode || 'mention_only';
+
+                            if (mode === 'off') {
+                                console.log(`[Baileys] ⏭️ Audio Groupe ignoré (Mode OFF)`);
+                            } else {
+                                // (Simplifié pour ce fix: STT classique pour les groupes)
+                                try {
+                                    // TODO: Implement Logic similar to PV for Native Audio if Groups Enabled
+                                    const buffer = await downloadMediaMessage(
+                                        msg, 'buffer', {}, { reuploadRequest: self.sock.updateMediaMessage, logger: pino({ level: 'silent' }) }
+                                    );
+
+                                    const { writeFileSync, unlinkSync, mkdirSync, existsSync } = await import('fs');
+                                    const tempDir = join(__dirname, '..', '..', 'temp', 'stt');
+                                    if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+                                    const tempPath = join(tempDir, `stt_${msg.key.id}.ogg`);
+                                    writeFileSync(tempPath, buffer);
+
+                                    const transcriptionService = self.container.get('transcriptionService');
+                                    transcribedText = await transcriptionService.transcribe(tempPath);
+                                    console.log(`[Baileys] 🗣️ Transcription Groupe: "${transcribedText}"`);
+
+                                    const mentionsBot = botIdentity.isVocallyMentioned(transcribedText);
+                                    let isQuotedReplyToBot = false;
+                                    const audioCtx = msg.message?.audioMessage?.contextInfo;
+                                    if (audioCtx?.participant) {
+                                        const rawBotId = self.sock?.user?.id;
+                                        const botLid = self.sock?.user?.lid;
+                                        const quotedSender = audioCtx.participant;
+                                        isQuotedReplyToBot = (rawBotId && quotedSender.includes(rawBotId.split(':')[0]?.split('@')[0])) ||
+                                            (botLid && quotedSender.includes(botLid.split(':')[0]?.split('@')[0]));
+                                    }
+
+                                    if (!mentionsBot && !isQuotedReplyToBot && mode !== 'full') {
+                                        transcribedText = null;
+                                    }
+                                    try { unlinkSync(tempPath); } catch (e) { }
+                                } catch (e) {
+                                    console.error(`[Baileys] Erreur STT Groupe: ${e.message}`);
                                 }
                             }
                         }
                     }
 
-                    if (shouldTranscribe) {
-                        try {
-                            console.log(`[Baileys] 🎤 Audio détecté de ${senderId}, téléchargement...`);
-
-                            // 1. Télécharger (stocker temporairement)
-                            const buffer = await downloadMediaMessage(
-                                msg,
-                                'buffer',
-                                {},
-                                {
-                                    reuploadRequest: this.sock.updateMediaMessage,
-                                    logger: pino({ level: 'silent' })
-                                }
-                            );
-
-                            // Sauvegarder temp pour l'envoi à Groq
-                            const { join } = await import('path');
-                            const { writeFileSync, unlinkSync, existsSync, mkdirSync } = await import('fs');
-
-                            // Ensure temp dir
-                            const tempDir = join(__dirname, '..', '..', 'temp', 'stt');
-                            if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-
-                            const tempPath = join(tempDir, `stt_${msg.key.id}.ogg`);
-                            writeFileSync(tempPath, buffer);
-
-                            // 2. Transcrire via Service
-                            const transcriptionService = this.container.get('transcriptionService');
-                            transcribedText = await transcriptionService.transcribe(tempPath);
-
-                            console.log(`[Baileys] 🗣️ Transcription: "${transcribedText}"`);
-
-                            // 3. Vérifier si le nom du bot est mentionné (avec variants dynamiques)
-                            // Ceci évite d'envoyer à l'IA si le nom du bot n'est pas mentionné
-                            const mentionsBot = botIdentity.isVocallyMentioned(transcribedText);
-
-                            if (!mentionsBot && mode === 'full') {
-                                console.log(`[Baileys] ⏭️ Transcription ignorée (nom du bot absent)`);
-                                transcribedText = null; // Ne pas passer à l'IA
-                            }
-
-                            // Cleanup
-                            try { unlinkSync(tempPath); } catch (e) { }
-
-                        } catch (err) {
-                            console.error(`[Baileys] ❌ Erreur STT: ${err.message}`);
-                        }
-                    } else {
-                        console.log(`[Baileys] ⏭️ Mode restricted: Audio ignoré (pas de quoted reply au bot)`);
+                    // Assigner le texte transcrit
+                    if (transcribedText) {
+                        normalizedMsg.text = transcribedText;
+                        normalizedMsg.isTranscribed = true;
+                    } else if (!normalizedMsg.text && !normalizedMsg.useNativeAudio) {
+                        // Fallback text extraction if not audio
+                        let textBody = '';
+                        if (msg.message?.conversation) textBody = msg.message.conversation;
+                        else if (msg.message?.extendedTextMessage?.text) textBody = msg.message.extendedTextMessage.text;
+                        else if (msg.message?.imageMessage?.caption) textBody = msg.message.imageMessage.caption;
+                        else if (msg.message?.videoMessage?.caption) textBody = msg.message.videoMessage.caption;
+                        normalizedMsg.text = textBody;
                     }
-                }
 
-                const normalizedMsg = this._normalizeMessage(msg);
+                    // ANTI-DELETE logic
+                    if (normalizedMsg.text && isGroup) {
+                        workingMemory.storeMessage(chatId, msg.key.id, {
+                            sender: senderId,
+                            senderName: msg.pushName || senderId.split('@')[0],
+                            text: normalizedMsg.text,
+                            mediaType: normalizedMsg.mediaType,
+                            timestamp: msg.messageTimestamp
+                        }).catch(() => { });
+                    }
 
-                // Injecter le texte transcrit
-                if (transcribedText) {
-                    normalizedMsg.text = transcribedText;
-                    normalizedMsg.isTranscribed = true;
-                    normalizedMsg.originalMediaType = 'audio';
-                }
+                    // EMIT MESSAGE
+                    if (normalizedMsg.text || normalizedMsg.useNativeAudio) {
+                        if (self.messageCallback) self.messageCallback(normalizedMsg);
+                        eventBus.publish(BotEvents.MESSAGE_RECEIVED, normalizedMsg);
+                        self.emit('message', normalizedMsg);
+                    }
 
-                // ANTI-DELETE: Stocker le message pour pouvoir le récupérer si supprimé
-                if (normalizedMsg.text && isGroup) {
-                    workingMemory.storeMessage(chatId, msg.key.id, {
-                        sender: senderId,
-                        senderName: msg.pushName || senderId.split('@')[0],
-                        text: normalizedMsg.text,
-                        mediaType: normalizedMsg.mediaType,
-                        timestamp: msg.messageTimestamp
-                    }).catch(() => { });
+                } catch (err) {
+                    console.error('[Baileys] ❌ Erreur traitement message:', err);
                 }
-
-                if (this.messageCallback) {
-                    this.messageCallback(normalizedMsg);
-                }
-                eventBus.publish(BotEvents.MESSAGE_RECEIVED, normalizedMsg);
             }
         });
 
         // REACTION: écoute des réactions
-        this.sock.ev.on('messages.reaction', async (reactions) => {
+        self.sock.ev.on('messages.reaction', async (reactions) => {
             for (const reaction of reactions) {
                 const reactionData = {
                     chatId: reaction.key.remoteJid,
@@ -358,82 +406,64 @@ class BaileysTransport {
                     reaction: reaction.reaction.text,
                     timestamp: reaction.reaction.messageTimestamp
                 };
-
                 console.log(`[Baileys] 👍 Réaction reçue: ${reactionData.reaction} dans ${reactionData.chatId}`);
                 eventBus.publish(BotEvents.REACTION_RECEIVED, reactionData);
             }
         });
 
         // ANTI-DELETE: Écoute des messages supprimés
-        this.sock.ev.on('messages.update', async (updates) => {
+        self.sock.ev.on('messages.update', async (updates) => {
             for (const update of updates) {
-                // Détecter une suppression (message revoked)
                 if (update.update?.messageStubType === 1 || update.update?.message === null) {
                     const chatId = update.key.remoteJid;
                     const messageId = update.key.id;
-
-                    // Vérifier si l'anti-delete est activé pour ce groupe
                     const isEnabled = await workingMemory.isAntiDeleteEnabled(chatId);
                     if (!isEnabled) continue;
 
-                    // Récupérer le message stocké
                     const storedMsg = await workingMemory.getStoredMessage(chatId, messageId);
                     if (!storedMsg) continue;
 
                     console.log(`[AntiDelete] 🗑️ Message supprimé détecté de ${storedMsg.senderName}`);
-
-                    // Tracker la suppression
                     await workingMemory.trackDeletedMessage(chatId, messageId, storedMsg);
 
-                    // Reposter automatiquement le message
                     try {
                         const repostText = `🗑️ *Message supprimé par ${storedMsg.senderName}:*\n\n"${storedMsg.text}"`;
-                        await this.sock.sendMessage(chatId, { text: repostText });
-                        console.log(`[AntiDelete] ✅ Message reposté`);
-                    } catch (e) {
-                        console.error('[AntiDelete] Erreur repost:', e.message);
-                    }
+                        await self.sock.sendMessage(chatId, { text: repostText });
+                    } catch (e) { }
                 }
             }
         });
 
         // Écoute des synchronisations de contacts
-        // C'est la SOURCE DE VÉRITÉ pour le mapping JID <-> LID
-        this.sock.ev.on('contacts.upsert', async (contacts) => {
-            if (!this.userService) return;
-
+        self.sock.ev.on('contacts.upsert', async (contacts) => {
+            if (!self.userService) return;
             for (const contact of contacts) {
-                // contact est de la forme: { id: "jid", lid: "lid", ... }
                 if (contact.id && contact.lid) {
-                    // On enregistre le mapping de manière asynchrone sans bloquer
-                    this.userService.registerLid(contact.id, contact.lid).catch(() => { });
-
-                    // Si debug activé
-                    // console.log(`[ContactSync] Nouveau lien: ${contact.id} ↔ ${contact.lid}`);
+                    self.userService.registerLid(contact.id, contact.lid).catch(() => { });
                 }
             }
         });
 
-        this.sock.ev.on('contacts.update', async (updates) => {
-            if (!this.userService) return;
+        self.sock.ev.on('contacts.update', async (updates) => {
+            if (!self.userService) return;
             for (const update of updates) {
                 if (update.id && update.lid) {
-                    this.userService.registerLid(update.id, update.lid).catch(() => { });
+                    self.userService.registerLid(update.id, update.lid).catch(() => { });
                 }
             }
         });
 
         // Écoute des événements de groupe
-        this.sock.ev.on('group-participants.update', async (event) => {
+        self.sock.ev.on('group-participants.update', async (event) => {
             const normalizedEvent = {
                 groupId: event.id,
                 participants: event.participants,
-                action: event.action, // 'add' | 'remove' | 'promote' | 'demote'
+                action: event.action,
                 timestamp: Date.now()
             };
 
-            if (this.groupEventCallback) {
-                this.groupEventCallback(normalizedEvent);
+            if (self.groupEventCallback) {
+                self.groupEventCallback(normalizedEvent);
             }
 
             const eventMap = {
@@ -445,7 +475,7 @@ class BaileysTransport {
             eventBus.publish(eventMap[event.action], normalizedEvent);
         });
 
-        return this.sock;
+        return self.sock;
     }
 
     /**
@@ -546,7 +576,7 @@ class BaileysTransport {
 
         let mentions = options.mentions || [];
 
-        // (Module 10) Résolution des @mentions via fuzzy matching
+        // (Module 10) Résolution des @mentions via fuzzy matching ET implicit matching
         // Active seulement pour les groupes
         if (chatId.endsWith('@g.us') && this.container) {
             try {
@@ -555,15 +585,22 @@ class BaileysTransport {
                     const members = await groupService.getGroupMembers(chatId);
 
                     if (members && members.length > 0) {
-                        const { resolveMentionsInText } = await import('../../utils/fuzzyMatcher.js');
+                        const { resolveMentionsInText, resolveImplicitMentions } = await import('../../utils/fuzzyMatcher.js');
 
-                        // Résolution EXPLICITE uniquement (@Nom ou @Numéro)
-                        // PAS de résolution implicite pour éviter de taguer quand le bot dit juste un nom/numéro
+                        // 1. Résolution Explicite (@Nom)
                         let resolved = resolveMentionsInText(formattedText, members);
                         if (resolved.mentions.length > 0) {
                             formattedText = resolved.text;
                             mentions = [...mentions, ...resolved.mentions];
-                            console.log(`[Baileys] 🏷️ Mentions résolues: ${resolved.resolved.map(m => m.name || 'Inconnu').join(', ')}`);
+                        }
+
+                        // 2. Résolution Implicite (Nom sans @) - NOUVEAU
+                        // On passe le texte déjà formaté (qui a peut-être déjà des @id)
+                        const implicitResolved = resolveImplicitMentions(formattedText, members);
+                        if (implicitResolved.mentions.length > 0) {
+                            formattedText = implicitResolved.text;
+                            mentions = [...mentions, ...implicitResolved.mentions];
+                            console.log(`[Baileys] 🕵️ Mentions implicites trouvées: ${implicitResolved.resolved.map(m => m.name).join(', ')}`);
                         }
 
                         // Dédoublonnage
@@ -652,7 +689,7 @@ class BaileysTransport {
      * (UX/UI) Envoie un sondage natif
      * @param {string} chatId 
      * @param {string} name - Titre du sondage
-     * @param {string[]} values - Options de réponse
+     * @param {string} values - Options de réponse
      * @param {number} selectableCount - Nombre de choix possibles (défaut: 1)
      */
     async sendPoll(chatId, name, values, selectableCount = 1) {
@@ -832,6 +869,27 @@ class BaileysTransport {
     }
 
     /**
+     * Envoie un message générique (alias pour sock.sendMessage)
+     */
+    async sendMessage(chatId, content, options = {}) {
+        if (!chatId) return null;
+        return await this.sock.sendMessage(chatId, content, options);
+    }
+
+    /**
+     * Envoie une réaction à un message
+     */
+    async sendReaction(chatId, key, emoji) {
+        if (!chatId || !key) return null;
+        return await this.sock.sendMessage(chatId, {
+            react: {
+                text: emoji,
+                key: key
+            }
+        });
+    }
+
+    /**
      * Envoie une note vocale (PTT)
      * Compatible iOS/Android
      */
@@ -911,8 +969,20 @@ class BaileysTransport {
      * Met à jour la présence
      */
     async setPresence(chatId, presence) {
-        await this.sock.presenceSubscribe(chatId);
-        await this.sock.sendPresenceUpdate(presence, chatId);
+        if (!chatId) {
+            console.warn('[Baileys] ⚠️ Tentative setPresence avec chatId undefined');
+            return;
+        }
+
+        try {
+            // S'assurer que le JID est valide avant de souscrire
+            if (chatId.includes('@')) {
+                await this.sock.presenceSubscribe(chatId);
+                await this.sock.sendPresenceUpdate(presence, chatId);
+            }
+        } catch (err) {
+            console.error('[Baileys] ❌ Erreur setPresence:', err.message);
+        }
     }
 
     /**

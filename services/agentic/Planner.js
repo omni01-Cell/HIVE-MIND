@@ -101,13 +101,26 @@ Format JSON:
                 throw new Error('AI response is empty or null');
             }
 
-            const planText = response.content.replace(/```json|```/g, '').trim();
+            // Nettoyage robuste : Extraire uniquement ce qui ressemble à du JSON
+            const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+            const planText = jsonMatch ? jsonMatch[0] : response.content;
+
             let plan;
             try {
+                // Tentative de parsing standard
                 plan = JSON.parse(planText);
             } catch (e) {
-                console.error('[Planner] Erreur parsing JSON (tronqué ?):', e.message);
-                throw new Error('AI response is not valid JSON');
+                // Si échec, tentative de nettoyage des clés sans guillemets (erreur commune LLM)
+                try {
+                    const fixedJson = planText
+                        .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Ajout guillemets aux clés
+                        .replace(/'/g, '"'); // Remplacement simple quotes par double quotes
+                    plan = JSON.parse(fixedJson);
+                } catch (innerE) {
+                    console.error('[Planner] Erreur parsing JSON (tronqué ou invalide):', e.message);
+                    console.log('[Planner] Contenu brut reçu:', response.content.substring(0, 200) + '...');
+                    throw new Error('AI response is not valid JSON');
+                }
             }
 
             // Stocker le plan dans ActionMemory

@@ -118,8 +118,8 @@ export class VoiceProvider {
 
             // Vérifier quota si QuotaManager disponible
             if (this.quotaManager) {
-                const canUse = await this.quotaManager.canUse(provider, model);
-                if (!canUse) {
+                const isAvailable = await this.quotaManager.isModelAvailable(model);
+                if (!isAvailable) {
                     console.log(`[VoiceProvider] ${provider}/${model} quota épuisé, fallback...`);
                     continue;
                 }

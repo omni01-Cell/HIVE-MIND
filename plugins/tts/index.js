@@ -61,10 +61,12 @@ export default {
             if (!voiceProvider) {
                 console.warn('[TTS Plugin] VoiceProvider manquant dans le contexte, tentative import direct...');
                 try {
-                    const module = await import('../../services/audio/voiceProvider.js');
-                    voiceProvider = module.voiceProvider;
+                    const { VoiceProvider } = await import('../../services/voice/voiceProvider.js');
+                    const { config: appConfig } = await import('../../config/index.js');
+                    const { quotaManager: qm } = await import('../../services/quotaManager.js');
+                    voiceProvider = new VoiceProvider(appConfig.voice, qm);
                 } catch (e) {
-                    console.error('[TTS Plugin] Echec import fallback:', e);
+                    console.error('[TTS Plugin] Echec import fallback:', e.message);
                 }
             }
 

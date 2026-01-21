@@ -269,13 +269,18 @@ class ProviderRouter {
             const familyConfig = this.getFamilyConfig(family);
 
             // Modèles à tester pour cette famille
-            // SÉCURITÉ CRITIQUE: Filtrer par TYPE, pas par nom
-            // On ne garde que les modèles avec type='chat' pour éviter de sélectionner embedding/TTS/audio
-            const modelsToTry = options.model
-                ? [options.model]
-                : (familyConfig?.modeles
-                    ?.filter(m => m.types?.includes('chat')) // FILTRE PAR TYPE
-                    .map(m => m.id) || []);
+            // SÉCURITÉ CRITIQUE: Si options.model est défini, on ne l'utilise QUE si c'est la bonne famille
+            let modelsToTry = [];
+
+            if (options.model && family === options.family) {
+                // Si on a un modèle spécifique forcé ET que c'est la bonne famille
+                modelsToTry = [options.model];
+            } else {
+                // Sinon (fallback ou famille différente), on cherche les modèles 'chat' de cette famille
+                modelsToTry = familyConfig?.modeles
+                    ?.filter(m => m.types?.includes('chat'))
+                    .map(m => m.id) || [];
+            }
 
 
             // Essayer chaque modèle de la famille

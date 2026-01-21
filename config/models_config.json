@@ -31,6 +31,15 @@
             "emergency_rpm_margin": 0.05,
             "emergency_tpm_margin": 0.05,
             "emergency_rpd_margin": 0.02
+        },
+        "audio_strategy": {
+            "comment": "Stratégie de traitement audio: natif (Gemini Live) vs cascade (STT->LLM->TTS)",
+            "prefer_native": true,
+            "fallback_to_cascade": true,
+            "native_for_groups": false,
+            "preserve_emotions": true,
+            "max_native_duration_seconds": 60,
+            "native_voice": "Aoede"
         }
     },
     "familles": {
@@ -141,19 +150,6 @@
                         "rpm": 100,
                         "tpm": 30000,
                         "rpd": 1000
-                    }
-                },
-                {
-                    "id": "gemma-3-12b-it",
-                    "description": "Modèle ouvert puissant.",
-                    "types": [
-                        "chat",
-                        "coding"
-                    ],
-                    "quota": {
-                        "rpm": 30,
-                        "tpm": 15000,
-                        "rpd": 14400
                     }
                 },
                 {
@@ -448,18 +444,6 @@
                     "types": [
                         "chat",
                         "long_context"
-                    ],
-                    "quota": {
-                        "rpm": 30,
-                        "tpm": 15000,
-                        "rpd": 14400
-                    }
-                },
-                {
-                    "id": "gemma2-9b-it",
-                    "description": "Google Gemma 2 9B",
-                    "types": [
-                        "chat"
                     ],
                     "quota": {
                         "rpm": 30,

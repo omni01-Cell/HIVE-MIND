@@ -20,19 +20,30 @@
 
 ## 2. Modes de Transcription
 ### Test 2.1 - Vérifier mode
-**Action :** `.voice status` -> Réponse attendue.
+**Action :** `.voice status`
+**Vérifier :** Affiche le mode actuel (restricted/full).
 
 ### Test 2.2 - Mode Restricted
+**Action :** `.voice restricted`
+**Vérifier :** Confirmation du mode.
 **Action :** Vocal sans répondre au bot -> Ignoré.
 **Action :** Vocal en répondant au bot -> Transcrit.
 
 ### Test 2.3 - Mode Full
-**Action :** `.voice full` -> Vocal "Erina, bonjour" -> Transcrit.
-**Action :** Vocal sans nom -> Ignoré.
+**Action :** `.voice full`
+**Vérifier :** Confirmation du mode.
+**Scénarios valides (transcription déclenchée) :**
+- Vocal mentionnant le nom du bot (ex: "Erina, bonjour") → ✅ Transcrit
+- Vocal en **réponse/quote** à un message du bot → ✅ Transcrit
+**Scénarios ignorés :**
+- Vocal sans nom ET sans reply au bot → ⏭️ Ignoré
 
 ## 3. Permissions Audio par Groupe
+> ⚠️ Ces commandes ne fonctionnent **qu'en groupe** !
+
 ### Test 3.1 - Status par défaut
-**Action :** `.audio.status` -> "Tout le monde".
+**Action :** `.audio.status`
+**Vérifier :** Affiche "Tout le monde" par défaut.
 
 ### Test 3.2 - Bloquer non-admins
 **Action :** `.mute.audio_for_none`
@@ -44,6 +55,24 @@
 ### Test 3.4 - Reset
 **Action :** `.allow.audio_for_all`.
 
+### Test 3.5 - Commande en PV (doit échouer)
+**Action :** Envoyer `.mute.audio_for_none` en PV.
+**Vérifier :** Message d'erreur + suggestion `.pv.audio.*`
+
+## 3b. Vocaux en PV (Global Admin)
+> En PV : Transcription directe, pas de modes restricted/full
+
+### Test 3b.1 - Status PV
+**Action :** `.pv.audio.status`
+**Vérifier :** Affiche le statut actuel.
+
+### Test 3b.2 - Désactiver (Global Admin)
+**Action :** `.pv.audio.off`
+**Vérifier :** Succès pour Global Admin, Refus pour les autres.
+
+### Test 3b.3 - Réactiver (Global Admin)
+**Action :** `.pv.audio.on`
+
 ## 4. Plugin text_to_speech
 ### Test 4.1 - Déclenchement manuel
 **Action :** "Erina, dis bonjour avec ta voix" -> Utilise l'outil `text_to_speech`.
@@ -52,6 +81,40 @@
 ### Test 5.1 - Tous providers HS
 **Action :** Couper clés API.
 **Vérifier :** Fallback texte gracieux.
+
+## 5b. Vision d'Images (Multimodal)
+> Le bot peut maintenant voir les images directes ET les images en quoted reply
+
+### Test 5b.1 - Image directe en PV
+**Action :** Envoyer une image sans texte en PV.
+**Vérifier :** Le bot décrit/commente l'image.
+
+### Test 5b.2 - Image directe avec caption
+**Action :** Envoyer une image avec "Erina c'est quoi ça ?" en groupe.
+**Vérifier :** Le bot voit l'image ET le texte.
+
+### Test 5b.3 - Image en quoted reply
+**Action :** Répondre à une image en mentionnant le bot "Erina qu'est-ce qu'on voit ici ?"
+**Vérifier :** Le bot télécharge l'image du quoted et la décrit.
+
+### Test 5b.4 - Quote d'image sans texte + mention
+**Action :** Quelqu'un envoie une image, tu reply avec "@Erina"
+**Vérifier :** Le bot voit l'image du quoted.
+
+## 5c. Audio Natif (Gemini Live)
+> Nécessite `prefer_native: true` dans `models_config.json`
+
+### Test 5c.1 - Vocal simple (PV)
+**Action :** Envoyer un vocal "Bonjour Erina" en PV.
+**Vérifier :** Réponse vocale rapide (<2s) avec voix fluide.
+**Logs :** `[Core] 🎙️ Traitement Audio Natif`
+
+### Test 5c.2 - Vocal avec Tool Calling
+**Action :** Envoyer un vocal "Cherche la météo à Paris" en PV.
+**Vérifier :** 
+1. Le bot cherche la météo (Tool: search_web)
+2. Le bot répond vocalement avec le résultat
+**Logs :** `[GeminiLive] 🛠️ Tool call detected`
 
 ---
 

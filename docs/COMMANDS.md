@@ -1,4 +1,4 @@
-# 📜 Liste des Commandes et Capacités du Bot (V3)
+# 📜 Liste des Commandes et Capacités du Bot (V1)
 
 Ce document référence l'intégralité des commandes disponibles, qu'elles soient déclenchées par texte (Regex) ou par l'Intelligence Artificielle.
 

@@ -75,7 +75,7 @@ export default {
                     required: ['text']
                 }
             }
-        }
+        },
         {
             type: 'function',
             function: {
@@ -102,8 +102,7 @@ export default {
                         },
                         args: {
                             type: 'object',
-                            description: 'Les arguments requis par l\'outil cible, au format JSON.',
-                            additionalProperties: true
+                            description: 'Les arguments requis par l\'outil cible, au format JSON.'
                         }
                     },
                     required: ['tool_name', 'args']
@@ -158,7 +157,7 @@ export default {
                     };
 
                 case 'react_to_message':
-                    const { emoji } = args;
+                    const emoji = args.emoji || args.reaction;
                     if (!emoji || emoji.length > 5) return { success: false, message: 'Emoji invalide.' };
 
                     const targetKey = message.raw?.key; // Message actuel par défaut

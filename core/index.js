@@ -11,6 +11,7 @@ if (dns.setDefaultResultOrder) {
 }
 
 import { fileURLToPath } from 'url';
+import { config } from '../config/index.js';
 import { orchestrator } from './orchestrator.js';
 import { eventBus, BotEvents } from './events.js';
 import { baileysTransport } from './transport/baileys.js';
@@ -34,6 +35,9 @@ import { adminService } from '../services/adminService.js';
 import { consciousness } from '../services/consciousnessService.js';
 import { agentMemory } from '../services/agentMemory.js';
 import { actionMemory } from '../services/memory/ActionMemory.js';
+import { GeminiLiveProvider } from '../services/audio/geminiLiveProvider.js';
+import { VoiceProvider } from '../services/voice/voiceProvider.js';
+import { quotaManager } from '../services/quotaManager.js';
 
 // Group Manager (filtrage hybride)
 let filterProcessor = null;
@@ -225,6 +229,10 @@ class BotCore {
         // [LEVEL 5] Services de Reflection et Morale
         import('../services/dreamService.js').then(m => container.register('dream', m.dreamService));
         import('../services/moralCompass.js').then(m => container.register('moralCompass', m.moralCompass));
+
+        // [AUDIO] Providers
+        container.register('voiceProvider', new VoiceProvider(config.voice, quotaManager));
+        container.register('geminiLiveProvider', new GeminiLiveProvider());
 
         // Injecter le container dans le transport
         this.transport.setContainer(container);
@@ -455,12 +463,9 @@ class BotCore {
                 isGroup
             });
 
-            // Si le plugin retourne un message (hors shutdown qui tue le process)
+            // Si le plugin retourne un message, on l'envoie
             if (result && result.message) {
-                // On ne répond pas toujours, ça dépend du plugin (ex: react)
-                // Mais pour .devcontact oui.
-                // Ici on laisse le plugin gérer l'envoi s'il a besoin (comme shutdown)
-                // Ou on log juste le succès.
+                await this.transport.sendText(chatId, result.message);
             }
             return; // On arrête le flux ici, pas d'IA si c'est une commande
         }
@@ -503,6 +508,11 @@ class BotCore {
         const mentionsBot = this._isBotMentioned(message, text);
         const isPrivate = !isGroup;
 
+        // NOUVEAU: Détecter si c'est une image adressée au bot
+        const hasImage = message.mediaType === 'image';
+        const hasQuotedImage = message.quotedMsg?.hasImage;
+        const isImageForBot = hasImage && (isPrivate || mentionsBot || message.quotedMsg?.sender === this.transport.sock?.user?.id);
+
         // ========== CONTEXTUAL CONVERSATION (Follow-up Mode) ==========
         // Si l'utilisateur est le dernier à avoir parlé au bot (et qu'on est en mode solo/calme)
         // On considère qu'il parle toujours au bot, même sans mention
@@ -524,7 +534,7 @@ class BotCore {
         }
 
         let hasInterest = false;
-        if (!mentionsBot && !isPrivate && !isContextualReply) {
+        if (!mentionsBot && !isPrivate && !isContextualReply && !isImageForBot) {
             const interests = persona.interests || [];
             hasInterest = interests.some(topic => text.toLowerCase().includes(topic.toLowerCase()));
 
@@ -561,38 +571,150 @@ class BotCore {
         await this.transport.setPresence(chatId, 'composing');
 
         try {
-            // (Fix 5) Gestion Multimodale (Image)
-            let userContent = text;
-            if (message.mediaType === 'image') {
-                try {
-                    console.log('[Core] Téléchargement image...');
-                    const buffer = await this.transport.downloadMedia(message);
-                    const base64 = buffer.toString('base64');
-                    // Format compatible OpenAI/Gemini pour images
-                    userContent = [
-                        { type: 'text', text: text || 'Que vois-tu sur cette image ? décrit la  ?' },
-                        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
-                    ];
-                } catch (e) {
-                    console.error('[Core] Erreur image:', e);
-                    // On continue avec le texte seul si l'image échoue
+            // ========== GESTION AUDIO NATIF (Gemini Live) ==========
+            // Si le message a été marqué par Baileys comme devant utiliser le mode natif
+            if (message.useNativeAudio) {
+                console.log('[Core] 🎙️ Traitement Audio Natif (Gemini Live)');
+
+                if (container.has('geminiLiveProvider')) {
+                    const geminiLive = container.get('geminiLiveProvider');
+                    const config = container.get('config'); // RécupConfig
+                    const shortTermContext = await workingMemory.getContext(chatId);
+
+                    // Constuire le contexte (pour le system prompt)
+                    const context = await this._buildContext(chatId, message, shortTermContext);
+
+                    // Tools sélection
+                    // On charge les outils génériques car on a pas encore le texte
+                    const relevantTools = await pluginLoader.getRelevantTools("conversation générale", 5, 0.5);
+
+                    // Définir l'executor pour que le Provider puisse appeler les tools du Bot
+                    geminiLive.toolExecutor = async (name, args) => {
+                        console.log(`[Core] 🛠️ Exécution tool via Live: ${name}`);
+                        // On réutilise _executeTool du Core
+                        return await this._executeTool(name, args, context);
+                    };
+
+                    // Appel Streaming vers Gemini Live
+                    const response = await geminiLive.processAudioWithTools({
+                        audioBuffer: message.audioBuffer,
+                        systemPrompt: context.systemPrompt,
+                        tools: relevantTools,
+                        conversationHistory: context.messages.slice(-5), // Limite contexte audio
+                        voice: config.models?.voice_provider?.audio_strategy?.native_voice || 'Aoede'
+                    });
+
+                    // 1. Envoyer la réponse AUDIO
+                    if (response.audioFile) {
+                        try {
+                            // On envoie le fichier audio (converti en OGG par le provider ou baileys?)
+                            // Wait, geminiLiveProvider save en PCM actuellement.
+                            // Il faut le convertir en OGG ici ou dans le provider.
+                            // Le provider renvoie 'audioFile' (PCM). Baileys sendVoice attend un OGG/MP3 souvent.
+                            // Baileys sendVoice: { audio: { url: path }, mimetype: 'audio/mp4', ptt: true }
+                            // Il faut convertir PCM -> OGG/MP3. 
+
+                            // Import dynamique du converter
+                            const converter = await import('../services/audio/audioConverter.js');
+                            const fs = await import('fs');
+                            const path = await import('path');
+
+                            const outputOgg = response.audioFile.replace('.pcm', '.ogg');
+                            await converter.convertPcmToOgg(response.audioFile, outputOgg);
+
+                            await this.transport.sendVoice(chatId, outputOgg);
+
+                            // Nettoyage
+                            setTimeout(() => {
+                                try { fs.unlinkSync(response.audioFile); } catch (e) { }
+                                try { fs.unlinkSync(outputOgg); } catch (e) { }
+                            }, 10000);
+
+                        } catch (e) {
+                            console.error('[Core] ❌ Erreur envoi vocal natif:', e.message);
+                        }
+                    } else if (response.transcribedText) {
+                        // Fallback texte si pas d'audio généré
+                        await this.transport.sendText(chatId, response.transcribedText);
+                    }
+
+                    // 2. Stocker en mémoire (texte transcrit par Gemini)
+                    if (response.transcribedText) {
+                        await workingMemory.addMessage(chatId, 'assistant', response.transcribedText);
+                    }
+
+                    return; // Fin du traitement natif, on arrête ici.
+                } else {
+                    console.warn('[Core] ⚠️ Flag useNativeAudio actif mais provider manquant. Fallback cascade.');
                 }
             }
 
-            // (Fix Quote Context) Intégration du message cité (Reply Context)
-            // Si l'utilisateur répond à quelqu'un d'autre tout en mentionnant le bot
-            if (message.quoted && message.quoted.text) {
-                const quotedParticipant = message.quoted.participant ? message.quoted.participant.split('@')[0] : 'Inconnu';
-                // On ajoute ce contexte au message utilisateur pour que l'IA comprenne de quoi on parle
-                const quoteBlock = `\n\n[Contexte - En réponse à un message de @${quotedParticipant} : "${message.quoted.text}"]`;
+            // ========== GESTION MULTIMODALE (Images) ==========
+            let userContent = text;
+            const imageBlocks = []; // Stocke les images à envoyer à l'IA
 
-                if (Array.isArray(userContent)) {
-                    // Cas Multimodal : on l'ajoute au bloc texte
-                    const textBlock = userContent.find(b => b.type === 'text');
-                    if (textBlock) textBlock.text += quoteBlock;
-                } else {
-                    // Cas Texte simple
-                    userContent += quoteBlock;
+            // 1. Image directe envoyée par l'utilisateur
+            if (message.mediaType === 'image') {
+                try {
+                    console.log('[Core] 📷 Téléchargement image directe...');
+                    const buffer = await this.transport.downloadMedia(message);
+                    const base64 = buffer.toString('base64');
+                    imageBlocks.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } });
+                    console.log('[Core] ✅ Image directe téléchargée');
+                } catch (e) {
+                    console.error('[Core] ❌ Erreur téléchargement image directe:', e.message);
+                }
+            }
+
+            // 2. Image dans le message cité (quoted)
+            if (message.quotedMsg?.hasImage) {
+                try {
+                    console.log('[Core] 📷 Téléchargement image du quoted message...');
+                    // Télécharger l'image du quoted via le message brut
+                    const quotedBuffer = await this.transport.downloadQuotedMedia(message);
+                    if (quotedBuffer) {
+                        const quotedBase64 = quotedBuffer.toString('base64');
+                        imageBlocks.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${quotedBase64}` } });
+                        console.log('[Core] ✅ Image quoted téléchargée');
+                    }
+                } catch (e) {
+                    console.error('[Core] ❌ Erreur téléchargement image quoted:', e.message);
+                }
+            }
+
+            // Construire le contenu multimodal si on a des images
+            if (imageBlocks.length > 0) {
+                userContent = [
+                    { type: 'text', text: text || 'Que vois-tu sur cette image ?' },
+                    ...imageBlocks
+                ];
+            }
+
+            // ========== CONTEXTE DE MESSAGE CITÉ (Quote Context) ==========
+            // Intégrer le contexte du message cité pour que l'IA comprenne le contexte
+            if (message.quotedMsg) {
+                const quotedParticipant = message.quotedMsg.sender?.split('@')[0] || 'Inconnu';
+                let quoteBlock = '';
+
+                if (message.quotedMsg.hasImage && !message.quotedMsg.text) {
+                    quoteBlock = `\n\n[Contexte - En réponse à une IMAGE envoyée par @${quotedParticipant}]`;
+                } else if (message.quotedMsg.hasImage && message.quotedMsg.text) {
+                    quoteBlock = `\n\n[Contexte - En réponse à une IMAGE avec légende de @${quotedParticipant} : "${message.quotedMsg.text}"]`;
+                } else if (message.quotedMsg.hasVideo) {
+                    quoteBlock = `\n\n[Contexte - En réponse à une VIDÉO de @${quotedParticipant}${message.quotedMsg.text ? ` : "${message.quotedMsg.text}"` : ''}]`;
+                } else if (message.quotedMsg.text) {
+                    quoteBlock = `\n\n[Contexte - En réponse à un message de @${quotedParticipant} : "${message.quotedMsg.text}"]`;
+                }
+
+                if (quoteBlock) {
+                    if (Array.isArray(userContent)) {
+                        // Cas Multimodal : on l'ajoute au bloc texte
+                        const textBlock = userContent.find(b => b.type === 'text');
+                        if (textBlock) textBlock.text += quoteBlock;
+                    } else {
+                        // Cas Texte simple
+                        userContent += quoteBlock;
+                    }
                 }
             }
 
@@ -634,63 +756,115 @@ class BotCore {
                 { role: 'user', content: userContent }
             ];
 
-            // Initialiser les variables de contrôle du flux
+            // [AGENTIC SWITCH] Classification précoce pour choisir la stratégie
+            const complexity = await this._classifyComplexity(typeof text === 'string' ? text : "");
+            const isAgenticForce = !complexity || complexity === 'AGENTIC';
+
+            // On désactive la boucle lourde si c'est une requête standard, 
+            // mais on garde les outils dispo pour des actions simples (ex: réactions)
             let finalResponse = null;
             let keepThinking = true;
             let iterations = 0;
             const MAX_ITERATIONS = 10;
             let usedFamily = null;
 
-            // [EXPLICIT PLANNER] Vérifier si tâche complexe nécessite planification
-            const { planner } = await import('../services/agentic/Planner.js');
-            const needsPlanning = await planner.needsPlanning(
-                typeof userContent === 'string' ? userContent : text,
-                relevantTools
-            );
+            if (complexity === 'STANDARD') {
+                console.log(`[Agent] ⚡ Fast-Path: Traitement Standard (Outils inclus)`);
+                // APPEL UNIQUE (Single Pass) avec outils
+                const response = await providerRouter.chat(conversationHistory, {
+                    family: usedFamily,
+                    tools: relevantTools
+                });
 
-            if (needsPlanning) {
-                console.log('[Planner] 📋 Tâche complexe détectée, création d\'un plan...');
+                finalResponse = response.content;
 
-                const plan = await planner.plan(
-                    typeof userContent === 'string' ? userContent : text,
-                    { tools: relevantTools, chatId, message }
-                );
-
-                if (plan) {
-                    // Exécuter le plan au lieu du ReAct standard
-                    const executionLog = await planner.execute(plan, {
-                        executeToolFn: this._executeTool.bind(this),
-                        chatId,
-                        message
-                    });
-
-                    // Review
-                    const analysis = await planner.review(executionLog);
-
-                    // Générer réponse finale basée sur les résultats
-                    const summaryPrompt = `Le plan d'action a été exécuté.
-Objectif: ${plan.goal}
-Étapes complétées: ${executionLog.completed.length}/${plan.steps.length}
-Résultats: ${JSON.stringify(executionLog.results).substring(0, 1000)}
-
-Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a été fait.`;
-
-                    const summaryResponse = await providerRouter.chat([
-                        ...conversationHistory,
-                        { role: 'user', content: summaryPrompt }
-                    ], { family: usedFamily });
-
-                    finalResponse = summaryResponse.content;
-
-                    // Marquer comme complété
-                    await actionMemory.completeAction(chatId, { success: analysis.success });
-
-                    // Skip ReAct loop
-                    keepThinking = false;
+                // [FALLBACK] Détecter les "hallucinations" de tool calls textuels dans le mode Standard
+                if ((!response.toolCalls || response.toolCalls.length === 0) && response.content) {
+                    const toolRegex = /(?:print\()?(?:sys_interaction\.)?([a-zA-Z0-9_]+)\(([\s\S]*?)\)/g;
+                    let match;
+                    const extractedCalls = [];
+                    while ((match = toolRegex.exec(response.content)) !== null) {
+                        try {
+                            const name = match[1];
+                            const argsStr = match[2];
+                            let args = {};
+                            if (argsStr.includes('=')) {
+                                const pairs = argsStr.split(',').map(p => p.trim());
+                                pairs.forEach(p => {
+                                    const [k, v] = p.split('=').map(x => x.trim().replace(/^["']|["']$/g, ''));
+                                    if (k && v) args[k] = v;
+                                });
+                            } else {
+                                try { args = JSON.parse(argsStr); } catch (e) { }
+                            }
+                            if (name) {
+                                extractedCalls.push({
+                                    id: `std_hal_${Date.now()}`,
+                                    type: 'function',
+                                    function: { name, arguments: JSON.stringify(args) }
+                                });
+                            }
+                        } catch (e) { }
+                    }
+                    if (extractedCalls.length > 0) {
+                        console.log(`[Agent] 🕵️ Tool calls textuels détectés en Standard: ${extractedCalls.length}`);
+                        response.toolCalls = extractedCalls;
+                    }
                 }
+
+                // Exécuter les outils s'il y en a, mais une seule fois
+                if (response.toolCalls && response.toolCalls.length > 0) {
+                    console.log(`[Agent] 🛠️ Exécution outils en mode Standard: ${response.toolCalls.length}`);
+                    for (const toolCall of response.toolCalls) {
+                        try {
+                            await this._executeTool(toolCall, message);
+                        } catch (e) {
+                            console.error(`[Agent] ❌ Échec outil Standard:`, e.message);
+                        }
+                    }
+                }
+
+                // Fin du traitement pour le mode Standard
+                keepThinking = false;
+            } else {
+                console.log('[Agent] 🧠 Pas-à-pas: Traitement Agentique');
             }
 
-            console.log('[Agent] 🧠 Démarrage de la boucle de réflexion...');
+            // [EXPLICIT PLANNER] Seulement si AGENTIC
+            if (keepThinking) {
+                const { planner } = await import('../services/agentic/Planner.js');
+                const needsPlanning = await planner.needsPlanning(
+                    typeof userContent === 'string' ? userContent : text,
+                    relevantTools
+                );
+
+                if (needsPlanning) {
+                    console.log('[Planner] 📋 Tâche complexe détectée, création d\'un plan...');
+                    const plan = await planner.plan(
+                        typeof userContent === 'string' ? userContent : text,
+                        { tools: relevantTools, chatId, message }
+                    );
+
+                    if (plan) {
+                        const executionLog = await planner.execute(plan, {
+                            executeToolFn: this._executeTool.bind(this),
+                            chatId,
+                            message
+                        });
+                        const analysis = await planner.review(executionLog);
+
+                        const summaryPrompt = `Le plan d'action a été exécuté.\nObjectif: ${plan.goal}\nRésultats: ${JSON.stringify(executionLog.results).substring(0, 1000)}\n\nGénère une réponse conversationnelle résumant ce qui a été fait.`;
+                        const summaryResponse = await providerRouter.chat([
+                            ...conversationHistory,
+                            { role: 'user', content: summaryPrompt }
+                        ], { family: usedFamily });
+
+                        finalResponse = summaryResponse.content;
+                        await actionMemory.completeAction(chatId, { success: analysis.success });
+                        keepThinking = false;
+                    }
+                }
+            }
 
             while (keepThinking && iterations < MAX_ITERATIONS) {
                 iterations++;
@@ -703,6 +877,46 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
 
                 // Sauvegarder la famille utilisée au premier tour
                 if (!usedFamily) usedFamily = response.usedFamily;
+
+                // [FALLBACK] Détecter les "hallucinations" de tool calls textuels (ex: Kimi qui écrit du code)
+                if ((!response.toolCalls || response.toolCalls.length === 0) && response.content) {
+                    const toolRegex = /(?:print\()?(?:sys_interaction\.)?([a-zA-Z0-9_]+)\(([\s\S]*?)\)/g;
+                    let match;
+                    const extractedCalls = [];
+
+                    while ((match = toolRegex.exec(response.content)) !== null) {
+                        try {
+                            const name = match[1];
+                            const argsStr = match[2];
+
+                            // Tenter d'extraire les arguments (format 'emoji="✨"' ou JSON)
+                            let args = {};
+                            if (argsStr.includes('=')) {
+                                // Format clé=valeur
+                                const pairs = argsStr.split(',').map(p => p.trim());
+                                pairs.forEach(p => {
+                                    const [k, v] = p.split('=').map(x => x.trim().replace(/^["']|["']$/g, ''));
+                                    if (k && v) args[k] = v;
+                                });
+                            } else {
+                                try { args = JSON.parse(argsStr); } catch (e) { }
+                            }
+
+                            if (name) {
+                                extractedCalls.push({
+                                    id: `hallucinated_${Date.now()}_${extractedCalls.length}`,
+                                    type: 'function',
+                                    function: { name, arguments: JSON.stringify(args) }
+                                });
+                            }
+                        } catch (e) { /* On ignore si mal formé */ }
+                    }
+
+                    if (extractedCalls.length > 0) {
+                        console.log(`[Agent] 🕵️ Tool calls textuels détectés et convertis: ${extractedCalls.length}`);
+                        response.toolCalls = extractedCalls;
+                    }
+                }
 
                 if (response.toolCalls && response.toolCalls.length > 0) {
                     console.log(`[Agent] 🛠️ Étape ${iterations}: L'IA appelle ${response.toolCalls.length} outil(s)`);
@@ -844,6 +1058,11 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
                 } else {
                     // 4. L'IA n'a plus d'outils à appeler, c'est la réponse finale
                     console.log(`[Agent] 🏁 Fin de réflexion à l'étape ${iterations}.`);
+
+                    // DEBUG: Voir ce que le provider retourne
+                    console.log(`[Agent Debug] response.content type: ${typeof response.content}, value: "${String(response.content).substring(0, 100)}"`);
+                    console.log(`[Agent Debug] response keys: ${Object.keys(response).join(', ')}`);
+
                     finalResponse = response.content;
                     keepThinking = false;
                 }
@@ -853,6 +1072,12 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
             if (!finalResponse && iterations >= MAX_ITERATIONS) {
                 finalResponse = "J'ai trop réfléchi et je me suis perdu en chemin... (Boucle infinie détectée)";
                 console.warn('[Agent] ⚠️ MAX_ITERATIONS reached');
+            }
+
+            // [AGENTIC] Fallback si l'IA n'a rien répondu mais a bouclé
+            if (!finalResponse && iterations > 0) {
+                finalResponse = "J'ai terminé ma réflexion, mais je n'ai pas trouvé de réponse textuelle appropriée.";
+                console.log('[Agent] ⚠️ Réponse vide après réflexion, application du fallback.');
             }
 
             // --- Post-Processing (Commandes Textuelles Fallback) ---
@@ -931,13 +1156,21 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
 
             // [AGENTIC] Nettoyage de la pensée interne (Invisible pour l'utilisateur)
             // On conserve la pensée dans les logs mais on la retire du message WhatsApp
-            if (finalResponse.includes('<thought>')) {
+            if (finalResponse?.includes('<thought>')) {
                 console.log('[Agent] 🧠 Pensée détectée:', finalResponse.match(/<thought>[\s\S]*?<\/thought>/g));
                 finalResponse = finalResponse.replace(/<thought>[\s\S]*?<\/thought>/g, '').trim();
 
-                // Si après nettoyage il ne reste rien (l'IA a juste pensé sans répondre), on ignore
-                if (!finalResponse) return;
+                // Si après nettoyage il ne reste rien, mais qu'il y a eu de l'activité, on ne return pas direct
+                if (!finalResponse) {
+                    if (iterations > 0) {
+                        finalResponse = "*(Réflexion terminée sans réponse textuelle)*";
+                    } else {
+                        return;
+                    }
+                }
             }
+
+            if (!finalResponse) return;
 
             // ========== ADAPTIVE REPLY STRATEGY ==========
             // Appliquer quote/mention selon l'activité du groupe
@@ -1004,6 +1237,58 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
     }
 
 
+
+    /**
+     * Analyse la complexité d'une demande pour choisir le pipeline de traitement
+     * @param {string} text Demande utilisateur
+     * @returns {Promise<'STANDARD' | 'AGENTIC'>}
+     */
+    async _classifyComplexity(text) {
+        try {
+            // Modèles ultra-rapides pour classification
+            const fastModels = [
+                { family: 'groq', id: 'llama-3.1-8b-instant' },
+                { family: 'gemini', id: 'gemini-2.5-flash-lite' },
+                { family: 'gemini', id: 'gemini-2.5-flash' }
+            ];
+
+            const classifierPrompt = `Tu es un trieur d'intention ultra-rapide pour un assistant WhatsApp.
+Ta mission: Classer la demande de l'utilisateur entre 'STANDARD' (conversation banale, salutations, remerciements, petites blagues, questions sans besoin d'outils) ou 'AGENTIC' (besoin d'outils, recherche web, action sur le groupe, synthèse vocale, vision, calculs, ou RÉACTION par emoji).
+
+Exemples:
+- 'STANDARD': "Salut", "Comment ça va ?", "Merci beaucoup", "Lol", "Tu es qui ?".
+- 'AGENTIC': "Cherche sur le web...", "Réagis avec un ✨", "Réagis à ça avec 💖", "Bannis @user", "Lis ce texte vocalement".
+
+Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
+
+            // Utiliser le premier routeur rapide dispo
+            for (const candidate of fastModels) {
+                if (providerRouter.isAvailable(candidate.family)) {
+                    console.log(`[Classifier] 🎯 Classification via ${candidate.id}...`);
+                    try {
+                        const response = await providerRouter.chat([
+                            { role: 'system', content: classifierPrompt },
+                            { role: 'user', content: text }
+                        ], { model: candidate.id, family: candidate.family });
+
+                        const result = response.content?.trim().toUpperCase();
+                        if (result === 'STANDARD' || result === 'AGENTIC') {
+                            console.log(`[Classifier] ✓ Résultat: ${result}`);
+                            return result;
+                        }
+                    } catch (e) {
+                        console.warn(`[Classifier] ⚠️ Échec ${candidate.id}, essai suivant...`);
+                    }
+                }
+            }
+
+            // Fallback si tout échoue
+            return text.length < 50 ? 'STANDARD' : 'AGENTIC';
+        } catch (error) {
+            console.error('[Classifier] ❌ Erreur fatale classification:', error.message);
+            return 'AGENTIC'; // Sécurité
+        }
+    }
 
     /**
      * Construit le contexte pour le prompt

@@ -154,6 +154,45 @@ export const workingMemory = {
         }
     },
 
+    // ========== PV AUDIO (Global Admin Control) ==========
+
+    /**
+     * Vérifie si les vocaux en PV sont désactivés globalement
+     * @returns {Promise<boolean>}
+     */
+    async isPvAudioDisabled() {
+        try {
+            await ensureConnected();
+            if (!redis.isOpen) return false;
+            const key = 'global:pv_audio_disabled';
+            const val = await redis.get(key);
+            return val === '1';
+        } catch (error) {
+            console.error('[WorkingMemory] isPvAudioDisabled error:', error.message);
+            return false;
+        }
+    },
+
+    /**
+     * Active/désactive les vocaux en PV globalement (Global Admin only)
+     * @param {boolean} disabled 
+     */
+    async setPvAudioDisabled(disabled) {
+        try {
+            await ensureConnected();
+            if (!redis.isOpen) return;
+            const key = 'global:pv_audio_disabled';
+            if (disabled) {
+                await redis.set(key, '1');
+            } else {
+                await redis.del(key);
+            }
+            console.log(`[WorkingMemory] PV Audio: ${disabled ? 'DISABLED' : 'ENABLED'} globally`);
+        } catch (error) {
+            console.error('[WorkingMemory] setPvAudioDisabled error:', error.message);
+        }
+    },
+
     // ========== ANTI-DELETE (Message Revocation Guard) ==========
 
     /**

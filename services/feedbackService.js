@@ -11,7 +11,7 @@ export const feedbackService = {
      */
     init() {
         eventBus.subscribe(BotEvents.REACTION_RECEIVED, this.handleReaction.bind(this));
-        console.log('[FeedbackService] 👂 Écoute des réactions activée.');
+        // Log removed to avoid interfering with startup progress bar
     },
 
     /**

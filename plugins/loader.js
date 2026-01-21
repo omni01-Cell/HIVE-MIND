@@ -94,6 +94,11 @@ class PluginLoader {
                         ...matcher,
                         pluginName: plugin.name
                     });
+                    // IMPORTANT: Mapper le nom du handler vers le plugin
+                    const handlerName = matcher.name || matcher.handler;
+                    if (handlerName) {
+                        this.toolToPlugin.set(handlerName, plugin.name);
+                    }
                 }
             }
 
@@ -200,9 +205,11 @@ class PluginLoader {
                     // Vérifier si les args sont valides (ex: user_jid doit exister)
                     if (args === null || args === undefined) continue;
 
-                    console.log(`[TextMatcher] ✓ Pattern trouvé: ${matcher.handler} (plugin: ${matcher.pluginName})`);
+                    // Support both "name" and "handler" for backwards compatibility
+                    const handlerName = matcher.name || matcher.handler;
+                    console.log(`[TextMatcher] ✓ Pattern trouvé: ${handlerName} (plugin: ${matcher.pluginName})`);
                     return {
-                        name: matcher.handler,
+                        name: handlerName,
                         args
                     };
                 }
