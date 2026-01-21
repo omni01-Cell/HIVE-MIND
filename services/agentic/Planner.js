@@ -41,7 +41,7 @@ Réponds UNIQUEMENT avec un nombre entier (ex: 2)`;
             const response = await providerRouter.chat([
                 { role: 'system', content: 'Tu es un estimateur de complexité.' },
                 { role: 'user', content: prompt }
-            ], { family: 'gemini', model: 'gemini-2.0-flash', temperature: 0.1, maxTokens: 5 });
+            ], { temperature: 0.1, maxTokens: 5 });
 
             const estimate = parseInt(response.content.trim());
             return !isNaN(estimate) && estimate >= this.complexityThreshold;
@@ -95,10 +95,20 @@ Format JSON:
             const response = await providerRouter.chat([
                 { role: 'system', content: 'Tu es un planificateur expert en décomposition de tâches.' },
                 { role: 'user', content: planPrompt }
-            ], { family: 'gemini', model: 'gemini-2.0-flash', temperature: 0.3 });
+            ], { temperature: 0.3 });
+
+            if (!response?.content) {
+                throw new Error('AI response is empty or null');
+            }
 
             const planText = response.content.replace(/```json|```/g, '').trim();
-            const plan = JSON.parse(planText);
+            let plan;
+            try {
+                plan = JSON.parse(planText);
+            } catch (e) {
+                console.error('[Planner] Erreur parsing JSON (tronqué ?):', e.message);
+                throw new Error('AI response is not valid JSON');
+            }
 
             // Stocker le plan dans ActionMemory
             const planId = await actionMemory.startAction(context.chatId, {
@@ -277,7 +287,11 @@ Format JSON identique au plan original.`;
             const response = await providerRouter.chat([
                 { role: 'system', content: 'Tu es un planificateur expert en récupération d\'échecs.' },
                 { role: 'user', content: replanPrompt }
-            ], { family: 'gemini', temperature: 0.5 });
+            ], { temperature: 0.5 });
+
+            if (!response?.content) {
+                throw new Error('AI response for replan is empty');
+            }
 
             const newPlanText = response.content.replace(/```json|```/g, '').trim();
             const newPlan = JSON.parse(newPlanText);

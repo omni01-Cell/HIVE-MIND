@@ -41,8 +41,8 @@ RÉPONDS UNIQUEMENT EN JSON :
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Texte à analyser :\n"${text}"` }
             ], {
-                family: 'gemini',
-                model: 'gemini-2.0-flash', // Utilisation d'un modèle ultra-rapide
+                family: 'kimi',
+                model: 'kimi-for-coding', // Spécialiste extraction structurée
                 temperature: 0.1
             });
 

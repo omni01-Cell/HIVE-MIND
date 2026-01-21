@@ -12,9 +12,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 let embeddings = null;
 try {
     const credentials = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'credentials.json'), 'utf-8'));
+
+    // Résoudre les variables d'environnement
+    let geminiKey = credentials.familles_ia?.gemini;
+    let openaiKey = credentials.familles_ia?.openai;
+
+    if (geminiKey && geminiKey.startsWith('VOTRE_') && process.env[geminiKey]) {
+        geminiKey = process.env[geminiKey];
+    }
+    if (openaiKey && openaiKey.startsWith('VOTRE_') && process.env[openaiKey]) {
+        openaiKey = process.env[openaiKey];
+    }
+
     embeddings = new EmbeddingsService({
-        geminiKey: credentials.familles_ia?.gemini,
-        openaiKey: credentials.familles_ia?.openai
+        geminiKey,
+        openaiKey
     });
 } catch (e) {
     console.error('[Memory] Impossible de charger EmbeddingsService:', e.message);

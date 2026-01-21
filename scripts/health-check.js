@@ -30,7 +30,12 @@ async function runHealthCheck() {
         const keys = credentials.familles_ia || {};
         const maskedKeys = {};
         for (const [k, v] of Object.entries(keys)) {
-            maskedKeys[k] = v && v.length > 10 && !v.startsWith('VOTRE') ? '✅ Present' : '❌ Missing/Placeholder';
+            // Résoudre les env vars avant de vérifier
+            let resolvedValue = v;
+            if (v && v.startsWith('VOTRE_') && process.env[v]) {
+                resolvedValue = process.env[v];
+            }
+            maskedKeys[k] = resolvedValue && resolvedValue.length > 10 && !resolvedValue.startsWith('VOTRE') ? '✅ Present' : '❌ Missing/Placeholder';
         }
         report.credentials = maskedKeys;
         console.table(maskedKeys);

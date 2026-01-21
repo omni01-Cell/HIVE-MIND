@@ -2,6 +2,9 @@
 // scripts/admin-cli.js
 // CLI pour exécuter les commandes admin du bot
 
+// CRITIQUE: Charger .env AVANT tout import de service
+import 'dotenv/config';
+
 import { redis, ensureConnected } from '../services/redisClient.js';
 import { adminService } from '../services/adminService.js';
 import { supabase } from '../services/supabase.js';
@@ -197,9 +200,27 @@ async function main() {
                 // Charger les credentials pour EmbeddingsService
                 const __dirname2 = dirname(fileURLToPath(import.meta.url));
                 const credentials = JSON.parse(readFileSync(join(__dirname2, '..', 'config', 'credentials.json'), 'utf-8'));
+                const modelsConfig = JSON.parse(readFileSync(join(__dirname2, '..', 'config', 'models_config.json'), 'utf-8'));
+
+                // Résoudre les variables d'environnement (comme ServiceContainer)
+                let geminiKey = credentials.familles_ia?.gemini;
+                let openaiKey = credentials.familles_ia?.openai;
+
+                if (geminiKey && geminiKey.startsWith('VOTRE_') && process.env[geminiKey]) {
+                    geminiKey = process.env[geminiKey];
+                }
+                if (openaiKey && openaiKey.startsWith('VOTRE_') && process.env[openaiKey]) {
+                    openaiKey = process.env[openaiKey];
+                }
+
+                // Récupérer la config d'embedding
+                const embeddingConfig = modelsConfig.reglages_generaux?.embeddings?.primary || {};
+
                 const embeddings = new EmbeddingsService({
-                    geminiKey: credentials.familles_ia?.gemini,
-                    openaiKey: credentials.familles_ia?.openai
+                    geminiKey,
+                    openaiKey,
+                    model: embeddingConfig.model || 'gemini-embedding-001',
+                    dimensions: embeddingConfig.dimensions || 1024
                 });
 
                 // Charger les plugins

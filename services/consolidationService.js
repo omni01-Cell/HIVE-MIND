@@ -43,7 +43,7 @@ Format : Un paragraphe court et percutant.`;
             const response = await providerRouter.chat([
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: conversationText }
-            ], { family: 'gemini', model: 'gemini-2.0-flash', temperature: 0.3 });
+            ], { family: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.3 });
 
             const synthesis = response?.content;
 

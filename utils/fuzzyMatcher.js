@@ -87,6 +87,33 @@ export function findBestMatch(query, candidates, threshold = 0.4) {
         return { match: null, score: 0, exact: false };
     }
 
+    // === DUAL RESOLVER: Phone Number Check (Priority #1) ===
+    // Si la query ressemble à un numéro (contient uniquement des chiffres), chercher par JID
+    const isNumericQuery = /^\d+$/.test(query);
+
+    if (isNumericQuery) {
+        console.log(`[FuzzyMatcher] Numeric query detected: "${query}" - Searching by phone number...`);
+
+        // Chercher un match exact dans les JIDs
+        for (const candidate of candidates) {
+            if (!candidate.jid) continue;
+
+            // Extraire le numéro du JID (partie avant @)
+            const phoneNumber = candidate.jid.split('@')[0];
+
+            // Match exact ou prefix
+            if (phoneNumber === query || phoneNumber.startsWith(query)) {
+                console.log(`[FuzzyMatcher] Phone match found: ${query} → ${candidate.name || 'Unknown'} (${phoneNumber})`);
+                return { match: candidate, score: 1, exact: true };
+            }
+        }
+
+        // Si aucun match exact, le numéro est inconnu
+        console.log(`[FuzzyMatcher] No phone match for: ${query}`);
+        return { match: null, score: 0, exact: false };
+    }
+
+    // === NAME MATCHING (Existing Logic) ===
     const normalizedQuery = normalize(query);
     let bestMatch = null;
     let bestScore = 0;

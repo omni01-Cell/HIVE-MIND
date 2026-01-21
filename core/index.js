@@ -1108,10 +1108,10 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
                         }
 
                         if (name && name !== 'Inconnu') {
-                            return name; // Nom connu
+                            return `${name} (@${adminId})`; // Nom avec numéro
                         } else {
-                            // Fallback final: utiliser format @mention
-                            return `@${adminId}`;
+                            // Fallback final: Admin Inconnu avec numéro
+                            return `Admin (@${adminId})`;
                         }
                     })
                 );
@@ -1139,9 +1139,12 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
                         }
 
                         // Fallback final
-                        if (!name || name === 'Inconnu') name = `@${jid.split('@')[0]}`;
+                        if (!name || name === 'Inconnu') name = `Inconnu`;
 
-                        return `- ${name} (ID: ${jid})`;
+                        // Extraire le numéro de téléphone du JID
+                        const phoneNumber = jid.split('@')[0];
+
+                        return `- ${name} (@${phoneNumber})`;
                     })
                 );
 
@@ -1170,16 +1173,16 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
                         const profile = await userService.getProfile(admin.jid);
                         const realName = profile.names[0];
                         if (realName && realName !== 'Inconnu') {
-                            return realName; // Ex: "Christ-Léandre"
+                            return `${realName} (@${adminId})`; // Nom avec numéro
                         }
 
                         // PRIORITÉ 2: Fallback sur le nom Supabase (ex: "Admin Principal")
                         if (admin.name && admin.name !== 'Inconnu') {
-                            return admin.name;
+                            return `${admin.name} (@${adminId})`;
                         }
 
                         // Fallback final
-                        return `@${adminId}`;
+                        return `Admin (@${adminId})`;
                     })
                 );
                 globalAdminsFormatted = globalAdminNames.join(', ');
@@ -1227,11 +1230,16 @@ Génère une réponse conversationnelle pour l'utilisateur résumant ce qui a é
                             name = m.name;
                         }
 
+                        // Extraire le numéro de téléphone
+                        const phoneNumber = m.jid.split('@')[0];
+
                         if (name && name !== 'Inconnu') {
                             const role = m.isAdmin ? '👑' : '';
-                            return `${role}${name}`;
+                            return `${role}${name} (@${phoneNumber})`;
                         }
-                        return null;
+
+                        // Si pas de nom, utiliser "Membre" avec le numéro
+                        return `Membre (@${phoneNumber})`;
                     })
                 );
                 const knownMembers = membersList.filter(Boolean);

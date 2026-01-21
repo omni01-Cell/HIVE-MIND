@@ -103,11 +103,10 @@ Réponds UNIQUEMENT avec un nombre entre 0 et 1 (ex: 0.85)`;
                 { role: 'system', content: 'Tu es un évaluateur de qualité objectif.' },
                 { role: 'user', content: prompt }
             ], {
-                family: 'gemini',
-                model: 'gemini-2.0-flash',
-                temperature: 0.1,
-                maxTokens: 10
+                temperature: 0.1
             });
+
+            if (!response?.content) return 0.5;
 
             const score = parseFloat(response.content.trim());
             return isNaN(score) ? 0.5 : Math.max(0, Math.min(1, score));

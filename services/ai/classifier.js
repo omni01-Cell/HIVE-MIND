@@ -23,7 +23,12 @@ class ClassifierService {
             // Charger les clés API
             const credsPath = join(__dirname, '..', '..', 'config', 'credentials.json');
             const creds = JSON.parse(readFileSync(credsPath, 'utf-8'));
-            const apiKey = creds.familles_ia?.gemini;
+
+            // Résoudre variable d'environnement
+            let apiKey = creds.familles_ia?.gemini;
+            if (apiKey && apiKey.startsWith('VOTRE_') && process.env[apiKey]) {
+                apiKey = process.env[apiKey];
+            }
 
             if (apiKey) {
                 const genAI = new GoogleGenerativeAI(apiKey);

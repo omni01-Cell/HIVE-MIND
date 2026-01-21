@@ -59,8 +59,8 @@ Réponds en JSON strict :
                 { role: 'system', content: 'Tu es un analyseur de sentiment social.' },
                 { role: 'user', content: analysisPrompt }
             ], {
-                family: 'gemini',
-                model: 'gemini-2.0-flash',
+                family: 'kimi',
+                model: 'kimi-for-coding',
                 temperature: 0.1
             });
 
@@ -148,7 +148,8 @@ Réponds comme si tu participais naturellement à la conversation (1-2 phrases m
                 { role: 'system', content: 'Tu es HIVE-MIND, un bot WhatsApp social et utile.' },
                 { role: 'user', content: thoughtPrompt }
             ], {
-                family: 'gemini',
+                family: 'kimi',
+                model: 'kimi-for-coding',
                 temperature: 0.8
             });
 

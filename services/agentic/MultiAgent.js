@@ -95,11 +95,12 @@ Réponds en JSON:
                 { role: 'system', content: 'Tu es un agent critique et prudent. Ta priorité est la sécurité et l\'éthique.' },
                 { role: 'user', content: criticPrompt }
             ], {
-                family: 'gemini',
-                model: 'gemini-2.0-flash',
                 temperature: 0.2 // Très déterministe
             });
 
+            if (!response?.content) {
+                throw new Error('Critic response is empty');
+            }
             const resultText = response.content.replace(/```json|```/g, '').trim();
             const result = JSON.parse(resultText);
 
@@ -161,11 +162,12 @@ Réponds en JSON:
                 { role: 'system', content: 'Tu détectes les incohérences comportementales.' },
                 { role: 'user', content: observerPrompt }
             ], {
-                family: 'gemini',
-                model: 'gemini-2.0-flash',
                 temperature: 0.1
             });
 
+            if (!response?.content) {
+                throw new Error('Observer response is empty');
+            }
             const resultText = response.content.replace(/```json|```/g, '').trim();
             const result = JSON.parse(resultText);
 
@@ -213,16 +215,21 @@ Propose une solution en JSON: { "solution": "...", "risks": ["..."], "confidence
                 providerRouter.chat([
                     { role: 'system', content: 'Tu es orienté action et efficacité.' },
                     { role: 'user', content: executorPrompt }
-                ], { family: 'gemini', temperature: 0.7 }),
+                ], { temperature: 0.7 }),
 
                 providerRouter.chat([
                     { role: 'system', content: 'Tu es orienté sécurité et prudence.' },
                     { role: 'user', content: criticPrompt }
-                ], { family: 'gemini', temperature: 0.3 })
+                ], { temperature: 0.3 })
             ]);
 
-            const executorSolution = JSON.parse(executorResponse.content.replace(/```json|```/g, '').trim());
-            const criticSolution = JSON.parse(criticResponse.content.replace(/```json|```/g, '').trim());
+            const executorSolution = executorResponse?.content
+                ? JSON.parse(executorResponse.content.replace(/```json|```/g, '').trim())
+                : { solution: "N/A", confidence: 0 };
+
+            const criticSolution = criticResponse?.content
+                ? JSON.parse(criticResponse.content.replace(/```json|```/g, '').trim())
+                : { solution: "N/A", risks: [], confidence: 0 };
 
             // Synthèse (simple: choisir selon confiance)
             const consensus = executorSolution.confidence > criticSolution.confidence

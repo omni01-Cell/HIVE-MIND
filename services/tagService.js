@@ -26,8 +26,8 @@ RÈGLES :
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Texte : "${content}"` }
             ], {
-                family: 'gemini',
-                model: 'gemini-2.0-flash',
+                family: 'groq',
+                model: 'llama-3.1-8b-instant',
                 temperature: 0,
                 maxTokens: 10
             });

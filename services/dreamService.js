@@ -49,7 +49,7 @@ Format : Markdown pur, liste à puces, sois très direct.`;
             const response = await providerRouter.chat([
                 { role: 'system', content: 'Tu es le module de réflexion interne du bot.' },
                 { role: 'user', content: prompt }
-            ], { family: 'gemini', model: 'gemini-2.0-flash', temperature: 0.1 });
+            ], { family: 'groq', model: 'llama-3.3-70b-versatile', temperature: 0.1 });
 
             if (response?.content) {
                 const newLessons = `# Lessons Learned (Updated: ${new Date().toLocaleDateString()})\n\n${response.content}`;

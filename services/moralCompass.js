@@ -46,7 +46,7 @@ RÉPONDS UNIQUEMENT EN JSON :
             const response = await providerRouter.chat([
                 { role: 'system', content: 'Tu es un évaluateur éthique strict.' },
                 { role: 'user', content: prompt }
-            ], { family: 'gemini', model: 'gemini-2.0-flash', temperature: 0.1 });
+            ], { family: 'kimi', model: 'kimi-for-coding', temperature: 0.1 });
 
             if (response?.content) {
                 const result = JSON.parse(response.content.replace(/```json|```/g, ''));

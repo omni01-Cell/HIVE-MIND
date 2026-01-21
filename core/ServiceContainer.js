@@ -93,8 +93,8 @@ export class ServiceContainer {
         const embeddingConfig = {
             geminiKey,
             openaiKey,
-            model: primaryEmbedding.model || 'gemini-embedding-1.0',
-            dimensions: primaryEmbedding.dimensions || 768
+            model: primaryEmbedding.model || 'gemini-embedding-001',
+            dimensions: primaryEmbedding.dimensions || 1024
         };
         const embeddings = new EmbeddingsService(embeddingConfig);
         this.register('embeddings', embeddings);

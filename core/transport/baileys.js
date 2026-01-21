@@ -546,7 +546,7 @@ class BaileysTransport {
 
         let mentions = options.mentions || [];
 
-        // (Module 10) Résolution des @mentions via fuzzy matching ET implicit matching
+        // (Module 10) Résolution des @mentions via fuzzy matching
         // Active seulement pour les groupes
         if (chatId.endsWith('@g.us') && this.container) {
             try {
@@ -555,22 +555,15 @@ class BaileysTransport {
                     const members = await groupService.getGroupMembers(chatId);
 
                     if (members && members.length > 0) {
-                        const { resolveMentionsInText, resolveImplicitMentions } = await import('../../utils/fuzzyMatcher.js');
+                        const { resolveMentionsInText } = await import('../../utils/fuzzyMatcher.js');
 
-                        // 1. Résolution Explicite (@Nom)
+                        // Résolution EXPLICITE uniquement (@Nom ou @Numéro)
+                        // PAS de résolution implicite pour éviter de taguer quand le bot dit juste un nom/numéro
                         let resolved = resolveMentionsInText(formattedText, members);
                         if (resolved.mentions.length > 0) {
                             formattedText = resolved.text;
                             mentions = [...mentions, ...resolved.mentions];
-                        }
-
-                        // 2. Résolution Implicite (Nom sans @) - NOUVEAU
-                        // On passe le texte déjà formaté (qui a peut-être déjà des @id)
-                        const implicitResolved = resolveImplicitMentions(formattedText, members);
-                        if (implicitResolved.mentions.length > 0) {
-                            formattedText = implicitResolved.text;
-                            mentions = [...mentions, ...implicitResolved.mentions];
-                            console.log(`[Baileys] 🕵️ Mentions implicites trouvées: ${implicitResolved.resolved.map(m => m.name).join(', ')}`);
+                            console.log(`[Baileys] 🏷️ Mentions résolues: ${resolved.resolved.map(m => m.name || 'Inconnu').join(', ')}`);
                         }
 
                         // Dédoublonnage

@@ -230,17 +230,21 @@ class ProviderRouter {
 
         if (!options.family && availableFamilies.length > 1) {
             console.time('[Router] Classification');
-            const bestFamily = await this._classifyRequest(messages, availableFamilies);
+            const bestChoice = await this._classifyRequest(messages, availableFamilies);
             console.timeEnd('[Router] Classification');
 
-            if (bestFamily && availableFamilies.includes(bestFamily)) {
-                console.log(`[Router] 🧠 Smart Router a choisi: ${bestFamily}`);
+            if (bestChoice && bestChoice.model && availableFamilies.includes(bestChoice.family)) {
+                console.log(`[Router] 🧠 Smart Router a choisi: ${bestChoice.model} (${bestChoice.family})`);
 
-                // On réorganise la liste pour mettre le choix en premier (PRIORITY)
+                // On force l'utilisation de CE modèle spécifique
+                options.model = bestChoice.model;
+                options.family = bestChoice.family;
+
+                // On réorganise la liste pour mettre la famille choisie en premier
                 // Les autres restent en fallback
                 availableFamilies = [
-                    bestFamily,
-                    ...availableFamilies.filter(f => f !== bestFamily)
+                    bestChoice.family,
+                    ...availableFamilies.filter(f => f !== bestChoice.family)
                 ];
             } else {
                 console.log(`[Router] Classification neutre ou échouée, conservation ordre par défaut.`);
@@ -262,13 +266,16 @@ class ProviderRouter {
             }
 
             const adapter = this.adapters.get(family);
-
-            // Récup config
             const familyConfig = this.getFamilyConfig(family);
+
             // Modèles à tester pour cette famille
+            // SÉCURITÉ CRITIQUE: Filtrer par TYPE, pas par nom
+            // On ne garde que les modèles avec type='chat' pour éviter de sélectionner embedding/TTS/audio
             const modelsToTry = options.model
                 ? [options.model]
-                : (familyConfig?.modeles?.filter(m => !m.id.includes('embedding')).map(m => m.id) || []);
+                : (familyConfig?.modeles
+                    ?.filter(m => m.types?.includes('chat')) // FILTRE PAR TYPE
+                    .map(m => m.id) || []);
 
 
             // Essayer chaque modèle de la famille
@@ -488,80 +495,100 @@ class ProviderRouter {
 
     /**
      * NIVEAU 3: Classification de la requête par IA
-     * Utilise un petit modèle rapide (Gemini Flash) pour router intelligemment.
+     * Utilise un petit modèle ultra-rapide (Groq Llama Instant OU Gemini 3 Flash) pour router intelligemment.
+     * Retourne un MODÈLE SPÉCIFIQUE avec sa famille, pas juste une famille.
      */
     async _classifyRequest(messages, candidates) {
-        // Condition: Il faut que Gemini soit dispo pour classifier
-        const classifierFamily = 'gemini';
+        // 1. Construire la liste complète des modèles disponibles avec métadonnées
+        const allAvailableModels = [];
 
-        if (!this.adapters.has(classifierFamily) || !this.isAvailable(classifierFamily)) {
-            return null; // Pas de classifier dispo
+        for (const family of candidates) {
+            const familyConfig = this.getFamilyConfig(family);
+            if (!familyConfig?.modeles) continue;
+
+            const chatModels = familyConfig.modeles
+                .filter(m => m.types?.includes('chat')) // Seulement les modèles de chat
+                .map(m => ({
+                    id: m.id,
+                    family: family,
+                    description: m.description || 'Modèle généraliste',
+                    types: m.types || ['chat']
+                }));
+
+            allAvailableModels.push(...chatModels);
         }
 
-        const lastMessage = messages[messages.length - 1].content;
-        const candidatesList = candidates.join(', ');
+        if (allAvailableModels.length === 0) return null;
 
-        const systemPrompt = `Tu es le "Smart Router" du système.
-Ta mission: Analyser la demande de l'utilisateur et choisir la MEILLEURE famille de modèles IA parmi les candidats.
+        // 2. Configuration des modèles pour le cerveau du router (ultra-rapides)
+        const routerCandidates = [
+            { provider: 'groq', model: 'llama-3.1-8b-instant' },     // Priorité 1: Groq LPU Ultra Fast
+            { provider: 'gemini', model: 'gemini-3-flash-preview' }, // Priorité 2: Gemini Flash
+        ];
 
-Candidats disponibles: [${candidatesList}]
-
-Règles de décision:
-- "coding", "code", "dev", "bug", "script" -> github, mistral, deepseek
-- "vision", "image", "photo" -> gemini, claude (si dispo)
-- "creative", "poème", "histoire" -> gemini, openai
-- "logique", "math", "raisonnement" -> openai, anthropic
-- "chinois", "asia" -> kimi, moonshot
-- Par défaut -> gemini (polyvalent et rapide)
-
-Réponds UNIQUEMENT au format JSON:
-{ "reason": "court motif", "selected": "nom_famille" }`;
+        // 3. Trouver le premier modèle de routing disponible
+        let selectedRouter = null;
+        const { container } = await import('../core/ServiceContainer.js');
+        let quotaManager = null;
 
         try {
-            // [OPTIMIZATION] Check Quota before trying
-            const { container } = await import('../core/ServiceContainer.js');
-            let quotaManager = null;
             if (container.has('quotaManager')) quotaManager = container.get('quotaManager');
+        } catch (e) { }
 
-            // Liste de priorité pour le cerveau du routeur (du moins cher/rapide au plus complexe)
-            const routerCandidates = [
-                'gemini-2.5-flash-lite',   // Priorité 1: Le plus économique
-                'gemini-2.5-flash',        // Priorité 2: Standard rapide
-                'gemini-3-flash-preview'   // Priorité 3: Flagship (si les autres sont KO)
-            ];
-
-            let selectedRoutingModel = null;
-
-            if (quotaManager) {
-                // Trouver le premier modèle disponible
-                for (const candidate of routerCandidates) {
-                    if (await quotaManager.isModelAvailable(candidate)) {
-                        selectedRoutingModel = candidate;
-                        break;
-                    }
-                }
-
-                if (!selectedRoutingModel) {
-                    // console.log('[Router] Classification skipped (All router models exhausted)');
-                    // Si tous sont épuisés, on skip la classification et on laisse le fallback faire
-                    return null;
-                }
-            } else {
-                // Si pas de quota manager (rare), on prend le premier
-                selectedRoutingModel = routerCandidates[0];
+        for (const candidate of routerCandidates) {
+            // Vérifier si le provider est disponible
+            if (!this.adapters.has(candidate.provider) || !this.isAvailable(candidate.provider)) {
+                continue;
             }
 
-            // console.log(`[Router] Cerveau actif: ${selectedRoutingModel}`);
+            // Vérifier les quotas si quotaManager disponible
+            if (quotaManager) {
+                const isAvailable = await quotaManager.isModelAvailable(candidate.model);
+                if (!isAvailable) continue;
+            }
 
-            const adapter = this.adapters.get(classifierFamily);
-            const apiKey = this.getApiKey(classifierFamily);
+            // Ce modèle est dispo !
+            selectedRouter = candidate;
+            break;
+        }
 
-            // On utilise un modèle ultra-rapide pour le routing
+        if (!selectedRouter) {
+            // console.log('[Router] Classification skipped (No fast router available)');
+            return null; // Pas de router rapide dispo
+        }
+
+        // 4. Construire le prompt DYNAMIQUEMENT à partir des métadonnées du config
+        const modelsList = allAvailableModels.map(m => {
+            const typesStr = m.types.join(', ');
+            return `- ${m.id}: "${m.description}" | Types: ${typesStr}`;
+        }).join('\n');
+
+        const lastMessage = messages[messages.length - 1].content;
+
+        const systemPrompt = `Tu es le "Smart Router" du système HIVE-MIND.
+Ta mission: Analyser la demande de l'utilisateur et choisir le MEILLEUR MODÈLE SPÉCIFIQUE parmi les candidats.
+
+Modèles disponibles:
+${modelsList}
+
+Instructions:
+- Lis la description et les types de chaque modèle
+- Match les types avec la demande (ex: "coding" → cherche type 'coding')
+- Choisis le modèle le PLUS ADAPTÉ
+- Par défaut, privilégie les modèles rapides (flash, fast dans description)
+
+Réponds UNIQUEMENT au format JSON strict:
+{ "reason": "court motif de ton choix", "selected_model": "nom-exact-du-modele" }`;
+
+        try {
+            const adapter = this.adapters.get(selectedRouter.provider);
+            const apiKey = this.getApiKey(selectedRouter.provider);
+
             const routingOptions = {
-                model: selectedRoutingModel,
+                model: selectedRouter.model,
                 apiKey,
-                temperature: 0.3, // Moins créatif, plus déterministe
-                maxTokens: 100
+                temperature: 0.2, // Très déterministe
+                maxTokens: 150
             };
 
             const response = await adapter.chat([
@@ -572,10 +599,23 @@ Réponds UNIQUEMENT au format JSON:
             const text = response.content.replace(/```json|```/g, '').trim();
             const result = JSON.parse(text);
 
-            return result.selected;
+            // 5. Trouver le modèle sélectionné et retourner {model, family}
+            const selectedModelId = result.selected_model;
+            const modelInfo = allAvailableModels.find(m => m.id === selectedModelId);
+
+            if (modelInfo) {
+                console.log(`[Router] 🎯 Smart Router sélectionné: ${modelInfo.id} (${modelInfo.family}) - ${result.reason}`);
+                return {
+                    model: modelInfo.id,
+                    family: modelInfo.family
+                };
+            }
+
+            return null;
 
         } catch (e) {
             // Silencieux car c'est une optimisation optionnelle
+            // console.error('[Router] Classification error:', e.message);
             return null;
         }
     }
