@@ -359,24 +359,16 @@ class BaileysTransport extends EventEmitter {
                             if (mode === 'off') {
                                 console.log(`[Baileys] ⏭️ Audio Groupe ignoré (Mode OFF)`);
                             } else {
-                                // (Simplifié pour ce fix: STT classique pour les groupes)
                                 try {
-                                    // TODO: Implement Logic similar to PV for Native Audio if Groups Enabled
                                     const buffer = await downloadMediaMessage(
                                         msg, 'buffer', {}, { reuploadRequest: self.sock.updateMediaMessage, logger: pino({ level: 'silent' }) }
                                     );
 
-                                    const { writeFileSync, unlinkSync, mkdirSync, existsSync } = await import('fs');
-                                    const tempDir = join(__dirname, '..', '..', 'temp', 'stt');
-                                    if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-                                    const tempPath = join(tempDir, `stt_${msg.key.id}.ogg`);
-                                    writeFileSync(tempPath, buffer);
+                                    // Check if native audio is enabled and available
+                                    const audioStrategy = globalConfig.models?.reglages_generaux?.audio_strategy || {};
+                                    const useNativeAudio = audioStrategy.prefer_native && self.container?.has('geminiLiveProvider');
 
-                                    const transcriptionService = self.container.get('transcriptionService');
-                                    transcribedText = await transcriptionService.transcribe(tempPath);
-                                    console.log(`[Baileys] 🗣️ Transcription Groupe: "${transcribedText}"`);
-
-                                    const mentionsBot = botIdentity.isVocallyMentioned(transcribedText);
+                                    // Determine context (Reply to bot?)
                                     let isQuotedReplyToBot = false;
                                     const audioCtx = msg.message?.audioMessage?.contextInfo;
                                     if (audioCtx?.participant) {
@@ -387,12 +379,37 @@ class BaileysTransport extends EventEmitter {
                                             (botLid && quotedSender.includes(botLid.split(':')[0]?.split('@')[0]));
                                     }
 
-                                    if (!mentionsBot && !isQuotedReplyToBot && mode !== 'full') {
-                                        transcribedText = null;
+                                    // Try Native Audio first (if conditions met)
+                                    // Conditions: Native Enabled AND (Full Mode OR Explicit Reply to Bot)
+                                    // Note: "mention_only" without reply falls back to STT because we need text to check mentions
+                                    if (useNativeAudio && (mode === 'full' || isQuotedReplyToBot)) {
+                                        console.log(`[Baileys] 🎙️ Mode Audio NATIF détecté pour GROUPE (mode=${mode}, reply=${isQuotedReplyToBot})`);
+                                        normalizedMsg.audioBuffer = buffer;
+                                        normalizedMsg.useNativeAudio = true;
+                                        normalizedMsg.text = '[AUDIO_NATIVE]';
                                     }
-                                    try { unlinkSync(tempPath); } catch (e) { }
+
+                                    // Fallback / Default to STT
+                                    if (!normalizedMsg.useNativeAudio) {
+                                        const { writeFileSync, unlinkSync, mkdirSync, existsSync } = await import('fs');
+                                        const tempDir = join(__dirname, '..', '..', 'temp', 'stt');
+                                        if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+                                        const tempPath = join(tempDir, `stt_${msg.key.id}.ogg`);
+                                        writeFileSync(tempPath, buffer);
+
+                                        const transcriptionService = self.container.get('transcriptionService');
+                                        transcribedText = await transcriptionService.transcribe(tempPath);
+                                        console.log(`[Baileys] 🗣️ Transcription Groupe: "${transcribedText}"`);
+
+                                        const mentionsBot = botIdentity.isVocallyMentioned(transcribedText);
+
+                                        if (!mentionsBot && !isQuotedReplyToBot && mode !== 'full') {
+                                            transcribedText = null;
+                                        }
+                                        try { unlinkSync(tempPath); } catch (e) { }
+                                    }
                                 } catch (e) {
-                                    console.error(`[Baileys] Erreur STT Groupe: ${e.message}`);
+                                    console.error(`[Baileys] Erreur Audio Groupe: ${e.message}`);
                                 }
                             }
                         }
