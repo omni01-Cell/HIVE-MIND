@@ -246,8 +246,27 @@ export class SchedulerHandler {
             const dueGoals = await goalsService.getDueGoals();
 
             for (const goal of dueGoals) {
-                console.log(`[Goals] Exécution objectif: ${goal.title}`);
-                await goalsService.executeGoal(goal.id, this.transport);
+                console.log(`[Goals] 🎯 Activation objectif: ${goal.title}`);
+
+                // 1. Marquer comme en cours
+                await goalsService.markInProgress(goal.id);
+
+                // 2. Injecter un message système pour réveiller le bot
+                if (this.messageHandler) {
+                    await this.messageHandler({
+                        data: {
+                            isGroup: goal.target_chat_id ? goal.target_chat_id.endsWith('@g.us') : false,
+                            chatId: goal.target_chat_id,
+                            text: `SYSTEM_GOAL_TRIGGER: L'heure est venue d'exécuter l'objectif "${goal.title}".\nConsigne: ${goal.description}\nPriorité: ${goal.priority}`,
+                            senderName: "SYSTEM_SCHEDULER",
+                            sender: "system@internal",
+                            isSystem: true // Flag pour traiter différemment si besoin
+                        }
+                    });
+                    console.log(`[Goals] ✅ Trigger envoyé pour ${goal.id}`);
+                } else {
+                    console.error('[Goals] ❌ Impossible d\'exécuter: messageHandler non défini dans Scheduler');
+                }
             }
         } catch (e) {
             console.error('[Scheduler] Erreur goalExecution:', e.message);

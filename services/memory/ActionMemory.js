@@ -114,6 +114,13 @@ export class ActionMemory {
             const key = `${this.keyPrefix}${chatId}`;
             await redis.hSet(key, 'steps', JSON.stringify(action.steps));
 
+            // [PHASE 3] Persistance Supabase pour reprise après crash
+            // On met à jour le tableau steps dans la DB
+            await supabase.from('agent_actions')
+                .update({ steps: JSON.stringify(action.steps) })
+                .eq('chat_id', chatId)
+                .eq('status', 'active');
+
             return true;
         } catch (error) {
             console.error('[ActionMemory] Erreur updateStep:', error.message);
@@ -223,7 +230,84 @@ ${stepsText}
 3. Abandonner si l'utilisateur demande explicitement d'arrêter
 `;
     }
+
+    /**
+     * Récupère les actions 'active' depuis Supabase pour reprise après crash
+     * @param {number} limit 
+     * @returns {Promise<Array>}
+     */
+    async getResumableActions(limit = 10) {
+        try {
+            // Chercher les actions marquées 'active' dans la DB
+            // Idéalement on filtre sur les dernières 24h pour éviter de déterrer des fantômes
+            const { data, error } = await supabase
+                .from('agent_actions')
+                .select('*')
+                .eq('status', 'active')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            if (error) throw error;
+
+            return data.map(row => ({
+                id: row.id,
+                chatId: row.chat_id,
+                type: row.tool_name,
+                // params contient le goal et contexte
+                params: typeof row.params === 'string' ? JSON.parse(row.params) : row.params,
+                steps: typeof row.steps === 'string' ? JSON.parse(row.steps) : (row.steps || []),
+                createdAt: new Date(row.created_at).getTime()
+            }));
+        } catch (error) {
+            console.error('[ActionMemory] Erreur getResumableActions:', error.message);
+            return [];
+        }
+    }
+    /**
+     * Restaure une action depuis Supabase vers Redis (Réhydratation du contexte)
+     * @param {string} chatId 
+     * @param {string} actionId 
+     */
+    async rehydrateAction(chatId, actionId) {
+        try {
+            // 1. Récupérer depuis Supabase
+            const { data, error } = await supabase
+                .from('agent_actions')
+                .select('*')
+                .eq('id', actionId)
+                .single();
+
+            if (error || !data) throw new Error('Action introuvable dans Supabase');
+
+            // 2. Reconstruire l'objet Redis
+            const actionData = {
+                id: data.id.toString(),
+                chatId: data.chat_id,
+                type: data.tool_name,
+                goal: typeof data.params === 'string' ? JSON.parse(data.params).goal : data.params.goal,
+                context: typeof data.params === 'string' ? JSON.parse(data.params).context : JSON.stringify(data.params.context || {}),
+                priority: 5, // Default
+                status: 'active', // On force le statut actif
+                steps: typeof data.steps === 'string' ? data.steps : JSON.stringify(data.steps || []),
+                startedAt: new Date(data.created_at).getTime(),
+                expiresAt: Date.now() + (this.defaultTTL * 1000)
+            };
+
+            // 3. Écrire dans Redis
+            const key = `${this.keyPrefix}${chatId}`;
+            await redis.hSet(key, actionData);
+            await redis.expire(key, this.defaultTTL);
+
+            console.log(`[ActionMemory] 💧 Action réhydratée dans Redis: ${data.tool_name}`);
+            return true;
+
+        } catch (error) {
+            console.error('[ActionMemory] Erreur rehydrateAction:', error.message);
+            return false;
+        }
+    }
 }
+
 
 // Export singleton
 export const actionMemory = new ActionMemory();

@@ -220,6 +220,9 @@ class BotCore {
         this.transport.onMessage((msg) => this._onMessage(msg));
         this.transport.onGroupEvent((event) => this._onGroupEvent(event));
 
+        // 7. [PHASE 3] Résilience: Vérifier les tâches interrompues
+        await this._resumePendingActions();
+
         this.isReady = true;
         startupDisplay.complete(persona.name);
     }
@@ -414,6 +417,38 @@ class BotCore {
         }
 
         console.log(`[${isGroup ? 'G' : 'P'}] ${senderName}: ${text.substring(0, 50)}...`);
+
+        // ======== (PHASE 4) AUTONOMOUS EVENT TRIGGERS (Wait For X) ========
+        // Vérifier si ce message débloque un objectif en attente
+        try {
+            const { goalsService } = await import('../services/goalsService.js');
+            const triggeredGoals = await goalsService.checkEventTriggers(message);
+
+            if (triggeredGoals.length > 0) {
+                console.log(`[EventTrigger] 🎯 ${triggeredGoals.length} objectif(s) déclenché(s) par ce message !`);
+                for (const goal of triggeredGoals) {
+                    // Marquer comme en cours
+                    await goalsService.markInProgress(goal.id);
+
+                    // Injecter le message système pour forcer l'exécution
+                    // On simule un message système qui arrive immédiatement après
+                    setTimeout(async () => {
+                        await this._onMessage({
+                            data: {
+                                isGroup: goal.target_chat_id ? goal.target_chat_id.endsWith('@g.us') : false,
+                                chatId: goal.target_chat_id,
+                                text: `SYSTEM_GOAL_TRIGGER: L'objectif "${goal.title}" a été déclenché par un événement (Reçu message de ${senderName}).\nConsigne: ${goal.description}\nPriorité: ${goal.priority}`,
+                                senderName: "SYSTEM_EVENT_LISTENER",
+                                sender: "system@internal",
+                                isSystem: true
+                            }
+                        });
+                    }, 500); // Petit délai pour laisser traiter le message courant
+                }
+            }
+        } catch (e) {
+            console.error('[EventTrigger] Erreur vérification:', e.message);
+        }
 
         // ========== VELOCITY TRACKING (Adaptive Reply System) ==========
         // Tracker ce message pour le calcul de vélocité du chat
@@ -862,7 +897,12 @@ class BotCore {
                     console.log(`[Agent] 🛠️ Exécution outils en mode Standard: ${response.toolCalls.length}`);
                     for (const toolCall of response.toolCalls) {
                         try {
-                            await this._executeTool(toolCall, message);
+                            // [SECURITÉ PATCH] Utiliser _safeExecuteTool même en mode Standard
+                            await this._safeExecuteTool(toolCall, {
+                                chatId,
+                                message,
+                                authority: context.authority
+                            });
                         } catch (e) {
                             console.error(`[Agent] ❌ Échec outil Standard:`, e.message);
                         }
@@ -892,7 +932,14 @@ class BotCore {
 
                     if (plan) {
                         const executionLog = await planner.execute(plan, {
-                            executeToolFn: this._executeTool.bind(this),
+                            // [SAFE EXECUTION ADAPTER] Injection de la sécurité
+                            executeToolFn: async (toolCall, msg) => {
+                                return await this._safeExecuteTool(toolCall, {
+                                    chatId,
+                                    message: msg,
+                                    authority: context.authority // Capture du contexte d'autorité
+                                });
+                            },
                             chatId,
                             message
                         });
@@ -913,6 +960,21 @@ class BotCore {
 
             while (keepThinking && iterations < MAX_ITERATIONS) {
                 iterations++;
+
+                // [PHASE 2] GESTION DE CONTEXTE INTELLIGENTE
+                // Purger l'historique des résultats trop lourds pour éviter l'explosion
+                try {
+                    // On ne modifie pas 'conversationHistory' en place car c'est une constante (reference), 
+                    // mais c'est un tableau mutable. _optimizeHistory renvoie un nouveau tableau ou le même.
+                    // Si nouveau tableau, on doit remplacer le contenu.
+                    const optimized = this._optimizeHistory(conversationHistory);
+                    if (optimized !== conversationHistory) {
+                        conversationHistory.length = 0; // Vider l'original
+                        conversationHistory.push(...optimized); // Remplir avec l'optimisé
+                    }
+                } catch (ctxErr) {
+                    console.error('[ContextManager] ❌ Échec optimisation:', ctxErr);
+                }
 
                 // Appel à l'IA avec l'historique accumulé
                 const response = await providerRouter.chat(conversationHistory, {
@@ -981,63 +1043,13 @@ class BotCore {
                         const toolName = toolCall.function.name;
 
                         try {
-                            // [MULTI-AGENT] Critique pour actions critiques
-                            const { multiAgent } = await import('../services/agentic/MultiAgent.js');
-                            if (multiAgent.needsCritique(toolCall, context)) {
-                                console.log(`[MultiAgent] 🕵️ Action critique détectée: ${toolName}`);
-                                const critique = await multiAgent.critique(toolCall, {
-                                    chatId,
-                                    sender: message.sender,
-                                    senderName: message.senderName,
-                                    isGroup: message.isGroup,
-                                    authorityLevel: context.authority?.level || 0
-                                });
-
-                                if (!critique.approved) {
-                                    console.warn(`[MultiAgent] 🛑 Action refusée par Critic: ${critique.concerns.join('. ')}`);
-                                    conversationHistory.push({
-                                        role: 'tool',
-                                        tool_call_id: toolCall.id,
-                                        name: toolName,
-                                        content: JSON.stringify({
-                                            success: false,
-                                            error: true,
-                                            message: `ACTION_REFUSÉE_PAR_CRITIC: ${critique.concerns.join('. ')}. Alternative suggérée: ${critique.alternative || 'aucune'}`
-                                        })
-                                    });
-                                    continue;
-                                }
-                            }
-
-                            // [LEVEL 5] Boussole Morale Dynamique
-                            const moralCompass = container.get('moralCompass');
-                            if (moralCompass) {
-                                console.log(`[MoralCompass] 🧭 Évaluation de l'action: ${toolName}`);
-                                const evaluation = await moralCompass.evaluate(toolCall, {
-                                    chatId,
-                                    sender: message.sender,
-                                    senderName: message.senderName,
-                                    isGroup: message.isGroup,
-                                    authorityLevel: context.authority?.level || 0
-                                });
-
-                                if (!evaluation.allowed) {
-                                    console.warn(`[MoralCompass] 🛑 Action refusée: ${evaluation.reason}`);
-                                    conversationHistory.push({
-                                        role: 'tool',
-                                        tool_call_id: toolCall.id,
-                                        name: toolName,
-                                        content: JSON.stringify({
-                                            success: false,
-                                            error: true,
-                                            message: `ACTION_REFUSÉE_PAR_LA_BOUSSOLE_MORALE: ${evaluation.reason}`
-                                        })
-                                    });
-                                    continue;
-                                }
-                            }
-
-                            const toolResult = await this._executeTool(toolCall, message);
+                            // [MIGRATION vers _safeExecuteTool]
+                            // Centralisation de toute la logique de sécurité (MultiAgent, MoralCompass) et de logging
+                            const toolResult = await this._safeExecuteTool(toolCall, {
+                                chatId,
+                                message,
+                                authority: context.authority
+                            });
 
                             // Important: l'IA a besoin de voir le résultat JSON pur
                             const stringResult = JSON.stringify(toolResult);
@@ -1050,49 +1062,21 @@ class BotCore {
                                 content: stringResult
                             });
 
-                            console.log(`[Agent] ✅ Résultat ${toolName} reçu (${stringResult.length} chars)`);
+                            console.log(`[Agent] ✅ Résultat ${toolName} traité`);
 
                             // UX Agentique: Petit feedback visuel si c'est long
                             if (iterations > 1) {
                                 await this.transport.setPresence(chatId, 'composing');
                             }
 
-                            // [EPISODIC MEMORY] Log de l'action réussie
-                            const actionLog = await db.logAction(chatId, toolName, toolCall.function.arguments, toolResult, true);
-
-                            // [POST-ACTION EVALUATION] Évaluer l'action pour apprentissage continu
-                            if (actionLog?.id) {
-                                const { actionEvaluator } = await import('../services/agentic/ActionEvaluator.js');
-                                actionEvaluator.evaluate({
-                                    id: actionLog.id,
-                                    tool: toolName,
-                                    params: JSON.parse(toolCall.function.arguments),
-                                    result: toolResult,
-                                    duration_ms: 0, // TODO: measure
-                                    chatId,
-                                    timestamp: Date.now()
-                                }).catch(e => console.error('[Eval] Error:', e.message));
-                            }
-
-                            // Cas spécial: Si un outil demande d'arrêter ou échoue fatalement ?
-                            // Pour l'instant on laisse l'IA gérer l'erreur (Graceful Degradation)
-
-                        } catch (execErr) {
-                            console.error(`[Agent] ❌ Erreur critique exécution outil ${toolName}:`, execErr);
-
-                            // [EPISODIC MEMORY] Log de l'action échouée
-                            db.logAction(chatId, toolName, toolCall.function.arguments, null, false, execErr.message);
-
-                            // [SELF-HEALING] On renvoie l'erreur détaillée à l'IA pour qu'elle corrige
+                        } catch (unexpectedErr) {
+                            console.error(`[Agent] ❌ Erreur fatale boucle ReAct:`, unexpectedErr);
+                            // Fallback ultime
                             conversationHistory.push({
                                 role: 'tool',
                                 tool_call_id: toolCall.id,
                                 name: toolName,
-                                content: JSON.stringify({
-                                    success: false,
-                                    error: true,
-                                    message: `Tool Execution Failed: ${execErr.message}. Please analyze the error, self-correct your parameters or strategy, and try again.`
-                                })
+                                content: JSON.stringify({ success: false, error: true, message: `Fatal Loop Error: ${unexpectedErr.message}` })
                             });
                         }
                     }
@@ -1194,8 +1178,8 @@ class BotCore {
             }
 
             // Envoyer la réponse TEXTE (Standard ou Fallback)
-            if (!finalResponse || finalResponse.trim() === '') {
-                console.warn('[Core] ⚠️ Réponse vide, annulation envoi');
+            if (!finalResponse || typeof finalResponse !== 'string' || finalResponse.trim() === '') {
+                console.warn('[Core] ⚠️ Réponse vide ou invalide (non-string), annulation envoi');
                 return;
             }
 
@@ -1216,6 +1200,23 @@ class BotCore {
                         // Cas rare: Le modèle n'a renvoyé QUE de la pensée sans tool call ni réponse
                         return;
                     }
+                }
+            }
+
+            // [FIX] Detecter et corriger le format <send_message>JSON</send_message>
+            // Protection contre l'hallucination de format XML du modèle
+            const sendMessageRegex = /<send_message>([\s\S]*?)<\/send_message>/;
+            const smMatch = finalResponse && finalResponse.match(sendMessageRegex);
+            if (smMatch) {
+                try {
+                    const jsonContent = JSON.parse(smMatch[1]);
+                    if (jsonContent.text) {
+                        console.log('[Core] 🧹 Nettoyage automatique du format <send_message>');
+                        finalResponse = jsonContent.text;
+                    }
+                } catch (e) {
+                    // Fallback: simplement nettoyer les balises si le JSON est invalide ou si c'est du texte brut
+                    finalResponse = finalResponse.replace(/<\/?send_message>/g, '');
                 }
             }
 
@@ -1276,10 +1277,100 @@ class BotCore {
 
 
 
+
+    /**
+     * Exécute un outil de manière sécurisée (avec Critique et Boussole Morale)
+     * Utiliser cette méthode au lieu de _executeTool direct pour le Planner
+     */
+    async _safeExecuteTool(toolCall, context) {
+        const toolName = toolCall.function.name;
+        const { chatId, message, authority } = context;
+
+        console.log(`[SafeExecute] 🛡️ Exécution sécurisée demandée: ${toolName}`);
+
+        try {
+            // [MULTI-AGENT] Critique pour actions critiques
+            const { multiAgent } = await import('../services/agentic/MultiAgent.js');
+            if (multiAgent.needsCritique(toolCall, context)) {
+                console.log(`[MultiAgent] 🕵️ Action critique détectée: ${toolName}`);
+                const critique = await multiAgent.critique(toolCall, {
+                    chatId,
+                    sender: message.sender,
+                    senderName: message.senderName,
+                    isGroup: message.isGroup,
+                    authorityLevel: authority?.level || 0
+                });
+
+                if (!critique.approved) {
+                    console.warn(`[MultiAgent] 🛑 Action refusée par Critic: ${critique.concerns.join('. ')}`);
+                    return {
+                        success: false,
+                        error: true,
+                        message: `ACTION_REFUSÉE_PAR_CRITIC: ${critique.concerns.join('. ')}. Alternative suggérée: ${critique.alternative || 'aucune'}`
+                    };
+                }
+            }
+
+            // [LEVEL 5] Boussole Morale Dynamique
+            const moralCompass = container.get('moralCompass');
+            if (moralCompass) {
+                console.log(`[MoralCompass] 🧭 Évaluation de l'action: ${toolName}`);
+                const evaluation = await moralCompass.evaluate(toolCall, {
+                    chatId,
+                    sender: message.sender,
+                    senderName: message.senderName,
+                    isGroup: message.isGroup,
+                    authorityLevel: authority?.level || 0
+                });
+
+                if (!evaluation.allowed) {
+                    console.warn(`[MoralCompass] 🛑 Action refusée: ${evaluation.reason}`);
+                    return {
+                        success: false,
+                        error: true,
+                        message: `ACTION_REFUSÉE_PAR_LA_BOUSSOLE_MORALE: ${evaluation.reason}`
+                    };
+                }
+            }
+
+            // EXÉCUTION RÉELLE
+            const toolResult = await this._executeTool(toolCall, message);
+
+            // [EPISODIC MEMORY] Log de l'action réussie
+            const actionLog = await db.logAction(chatId, toolName, toolCall.function.arguments, toolResult, true);
+
+            // [POST-ACTION EVALUATION] Évaluer l'action pour apprentissage continu
+            if (actionLog?.id) {
+                const { actionEvaluator } = await import('../services/agentic/ActionEvaluator.js');
+                actionEvaluator.evaluate({
+                    id: actionLog.id,
+                    tool: toolName,
+                    params: JSON.parse(toolCall.function.arguments),
+                    result: toolResult,
+                    duration_ms: 0,
+                    chatId,
+                    timestamp: Date.now()
+                }).catch(e => console.error('[Eval] Error:', e.message));
+            }
+
+            return toolResult;
+
+        } catch (execErr) {
+            console.error(`[SafeExecute] ❌ Erreur exécution outil ${toolName}:`, execErr);
+
+            // [EPISODIC MEMORY] Log de l'action échouée
+            db.logAction(chatId, toolName, toolCall.function.arguments, null, false, execErr.message);
+
+            return {
+                success: false,
+                error: true,
+                message: `Tool Execution Failed: ${execErr.message}. Please analyze the error, self-correct your parameters or strategy, and try again.`
+            };
+        }
+    }
+
     /**
      * Analyse la complexité d'une demande pour choisir le pipeline de traitement
-     * @param {string} text Demande utilisateur
-     * @returns {Promise<'STANDARD' | 'AGENTIC'>}
      */
     async _classifyComplexity(text) {
         try {
@@ -1735,6 +1826,99 @@ Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
                 level: isSuperUser ? 100 : (isGlobalAdmin ? 80 : (socialData.senderIsAdmin ? 50 : 0))
             }
         };
+    }
+
+    /**
+     * Gère intelligemment la fenêtre de contexte pour éviter l'explosion (Amnésie Progressive)
+     * Tronque les sorties d'outils volumineuses tout en gardant l'instruction utilisateur
+     * @param {Array} history - Historique complet
+     * @returns {Array} Historique optimisé
+     */
+    _optimizeHistory(history) {
+        // Paramètres
+        const TOTAL_CHAR_LIMIT = 25000; // ~6k tokens
+        const TOOL_OUTPUT_LIMIT = 2000; // Limite par outil résumé
+
+        let currentSize = JSON.stringify(history).length;
+
+        if (currentSize < TOTAL_CHAR_LIMIT) {
+            return history;
+        }
+
+        console.log(`[ContextManager] ⚠️ Surcharge contexte détectée (${currentSize} chars). Optimisation...`);
+
+        // Stratégie: Supprimer/Tronquer les vieux tool_outputs, mais GARDEZ :
+        // 1. Le System Prompt (Index 0)
+        // 2. Le User Message original (Le dernier User message du début de chaine) => Souvent index 1 ou 2
+        // 3. Les 3 derniers échanges (User/Assistant/Tool)
+
+        const optimizedHistory = [...history];
+
+        // On parcourt de l'index 2 (après system/user prompt) jusqu'à length-3
+        // On ne touche PAS aux 3 derniers messages pour garder la cohérence immédiate
+        const safeZoneStart = 2;
+        const safeZoneEnd = optimizedHistory.length - 3;
+
+        let trimmedCount = 0;
+
+        for (let i = safeZoneStart; i < safeZoneEnd; i++) {
+            const msg = optimizedHistory[i];
+
+            // Cible n°1: Les résultats d'outils volumineux
+            if (msg.role === 'tool' && msg.content && msg.content.length > TOOL_OUTPUT_LIMIT) {
+                const originalLen = msg.content.length;
+                const summary = msg.content.substring(0, TOOL_OUTPUT_LIMIT) +
+                    `\n... [DONNÉES VOLUMINEUSES TRONQUÉES: ${originalLen - TOOL_OUTPUT_LIMIT} chars masqués pour préserver la mémoire. L'essentiel a été lu.]`;
+
+                msg.content = summary;
+                trimmedCount++;
+                currentSize = JSON.stringify(optimizedHistory).length;
+
+                if (currentSize < TOTAL_CHAR_LIMIT) break;
+            }
+        }
+
+        console.log(`[ContextManager] ✅ Optimisation terminée. ${trimmedCount} outils tronqués. Nouvelle taille: ${currentSize} chars.`);
+        return optimizedHistory;
+    }
+
+    /**
+     * [PHASE 3] Résilience: Vérifie s'il y a des actions interrompues (Crash Recovery)
+     * Si oui, propose de les reprendre
+     */
+    async _resumePendingActions() {
+        console.log('[Core] ♻️ Vérification des tâches interrompues...');
+        try {
+            const { actionMemory } = await import('../services/memory/ActionMemory.js');
+            const pendingActions = await actionMemory.getResumableActions(5);
+
+            if (pendingActions.length > 0) {
+                console.log(`[Core] ⚠️ ${pendingActions.length} action(s) interrompue(s) trouvée(s). Tentative de reprise...`);
+
+                for (const action of pendingActions) {
+                    // On ne reprend que les actions récentes (< 24h)
+                    const age = Date.now() - action.createdAt;
+                    if (age > 24 * 3600 * 1000) {
+                        console.log(`[Core] Action ${action.id} trop vieille, ignorée.`);
+                        continue;
+                    }
+
+                    // Notifier dans le chat qu'on a trouvé quelque chose
+                    const msg = `♻️ *Reprise d'activité*\nJ'ai détecté une tâche interrompue : "${action.params.goal}".\nJe reprends là où je m'étais arrêté (Étape ${action.steps.length}).\n_(Dites 'stop' pour annuler)_`;
+                    await this.transport.sendText(action.chatId, msg);
+
+                    // [REHYDRATION] Restaure le contexte Redis pour que le Planner soit prêt
+                    await actionMemory.rehydrateAction(action.chatId, action.id);
+
+                    // On ne change PAS le status DB ici pour garder la persistance "active" 
+                    // tant que la tâche n'est pas finie ou annulée.
+                }
+            } else {
+                console.log('[Core] ✅ Aucune tâche interrompue.');
+            }
+        } catch (e) {
+            console.error('[Core] ❌ Erreur lors de la vérification de reprise:', e.message);
+        }
     }
 
     /**

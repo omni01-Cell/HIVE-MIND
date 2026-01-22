@@ -202,7 +202,8 @@ export default {
                     if (!text) return { success: false, message: 'Texte vide.' };
 
                     // Envoi direct via le transport
-                    await transport.sendMessage(chatId, { text });
+                    // Utiliser sendText pour bénéficier du formatage auto et splitting
+                    await transport.sendText(chatId, text);
                     return { success: true, message: `[ACTION] Message intermédiaire envoyé: "${text}"` };
 
                 default:

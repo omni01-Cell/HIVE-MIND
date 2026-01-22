@@ -6,7 +6,8 @@ import {
     DisconnectReason,
     fetchLatestBaileysVersion,
     delay,
-    downloadMediaMessage
+    downloadMediaMessage,
+    isRealMessage
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
@@ -188,19 +189,44 @@ class BaileysTransport extends EventEmitter {
 
         // Écoute des messages
         self.sock.ev.on('messages.upsert', async ({ messages, type }) => {
-            if (type !== 'notify') return;
+            // 🔍 DEBUG: Log every upsert event to diagnose reception issues
+            console.log(`[Baileys] 📩 messages.upsert: type="${type}", count=${messages.length}`);
+
+            if (type !== 'notify') {
+                console.log(`[Baileys] ⏭️ Ignoré: type="${type}" (seul 'notify' traité)`);
+                return;
+            }
 
             for (const msg of messages) {
-                if (msg.key.fromMe) continue;
+                // 🔍 DEBUG: Log each message for diagnosis
+                const msgType = msg.message ? Object.keys(msg.message)[0] : 'NO_MESSAGE';
+                const remoteJid = msg.key?.remoteJid || 'UNKNOWN';
+                console.log(`[Baileys] 📨 Message reçu: from=${remoteJid}, type=${msgType}, fromMe=${msg.key?.fromMe}, id=${msg.key?.id?.slice(0, 8)}...`);
 
-                // Extraction des variables de base immédiate
-                const remoteJid = msg.key.remoteJid;
+                if (msg.key.fromMe) {
+                    console.log(`[Baileys] ⏭️ Ignoré: fromMe=true`);
+                    continue;
+                }
+
+                // Filtrage des messages de protocole/système (presence, receipts, group events, etc.)
+                if (!isRealMessage(msg)) {
+                    // 🔍 DEBUG: Always log when isRealMessage rejects a message
+                    const stubType = msg.messageStubType;
+                    const stubParams = msg.messageStubParameters;
+                    console.log(`[Baileys] 🚫 isRealMessage=false: stubType=${stubType}, params=${JSON.stringify(stubParams)}, keys=${Object.keys(msg).join(',')}`);
+                    continue;
+                }
+
+                // Extraction des variables de base immédiate (remoteJid déjà déclaré plus haut)
                 const sender = msg.key.participant || msg.key.remoteJid;
                 const senderName = msg.pushName || sender.split('@')[0];
 
-                // Vérification de sécurité: msg.message peut être undefined/null
+                console.log(`[Baileys] ✅ Message valide de ${senderName}, traitement en cours...`);
+
+                // Vérification de sécurité supplémentaire (cas edge)
                 if (!msg.message) {
-                    console.warn('[Baileys] ⚠️ Message reçu sans contenu (msg.message undefined)');
+                    console.warn('[Baileys] ⚠️ Message passed isRealMessage but has no content - investigating');
+                    console.warn('[Baileys] Message keys:', Object.keys(msg));
                     continue;
                 }
 
@@ -210,9 +236,13 @@ class BaileysTransport extends EventEmitter {
                 const isGroup = chatId.endsWith('@g.us');
                 const senderId = sender;
 
+                console.log(`[Baileys] 📝 Type=${messageType}, chatId=${chatId}, isGroup=${isGroup}`);
+
                 // 1. MISE À JOUR SOCIALE (USER)
                 if (self.userService) {
+                    console.log(`[Baileys] 👤 Mise à jour interaction utilisateur...`);
                     await self.userService.recordInteraction(senderId, msg.pushName, isGroup ? chatId : null);
+                    console.log(`[Baileys] ✅ Interaction enregistrée`);
                 }
 
                 // 2. AUTO-DISCOVERY (GROUPES)
@@ -231,11 +261,13 @@ class BaileysTransport extends EventEmitter {
                 }
 
                 // ⚡ Filtre anti-backlog
+                console.log(`[Baileys] ⏳ Vérification anti-backlog...`);
                 if (config.backlog_protection?.enabled && self.connectionTime) {
                     const messageTimestamp = msg.messageTimestamp;
                     const now = Math.floor(Date.now() / 1000);
                     const messageAge = now - messageTimestamp;
                     const threshold = config.backlog_protection.message_stale_threshold_seconds;
+                    console.log(`[Baileys] 📊 Age message: ${messageAge}s, seuil: ${threshold}s`);
 
                     if (messageAge > threshold) {
                         self.backlogMessagesIgnored++;
@@ -243,6 +275,7 @@ class BaileysTransport extends EventEmitter {
                         continue;
                     }
                 }
+                console.log(`[Baileys] ✅ Message pas trop ancien, traitement continue...`);
 
                 // 3. TRANSCRIPTION & AUDIO HANDLING (V6)
                 const isAudio = msg.message?.audioMessage;
@@ -320,7 +353,7 @@ class BaileysTransport extends EventEmitter {
                         // ========== GROUPES ==========
                         else {
                             const groupService = self.container?.get('groupService');
-                            const groupSettings = groupService ? await groupService.getGroupSettings(groupId) : {};
+                            const groupSettings = groupService ? await groupService.getGroupSettings(chatId) : {};
                             const mode = groupSettings?.audio_mode || 'mention_only';
 
                             if (mode === 'off') {
@@ -366,9 +399,11 @@ class BaileysTransport extends EventEmitter {
                     }
 
                     // Assigner le texte transcrit
+                    console.log(`[Baileys] 📝 Extraction texte: transcribedText=${!!transcribedText}, normalizedMsg.text=${!!normalizedMsg.text}, useNativeAudio=${!!normalizedMsg.useNativeAudio}`);
                     if (transcribedText) {
                         normalizedMsg.text = transcribedText;
                         normalizedMsg.isTranscribed = true;
+                        console.log(`[Baileys] 🎤 Texte transcrit assigné`);
                     } else if (!normalizedMsg.text && !normalizedMsg.useNativeAudio) {
                         // Fallback text extraction if not audio
                         let textBody = '';
@@ -377,6 +412,7 @@ class BaileysTransport extends EventEmitter {
                         else if (msg.message?.imageMessage?.caption) textBody = msg.message.imageMessage.caption;
                         else if (msg.message?.videoMessage?.caption) textBody = msg.message.videoMessage.caption;
                         normalizedMsg.text = textBody;
+                        console.log(`[Baileys] 💬 Texte extrait: "${textBody?.slice(0, 50)}${textBody?.length > 50 ? '...' : ''}"`);
                     }
 
                     // ANTI-DELETE logic
@@ -391,10 +427,39 @@ class BaileysTransport extends EventEmitter {
                     }
 
                     // EMIT MESSAGE
+                    console.log(`[Baileys] 🎯 Condition emit: text="${normalizedMsg.text?.slice(0, 30) || 'null'}", useNativeAudio=${!!normalizedMsg.useNativeAudio}, hasCallback=${!!self.messageCallback}`);
                     if (normalizedMsg.text || normalizedMsg.useNativeAudio) {
-                        if (self.messageCallback) self.messageCallback(normalizedMsg);
+                        console.log(`[Baileys] 📤 EMISSION MESSAGE vers Core...`);
+                        if (self.messageCallback) {
+                            console.log(`[Baileys] 📞 Appel messageCallback...`);
+                            self.messageCallback(normalizedMsg);
+                        }
                         eventBus.publish(BotEvents.MESSAGE_RECEIVED, normalizedMsg);
                         self.emit('message', normalizedMsg);
+                        console.log(`[Baileys] ✅ Message émis avec succès!`);
+                    } else {
+                        console.log(`[Baileys] ⚠️ Message NON émis - pas de texte ni audio natif`);
+                    }
+
+                    // 📬 ACCUSÉS DE RÉCEPTION (Humanisation)
+                    // Envoyer les récépissés pour rendre le bot plus naturel
+                    try {
+                        const sendDeliveryReceipts = process.env.SEND_DELIVERY_RECEIPTS === 'true';
+                        const sendReadReceipts = process.env.SEND_READ_RECEIPTS === 'true';
+
+                        if (sendReadReceipts) {
+                            // Envoyer accusé de lecture (double coche bleue)
+                            await self.sock.readMessages([msg.key]);
+                        } else if (sendDeliveryReceipts) {
+                            // Note: Baileys envoie automatiquement les accusés de réception (double coche grise)
+                            // si le message est dans le store. La lecture est le seul qu'on contrôle explicitement.
+                            // Pour éviter d'envoyer la lecture, on ne fait rien ici.
+                        }
+                    } catch (receiptErr) {
+                        // Erreur silencieuse - les récépissés ne sont pas critiques
+                        if (process.env.DEBUG === 'true') {
+                            console.warn('[Baileys] ⚠️ Erreur envoi récépissé:', receiptErr.message);
+                        }
                     }
 
                 } catch (err) {

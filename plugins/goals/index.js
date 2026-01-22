@@ -27,8 +27,16 @@ export default {
                         },
                         executeIn: {
                             type: 'string',
-                            description: 'Quand exécuter cet objectif. Exemples: "2h", "1d", "30min", "tomorrow"',
+                            description: 'Pour un rappel temporel: Quand exécuter cet objectif. Exemples: "2h", "1d", "tomorrow". Ignoré si waitForUser/Keyword est défini.',
                             default: '1h'
+                        },
+                        waitForUser: {
+                            type: 'string',
+                            description: 'Optionnel: Attendre un message de cet utilisateur spécifique (Nom ou JID) avant de déclencher l\'objectif.'
+                        },
+                        waitForKeyword: {
+                            type: 'string',
+                            description: 'Optionnel: Attendre un message contenant ce mot-clé avant de déclencher l\'objectif.'
                         }
                     },
                     required: ['title', 'description']
@@ -55,6 +63,19 @@ export default {
         {
             type: 'function',
             function: {
+                name: 'complete_goal',
+                description: 'Marque un objectif autonome comme terminé. À utiliser IMPÉRATIVEMENT à la fin de l\'exécution d\'un goal.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        goalId: {
+                            type: 'string',
+                            description: 'ID de l\'objectif complété'
+                        },
+
+        {
+            type: 'function',
+            function: {
                 name: 'cancel_goal',
                 description: 'Annule un objectif autonome.',
                 parameters: {
@@ -76,10 +97,30 @@ export default {
 
         switch (toolName) {
             case 'create_goal': {
-                const { title, description, executeIn = '1h' } = args;
+                const { title, description, executeIn = '1h', waitForUser, waitForKeyword } = args;
 
-                // Parse la durée
-                const executeAt = goalsService.parseDuration(executeIn);
+                // Déterminer le type de trigger
+                let triggerType = 'TIME';
+                let triggerEvent = null;
+                let triggerCondition = {};
+                let executeAt = null;
+
+                if (waitForUser || waitForKeyword) {
+                    triggerType = 'EVENT';
+                    triggerEvent = 'WAIT_FOR_MESSAGE';
+                    triggerCondition = {};
+                    if (waitForUser) triggerCondition.from_user = waitForUser;
+                    if (waitForKeyword) triggerCondition.contains = waitForKeyword;
+
+                    // Pas de date pour les événements, ou une date limite lointaine (à gérer plus tard)
+                    // Pour l'instant on met null ou `now` ? Le service attend une date pour le insert.
+                    // Si on regarde le schema, execute_at peut être null ?
+                    // SUPPOSITION: On met une date lointaine (2099) pour ne pas déclencher le Time Scheduler
+                    executeAt = new Date('2099-12-31T23:59:59Z');
+                } else {
+                    // Time based
+                    executeAt = goalsService.parseDuration(executeIn);
+                }
 
                 // Créer l'objectif
                 const goal = await goalsService.createGoal({
@@ -87,12 +128,22 @@ export default {
                     description,
                     executeAt,
                     targetChatId: chatId,
-                    origin: 'self'
+                    origin: 'self',
+                    triggerType,
+                    triggerEvent,
+                    triggerCondition
                 });
+
+                let validMsg = '';
+                if (triggerType === 'EVENT') {
+                    validMsg = `Exécution à l'événement: ${waitForUser ? `De "${waitForUser}"` : ''} ${waitForKeyword ? `Contenant "${waitForKeyword}"` : ''}`;
+                } else {
+                    validMsg = `Exécution prévue: ${executeAt.toLocaleString('fr-FR')}`;
+                }
 
                 return {
                     success: true,
-                    message: `✅ Objectif créé: "${title}"\nExécution prévue: ${executeAt.toLocaleString('fr-FR')}\nID: ${goal.id}`
+                    message: `✅ Objectif créé: "${title}"\n${validMsg}\nID: ${goal.id}`
                 };
             }
 
@@ -118,6 +169,16 @@ export default {
                 return {
                     success: true,
                     message: `📋 Objectifs (${filtered.length}):\n\n${list}`
+                };
+            }
+
+            case 'complete_goal': {
+                const { goalId, result } = args;
+                await goalsService.completeGoal(goalId, result);
+
+                return {
+                    success: true,
+                    message: `✅ Objectif ${goalId} marqué comme COMPLÉTÉ.`
                 };
             }
 

@@ -12,7 +12,17 @@ export const goalsService = {
      * @param {Object} goal - { title, description, executeAt, targetChatId, priority, origin }
      * @returns {Promise<Object>} L'objectif créé
      */
-    async createGoal({ title, description, executeAt, targetChatId = null, priority = 5, origin = 'self' }) {
+    async createGoal({
+        title,
+        description,
+        executeAt,
+        targetChatId = null,
+        priority = 5,
+        origin = 'self',
+        triggerType = 'TIME',
+        triggerEvent = null,
+        triggerCondition = {}
+    }) {
         try {
             const { data, error } = await supabase
                 .from('autonomous_goals')
@@ -22,7 +32,10 @@ export const goalsService = {
                     execute_at: executeAt,
                     target_chat_id: targetChatId,
                     priority,
-                    origin
+                    origin,
+                    trigger_type: triggerType,
+                    trigger_event: triggerEvent,
+                    trigger_condition: triggerCondition
                 })
                 .select()
                 .single();
@@ -120,6 +133,70 @@ export const goalsService = {
             console.log(`[GoalsService] ⚠️ Objectif annulé: ${goalId}`);
         } catch (error) {
             console.error('[GoalsService] Erreur cancelGoal:', error.message);
+        }
+    },
+
+    /**
+     * Vérifie si un message déclenche un objectif en attente (EVENT trigger)
+     * @param {Object} message - Message entrant
+     * @returns {Promise<Array>} Liste des objectifs déclenchés
+     */
+    async checkEventTriggers(message) {
+        try {
+            // 1. Récupérer les objectifs événementiels en attente
+            const { data: eventGoals, error } = await supabase
+                .from('autonomous_goals')
+                .select('*')
+                .eq('status', 'pending')
+                .eq('trigger_type', 'EVENT');
+
+            if (error) throw error;
+            if (!eventGoals || eventGoals.length === 0) return [];
+
+            const triggeredGoals = [];
+
+            for (const goal of eventGoals) {
+                // Analyse de la condition
+                if (goal.trigger_event === 'WAIT_FOR_MESSAGE') {
+                    const condition = goal.trigger_condition || {};
+                    let match = true;
+
+                    // Condition: Expéditeur spécifique
+                    if (condition.from_user) {
+                        // Supporte JID complet ou juste le nom/numéro
+                        const sender = message.sender || '';
+                        const name = message.senderName || '';
+                        if (!sender.includes(condition.from_user) && !name.includes(condition.from_user)) {
+                            match = false;
+                        }
+                    }
+
+                    // Condition: Contenu (Mots-clés)
+                    if (condition.contains && match) {
+                        const text = (message.text || '').toLowerCase();
+                        const keyword = condition.contains.toLowerCase();
+                        if (!text.includes(keyword)) {
+                            match = false;
+                        }
+                    }
+
+                    // Condition: Chat spécifique
+                    if (goal.target_chat_id && match) {
+                        if (message.chatId !== goal.target_chat_id) {
+                            match = false;
+                        }
+                    }
+
+                    if (match) {
+                        triggeredGoals.push(goal);
+                    }
+                }
+            }
+
+            return triggeredGoals;
+        } catch (error) {
+            console.error('[GoalsService] Erreur checkEventTriggers:', error.message);
+            return [];
         }
     },
 
