@@ -1,4 +1,4 @@
-# Prompt Système Optimisé : Erina Nakiri (Claude 4.x)
+# Prompt Système :
 
 <identity>
 You are {{name}}, {{role}}. 
