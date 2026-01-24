@@ -24,8 +24,19 @@ import { formatToWhatsApp } from '../../utils/helpers.js';
 import { workingMemory } from '../../services/workingMemory.js';
 import { botIdentity } from '../../utils/botIdentity.js';
 import { resolveMentionsInText } from '../../utils/fuzzyMatcher.js';
+import { AudioHandler } from './handlers/audioHandler.js';
+import { AntiDeleteHandler } from './handlers/antiDeleteHandler.js';
+
+const BAILEYS_ERRORS = {
+    CONNECTION_LOST: 'CONNECTION_LOST',
+    SESSION_CONFLICT: 'SESSION_CONFLICT', // Code 440
+    MEDIA_DOWNLOAD_FAILED: 'MEDIA_DOWNLOAD_FAILED',
+    RECOGNITION_FAILED: 'RECOGNITION_FAILED',
+    MESSAGE_SEND_FAILED: 'MESSAGE_SEND_FAILED'
+};
 
 // NOUVEAU: Import config centralisée pour Audio Strategy
+
 import { config as globalConfig } from '../../config/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -60,7 +71,10 @@ class BaileysTransport extends EventEmitter {
         this.state = null;
         this.saveCreds = null;
         this.reconnectAttempts = 0;
+        this.audioHandler = new AudioHandler(this, this.logger);
+        this.antiDeleteHandler = new AntiDeleteHandler(this, this.logger);
     }
+
 
     setContainer(container) {
         this.container = container;
@@ -78,8 +92,13 @@ class BaileysTransport extends EventEmitter {
         return this.container?.get('adminService');
     }
 
+    get logger() {
+        return this.container?.get('logger') || console;
+    }
+
     /**
      * Connecte au service WhatsApp via Baileys
+
      */
     async connect(sessionPath = 'session') {
         const self = this; // Capture du contexte pour les callbacks
@@ -143,15 +162,19 @@ class BaileysTransport extends EventEmitter {
                 console.log(`[Baileys] 🔌 Déconnexion (statusCode: ${statusCode || 'undefined'}, reason: ${lastDisconnect?.error?.message || 'unknown'})`);
                 eventBus.publish(BotEvents.DISCONNECTED, { shouldReconnect });
 
-                // Gérer le cas spécifique "Stream Errored" qui boucle
-                if (lastDisconnect.error?.message === 'Stream Errored (conflict)') {
-                    console.log('⚠️ Conflit de stream détecté, attente avant reconnexion...');
+                // Gérer le cas spécifique "Stream Errored" qui boucle (Error 440)
+                if (lastDisconnect.error?.message === 'Stream Errored (conflict)' || statusCode === 440) {
+                    this.logger.error('\x1b[31m[Baileys:CRITICAL] Session conflict detected (Error 440).\x1b[0m');
+                    this.logger.error('\x1b[31m[Baileys:CRITICAL] This usually means another instance of this bot is running.\x1b[0m');
+                    this.logger.error('\x1b[31m[Baileys:CRITICAL] Please kill all other instances and restart.\x1b[0m');
                     self.isConnecting = false;
-                    setTimeout(() => self.connect(sessionPath), 5000);
+                    // Attendre plus longtemps avant de retenter pour éviter de spammer le serveur
+                    setTimeout(() => self.connect(sessionPath), 10000);
                     return;
                 }
 
                 // Reset guard to allow reconnection
+
                 self.isConnecting = false;
 
                 if (shouldReconnect) {
@@ -168,7 +191,6 @@ class BaileysTransport extends EventEmitter {
                     console.log('[Baileys] ⛔ Déconnexion définitive (loggedOut)');
                 }
             } else if (connection === 'open') {
-                console.log('✅ Connecté à WhatsApp !');
                 self.isConnecting = false;
                 self.reconnectAttempts = 0;
                 self.connectionTime = Math.floor(Date.now() / 1000);
@@ -198,224 +220,111 @@ class BaileysTransport extends EventEmitter {
             }
 
             for (const msg of messages) {
-                // 🔍 DEBUG: Log each message for diagnosis
-                const msgType = msg.message ? Object.keys(msg.message)[0] : 'NO_MESSAGE';
-                const remoteJid = msg.key?.remoteJid || 'UNKNOWN';
-                console.log(`[Baileys] 📨 Message reçu: from=${remoteJid}, type=${msgType}, fromMe=${msg.key?.fromMe}, id=${msg.key?.id?.slice(0, 8)}...`);
+                try {
+                    // 🔍 DEBUG: Log each message for diagnosis
+                    const msgType = msg.message ? Object.keys(msg.message)[0] : 'NO_MESSAGE';
+                    const remoteJid = msg.key?.remoteJid || 'UNKNOWN';
+                    console.log(`[Baileys] 📨 Message reçu: from=${remoteJid}, type=${msgType}, fromMe=${msg.key?.fromMe}, id=${msg.key?.id?.slice(0, 8)}...`);
 
-                if (msg.key.fromMe) {
-                    console.log(`[Baileys] ⏭️ Ignoré: fromMe=true`);
-                    continue;
-                }
-
-                // Filtrage des messages de protocole/système (presence, receipts, group events, etc.)
-                if (!isRealMessage(msg)) {
-                    // 🔍 DEBUG: Always log when isRealMessage rejects a message
-                    const stubType = msg.messageStubType;
-                    const stubParams = msg.messageStubParameters;
-                    console.log(`[Baileys] 🚫 isRealMessage=false: stubType=${stubType}, params=${JSON.stringify(stubParams)}, keys=${Object.keys(msg).join(',')}`);
-                    continue;
-                }
-
-                // Extraction des variables de base immédiate (remoteJid déjà déclaré plus haut)
-                const sender = msg.key.participant || msg.key.remoteJid;
-                const senderName = msg.pushName || sender.split('@')[0];
-
-                console.log(`[Baileys] ✅ Message valide de ${senderName}, traitement en cours...`);
-
-                // Vérification de sécurité supplémentaire (cas edge)
-                if (!msg.message) {
-                    console.warn('[Baileys] ⚠️ Message passed isRealMessage but has no content - investigating');
-                    console.warn('[Baileys] Message keys:', Object.keys(msg));
-                    continue;
-                }
-
-                const messageType = Object.keys(msg.message)[0];
-                const pushName = msg.pushName;
-                const chatId = remoteJid;
-                const isGroup = chatId.endsWith('@g.us');
-                const senderId = sender;
-
-                console.log(`[Baileys] 📝 Type=${messageType}, chatId=${chatId}, isGroup=${isGroup}`);
-
-                // 1. MISE À JOUR SOCIALE (USER)
-                if (self.userService) {
-                    console.log(`[Baileys] 👤 Mise à jour interaction utilisateur...`);
-                    await self.userService.recordInteraction(senderId, msg.pushName, isGroup ? chatId : null);
-                    console.log(`[Baileys] ✅ Interaction enregistrée`);
-                }
-
-                // 2. AUTO-DISCOVERY (GROUPES)
-                if (isGroup && self.groupService) {
-                    const needsUpdate = await self.groupService.needsUpdate(chatId);
-
-                    if (needsUpdate) {
-                        try {
-                            console.log(`[Discovery] Scan du groupe ${chatId} en cours...`);
-                            const metadata = await self.sock.groupMetadata(chatId);
-                            await self.groupService.updateGroup(chatId, metadata);
-                        } catch (err) {
-                            console.error(`[Discovery] Echec recup metadata groupe: ${err.message}`);
-                        }
-                    }
-                }
-
-                // ⚡ Filtre anti-backlog
-                console.log(`[Baileys] ⏳ Vérification anti-backlog...`);
-                if (config.backlog_protection?.enabled && self.connectionTime) {
-                    const messageTimestamp = msg.messageTimestamp;
-                    const now = Math.floor(Date.now() / 1000);
-                    const messageAge = now - messageTimestamp;
-                    const threshold = config.backlog_protection.message_stale_threshold_seconds;
-                    console.log(`[Baileys] 📊 Age message: ${messageAge}s, seuil: ${threshold}s`);
-
-                    if (messageAge > threshold) {
-                        self.backlogMessagesIgnored++;
-                        console.log(`[Baileys] 🚫 Message ignoré (${messageAge}s ancien)`);
+                    if (msg.key.fromMe) {
+                        console.log(`[Baileys] ⏭️ Ignoré: fromMe=true`);
                         continue;
                     }
-                }
-                console.log(`[Baileys] ✅ Message pas trop ancien, traitement continue...`);
 
-                // 3. TRANSCRIPTION & AUDIO HANDLING (V6)
-                const isAudio = msg.message?.audioMessage;
-                let transcribedText = null;
+                    // Filtrage des messages de protocole/système (presence, receipts, group events, etc.)
+                    if (!isRealMessage(msg)) {
+                        // 🔍 DEBUG: Always log when isRealMessage rejects a message
+                        const stubType = msg.messageStubType;
+                        const stubParams = msg.messageStubParameters;
+                        console.log(`[Baileys] 🚫 isRealMessage=false: stubType=${stubType}, params=${JSON.stringify(stubParams)}, keys=${Object.keys(msg).join(',')}`);
+                        continue;
+                    }
 
-                // Préparer normalizedMsg
-                const normalizedMsg = {
-                    id: msg.key.id,
-                    chatId: remoteJid, // CRITICAL: Propagate chatId
-                    remoteJid: remoteJid,
-                    sender: sender,
-                    senderName: senderName,
-                    pushName: pushName,
-                    fromMe: msg.key.fromMe || false,
-                    isGroup: isGroup,
-                    timestamp: msg.messageTimestamp,
-                    type: messageType,
-                    raw: msg
-                };
+                    // Extraction des variables de base immédiate (remoteJid déjà déclaré plus haut)
+                    const sender = msg.key.participant || msg.key.remoteJid;
+                    const senderName = msg.pushName || sender.split('@')[0];
 
-                try {
-                    if (isAudio && self.container?.has('transcriptionService')) {
-                        // ========== PV (MESSAGES PRIVÉS) ==========
-                        if (!isGroup) {
-                            const pvAudioDisabled = await workingMemory.isPvAudioDisabled();
+                    console.log(`[Baileys] ✅ Message valide de ${senderName}, traitement en cours...`);
 
-                            if (pvAudioDisabled) {
-                                console.log(`[Baileys] ⏭️ Audio PV ignoré (désactivé globalement)`);
-                            } else {
-                                const audioStrategy = globalConfig.models?.reglages_generaux?.audio_strategy || {};
-                                const useNativeAudio = audioStrategy.prefer_native && self.container?.has('geminiLiveProvider');
+                    // Vérification de sécurité supplémentaire (cas edge)
+                    if (!msg.message) {
+                        console.warn('[Baileys] ⚠️ Message passed isRealMessage but has no content - investigating');
+                        console.warn('[Baileys] Message keys:', Object.keys(msg));
+                        continue;
+                    }
 
-                                if (useNativeAudio) {
-                                    console.log(`[Baileys] 🎙️ Mode Audio NATIF détecté (Gemini Live)`);
-                                    try {
-                                        const buffer = await downloadMediaMessage(
-                                            msg, 'buffer', {}, { reuploadRequest: self.sock.updateMediaMessage, logger: pino({ level: 'silent' }) }
-                                        );
-                                        normalizedMsg.audioBuffer = buffer;
-                                        normalizedMsg.useNativeAudio = true;
-                                        normalizedMsg.text = '[AUDIO_NATIVE]';
-                                        console.log(`[Baileys] ✅ Buffer audio prêt pour traitement natif (${buffer.length} bytes)`);
-                                    } catch (err) {
-                                        console.error(`[Baileys] ❌ Erreur téléchargement audio natif: ${err.message}`);
-                                        if (audioStrategy.fallback_to_cascade) {
-                                            console.log(`[Baileys] 🔄 Fallback vers mode cascade`);
-                                            // Fallback logique dessous...
-                                        }
-                                    }
-                                }
+                    const messageType = Object.keys(msg.message)[0];
+                    const pushName = msg.pushName;
+                    const chatId = remoteJid;
+                    const isGroup = chatId.endsWith('@g.us');
+                    const senderId = sender;
 
-                                // CASCADE
-                                if (!normalizedMsg.useNativeAudio) {
-                                    console.log(`[Baileys] 🎤 Audio PV détecté, transcription directe...`);
-                                    try {
-                                        const buffer = await downloadMediaMessage(
-                                            msg, 'buffer', {}, { reuploadRequest: self.sock.updateMediaMessage, logger: pino({ level: 'silent' }) }
-                                        );
-                                        const { writeFileSync, unlinkSync, mkdirSync, existsSync } = await import('fs');
+                    console.log(`[Baileys] 📝 Type=${messageType}, chatId=${chatId}, isGroup=${isGroup}`);
 
-                                        const tempDir = join(__dirname, '..', '..', 'temp', 'stt');
-                                        if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-                                        const tempPath = join(tempDir, `stt_pv_${msg.key.id}.ogg`);
-                                        writeFileSync(tempPath, buffer);
-                                        const transcriptionService = self.container.get('transcriptionService');
-                                        transcribedText = await transcriptionService.transcribe(tempPath);
-                                        console.log(`[Baileys] 🗣️ Transcription PV: "${transcribedText}"`);
-                                        try { unlinkSync(tempPath); } catch (e) { }
-                                    } catch (err) {
-                                        console.error(`[Baileys] ❌ Erreur STT PV: ${err.message}`);
-                                    }
-                                }
+                    // 1. MISE À JOUR SOCIALE (USER)
+                    if (self.userService) {
+                        console.log(`[Baileys] 👤 Mise à jour interaction utilisateur...`);
+                        await self.userService.recordInteraction(senderId, msg.pushName, isGroup ? chatId : null);
+                        console.log(`[Baileys] ✅ Interaction enregistrée`);
+                    }
+
+                    // 2. AUTO-DISCOVERY (GROUPES)
+                    if (isGroup && self.groupService) {
+                        const needsUpdate = await self.groupService.needsUpdate(chatId);
+
+                        if (needsUpdate) {
+                            try {
+                                console.log(`[Discovery] Scan du groupe ${chatId} en cours...`);
+                                const metadata = await self.sock.groupMetadata(chatId);
+                                await self.groupService.updateGroup(chatId, metadata);
+                            } catch (err) {
+                                console.error(`[Discovery] Echec recup metadata groupe: ${err.message}`);
                             }
                         }
-                        // ========== GROUPES ==========
-                        else {
-                            const groupService = self.container?.get('groupService');
-                            const groupSettings = groupService ? await groupService.getGroupSettings(chatId) : {};
-                            const mode = groupSettings?.audio_mode || 'mention_only';
+                    }
 
-                            if (mode === 'off') {
-                                console.log(`[Baileys] ⏭️ Audio Groupe ignoré (Mode OFF)`);
-                            } else {
-                                try {
-                                    const buffer = await downloadMediaMessage(
-                                        msg, 'buffer', {}, { reuploadRequest: self.sock.updateMediaMessage, logger: pino({ level: 'silent' }) }
-                                    );
+                    // ⚡ Filtre anti-backlog
+                    console.log(`[Baileys] ⏳ Vérification anti-backlog...`);
+                    if (config.backlog_protection?.enabled && self.connectionTime) {
+                        const messageTimestamp = msg.messageTimestamp;
+                        const now = Math.floor(Date.now() / 1000);
+                        const messageAge = now - messageTimestamp;
+                        const threshold = config.backlog_protection.message_stale_threshold_seconds;
+                        console.log(`[Baileys] 📊 Age message: ${messageAge}s, seuil: ${threshold}s`);
 
-                                    // Check if native audio is enabled and available
-                                    const audioStrategy = globalConfig.models?.reglages_generaux?.audio_strategy || {};
-                                    const useNativeAudio = audioStrategy.prefer_native && self.container?.has('geminiLiveProvider');
-
-                                    // Determine context (Reply to bot?)
-                                    let isQuotedReplyToBot = false;
-                                    const audioCtx = msg.message?.audioMessage?.contextInfo;
-                                    if (audioCtx?.participant) {
-                                        const rawBotId = self.sock?.user?.id;
-                                        const botLid = self.sock?.user?.lid;
-                                        const quotedSender = audioCtx.participant;
-                                        isQuotedReplyToBot = (rawBotId && quotedSender.includes(rawBotId.split(':')[0]?.split('@')[0])) ||
-                                            (botLid && quotedSender.includes(botLid.split(':')[0]?.split('@')[0]));
-                                    }
-
-                                    // Try Native Audio first (if conditions met)
-                                    // Conditions: Native Enabled AND (Full Mode OR Explicit Reply to Bot)
-                                    // Note: "mention_only" without reply falls back to STT because we need text to check mentions
-                                    if (useNativeAudio && (mode === 'full' || isQuotedReplyToBot)) {
-                                        console.log(`[Baileys] 🎙️ Mode Audio NATIF détecté pour GROUPE (mode=${mode}, reply=${isQuotedReplyToBot})`);
-                                        normalizedMsg.audioBuffer = buffer;
-                                        normalizedMsg.useNativeAudio = true;
-                                        normalizedMsg.text = '[AUDIO_NATIVE]';
-                                    }
-
-                                    // Fallback / Default to STT
-                                    if (!normalizedMsg.useNativeAudio) {
-                                        const { writeFileSync, unlinkSync, mkdirSync, existsSync } = await import('fs');
-                                        const tempDir = join(__dirname, '..', '..', 'temp', 'stt');
-                                        if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-                                        const tempPath = join(tempDir, `stt_${msg.key.id}.ogg`);
-                                        writeFileSync(tempPath, buffer);
-
-                                        const transcriptionService = self.container.get('transcriptionService');
-                                        transcribedText = await transcriptionService.transcribe(tempPath);
-                                        console.log(`[Baileys] 🗣️ Transcription Groupe: "${transcribedText}"`);
-
-                                        const mentionsBot = botIdentity.isVocallyMentioned(transcribedText);
-
-                                        if (!mentionsBot && !isQuotedReplyToBot && mode !== 'full') {
-                                            transcribedText = null;
-                                        }
-                                        try { unlinkSync(tempPath); } catch (e) { }
-                                    }
-                                } catch (e) {
-                                    console.error(`[Baileys] Erreur Audio Groupe: ${e.message}`);
-                                }
-                            }
+                        if (messageAge > threshold) {
+                            self.backlogMessagesIgnored++;
+                            console.log(`[Baileys] 🚫 Message ignoré (${messageAge}s ancien)`);
+                            continue;
                         }
+                    }
+                    console.log(`[Baileys] ✅ Message pas trop ancien, traitement continue...`);
+
+                    // 3. TRANSCRIPTION & AUDIO HANDLING (V6)
+                    const isAudio = msg.message?.audioMessage;
+                    let transcribedText = null;
+
+                    // Préparer normalizedMsg
+                    const normalizedMsg = {
+                        id: msg.key.id,
+                        chatId: remoteJid, // CRITICAL: Propagate chatId
+                        remoteJid: remoteJid,
+                        sender: sender,
+                        senderName: senderName,
+                        pushName: pushName,
+                        fromMe: msg.key.fromMe || false,
+                        isGroup: isGroup,
+                        timestamp: msg.messageTimestamp,
+                        type: messageType,
+                        raw: msg
+                    };
+
+                    if (isAudio) {
+                        transcribedText = await this.audioHandler.processAudioMessage(msg, normalizedMsg);
                     }
 
                     // Assigner le texte transcrit
+
                     console.log(`[Baileys] 📝 Extraction texte: transcribedText=${!!transcribedText}, normalizedMsg.text=${!!normalizedMsg.text}, useNativeAudio=${!!normalizedMsg.useNativeAudio}`);
                     if (transcribedText) {
                         normalizedMsg.text = transcribedText;
@@ -433,17 +342,10 @@ class BaileysTransport extends EventEmitter {
                     }
 
                     // ANTI-DELETE logic
-                    if (normalizedMsg.text && isGroup) {
-                        workingMemory.storeMessage(chatId, msg.key.id, {
-                            sender: senderId,
-                            senderName: msg.pushName || senderId.split('@')[0],
-                            text: normalizedMsg.text,
-                            mediaType: normalizedMsg.mediaType,
-                            timestamp: msg.messageTimestamp
-                        }).catch(() => { });
-                    }
+                    await this.antiDeleteHandler.storeMessage(normalizedMsg);
 
                     // EMIT MESSAGE
+
                     console.log(`[Baileys] 🎯 Condition emit: text="${normalizedMsg.text?.slice(0, 30) || 'null'}", useNativeAudio=${!!normalizedMsg.useNativeAudio}, hasCallback=${!!self.messageCallback}`);
                     if (normalizedMsg.text || normalizedMsg.useNativeAudio) {
                         console.log(`[Baileys] 📤 EMISSION MESSAGE vers Core...`);
@@ -502,33 +404,18 @@ class BaileysTransport extends EventEmitter {
 
         // ANTI-DELETE: Écoute des messages supprimés
         self.sock.ev.on('messages.update', async (updates) => {
-            for (const update of updates) {
-                if (update.update?.messageStubType === 1 || update.update?.message === null) {
-                    const chatId = update.key.remoteJid;
-                    const messageId = update.key.id;
-                    const isEnabled = await workingMemory.isAntiDeleteEnabled(chatId);
-                    if (!isEnabled) continue;
-
-                    const storedMsg = await workingMemory.getStoredMessage(chatId, messageId);
-                    if (!storedMsg) continue;
-
-                    console.log(`[AntiDelete] 🗑️ Message supprimé détecté de ${storedMsg.senderName}`);
-                    await workingMemory.trackDeletedMessage(chatId, messageId, storedMsg);
-
-                    try {
-                        const repostText = `🗑️ *Message supprimé par ${storedMsg.senderName}:*\n\n"${storedMsg.text}"`;
-                        await self.sock.sendMessage(chatId, { text: repostText });
-                    } catch (e) { }
-                }
-            }
+            await this.antiDeleteHandler.handleUpdate(updates);
         });
+
 
         // Écoute des synchronisations de contacts
         self.sock.ev.on('contacts.upsert', async (contacts) => {
             if (!self.userService) return;
             for (const contact of contacts) {
                 if (contact.id && contact.lid) {
-                    self.userService.registerLid(contact.id, contact.lid).catch(() => { });
+                    self.userService.registerLid(contact.id, contact.lid).catch((e) => {
+                        this.logger.error(`[Baileys:Contacts] Error registering LID: ${e.message}`);
+                    });
                 }
             }
         });
@@ -537,10 +424,13 @@ class BaileysTransport extends EventEmitter {
             if (!self.userService) return;
             for (const update of updates) {
                 if (update.id && update.lid) {
-                    self.userService.registerLid(update.id, update.lid).catch(() => { });
+                    self.userService.registerLid(update.id, update.lid).catch((e) => {
+                        this.logger.error(`[Baileys:Contacts] Error registering LID: ${e.message}`);
+                    });
                 }
             }
         });
+
 
         // Écoute des événements de groupe
         self.sock.ev.on('group-participants.update', async (event) => {
@@ -938,9 +828,11 @@ class BaileysTransport extends EventEmitter {
             // Recherche par numéro (fin de chaîne) ou nom
             const target = metadata.participants.find(p => p.id.includes(partialUser));
             return target ? target.id : null;
-        } catch {
+        } catch (e) {
+            this.logger.error(`[Baileys:resolveUser] ${e.message}`);
             return null;
         }
+
     }
 
     /**

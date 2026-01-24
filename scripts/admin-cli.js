@@ -5,12 +5,9 @@
 // CRITIQUE: Charger .env AVANT tout import de service
 import 'dotenv/config';
 
-import { redis, ensureConnected } from '../services/redisClient.js';
-import { adminService } from '../services/adminService.js';
-import { supabase } from '../services/supabase.js';
+import { container } from '../core/ServiceContainer.js';
 import * as logger from '../utils/logger.js';
 import { StateManager } from '../services/state/StateManager.js';
-import { LockManager } from '../services/state/LockManager.js';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -23,11 +20,15 @@ async function main() {
         process.exit(0);
     }
 
-    // Connexions
-    await ensureConnected();
-    await adminService.init();
+    // Initialisation via ServiceContainer
+    await container.init({ mode: 'cli' });
+
+    const redis = container.get('redis');
+    const adminService = container.get('adminService');
+    const supabase = container.get('supabase');
 
     switch (command) {
+
         // Debug
         case 'debug:on':
             logger.enableDebug();
@@ -192,39 +193,11 @@ async function main() {
             console.log('🔧 Indexation des outils du bot...\n');
             try {
                 const { pluginLoader } = await import('../plugins/loader.js');
-                const { EmbeddingsService } = await import('../services/ai/EmbeddingsService.js');
-                const { readFileSync } = await import('fs');
-                const { join, dirname } = await import('path');
-                const { fileURLToPath } = await import('url');
-
-                // Charger les credentials pour EmbeddingsService
-                const __dirname2 = dirname(fileURLToPath(import.meta.url));
-                const credentials = JSON.parse(readFileSync(join(__dirname2, '..', 'config', 'credentials.json'), 'utf-8'));
-                const modelsConfig = JSON.parse(readFileSync(join(__dirname2, '..', 'config', 'models_config.json'), 'utf-8'));
-
-                // Résoudre les variables d'environnement (comme ServiceContainer)
-                let geminiKey = credentials.familles_ia?.gemini;
-                let openaiKey = credentials.familles_ia?.openai;
-
-                if (geminiKey && geminiKey.startsWith('VOTRE_') && process.env[geminiKey]) {
-                    geminiKey = process.env[geminiKey];
-                }
-                if (openaiKey && openaiKey.startsWith('VOTRE_') && process.env[openaiKey]) {
-                    openaiKey = process.env[openaiKey];
-                }
-
-                // Récupérer la config d'embedding
-                const embeddingConfig = modelsConfig.reglages_generaux?.embeddings?.primary || {};
-
-                const embeddings = new EmbeddingsService({
-                    geminiKey,
-                    openaiKey,
-                    model: embeddingConfig.model || 'gemini-embedding-001',
-                    dimensions: embeddingConfig.dimensions || 1024
-                });
+                const embeddings = container.get('embeddings');
 
                 // Charger les plugins
                 await pluginLoader.loadAll();
+
                 const tools = pluginLoader.getToolDefinitions();
                 const currentToolNames = tools.map(t => t.function?.name).filter(Boolean);
 
@@ -308,104 +281,69 @@ async function main() {
                     const adminJids = admins.map(a => a.jid);
                     console.log(`👑 ${adminJids.length} Admin(s) Global(aux) identifié(s) (seront conservés).`);
 
-                    // 2. Liste des tables à vider (ordre respectant les FK si possible, mais delete cascade peut aider)
-                    // On vide tout sauf 'global_admins' et 'users' (qu'on filtre après)
-                    const tablesToFlush = [
-                        'agent_actions',
-                        'autonomous_goals',
-                        'bot_tools',
-                        'relationships',     // FK vers entities
-                        'entities',
-                        'facts',
-                        'user_warnings',     // FK vers groups, users, filters
-                        'group_member_history', // FK vers groups
-                        'group_whitelist',   // FK vers groups, users
-                        'group_filters',     // FK vers groups
-                        'group_configs',     // FK vers groups
-                        'reminders',
-                        'memories',
-                        'groups'             // FK vers users (founder) - Safe à supprimer après les dépendances
-                    ];
+                    // 2. Charger la liste des tables depuis config/db-reset-tables.json
+                    const { readFileSync } = await import('fs');
+                    const { join, dirname } = await import('path');
+                    const { fileURLToPath } = await import('url');
+                    const __dirname3 = dirname(fileURLToPath(import.meta.url));
+
+                    let tablesToFlush = [];
+                    try {
+                        const tablesConfigPath = join(__dirname3, '..', 'config', 'db-reset-tables.json');
+                        tablesToFlush = JSON.parse(readFileSync(tablesConfigPath, 'utf-8'));
+                    } catch (e) {
+                        console.error('❌ Impossible de charger config/db-reset-tables.json, fallback statique.');
+                        tablesToFlush = ['memories', 'facts', 'groups']; // Min fallback
+                    }
+
+                    console.log(`   - Nettoyage de ${tablesToFlush.length} tables...`);
 
                     // 3. Suppression des données tables standard
                     for (const table of tablesToFlush) {
-                        const { error } = await supabase
-                            .from(table)
-                            .delete()
-                            .neq('id', '00000000-0000-0000-0000-000000000000'); // Hack pour "tout supprimer" si id UUID/Int
+                        console.log(`     🗑️ Vidage de ${table}...`);
 
-                        // Pour les tables sans colonne ID (ex: group_configs, groups avec JID), on utilise une autre condition
-                        // Heureusement supabase delete() sans filtre est souvent bloqué, donc on met un filtre bidon tjrs vrai
-                        // Mais .neq('id'...) échoue si pas de colonne ID.
+                        // Stratégie de suppression selon la table
+                        let query = supabase.from(table).delete();
 
-                        // Approche plus robuste par table :
-                        let delQuery = supabase.from(table).delete();
+                        const PROTECTED_TABLES = [
+                            'users', 'groups', 'global_admins', 'group_admins',
+                            'group_configs', 'autonomous_goals', 'agent_actions'
+                        ];
 
-                        if (['groups', 'group_configs'].includes(table)) {
-                            delQuery = delQuery.neq('jid', 'contrived_value'); // Delete all where jid != '...'
+                        if (PROTECTED_TABLES.includes(table)) {
+                            query = query.neq('jid', 'x_not_found_x');
                         } else if (table === 'bot_tools') {
-                            delQuery = delQuery.neq('name', 'contrived_value');
-                        } else if (table === 'group_whitelist') {
-                            delQuery = delQuery.neq('group_jid', 'contrived_value');
+                            query = query.neq('name', 'x_not_found_x');
+                        } else if (table === 'group_whitelist' || table === 'group_admins') {
+                            query = query.neq('group_jid', 'x_not_found_x');
+                        } else if (table === 'autonomous_goals') {
+                            query = query.neq('title', 'x_not_found_x');
                         } else {
-                            // Tables avec ID (bigint ou uuid)
-                            delQuery = delQuery.neq('id', 0); // Pour bigint
-                            // Si c'est UUID, ça va peut-être rater sur le type ? Supabase est permissif souvent.
-                            // On tente un filtre générique "not null"
+                            // Tables avec ID numeric ou UUID
+                            query = query.neq('id', '00000000-0000-0000-0000-000000000000');
                         }
 
-                        // DELETE ALL générique souvent bloqué sans WHERE.
-                        // On va itérer proprement.
+                        const { error } = await query;
+                        if (error) {
+                            if (error.message.includes('does not exist')) {
+                                console.warn(`     ⚠️ Table ${table} inexistante, ignoré.`);
+                            } else {
+                                console.error(`     ❌ Erreur sur ${table}: ${error.message}`);
+                            }
+                        }
                     }
-
-                    // V2 Plus simple et brutale :
-                    console.log('   - Nettoyage des tables dépendantes...');
-                    await supabase.from('relationships').delete().neq('chat_id', 'x');
-                    await supabase.from('entities').delete().neq('chat_id', 'x');
-                    await supabase.from('agent_actions').delete().neq('id', 0);
-                    await supabase.from('autonomous_goals').delete().neq('title', '');
-                    await supabase.from('bot_tools').delete().neq('name', '');
-                    await supabase.from('facts').delete().neq('id', 0);
-                    await supabase.from('user_warnings').delete().neq('id', 0);
-                    await supabase.from('group_member_history').delete().neq('id', 0);
-                    await supabase.from('group_whitelist').delete().neq('group_jid', 'x');
-                    await supabase.from('group_filters').delete().neq('id', 0);
-                    await supabase.from('group_configs').delete().neq('group_jid', 'x');
-                    await supabase.from('reminders').delete().neq('id', 0);
-                    await supabase.from('memories').delete().neq('id', 0);
-
-                    // Suppression des groups (après avoir viré les dépendances)
-                    console.log('   - Suppression des Groupes...');
-                    await supabase.from('groups').delete().neq('jid', 'x');
 
                     // 4. Nettoyage des Users (Sauf Admins)
                     console.log('   - Nettoyage des Users non-admins...');
                     if (adminJids.length > 0) {
-                        // Supprime tous les users DONT le JID N'EST PAS dans la liste des admins
-                        const { error: errUser, count } = await supabase
-                            .from('users')
-                            .delete()
-                            .not('jid', 'in', `(${adminJids.map(id => `"${id}"`).join(',')})`);
-                        // Note: .not('jid', 'in', array) est mieux géré par le client JS
-                    } else {
-                        // Aucun admin ? On vide tout alors.
-                        await supabase.from('users').delete().neq('jid', 'x');
-                    }
-
-                    // Optimisation : Utilisation de la syntaxe correcte Supabase JS pour "NOT IN"
-                    if (adminJids.length > 0) {
                         const { error } = await supabase
                             .from('users')
                             .delete()
-                            .not('jid', 'in', `(${adminJids.join(',')})`); // Attention format
-
-                        // Re-essai plus propre pour users
-                        // On ne peut pas faire "not in" array facilement sur delete direct parfois.
-                        // On va faire : delete().filter('jid', 'not.in', adminJids)
-                        await supabase
-                            .from('users')
-                            .delete()
                             .filter('jid', 'not.in', `(${adminJids.join(',')})`);
+
+                        if (error) console.error('❌ Erreur nettoyage users:', error.message);
+                    } else {
+                        await supabase.from('users').delete().neq('jid', 'x');
                     }
 
                     console.log('✅ Base de données réinitialisée avec succès !');
@@ -415,6 +353,7 @@ async function main() {
                 }
             }
             break;
+
 
         // System
         case 'status':

@@ -396,7 +396,7 @@ export default {
 
             // --- NOUVELLES COMMANDES (Fusion Moderation) ---
             case 'gm_tagall':
-                const tagResult = await transport.tagAll(chatId, args.reason);
+                await transport.tagAll(chatId, args.reason);
                 return { success: true, message: '📢 Tout le monde a été tagué.' };
 
             case 'gm_ban_user':
@@ -407,6 +407,7 @@ export default {
 
             case 'gm_mute_user':
                 return await this._muteUser(chatId, args, message);
+
 
             // --- INTÉGRATION groupService (Phase 2) ---
             case 'gm_mission':
@@ -721,7 +722,8 @@ export default {
         }
 
         try {
-            await transport.banUser(chatId, targetJid);
+            const moderation = transport.container.get('moderation');
+            await moderation.banUser(chatId, targetJid, args.reason || 'Aucune', transport);
             // Récupérer le nom depuis le message ou fallback sur JID
             const username = this._getUsername(message.raw, targetJid) || targetJid.split('@')[0];
             return {
@@ -732,6 +734,7 @@ export default {
             console.error('[Ban] Erreur:', error);
             return { success: false, message: `Erreur ban: ${error.message}` };
         }
+
     },
 
     /**
@@ -809,99 +812,81 @@ export default {
      * Appelé depuis le core pour les commandes directes
      */
     parseTextCommand(text) {
-        const lower = text.toLowerCase().trim();
+        if (!text.toLowerCase().startsWith('.task')) return null;
 
-        // .task filter add "mot" | règle: "..."
-        const filterAddMatch = text.match(/\.task\s+filter\s+add\s+["']?([^"'|]+)["']?\s*\|?\s*(?:r[eè]gle:?\s*)?["']?([^"']*)["']?/i);
-        if (filterAddMatch) {
-            return {
-                name: 'gm_filter_add',
-                args: {
-                    keyword: filterAddMatch[1].trim(),
-                    rule: filterAddMatch[2]?.trim() || null
-                }
-            };
+        const parts = text.trim().split(/\s+/);
+        const cmd = parts[1]?.toLowerCase();
+        const subCmd = parts[2]?.toLowerCase();
+
+        // .task filter ...
+        if (cmd === 'filter') {
+            if (subCmd === 'add') {
+                // Format: .task filter add "mot" | règle: "..."
+                const content = parts.slice(3).join(' ');
+                const [keywordPart, rulePart] = content.split('|').map(s => s.trim());
+                const keyword = keywordPart.replace(/["']/g, '');
+                const rule = rulePart?.replace(/r[eè]gle:?\s*/i, '').replace(/["']/g, '');
+                
+                return { name: 'gm_filter_add', args: { keyword, rule } };
+            }
+            if (subCmd === 'list') return { name: 'gm_filter_list', args: {} };
         }
 
-        // .task filter list
-        if (lower.includes('.task') && lower.includes('filter') && lower.includes('list')) {
-            return { name: 'gm_filter_list', args: {} };
+        // .task config ...
+        if (cmd === 'config') {
+            if (subCmd === 'warnings') {
+                const value = parseInt(parts[3]);
+                return { name: 'gm_config', args: { action: 'set_warnings', value: isNaN(value) ? 3 : value } };
+            }
         }
 
-        // .task config warnings X
-        const warningsMatch = text.match(/\.task\s+config\s+warnings?\s+(\d+)/i);
-        if (warningsMatch) {
-            return {
-                name: 'gm_config',
-                args: { action: 'set_warnings', value: parseInt(warningsMatch[1]) }
-            };
+        // .task enable/disable ...
+        if (cmd === 'enable' || cmd === 'disable') {
+            const isEnable = cmd === 'enable';
+            if (subCmd === 'auto_ban') {
+                return { name: 'gm_config', args: { action: isEnable ? 'auto_ban_on' : 'auto_ban_off' } };
+            }
+            if (!subCmd) {
+                return { name: 'gm_config', args: { action: isEnable ? 'enable' : 'disable' } };
+            }
         }
 
-        // .task enable / disable
-        if (lower.includes('.task') && lower.includes('enable')) {
-            return { name: 'gm_config', args: { action: 'enable' } };
-        }
-        if (lower.includes('.task') && lower.includes('disable')) {
-            return { name: 'gm_config', args: { action: 'disable' } };
-        }
-
-        // .task whitelist @user
-        if (lower.includes('.task') && lower.includes('whitelist')) {
-            return { name: 'gm_whitelist_add', args: {} };
-        }
-
-        // .task enable auto_ban
-        if (lower.includes('.task') && lower.includes('auto_ban')) {
-            const enable = !lower.includes('disable') && !lower.includes('off');
-            return { name: 'gm_config', args: { action: enable ? 'auto_ban_on' : 'auto_ban_off' } };
-        }
-
-        // --- COMMANDES DOCUMENTÉES MANQUANTES (Ajoutées) ---
+        // .task whitelist ...
+        if (cmd === 'whitelist') return { name: 'gm_whitelist_add', args: {} };
 
         // .task ban @user [raison]
-        const banMatch = text.match(/\.task\s+ban\s+@?(\S+)(?:\s+(.+))?/i);
-        if (banMatch) {
+        if (cmd === 'ban') {
             return {
                 name: 'gm_ban_user',
                 args: {
-                    user_jid: null, // Sera extrait via mentions dans execute
-                    reason: banMatch[2]?.trim() || 'Commande .task'
+                    user_jid: null,
+                    reason: parts.slice(3).join(' ') || 'Commande .task'
                 }
             };
         }
 
-        // .task mute @user [durée_min]
-        const muteMatch = text.match(/\.task\s+mute\s+@?(\S+)(?:\s+(\d+))?/i);
-        if (muteMatch) {
+        // .task mute @user [durée]
+        if (cmd === 'mute') {
+            const possibleDuration = parseInt(parts[parts.length - 1]);
+            const hasDuration = !isNaN(possibleDuration) && parts.length > 3;
             return {
                 name: 'gm_mute_user',
                 args: {
-                    user_jid: null, // Sera extrait via mentions
-                    duration: muteMatch[2] ? parseInt(muteMatch[2]) : 30
+                    user_jid: null,
+                    duration: hasDuration ? possibleDuration : 30
                 }
             };
         }
 
         // .task unmute @user
-        const unmuteMatch = text.match(/\.task\s+unmute\s+@?(\S+)/i);
-        if (unmuteMatch) {
-            return {
-                name: 'gm_unmute_user',
-                args: { user_jid: null } // Sera extrait via mentions
-            };
-        }
+        if (cmd === 'unmute') return { name: 'gm_unmute_user', args: { user_jid: null } };
 
-        // .task tagall [message]
-        const tagallMatch = text.match(/\.task\s+tagall(?:\s+(.+))?/i);
-        if (tagallMatch) {
-            return {
-                name: 'gm_tagall',
-                args: { reason: tagallMatch[1]?.trim() || '' }
-            };
-        }
+        // .task tagall [raison]
+        if (cmd === 'tagall') return { name: 'gm_tagall', args: { reason: parts.slice(2).join(' ') } };
 
         return null;
     },
+
 
     /**
      * Récupère le nom d'utilisateur depuis un message

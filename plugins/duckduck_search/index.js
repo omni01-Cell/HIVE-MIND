@@ -1,22 +1,22 @@
-// plugins/web_search/index.js
+// plugins/duckduck_search/index.js
 
 export default {
-    name: 'web_search',
-    description: 'Effectue des recherches web via DuckDuckGo pour obtenir des informations à jour.',
+    name: 'duckduck_search',
+    description: 'Effectue des recherches web via DuckDuckGo (scraping) pour obtenir des informations à jour.',
     version: '2.0.0',
     enabled: true,
 
     toolDefinition: {
         type: 'function',
         function: {
-            name: 'search_web',
-            description: 'Accède au Web en temps réel pour vérifier des faits, chercher des actualités, la météo, des définitions, ou des infos post-2023.',
+            name: 'duckduck_search',
+            description: 'Recherche sur le web via DuckDuckGo pour vérifier des faits, actualités, etc.',
             parameters: {
                 type: 'object',
                 properties: {
                     query: {
                         type: 'string',
-                        description: 'La recherche à effectuer (ex: "Météo Abidjan", "Qui est le président du Brésil ?")'
+                        description: 'La recherche à effectuer'
                     },
                     num_results: {
                         type: 'integer',
@@ -32,12 +32,7 @@ export default {
         const { query, num_results = 3 } = args;
         const { transport, chatId } = context;
 
-        // Feedback visuel optionnel
-        if (transport) {
-            // transport.sendPresenceUpdate(chatId, 'composing'); 
-        }
-
-        console.log(`[WebSearch] 🦆 Recherche DuckDuckGo: "${query}"`);
+        console.log(`[DuckDuckSearch] 🦆 Recherche DuckDuckGo: "${query}"`);
 
         return await this.searchDuckDuckGo(query, num_results);
     },
@@ -96,7 +91,7 @@ export default {
             };
 
         } catch (e) {
-            console.error('[WebSearch] ❌ Erreur DuckDuckGo:', e.message);
+            console.error('[DuckDuckSearch] ❌ Erreur DuckDuckGo:', e.message);
             return {
                 success: false,
                 message: `Erreur technique lors de la recherche web (${e.message}). Essaye de reformuler ou demande-moi autre chose.`,

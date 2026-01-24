@@ -1,4 +1,4 @@
-// services/voice/adapters/geminiTTS.js
+// providers/adapters/geminiTTS.js
 // Gemini 2.5 Flash TTS Adapter
 // Features: Natural prompt control, 30 voices, <300ms latency, 80+ locales
 
@@ -18,7 +18,8 @@ export class GeminiTTSAdapter {
         this.name = 'gemini';
         this.apiKey = apiKey;
         this.config = config;
-        this.cacheDir = path.join(__dirname, '..', '..', '..', 'temp', 'voice_cache');
+        this.cacheDir = path.join(__dirname, '..', '..', 'temp', 'voice_cache');
+
 
         if (!fs.existsSync(this.cacheDir)) {
             fs.mkdirSync(this.cacheDir, { recursive: true });

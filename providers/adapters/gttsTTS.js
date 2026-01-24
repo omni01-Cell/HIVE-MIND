@@ -1,4 +1,4 @@
-// services/voice/adapters/gttsTTS.js
+// providers/adapters/gttsTTS.js
 // Google TTS (Free Tier) Adapter
 // Uses node-gtts - Last resort fallback
 
@@ -17,7 +17,8 @@ export class GttsTTSAdapter {
     constructor(config = {}) {
         this.name = 'gtts';
         this.config = config;
-        this.cacheDir = path.join(__dirname, '..', '..', '..', 'temp', 'voice_cache');
+        this.cacheDir = path.join(__dirname, '..', '..', 'temp', 'voice_cache');
+
 
         if (!fs.existsSync(this.cacheDir)) {
             fs.mkdirSync(this.cacheDir, { recursive: true });

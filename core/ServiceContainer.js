@@ -7,7 +7,9 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { resolveApiKey } from '../config/keyResolver.js';
 import { EmbeddingsService } from '../services/ai/EmbeddingsService.js';
+
 import { SemanticMemory } from '../services/memory/SemanticMemory.js';
 import * as logger from '../utils/logger.js';
 import { supabase } from '../services/supabase.js';
@@ -56,12 +58,16 @@ export class ServiceContainer {
         this.services = new Map();
         /** @type {boolean} */
         this.initialized = false;
+        /** @type {string} */
+        this.mode = 'full';
     }
 
-    async init() {
+    async init(options = { mode: 'full' }) {
         if (this.initialized) return;
+        this.mode = options.mode;
 
         // Initialisation silencieuse pour ne pas casser la barre de progression
+
 
         // 1. Charger la Configuration
         const credentialsPath = join(__dirname, '..', 'config', 'credentials.json');
@@ -79,16 +85,31 @@ export class ServiceContainer {
         this.register('logger', logger.logger);
         this.register('supabase', supabase);
 
-        // 3. Service Embeddings
-        // On extrait les clés API nécessaires
-        let geminiKey = credentials.familles_ia?.gemini;
-        let openaiKey = credentials.familles_ia?.openai;
+        // 2b. Redis & Admins
+        const { redis } = await import('../services/redisClient.js');
+        this.register('redis', redis);
 
-        // Resolve Env Vars
-        if (geminiKey && geminiKey.startsWith('VOTRE_') && process.env[geminiKey]) geminiKey = process.env[geminiKey];
-        if (openaiKey && openaiKey.startsWith('VOTRE_') && process.env[openaiKey]) openaiKey = process.env[openaiKey];
+        const { adminService } = await import('../services/adminService.js');
+        await adminService.init();
+        this.register('adminService', adminService);
+
+        const { userService } = await import('../services/userService.js');
+        this.register('userService', userService);
+
+        const { groupService } = await import('../services/groupService.js');
+        this.register('groupService', groupService);
+
+        const { moderationService } = await import('../services/moderationService.js');
+        this.register('moderation', moderationService);
+
+        // 3. Service Embeddings
+
+        // On extrait les clés API nécessaires
+        let geminiKey = resolveApiKey(credentials.familles_ia?.gemini);
+        let openaiKey = resolveApiKey(credentials.familles_ia?.openai);
 
         const primaryEmbedding = modelsConfig?.reglages_generaux?.embeddings?.primary || {};
+
 
         const embeddingConfig = {
             geminiKey,
@@ -112,19 +133,19 @@ export class ServiceContainer {
 
         // Legacy: garder voiceService pour compatibilité
         const { MinimaxVoiceService } = await import('../services/voice/minimax.js');
-        let minimaxKey = credentials.familles_ia?.minimax;
-        if (minimaxKey && minimaxKey.startsWith('VOTRE_') && process.env[minimaxKey]) minimaxKey = process.env[minimaxKey];
+        let minimaxKey = resolveApiKey(credentials.familles_ia?.minimax);
         const voiceConfig = modelsConfig?.voice_provider?.minimax_config || {};
+
         const voiceService = new MinimaxVoiceService(minimaxKey, voiceConfig);
         this.register('voiceService', voiceService);
 
         // 3d. Service Transcription (Groq Whisper) - V4
         const { GroqTranscriptionService } = await import('../services/transcription/groqSTT.js');
 
-        let groqKey = credentials.familles_ia?.groq;
-        if (groqKey && groqKey.startsWith('VOTRE_') && process.env[groqKey]) groqKey = process.env[groqKey];
+        let groqKey = resolveApiKey(credentials.familles_ia?.groq);
 
         const sttConfig = modelsConfig?.voice_provider?.stt_models?.[0] || {};
+
         const sttService = new GroqTranscriptionService(groqKey, sttConfig);
         this.register('transcriptionService', sttService);
 

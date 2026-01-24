@@ -27,7 +27,7 @@ export default {
         }
     ],
 
-    async execute(toolName, args, context) {
+    async execute(args, context, toolName) {
         const { chatId, sender, transport } = context;
 
         if (toolName === 'start_deep_search') {
@@ -42,10 +42,10 @@ export default {
                 const agent = new DeepResearchAgent(sender, chatId);
                 const reportMarkdown = await agent.start(topic);
 
-                // 3. Génération du PDF via visual_reporter
-                // On récupère le plugin visual_reporter dynamiquement
-                const { pluginLoader } = await import('../../core/loader.js');
-                const visualReporter = pluginLoader.get('visual_reporter');
+                 // 3. Génération du PDF via visual_reporter
+                 // On récupère le plugin visual_reporter dynamiquement
+                 const { pluginLoader } = await import('../loader.js');
+                 const visualReporter = pluginLoader.get('visual_reporter');
 
                 if (visualReporter) {
                     await transport.sendText(chatId, `📝 **Analyse terminée.** Génération du PDF en cours...`);

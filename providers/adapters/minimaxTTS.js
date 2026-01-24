@@ -1,4 +1,4 @@
-// services/voice/adapters/minimaxTTS.js
+// providers/adapters/minimaxTTS.js
 // Minimax TTS Adapter - Voix Erina (Primary)
 // Documentation: https://platform.minimax.io/docs/
 
@@ -19,7 +19,8 @@ export class MinimaxTTSAdapter {
         this.apiKey = apiKey;
         this.baseUrl = 'https://api.minimax.io/v1/t2a_v2';
         this.config = config;
-        this.cacheDir = path.join(__dirname, '..', '..', '..', 'temp', 'voice_cache');
+        this.cacheDir = path.join(__dirname, '..', '..', 'temp', 'voice_cache');
+
 
         if (!fs.existsSync(this.cacheDir)) {
             fs.mkdirSync(this.cacheDir, { recursive: true });

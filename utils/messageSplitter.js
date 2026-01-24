@@ -92,7 +92,7 @@ function splitBySentence(text, maxLength) {
  */
 export const TOOL_FEEDBACK = {
     // Recherche
-    'web_search': "🔍 Je cherche sur le web...",
+    'duckduck_search': "🔍 Je cherche sur le web...",
     'search_wikipedia': "📚 Je consulte Wikipédia...",
     'search_google': "🔍 Je cherche sur Google...",
 

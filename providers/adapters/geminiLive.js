@@ -1,9 +1,10 @@
-// services/voice/adapters/geminiLiveAdapter.js
+// providers/adapters/geminiLive.js
 // Adapter pour Gemini 2.5 Flash Native Audio (Live API)
 // PRIORITY 0: Provider principal pour TTS haute qualité
 
-import { GeminiLiveProvider, HD_VOICES } from '../../../providers/geminiLive.js';
-import { oggToPcm, pcmToOgg, wavToOgg, cleanupTempFiles } from '../../../utils/audioConverter.js';
+import { GeminiLiveProvider, HD_VOICES } from '../geminiLive.js';
+import { oggToPcm, pcmToOgg, wavToOgg, cleanupTempFiles } from '../../utils/audioConverter.js';
+
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';

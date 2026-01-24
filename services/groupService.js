@@ -116,15 +116,24 @@ export const groupService = {
                     }
                 }
 
+                // S'assurer que le fondateur existe dans la table users (contrainte FK)
+                if (validFounderJid && this.userService) {
+                    await this.userService.getProfile(validFounderJid);
+                }
+
                 await supabase.from('groups').upsert({
                     jid: groupJid,
                     name: waMetadata.subject || '',
                     founder_jid: validFounderJid || null, // NULL si pas résolu, pour respecter la FK
                     created_at: waMetadata.creation ? new Date(waMetadata.creation * 1000).toISOString() : new Date().toISOString()
                 }, { onConflict: 'jid' });
+
+                // NOUVEAU: Synchronisation des admins
+                await this.syncAdminsToSupabase(groupJid, admins);
             }
 
             console.log(`[GroupService] Groupe mis à jour (Redis + DB): ${waMetadata.subject}`);
+
 
         } catch (error) {
             console.error('[GroupService] updateGroup error:', error.message);
@@ -395,55 +404,56 @@ export const groupService = {
      */
     async syncAdminsToSupabase(groupJid, adminJids, promotedBy = null) {
         if (!supabase) return;
-        console.warn('[GroupService] SyncAdmins désactivé (Table group_admins manquante)');
-        return;
-        /*
+
         try {
-            // 1. Récupérer les admins actuels dans Supabase
-            const { data: existingAdmins } = await supabase
+            // 1. Récupérer les admins actuels dans Supabase pour ce groupe
+            const { data: existingAdmins, error: fetchError } = await supabase
                 .from('group_admins')
                 .select('user_jid')
                 .eq('group_jid', groupJid);
-        */
 
-        const existingSet = new Set((existingAdmins || []).map(a => a.user_jid));
-        const newSet = new Set(adminJids);
+            if (fetchError) {
+                if (fetchError.message.includes('does not exist')) {
+                    console.warn('[GroupService] Table group_admins manquante, sync ignoré.');
+                    return;
+                }
+                throw fetchError;
+            }
 
-        // 2. Ajouter les nouveaux admins
-        const toAdd = adminJids.filter(jid => !existingSet.has(jid));
-        if (toAdd.length > 0) {
-            const insertData = toAdd.map(jid => ({
-                group_jid: groupJid,
-                user_jid: jid,
-                role: 'admin',
-                promoted_at: new Date().toISOString(),
-                promoted_by: promotedBy
-            }));
+            const existingSet = new Set((existingAdmins || []).map(a => a.user_jid));
+            const newSet = new Set(adminJids);
 
-            await supabase.from('group_admins').insert(insertData);
-            console.log(`[GroupService] ${toAdd.length} admin(s) ajouté(s) à group_admins`);
-        }
+            // 2. Ajouter les nouveaux admins
+            const toAdd = adminJids.filter(jid => !existingSet.has(jid));
+            if (toAdd.length > 0) {
+                const insertData = toAdd.map(jid => ({
+                    group_jid: groupJid,
+                    user_jid: jid,
+                    role: 'admin',
+                    promoted_at: new Date().toISOString(),
+                    promoted_by: promotedBy
+                }));
 
-        // 3. Supprimer les admins retirés (demote)
-        const toRemove = [...existingSet].filter(jid => !newSet.has(jid));
-        if (toRemove.length > 0) {
-            await supabase
-                .from('group_admins')
-                .delete()
-                .eq('group_jid', groupJid)
-                .in('user_jid', toRemove);
+                await supabase.from('group_admins').insert(insertData);
+                console.log(`[GroupService] ${toAdd.length} admin(s) ajouté(s) à group_admins`);
+            }
 
-            console.log(`[GroupService] ${toRemove.length} admin(s) retiré(s) de group_admins`);
-        }
+            // 3. Supprimer les admins retirés (demote)
+            const toRemove = [...existingSet].filter(jid => !newSet.has(jid));
+            if (toRemove.length > 0) {
+                await supabase
+                    .from('group_admins')
+                    .delete()
+                    .eq('group_jid', groupJid)
+                    .in('user_jid', toRemove);
 
-        /*
-        try {
-            // ... (code supprimé/commenté)
-        } catch(error) {
+                console.log(`[GroupService] ${toRemove.length} admin(s) retiré(s) de group_admins`);
+            }
+        } catch (error) {
             console.error('[GroupService] syncAdminsToSupabase error:', error.message);
         }
-        */
     },
+
 
     /**
      * Vérifie si un utilisateur est admin dans un groupe (via Supabase)
@@ -454,23 +464,32 @@ export const groupService = {
      */
     async isGroupAdmin(groupJid, userJid) {
         if (!supabase) return false;
-        // Fallback Redis car table manquante
-        return false;
-        /*
+
         try {
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('group_admins')
                 .select('user_jid')
                 .eq('group_jid', groupJid)
                 .eq('user_jid', userJid)
-                .single();
+                .maybeSingle();
+
+            if (error) {
+                // Fallback Redis si table manquante ou erreur
+                const cacheKey = `group:${groupJid}:meta`;
+                const adminsJson = await redis.hGet(cacheKey, 'admins');
+                if (adminsJson) {
+                    const admins = JSON.parse(adminsJson);
+                    return admins.includes(userJid);
+                }
+                return false;
+            }
 
             return !!data;
         } catch (error) {
             return false;
         }
-        */
     },
+
 
     /**
      * Liste tous les groupes où un utilisateur est admin

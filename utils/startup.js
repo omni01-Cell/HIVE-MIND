@@ -164,6 +164,8 @@ class StartupDisplay {
             }
         }
 
+
+        console.log('✅ Connecté à WhatsApp !');
         console.log('');
     }
 }

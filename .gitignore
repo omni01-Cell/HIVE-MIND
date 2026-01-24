@@ -12,6 +12,8 @@ session/
 logs/
 temp/
 *.log
+.hive-mind.pid
+
 
 # OS files
 .DS_Store

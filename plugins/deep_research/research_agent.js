@@ -69,16 +69,16 @@ Before each action, use <thought> tags to plan:
         let keepSearching = true;
 
         // Outils disponibles pour cet agent (Web Search uniquement pour l'instant)
-        // On récupère l'outil web_search du plugin web_search
+        // On récupère l'outil duckduck_search du plugin duckduck_search
         const { pluginLoader } = await import('../loader.js');
-        const webSearchPlugin = pluginLoader.get('web_search');
+        const webSearchPlugin = pluginLoader.get('duckduck_search');
 
         // On construit la définition de l'outil pour l'IA
         const tools = [
             {
                 type: 'function',
                 function: {
-                    name: 'search_web',
+                    name: 'duckduck_search',
                     description: 'Effectue une recherche Google/Bing pour trouver des faits précis.',
                     parameters: {
                         type: 'object',
@@ -119,12 +119,12 @@ Before each action, use <thought> tags to plan:
                 // Gérer les appels d'outils
                 if (response.toolCalls && response.toolCalls.length > 0) {
                     for (const toolCall of response.toolCalls) {
-                        if (toolCall.function.name === 'search_web') {
+                        if (toolCall.function.name === 'duckduck_search') {
                             const args = JSON.parse(toolCall.function.arguments);
                             console.log(`[DeepResearch] 🌍 Recherche: ${args.query}`);
 
-                            // Exécution réelle via le plugin web_search existant
-                            // web_search attend (args, context)
+                            // Exécution réelle via le plugin duckduck_search existant
+                            // duckduck_search attend (args, context)
                             const searchResult = await webSearchPlugin.execute(args, {
                                 transport: this.transport,
                                 chatId: this.chatId
@@ -138,7 +138,7 @@ Before each action, use <thought> tags to plan:
                             this.history.push({
                                 role: 'tool',
                                 tool_call_id: toolCall.id,
-                                name: 'search_web',
+                                name: 'duckduck_search',
                                 content: content
                             });
                         }

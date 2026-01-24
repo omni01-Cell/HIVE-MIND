@@ -64,8 +64,8 @@ Use Markdown formatting for readability.
         ];
 
         // Outils pour l'IA
-        const { pluginLoader } = await import('../../core/loader.js');
-        const webSearchPlugin = pluginLoader.get('web_search'); // On réutilise le plugin de base
+        const { pluginLoader } = await import('../loader.js');
+        const webSearchPlugin = pluginLoader.get('duckduck_search'); // On réutilise le plugin de base
 
         const tools = [
             {
@@ -122,7 +122,7 @@ Use Markdown formatting for readability.
 
                         if (toolCall.function.name === 'search_products') {
                             console.log(`[Shopping] 🔍 Recherche: ${args.query}`);
-                            // On utilise le web_search normal
+                            // On utilise le duckduck_search normal
                             const res = await webSearchPlugin.execute(args, { transport: this.transport, chatId: this.chatId });
                             this.history.push({
                                 role: 'tool',

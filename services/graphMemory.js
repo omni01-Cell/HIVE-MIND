@@ -6,6 +6,7 @@ import { EmbeddingsService } from './ai/EmbeddingsService.js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { resolveApiKey } from '../config/keyResolver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -15,21 +16,15 @@ try {
     const credentials = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'credentials.json'), 'utf-8'));
 
     // Résoudre les variables d'environnement
-    let geminiKey = credentials.familles_ia?.gemini;
-    let openaiKey = credentials.familles_ia?.openai;
-
-    if (geminiKey && geminiKey.startsWith('VOTRE_') && process.env[geminiKey]) {
-        geminiKey = process.env[geminiKey];
-    }
-    if (openaiKey && openaiKey.startsWith('VOTRE_') && process.env[openaiKey]) {
-        openaiKey = process.env[openaiKey];
-    }
+    const geminiKey = resolveApiKey(credentials.familles_ia?.gemini);
+    const openaiKey = resolveApiKey(credentials.familles_ia?.openai);
 
     embeddings = new EmbeddingsService({
         geminiKey,
         openaiKey
     });
 } catch (e) {
+
     console.error('[GraphMemory] Erreur init embeddings:', e.message);
 }
 

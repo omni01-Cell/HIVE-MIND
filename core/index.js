@@ -170,8 +170,22 @@ class BotCore {
         startupDisplay.loading('plugins');
         try {
             const loadedPlugins = await pluginLoader.loadAll();
-            const pluginCount = loadedPlugins?.size || loadedPlugins?.length || 0;
-            startupDisplay.success('plugins', `${pluginCount} loaded`);
+
+            // Sync check
+            const syncStatus = await pluginLoader.checkSyncStatus(container.get('supabase'));
+            let syncDetails = `${loadedPlugins?.size || 0} loaded`;
+
+            if (syncStatus.deleted > 0 || syncStatus.new > 0 || syncStatus.modified > 0) {
+                const parts = [];
+                if (syncStatus.new > 0) parts.push(`+${syncStatus.new} new`);
+                if (syncStatus.modified > 0) parts.push(`~${syncStatus.modified} mod`);
+                if (syncStatus.deleted > 0) parts.push(`-${syncStatus.deleted} del`);
+                syncDetails += ` [${parts.join(', ')}]`;
+            }
+
+            startupDisplay.success('plugins', syncDetails);
+
+
         } catch (e) {
             startupDisplay.error('plugins', e.message);
         }

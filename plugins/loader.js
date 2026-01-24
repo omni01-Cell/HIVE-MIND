@@ -262,18 +262,10 @@ class PluginLoader {
             const credentials = JSON.parse(readFileSync(join(__dirname2, '..', 'config', 'credentials.json'), 'utf-8'));
             const modelsConfig = JSON.parse(readFileSync(join(__dirname2, '..', 'config', 'models_config.json'), 'utf-8')); // Load models config
 
-            // Resolve Env Vars Helper
-            const resolveKey = (key, jsonVal) => {
-                if (!jsonVal || jsonVal.startsWith('VOTRE_')) {
-                    if (jsonVal && process.env[jsonVal]) return process.env[jsonVal];
-                    if (key === 'gemini') return process.env.GEMINI_API_KEY || process.env.VOTRE_CLE_GEMINI;
-                    if (key === 'openai') return process.env.OPENAI_API_KEY;
-                }
-                return jsonVal;
-            };
-
-            const geminiKey = resolveKey('gemini', credentials.familles_ia?.gemini);
-            const openaiKey = resolveKey('openai', credentials.familles_ia?.openai);
+            // Resolve credentials
+            const { resolveApiKey } = await import('../config/keyResolver.js');
+            const geminiKey = resolveApiKey(credentials.familles_ia?.gemini);
+            const openaiKey = resolveApiKey(credentials.familles_ia?.openai);
 
             // Resolve Model Config
             const primaryEmbedding = modelsConfig?.reglages_generaux?.embeddings?.primary || {};
@@ -284,6 +276,7 @@ class PluginLoader {
                 model: primaryEmbedding.model || 'gemini-embedding-001',
                 dimensions: primaryEmbedding.dimensions || 1024
             });
+
         } catch (e) {
             console.warn('[PluginLoader] Impossible de charger EmbeddingsService:', e.message);
         }
@@ -367,6 +360,84 @@ class PluginLoader {
      * Liste tous les plugins chargés
      * @returns {Array<{name, description, version}>}
      */
+    /**
+     * Vérifie l'état de synchronisation des outils avec Supabase
+     * Supprime les outils obsolètes et signale les changements
+     * @param {Object} supabase - Client Supabase
+     * @returns {Promise<{deleted: number, new: number, modified: number}>}
+     */
+    async checkSyncStatus(supabase) {
+        if (!supabase) return { deleted: 0, new: 0, modified: 0 };
+
+        try {
+            // 1. Récupérer les outils actuels (chargés)
+            const loadedTools = this.getToolDefinitions();
+            const loadedToolHashes = new Map();
+
+            for (const tool of loadedTools) {
+                const name = tool.function?.name;
+                const description = tool.function?.description || '';
+                if (name) {
+                    loadedToolHashes.set(name, this._generateToolHash(name, description));
+                }
+            }
+
+            // 2. Récupérer les outils en base
+            const { data: dbTools, error } = await supabase
+                .from('bot_tools')
+                .select('name, description');
+
+            if (error) throw error;
+
+            let deleted = 0;
+            let newTools = 0;
+            let modified = 0;
+
+            if (dbTools) {
+                // 3. Identifier et supprimer les obsolètes
+                const dbToolNames = dbTools.map(t => t.name);
+                const obsoleteTools = dbToolNames.filter(name => !loadedToolHashes.has(name));
+
+                if (obsoleteTools.length > 0) {
+                    const { error: deleteError } = await supabase
+                        .from('bot_tools')
+                        .delete()
+                        .in('name', obsoleteTools);
+
+                    if (!deleteError) {
+                        deleted = obsoleteTools.length;
+                    }
+                }
+
+                // 4. Identifier les nouveaux et modifiés
+                for (const [name, hash] of loadedToolHashes.entries()) {
+                    const dbTool = dbTools.find(t => t.name === name);
+                    if (!dbTool) {
+                        newTools++;
+                    } else {
+                        const dbHash = this._generateToolHash(name, dbTool.description);
+                        if (hash !== dbHash) {
+                            modified++;
+                        }
+                    }
+                }
+            }
+
+            return { deleted, new: newTools, modified };
+
+        } catch (error) {
+            console.error('[PluginLoader] Sync check error:', error);
+            return { deleted: 0, new: 0, modified: 0 };
+        }
+    }
+
+    /**
+     * Génère un hash simple pour détecter les changements
+     */
+    _generateToolHash(name, description) {
+        return `${name}:${description.trim()}`;
+    }
+
     list() {
         return Array.from(this.plugins.values()).map(p => ({
             name: p.name,

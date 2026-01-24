@@ -5,11 +5,13 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { resolveCredentials } from '../../config/keyResolver.js';
 
-import { MinimaxTTSAdapter } from './adapters/minimaxTTS.js';
-import { GeminiTTSAdapter } from './adapters/geminiTTS.js';
-import { GttsTTSAdapter } from './adapters/gttsTTS.js';
-import { GeminiLiveAdapter } from './adapters/geminiLiveAdapter.js';
+import { MinimaxTTSAdapter } from '../../providers/adapters/minimaxTTS.js';
+import { GeminiTTSAdapter } from '../../providers/adapters/geminiTTS.js';
+import { GttsTTSAdapter } from '../../providers/adapters/gttsTTS.js';
+import { GeminiLiveAdapter } from '../../providers/adapters/geminiLive.js';
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,20 +22,13 @@ function loadCredentials() {
     try {
         const credsPath = join(__dirname, '..', '..', 'config', 'credentials.json');
         const creds = JSON.parse(readFileSync(credsPath, 'utf-8'));
-        const resolved = {};
-
-        for (const [key, value] of Object.entries(creds.familles_ia || {})) {
-            if (typeof value === 'string' && value.startsWith('VOTRE_')) {
-                resolved[key] = process.env[value] || value;
-            } else {
-                resolved[key] = value;
-            }
-        }
-        return resolved;
+        const resolved = resolveCredentials(creds);
+        return resolved.familles_ia || {};
     } catch (e) {
         return {};
     }
 }
+
 
 export class VoiceProvider {
     /**
