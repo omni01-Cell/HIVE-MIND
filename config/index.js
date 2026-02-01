@@ -8,6 +8,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { envResolver } from '../services/envResolver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -43,12 +44,7 @@ function loadJsonConfig(filename) {
  * @returns {string|undefined}
  */
 function resolveEnvValue(value) {
-    if (!value) return undefined;
-    if (value.startsWith('VOTRE_') || value.startsWith('${')) {
-        const envKey = value.replace(/^\$\{|\}$/g, '').replace('VOTRE_', '');
-        return process.env[envKey] || process.env[value];
-    }
-    return value;
+    return envResolver.resolve(value);
 }
 
 // ============================================================================

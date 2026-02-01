@@ -121,13 +121,40 @@ Respond in JSON only:
 
         } catch (error) {
             console.error('[MultiAgent] Erreur critique:', error.message);
-            // Fallback permissif en cas d'erreur du critique
-            return {
-                approved: true,
-                risk_level: 'unknown',
-                concerns: [],
-                confidence: 0
-            };
+            
+            // ⚠️ SÉCURITÉ : Fail CLOSED pour actions critiques, Fail OPEN avec warning pour le reste
+            const toolName = toolCall.function.name;
+            const isCritical = this.criticalActions.includes(toolName);
+            
+            if (isCritical) {
+                // Actions critiques : REFUSER par défaut si le critique est indisponible
+                console.error(`[MultiAgent] 🚨 CRITIC FAILURE - Action critique "${toolName}" REJETÉE par sécurité`);
+                return {
+                    approved: false,
+                    risk_level: 'critical',
+                    concerns: [
+                        'Critic service unavailable - cannot validate critical action',
+                        'Action blocked by safety protocol',
+                        `Error: ${error.message}`
+                    ],
+                    confidence: 0,
+                    error: true
+                };
+            } else {
+                // Actions non-critiques : Autoriser avec warning fort
+                console.warn(`[MultiAgent] ⚠️ Critic failed for non-critical action "${toolName}" - proceeding with caution`);
+                return {
+                    approved: true,
+                    risk_level: 'high', // Marquer comme haut risque même si approuvé
+                    concerns: [
+                        'Critic service failed - proceeding without validation',
+                        'Manual review recommended',
+                        `Error: ${error.message}`
+                    ],
+                    confidence: 0.2, // Très faible confiance
+                    error: true
+                };
+            }
         }
     }
 

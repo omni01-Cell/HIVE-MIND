@@ -18,6 +18,11 @@ export class ShoppingAgent {
     async start(request) {
         console.log(`[ShoppingAgent] 🛍️ Démarrage pour: "${request}"`);
 
+        // TIMEOUT & CONVERGENCE CONFIG
+        const MAX_DURATION_MS = 90000; // 90 secondes max (shopping doit être rapide)
+        const START_TIME = Date.now();
+        const FEEDBACK_INTERVAL = 3; // Feedback toutes les 3 itérations
+
         // SYSTEM PROMPT SPÉCIALISÉ COMMERCE
         const systemPrompt = `<role>
 You are an Expert Personal Shopper Assistant.
@@ -100,8 +105,25 @@ Use Markdown formatting for readability.
         while (!finalResponse && iterations < this.maxIterations) {
             iterations++;
 
+            // 🛡️ CHECK 1: Timeout global
+            const elapsed = Date.now() - START_TIME;
+            if (elapsed > MAX_DURATION_MS) {
+                console.warn(`[ShoppingAgent] ⏱️ Timeout après ${Math.round(elapsed/1000)}s, forçage de complétion`);
+                await this.transport.sendText(this.chatId, `⏱️ Temps écoulé. Voici ce que j'ai trouvé jusqu'à présent...`);
+                
+                // Forcer une réponse finale avec ce qu'on a
+                finalResponse = `Je n'ai pas pu compléter la recherche dans le temps imparti, mais voici un résumé basé sur ${iterations} étapes de recherche.`;
+                break;
+            }
+
             // Notification intermédiaire
-            if (iterations % 2 === 0) await this.transport.sendText(this.chatId, `🛍️ Je compare les offres... (Étape ${iterations})`);
+            if (iterations % FEEDBACK_INTERVAL === 0) {
+                const remainingTime = Math.round((MAX_DURATION_MS - elapsed) / 1000);
+                await this.transport.sendText(
+                    this.chatId, 
+                    `🛍️ Je compare les offres... (Étape ${iterations}/${this.maxIterations}, ~${remainingTime}s restantes)`
+                );
+            }
 
             try {
                 const response = await this.providerRouter.chat(this.history, {

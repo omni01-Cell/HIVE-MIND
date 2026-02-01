@@ -145,9 +145,9 @@ export const StateManager = {
             if (data && Object.keys(data).length > 0) {
                 updates.push({
                     jid: jids[i],
-                    username: data.last_pushname, // Mapping Redis 'last_pushname' -> Supabase 'username'
+                    username: data.last_pushname || 'Inconnu', // Legacy logic: Syncs WhatsApp name directly to username
                     interaction_count: parseInt(data.interaction_count || 0),
-                    // last_seen géré par DB updated_at ou à ajouter via colonne spécifique si on veut
+                    updated_at: new Date().toISOString()
                 });
             }
         }

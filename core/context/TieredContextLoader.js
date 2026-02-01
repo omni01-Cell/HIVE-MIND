@@ -1,0 +1,449 @@
+// core/context/TieredContextLoader.js
+// ============================================================================
+// TIERED CONTEXT LOADER - Chargement contexte à 3 niveaux (HOT/WARM/COLD)
+// Objectif: Réduire la latence de chargement de contexte de ~2000ms à ~250ms
+// ============================================================================
+
+import { container } from '../ServiceContainer.js';
+import { botIdentity } from '../../utils/botIdentity.js';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// System prompt minimal pour le FastPath
+let minimalSystemPrompt = '';
+try {
+    minimalSystemPrompt = readFileSync(
+        join(__dirname, '..', '..', 'persona', 'prompts', 'system.md'), 'utf-8'
+    );
+} catch {
+    minimalSystemPrompt = 'Tu es un assistant amical.';
+}
+
+/**
+ * Loader de contexte tiered pour optimiser la latence
+ * 
+ * NIVEAU 1 (HOT): ~50ms - Toujours chargé, données ultra-rapides
+ * NIVEAU 2 (WARM): ~200ms - Données cachées avec TTL
+ * NIVEAU 3 (COLD): ~800ms+ - Données lourdes, seulement pour AgenticPath
+ */
+export class TieredContextLoader {
+    constructor() {
+        // Services injectés via container
+        this.workingMemory = null;
+        this.userService = null;
+        this.groupService = null;
+        this.adminService = null;
+        this.factsMemory = null;
+        this.consciousness = null;
+        this.memory = null;
+
+        // Cache local en mémoire (ultra-rapide)
+        const profile = botIdentity.profile;
+        this.localCache = {
+            botIdentity: {
+                name: profile.name,
+                role: profile.role,
+                traits: profile.traits?.join(', ') || '',
+                languages: profile.languages?.join(', ') || 'fr',
+                interests: profile.interests || []
+            },
+            systemPromptTemplate: minimalSystemPrompt
+        };
+
+        // Cache des autorités (évite les appels répétés à adminService)
+        this.authorityCache = new Map();
+        this.AUTHORITY_CACHE_TTL = 600000; // 10 minutes
+    }
+
+    /**
+     * Initialise les services depuis le container
+     * À appeler une fois au démarrage
+     */
+    init() {
+        try {
+            this.workingMemory = container.get('workingMemory');
+            this.userService = container.get('userService');
+            this.groupService = container.get('groupService');
+            this.adminService = container.get('adminService');
+            this.factsMemory = container.get('facts'); // Correct key is 'facts'
+            this.consciousness = container.get('consciousness');
+            this.memory = container.get('memory');
+
+            console.log(`[TieredContext] ✅ Init Success. WM: ${!!this.workingMemory}, UserSvc: ${!!this.userService}`);
+        } catch (e) {
+            console.error('[TieredContext] ❌ Init Failed:', e.message);
+        }
+    }
+
+    /**
+     * NIVEAU 1: HOT - Données ultra-rapides (~50ms)
+     * Redis only + cache local
+     */
+    async loadHot(chatId) {
+        const startTime = Date.now();
+
+        // Safety Check
+        if (!this.workingMemory) {
+            console.warn('[TieredContext] ⚠️ WorkingMemory missing, attempting re-init...');
+            this.init();
+            if (!this.workingMemory) {
+                console.error('[TieredContext] 🛑 CRITICAL: WorkingMemory still missing after re-init.');
+                // Fallback fictif pour éviter crash
+                return { recentMessages: [], chatMode: 'normal', botIdentity: this.localCache.botIdentity, timestamp: new Date() };
+            }
+        }
+
+        // Parallélisation des appels Redis
+        const [recentMessages, chatMode] = await Promise.all([
+            this.workingMemory.getContext(chatId, 5), // 5 derniers messages
+            this.workingMemory.getChatMode?.(chatId) || 'normal'
+        ]);
+
+        const hotData = {
+            recentMessages: recentMessages || [],
+            chatMode,
+            botIdentity: this.localCache.botIdentity,
+            timestamp: new Date()
+        };
+
+        console.log(`[TieredContext] HOT chargé en ${Date.now() - startTime}ms`);
+        return hotData;
+    }
+
+    /**
+     * NIVEAU 2: WARM - Données cachées (~200ms)
+     * Profil utilisateur + autorité avec cache TTL
+     */
+    async loadWarm(chatId, sender, isGroup = false) {
+        const startTime = Date.now();
+
+        // Vérifier le cache d'autorité local
+        const cachedAuthority = this._getCachedAuthority(sender);
+
+        // Parallélisation
+        const [userSnapshot, authority, groupBasics] = await Promise.all([
+            this._getCachedUserProfile(sender),
+            cachedAuthority || this._loadAndCacheAuthority(sender, chatId),
+            isGroup ? this._getGroupBasics(chatId) : null
+        ]);
+
+        const warmData = {
+            userSnapshot,
+            authority,
+            group: groupBasics,
+            systemPromptBase: this._buildMinimalPrompt(userSnapshot, authority, groupBasics)
+        };
+
+        console.log(`[TieredContext] WARM chargé en ${Date.now() - startTime}ms`);
+        return warmData;
+    }
+
+    /**
+     * NIVEAU 3: COLD - Données lourdes (~800ms+)
+     * Seulement pour AgenticPath
+     */
+    async loadCold(chatId, message) {
+        const startTime = Date.now();
+
+        // PARALLÉLISATION TOTALE de tous les appels lourds
+        const [facts, ragResults, groupMembers, consciousnessState, lessons] = await Promise.all([
+            this._loadFacts(message.sender),
+            this._loadRAG(chatId, message.text),
+            this._loadGroupMembers(chatId),
+            this._loadConsciousness(chatId, message.sender),
+            this._loadLessons()
+        ]);
+
+        const coldData = {
+            facts,
+            rag: ragResults,
+            groupMembers,
+            consciousness: consciousnessState,
+            lessons
+        };
+
+        console.log(`[TieredContext] COLD chargé en ${Date.now() - startTime}ms`);
+        return coldData;
+    }
+
+    /**
+     * Méthode principale: Charge le contexte selon le mode
+     * @param {string} chatId 
+     * @param {Object} message 
+     * @param {'FAST'|'AGENTIC'} mode 
+     */
+    async load(chatId, message, mode = 'FAST') {
+        const startTime = Date.now();
+        const isGroup = chatId?.endsWith('@g.us');
+
+        // HOT est toujours chargé
+        const hot = await this.loadHot(chatId);
+
+        // WARM est chargé pour les deux modes
+        const warm = await this.loadWarm(chatId, message.sender, isGroup);
+
+        if (mode === 'FAST') {
+            // FastPath: Contexte léger uniquement
+            const context = this._buildFastContext(hot, warm, message);
+            console.log(`[TieredContext] ⚡ FAST context complet en ${Date.now() - startTime}ms`);
+            return context;
+        }
+
+        // AgenticPath: Charger COLD en plus
+        const cold = await this.loadCold(chatId, message);
+        const context = this._buildFullContext(hot, warm, cold, message);
+
+        console.log(`[TieredContext] 🧠 FULL context complet en ${Date.now() - startTime}ms`);
+        return context;
+    }
+
+    // ========================================================================
+    // MÉTHODES PRIVÉES - Helpers de chargement
+    // ========================================================================
+
+    async _getCachedUserProfile(sender) {
+        try {
+            // Le userService a déjà un cache Redis interne
+            const profile = await this.userService.getProfile(sender);
+            return {
+                jid: sender,
+                name: profile.names?.[0] || 'Inconnu',
+                interactionCount: profile.interaction_count || 0,
+                lastSeen: profile.last_seen
+            };
+        } catch (e) {
+            return { jid: sender, name: 'Inconnu', interactionCount: 0 };
+        }
+    }
+
+    _getCachedAuthority(sender) {
+        const cached = this.authorityCache.get(sender);
+        if (cached && (Date.now() - cached.timestamp) < this.AUTHORITY_CACHE_TTL) {
+            return cached.data;
+        }
+        return null;
+    }
+
+    async _loadAndCacheAuthority(sender, chatId) {
+        try {
+            const [isSuperUser, isGlobalAdmin] = await Promise.all([
+                this.adminService.isSuperUser(sender),
+                this.adminService.isGlobalAdmin(sender)
+            ]);
+
+            const authority = {
+                isSuperUser,
+                isGlobalAdmin,
+                isGroupAdmin: false, // Sera enrichi par groupService si nécessaire
+                isBotAdmin: false,
+                level: isSuperUser ? 100 : (isGlobalAdmin ? 80 : 0)
+            };
+
+            // Mettre en cache
+            this.authorityCache.set(sender, {
+                data: authority,
+                timestamp: Date.now()
+            });
+
+            return authority;
+        } catch (e) {
+            return { isSuperUser: false, isGlobalAdmin: false, isGroupAdmin: false, isBotAdmin: false, level: 0 };
+        }
+    }
+
+    async _getGroupBasics(chatId) {
+        try {
+            // Récupérer seulement les infos essentielles du groupe
+            const groupContext = await this.groupService.getContext(chatId, null, null);
+            if (groupContext?.group) {
+                return {
+                    name: groupContext.group.name,
+                    description: groupContext.group.description || '',
+                    memberCount: groupContext.group.member_count || 0,
+                    botMission: groupContext.group.bot_mission || ''
+                };
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async _loadFacts(sender) {
+        try {
+            return await this.factsMemory.format(sender);
+        } catch (e) {
+            console.warn('[TieredContext] Erreur chargement faits:', e.message);
+            return '';
+        }
+    }
+
+    async _loadRAG(chatId, text) {
+        try {
+            const relevantMemories = await this.memory.recall(chatId, text, 3);
+            if (relevantMemories?.length > 0) {
+                return relevantMemories.map(m => `- ${m.content}`).join('\n');
+            }
+            return '';
+        } catch (e) {
+            console.warn('[TieredContext] Erreur RAG:', e.message);
+            return '';
+        }
+    }
+
+    async _loadGroupMembers(chatId) {
+        try {
+            if (!chatId?.endsWith('@g.us')) return [];
+            return await this.groupService.getGroupMembers(chatId);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    async _loadConsciousness(chatId, sender) {
+        try {
+            return await this.consciousness.getGlobalState(chatId, sender);
+        } catch (e) {
+            return { emotionalState: { mood: 'neutre', annoyance: 0 } };
+        }
+    }
+
+    async _loadLessons() {
+        try {
+            const { dreamService } = await import('../../services/dreamService.js');
+            return dreamService.getLessons?.() || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    // ========================================================================
+    // MÉTHODES PRIVÉES - Builders de contexte
+    // ========================================================================
+
+    _buildMinimalPrompt(userSnapshot, authority, group = null) {
+        let prompt = this.localCache.systemPromptTemplate
+            .replace('{{name}}', this.localCache.botIdentity.name)
+            .replace('{{role}}', this.localCache.botIdentity.role)
+            .replace('{{traits}}', this.localCache.botIdentity.traits)
+            .replace('{{languages}}', this.localCache.botIdentity.languages)
+            .replace('{{interests}}', this.localCache.botIdentity.interests.join(', '));
+
+        // Ajouter le bloc temps
+        const now = new Date();
+        prompt += `\n### 📅 TEMPS RÉEL
+- **Date** : ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+- **Heure** : ${now.toLocaleTimeString('fr-FR')}
+`;
+
+        // Contexte social minimal
+        if (group) {
+            prompt += `\n### 🌍 CONTEXTE
+- **Lieu** : Groupe "${group.name}"
+- **Interlocuteur** : ${userSnapshot.name}
+- **Statut** : ${authority.isSuperUser ? '👑 SuperUser' : (authority.isGlobalAdmin ? '⭐ Admin' : 'Membre')}
+`;
+        } else {
+            prompt += `\n### 👤 CONTEXTE PRIVÉ
+- **Interlocuteur** : ${userSnapshot.name}
+`;
+        }
+
+        // Nettoyer les placeholders restants
+        prompt = prompt.replace(/{{#each.*?}}[\s\S]*?{{\/each}}/g, '');
+        prompt = prompt.replace(/{{.*?}}/g, '');
+
+        return prompt;
+    }
+
+    _buildFastContext(hot, warm, message) {
+        return {
+            systemPrompt: warm.systemPromptBase,
+            recentMessages: hot.recentMessages,
+            history: hot.recentMessages.map(m => ({
+                role: m.role,
+                content: m.content
+            })),
+            authority: warm.authority,
+            userSnapshot: warm.userSnapshot,
+            mode: 'FAST'
+        };
+    }
+
+    _buildFullContext(hot, warm, cold, message) {
+        // Enrichir le system prompt avec les données COLD
+        let fullPrompt = warm.systemPromptBase;
+
+        // Ajouter les faits
+        if (cold.facts) {
+            fullPrompt += `\n### 🧠 MÉMOIRE FACTUELLE\n${cold.facts}\n`;
+        }
+
+        // Ajouter le RAG
+        if (cold.rag) {
+            fullPrompt += `\n### 📚 SOUVENIRS PERTINENTS\n${cold.rag}\n`;
+        }
+
+        // Ajouter les leçons
+        if (cold.lessons) {
+            fullPrompt += `\n### 🎓 LEÇONS APPRISES\n${cold.lessons}\n`;
+        }
+
+        // Ajouter l'état de conscience
+        if (cold.consciousness?.emotionalState) {
+            const { mood, annoyance } = cold.consciousness.emotionalState;
+            fullPrompt += `\n### 💭 ÉTAT ÉMOTIONNEL
+- **Humeur** : ${mood}
+- **Agacement** : ${annoyance}/100
+`;
+        }
+
+        // Enrichir l'autorité avec infos groupe
+        const enrichedAuthority = { ...warm.authority };
+        if (cold.groupMembers?.length > 0) {
+            const botJid = container.get('transport')?.sock?.user?.id;
+            if (botJid) {
+                const botMember = cold.groupMembers.find(m =>
+                    m.jid?.includes(botJid.split(':')[0]?.split('@')[0])
+                );
+                enrichedAuthority.isBotAdmin = botMember?.isAdmin || false;
+
+                // [FIX] Si le bot est admin, on augmente le niveau d'autorité effectif du contexte
+                // Cela permet au bot d'agir (ban/kick) même si l'utilisateur est niveau 0
+                if (enrichedAuthority.isBotAdmin) {
+                    enrichedAuthority.level = Math.max(enrichedAuthority.level, 50); // Level 50 = Moderator
+                    enrichedAuthority.botHasControl = true;
+                }
+            }
+        }
+
+        return {
+            systemPrompt: fullPrompt,
+            recentMessages: hot.recentMessages,
+            history: hot.recentMessages.map(m => ({
+                role: m.role,
+                content: m.content
+            })),
+            authority: enrichedAuthority,
+            userSnapshot: warm.userSnapshot,
+            groupMembers: cold.groupMembers,
+            consciousness: cold.consciousness,
+            mode: 'AGENTIC'
+        };
+    }
+
+    /**
+     * Vide le cache d'autorité (à appeler si les admins changent)
+     */
+    clearAuthorityCache() {
+        this.authorityCache.clear();
+        console.log('[TieredContext] Cache autorité vidé');
+    }
+}
+
+// Export singleton
+export const tieredContextLoader = new TieredContextLoader();
+export default tieredContextLoader;

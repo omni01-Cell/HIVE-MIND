@@ -2,29 +2,32 @@
 // Service de mémoire sémantique (RAG) avec pgvector
 
 import { supabase, db } from './supabase.js';
-import { EmbeddingsService } from './ai/EmbeddingsService.js';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { resolveApiKey } from '../config/keyResolver.js';
 
-// Initialisation embeddings avec credentials
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// Initialisation embeddings via container singleton
 let embeddings = null;
-try {
-    const credentials = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'credentials.json'), 'utf-8'));
+let container = null;
 
-    // Résoudre les variables d'environnement
-    const geminiKey = resolveApiKey(credentials.familles_ia?.gemini);
-    const openaiKey = resolveApiKey(credentials.familles_ia?.openai);
-
-    embeddings = new EmbeddingsService({
-        geminiKey,
-        openaiKey
-    });
-} catch (e) {
-
-    console.error('[Memory] Impossible de charger EmbeddingsService:', e.message);
+// Fonction pour obtenir l'instance singleton
+async function getEmbeddingsService() {
+    if (embeddings) return embeddings;
+    
+    try {
+        if (!container) {
+            const { container: serviceContainer } = await import('../core/ServiceContainer.js');
+            container = serviceContainer;
+        }
+        
+        if (container.has('embeddings')) {
+            embeddings = container.get('embeddings');
+            console.log('[Memory] ✅ EmbeddingsService chargé depuis container (singleton)');
+        } else {
+            console.warn('[Memory] EmbeddingsService non disponible dans container');
+        }
+    } catch (e) {
+        console.error('[Memory] Erreur chargement EmbeddingsService depuis container:', e.message);
+    }
+    
+    return embeddings;
 }
 
 /**
@@ -41,6 +44,13 @@ export const semanticMemory = {
      */
     async store(chatId, content, role, options = {}) {
         if (!supabase || !content?.trim()) return;
+
+        // Obtenir l'instance singleton depuis le container
+        const embeddings = await getEmbeddingsService();
+        if (!embeddings) {
+            console.warn('[Memory] EmbeddingsService non disponible, message non vectorisé');
+            return;
+        }
 
         // 1. Génération de l'embedding
         const vector = await embeddings.embed(content, 'RETRIEVAL_DOCUMENT');
@@ -89,6 +99,21 @@ export const semanticMemory = {
      */
     async recall(chatId, query, limit = 5) {
         if (!supabase) return [];
+
+        // Obtenir l'instance singleton depuis le container
+        const embeddings = await getEmbeddingsService();
+        if (!embeddings) {
+            console.warn('[Memory] EmbeddingsService non disponible, fallback temporel');
+            // Fallback: recherche simple par date
+            const { data } = await supabase
+                .from('memories')
+                .select('content, role, created_at')
+                .eq('chat_id', chatId)
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            return this._formatWithAge(data || []);
+        }
 
         // Utilise taskType 'RETRIEVAL_QUERY' pour optimiser la recherche
         const vector = await embeddings.embed(query, 'RETRIEVAL_QUERY');

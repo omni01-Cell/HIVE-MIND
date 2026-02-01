@@ -7,6 +7,10 @@ import { createReadStream, createWriteStream, unlinkSync, existsSync } from 'fs'
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
+import ffmpegPath from '@ffmpeg-installer/ffmpeg';
+
+const FFMPEG_BIN = ffmpegPath.path;
+
 
 /**
  * Formats audio pour Gemini Live API
@@ -154,7 +158,7 @@ export function cleanupTempFiles(...paths) {
  */
 export async function checkFfmpeg() {
     return new Promise((resolve) => {
-        const ffmpeg = spawn('ffmpeg', ['-version']);
+        const ffmpeg = spawn(FFMPEG_BIN, ['-version']);
         ffmpeg.on('close', (code) => resolve(code === 0));
         ffmpeg.on('error', () => resolve(false));
     });

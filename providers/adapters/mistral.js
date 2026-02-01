@@ -12,43 +12,87 @@ export default {
         // Default to mistral-small-latest if not specified
         const modelId = model || 'mistral-small-latest';
 
-        const body = {
-            model: modelId,
-            messages: messages.map(m => {
-                // 1. Gestion Assistant avec Tool Calls
-                if (m.role === 'assistant') {
-                    const msg = { role: 'assistant', content: m.content || "" }; // Contenu vide autorisé si tools
-                    if (m.tool_calls && m.tool_calls.length > 0) {
-                        msg.tool_calls = m.tool_calls.map(tc => ({
-                            id: tc.id,
+        // Map pour sanitizer les IDs (Provider ID -> 9-char Mistral ID)
+        const idMap = new Map();
+
+        const cleanMessages = messages.flatMap(m => {
+            // 1. Gestion Assistant avec Tool Calls
+            if (m.role === 'assistant') {
+                const results = [];
+
+                // Si on a du contenu ET des tools, il faut splitter en 2 messages
+                // car Mistral interdit d'avoir content + tool_calls dans le même message
+                if (m.content && m.tool_calls && m.tool_calls.length > 0) {
+                    // Message 1: Texte (Pensée)
+                    results.push({ role: 'assistant', content: m.content });
+
+                    // Message 2: Tools (Sans contenu)
+                    const sanitizedTools = m.tool_calls.map(tc => {
+                        // Sanitizer l'ID (9 chars exactly)
+                        let safeId = tc.id;
+                        if (!/^[a-zA-Z0-9]{9}$/.test(tc.id)) {
+                            // Générer un ID safe déterministe ou random (ici random suffisant si map utilisée)
+                            // [IMPORTANT] On map l'ancien ID vers le nouveau pour les réponses 'tool'
+                            safeId = Math.random().toString(36).substring(2, 11);
+                            idMap.set(tc.id, safeId);
+                        }
+                        return {
+                            id: safeId,
                             type: 'function',
                             function: tc.function
-                        }));
-                        // Si content est null/undefined, Mistral préfère parfois une chaine vide ou null explicite
-                        // Si tool_calls est là, content peut être null. Mais "" est plus safe.
-                    }
-                    return msg;
+                        };
+                    });
+
+                    results.push({ role: 'assistant', tool_calls: sanitizedTools, content: null });
+                } else if (m.tool_calls && m.tool_calls.length > 0) {
+                    // Cas Tools sans contenu
+                    const sanitizedTools = m.tool_calls.map(tc => {
+                        let safeId = tc.id;
+                        if (!/^[a-zA-Z0-9]{9}$/.test(tc.id)) {
+                            safeId = Math.random().toString(36).substring(2, 11);
+                            idMap.set(tc.id, safeId);
+                        }
+                        return {
+                            id: safeId,
+                            type: 'function',
+                            function: tc.function
+                        };
+                    });
+                    results.push({ role: 'assistant', tool_calls: sanitizedTools, content: null });
+                } else {
+                    // Cas standard (Texte seul)
+                    results.push({ role: 'assistant', content: m.content || "" });
                 }
 
-                // 2. Gestion Tool Responses
-                if (m.role === 'tool') {
-                    return {
-                        role: 'tool',
-                        tool_call_id: m.tool_call_id,
-                        name: m.name,
-                        content: m.content
-                    };
-                }
+                return results;
+            }
 
-                // 3. System & User
-                // Mistral supporte le role 'system'
-                return {
-                    role: m.role,
+            // 2. Gestion Tool Responses
+            if (m.role === 'tool') {
+                // Récupérer l'ID sanitizé si disponible, sinon garder l'original
+                const safeId = idMap.get(m.tool_call_id) || m.tool_call_id;
+
+                return [{
+                    role: 'tool',
+                    tool_call_id: safeId,
+                    name: m.name,
                     content: m.content
-                };
-            }),
+                }];
+            }
+
+            // 3. System & User
+            return [{
+                role: m.role,
+                content: m.content
+            }];
+        });
+
+        const body = {
+            model: modelId,
+            messages: cleanMessages,
             temperature,
-            max_tokens: 1000
+            max_tokens: 1000,
+            safe_prompt: true // Option Mistral recommandée
         };
 
         // Mistral utilise le même format de tools qu'OpenAI

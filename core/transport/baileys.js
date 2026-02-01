@@ -15,6 +15,7 @@ import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { EventEmitter } from 'events';
+import swarm from '../concurrency/SwarmDispatcher.js'; // [NEW] Module Swarm
 
 // DTC Phase 1: Nouveaux services unifiés
 // import { userService } from '../../services/userService.js'; // REMOVED FOR DI
@@ -40,6 +41,7 @@ const BAILEYS_ERRORS = {
 import { config as globalConfig } from '../../config/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const isDebug = process.env.DEBUG === 'true';
 
 // Charger la configuration de protection contre le backlog
 let config;
@@ -73,11 +75,31 @@ class BaileysTransport extends EventEmitter {
         this.reconnectAttempts = 0;
         this.audioHandler = new AudioHandler(this, this.logger);
         this.antiDeleteHandler = new AntiDeleteHandler(this, this.logger);
+
+        // 🛡️ Monitoring des event listeners (détection de fuites)
+        this.listenerMonitor = null;
     }
 
 
     setContainer(container) {
         this.container = container;
+    }
+
+    // [COMPATIBILITY] Rétablissement des méthodes legacy
+    onMessage(callback) {
+        this.messageCallback = callback;
+        // FIX: Ne pas doubler avec this.on('message', callback) car on appelle déjà messageCallback explicitement
+    }
+
+    onGroupEvent(callback) {
+        this.groupEventCallback = callback;
+    }
+
+    /**
+     * Alias de compatibilité pour BotCore qui attend sendPresenceUpdate
+     */
+    async sendPresenceUpdate(chatId, type) {
+        return this.setPresence(chatId, type);
     }
 
     get userService() {
@@ -98,7 +120,6 @@ class BaileysTransport extends EventEmitter {
 
     /**
      * Connecte au service WhatsApp via Baileys
-
      */
     async connect(sessionPath = 'session') {
         const self = this; // Capture du contexte pour les callbacks
@@ -110,13 +131,22 @@ class BaileysTransport extends EventEmitter {
         }
         self.isConnecting = true;
 
-        // Cleanup: End previous socket to prevent listener accumulation
+        // 🛡️ CLEANUP COMPLET : End previous socket to prevent listener accumulation
         if (self.sock) {
             try {
+                console.log('[Baileys] 🧹 Nettoyage de l\'ancienne connexion...');
+                // 1. Supprimer TOUS les listeners
                 self.sock.ev.removeAllListeners();
+                // 2. Terminer proprement le socket
                 self.sock.end(new Error('Reconnecting'));
-            } catch (e) { /* ignore cleanup errors */ }
-            self.sock = null;
+                // 3. Nullifier la référence
+                self.sock = null;
+
+                // 4. Petit délai pour laisser le temps au cleanup
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (e) {
+                console.warn('[Baileys] ⚠️ Erreur cleanup:', e.message);
+            }
         }
 
         // Connexion silencieuse pour ne pas casser la barre de progression
@@ -205,46 +235,41 @@ class BaileysTransport extends EventEmitter {
                 // Mettre le bot "En ligne" pour montrer qu'il est réveillé
                 self.sock.sendPresenceUpdate('available');
 
+                // 🛡️ Démarrer le monitoring des event listeners (toutes les minutes)
+                self._startListenerMonitoring();
+
                 eventBus.publish(BotEvents.CONNECTED);
             }
         });
 
         // Écoute des messages
         self.sock.ev.on('messages.upsert', async ({ messages, type }) => {
-            // 🔍 DEBUG: Log every upsert event to diagnose reception issues
-            console.log(`[Baileys] 📩 messages.upsert: type="${type}", count=${messages.length}`);
-
             if (type !== 'notify') {
-                console.log(`[Baileys] ⏭️ Ignoré: type="${type}" (seul 'notify' traité)`);
                 return;
             }
 
             for (const msg of messages) {
                 try {
-                    // 🔍 DEBUG: Log each message for diagnosis
                     const msgType = msg.message ? Object.keys(msg.message)[0] : 'NO_MESSAGE';
                     const remoteJid = msg.key?.remoteJid || 'UNKNOWN';
-                    console.log(`[Baileys] 📨 Message reçu: from=${remoteJid}, type=${msgType}, fromMe=${msg.key?.fromMe}, id=${msg.key?.id?.slice(0, 8)}...`);
 
-                    if (msg.key.fromMe) {
-                        console.log(`[Baileys] ⏭️ Ignoré: fromMe=true`);
+                    // [FIX] Ignorer les statuts WhatsApp (Stories)
+                    if (remoteJid === 'status@broadcast') {
                         continue;
                     }
 
-                    // Filtrage des messages de protocole/système (presence, receipts, group events, etc.)
+                    if (msg.key.fromMe) {
+                        continue;
+                    }
+
+                    // Filtrage des messages de protocole/système
                     if (!isRealMessage(msg)) {
-                        // 🔍 DEBUG: Always log when isRealMessage rejects a message
-                        const stubType = msg.messageStubType;
-                        const stubParams = msg.messageStubParameters;
-                        console.log(`[Baileys] 🚫 isRealMessage=false: stubType=${stubType}, params=${JSON.stringify(stubParams)}, keys=${Object.keys(msg).join(',')}`);
                         continue;
                     }
 
                     // Extraction des variables de base immédiate (remoteJid déjà déclaré plus haut)
                     const sender = msg.key.participant || msg.key.remoteJid;
                     const senderName = msg.pushName || sender.split('@')[0];
-
-                    console.log(`[Baileys] ✅ Message valide de ${senderName}, traitement en cours...`);
 
                     // Vérification de sécurité supplémentaire (cas edge)
                     if (!msg.message) {
@@ -263,9 +288,7 @@ class BaileysTransport extends EventEmitter {
 
                     // 1. MISE À JOUR SOCIALE (USER)
                     if (self.userService) {
-                        console.log(`[Baileys] 👤 Mise à jour interaction utilisateur...`);
                         await self.userService.recordInteraction(senderId, msg.pushName, isGroup ? chatId : null);
-                        console.log(`[Baileys] ✅ Interaction enregistrée`);
                     }
 
                     // 2. AUTO-DISCOVERY (GROUPES)
@@ -274,31 +297,26 @@ class BaileysTransport extends EventEmitter {
 
                         if (needsUpdate) {
                             try {
-                                console.log(`[Discovery] Scan du groupe ${chatId} en cours...`);
                                 const metadata = await self.sock.groupMetadata(chatId);
                                 await self.groupService.updateGroup(chatId, metadata);
                             } catch (err) {
-                                console.error(`[Discovery] Echec recup metadata groupe: ${err.message}`);
+                                if (isDebug) console.error(`[Discovery] Echec recup metadata groupe: ${err.message}`);
                             }
                         }
                     }
 
                     // ⚡ Filtre anti-backlog
-                    console.log(`[Baileys] ⏳ Vérification anti-backlog...`);
                     if (config.backlog_protection?.enabled && self.connectionTime) {
                         const messageTimestamp = msg.messageTimestamp;
                         const now = Math.floor(Date.now() / 1000);
                         const messageAge = now - messageTimestamp;
                         const threshold = config.backlog_protection.message_stale_threshold_seconds;
-                        console.log(`[Baileys] 📊 Age message: ${messageAge}s, seuil: ${threshold}s`);
 
                         if (messageAge > threshold) {
                             self.backlogMessagesIgnored++;
-                            console.log(`[Baileys] 🚫 Message ignoré (${messageAge}s ancien)`);
                             continue;
                         }
                     }
-                    console.log(`[Baileys] ✅ Message pas trop ancien, traitement continue...`);
 
                     // 3. TRANSCRIPTION & AUDIO HANDLING (V6)
                     const isAudio = msg.message?.audioMessage;
@@ -324,12 +342,9 @@ class BaileysTransport extends EventEmitter {
                     }
 
                     // Assigner le texte transcrit
-
-                    console.log(`[Baileys] 📝 Extraction texte: transcribedText=${!!transcribedText}, normalizedMsg.text=${!!normalizedMsg.text}, useNativeAudio=${!!normalizedMsg.useNativeAudio}`);
                     if (transcribedText) {
                         normalizedMsg.text = transcribedText;
                         normalizedMsg.isTranscribed = true;
-                        console.log(`[Baileys] 🎤 Texte transcrit assigné`);
                     } else if (!normalizedMsg.text && !normalizedMsg.useNativeAudio) {
                         // Fallback text extraction if not audio
                         let textBody = '';
@@ -338,26 +353,32 @@ class BaileysTransport extends EventEmitter {
                         else if (msg.message?.imageMessage?.caption) textBody = msg.message.imageMessage.caption;
                         else if (msg.message?.videoMessage?.caption) textBody = msg.message.videoMessage.caption;
                         normalizedMsg.text = textBody;
-                        console.log(`[Baileys] 💬 Texte extrait: "${textBody?.slice(0, 50)}${textBody?.length > 50 ? '...' : ''}"`);
                     }
 
-                    // ANTI-DELETE logic
-                    await this.antiDeleteHandler.storeMessage(normalizedMsg);
+                    // 🛡️ ANTI-DELETE logic avec protection race condition
+                    // Ajouter un délai anti-suppression pour éviter les suppressions instantanées
+                    setTimeout(async () => {
+                        try {
+                            await this.antiDeleteHandler.storeMessage(normalizedMsg);
+                        } catch (err) {
+                            console.warn('[Baileys] Erreur AntiDelete store:', err.message);
+                        }
+                    }, 100); // 100ms de tolérance
 
                     // EMIT MESSAGE
-
-                    console.log(`[Baileys] 🎯 Condition emit: text="${normalizedMsg.text?.slice(0, 30) || 'null'}", useNativeAudio=${!!normalizedMsg.useNativeAudio}, hasCallback=${!!self.messageCallback}`);
                     if (normalizedMsg.text || normalizedMsg.useNativeAudio) {
-                        console.log(`[Baileys] 📤 EMISSION MESSAGE vers Core...`);
-                        if (self.messageCallback) {
-                            console.log(`[Baileys] 📞 Appel messageCallback...`);
-                            self.messageCallback(normalizedMsg);
-                        }
-                        eventBus.publish(BotEvents.MESSAGE_RECEIVED, normalizedMsg);
-                        self.emit('message', normalizedMsg);
-                        console.log(`[Baileys] ✅ Message émis avec succès!`);
-                    } else {
-                        console.log(`[Baileys] ⚠️ Message NON émis - pas de texte ni audio natif`);
+                        // 🚀 SWARM UPGRADE: Utilisation du Dispatcher pour parallélisation
+                        // On utilise chatId comme Lock Key (pour l'ordre)
+                        // On passe l'objet message complet pour le check isFastPath
+                        swarm.dispatch(normalizedMsg.chatId, normalizedMsg, async () => {
+                            if (self.messageCallback) {
+                                await self.messageCallback(normalizedMsg);
+                            }
+                            eventBus.publish(BotEvents.MESSAGE_RECEIVED, normalizedMsg);
+                            self.emit('message', normalizedMsg);
+                        }).catch(err => {
+                            console.error(`[Baileys] 💥 Error processing message in Swarm:`, err);
+                        });
                     }
 
                     // 📬 ACCUSÉS DE RÉCEPTION (Humanisation)
@@ -461,6 +482,9 @@ class BaileysTransport extends EventEmitter {
      * Déconnexion propre
      */
     async disconnect() {
+        // Arrêter le monitoring
+        this._stopListenerMonitoring();
+
         if (this.sock) {
             await this.sock.logout();
             this.sock = null;
@@ -475,33 +499,56 @@ class BaileysTransport extends EventEmitter {
         const sender = msg.key.participant || msg.key.remoteJid;
         const isGroup = chatId.endsWith('@g.us');
 
+        // [FIX] Déballage des messages (Ephemeral, ViewOnce, etc.)
+        // Baileys encapsule parfois le vrai message
+        let realMessage = msg.message;
+        if (realMessage?.ephemeralMessage) {
+            realMessage = realMessage.ephemeralMessage.message;
+        }
+        if (realMessage?.viewOnceMessage) {
+            realMessage = realMessage.viewOnceMessage.message;
+        }
+        if (realMessage?.viewOnceMessageV2) {
+            realMessage = realMessage.viewOnceMessageV2.message;
+        }
+        if (realMessage?.documentWithCaptionMessage) {
+            realMessage = realMessage.documentWithCaptionMessage.message;
+        }
+
+        // On remplace msg.message par la version déballée pour simplifier la suite
+        // (Attention: on ne modifie pas l'objet original msg qui est readonly parfois, on utilise une ref locale)
+        const content = realMessage;
+
         // Extraction du texte
         let text = '';
-        if (msg.message?.conversation) text = msg.message.conversation;
-        else if (msg.message?.extendedTextMessage?.text) text = msg.message.extendedTextMessage.text;
-        else if (msg.message?.imageMessage?.caption) text = msg.message.imageMessage.caption;
-        else if (msg.message?.videoMessage?.caption) text = msg.message.videoMessage.caption;
+        if (content?.conversation) text = content.conversation;
+        else if (content?.extendedTextMessage?.text) text = content.extendedTextMessage.text;
+        else if (content?.imageMessage?.caption) text = content.imageMessage.caption;
+        else if (content?.videoMessage?.caption) text = content.videoMessage.caption;
 
         // Détection du type de média
         let mediaType = null;
-        if (msg.message?.imageMessage) mediaType = 'image';
-        else if (msg.message?.videoMessage) mediaType = 'video';
-        else if (msg.message?.audioMessage) mediaType = 'audio';
-        else if (msg.message?.documentMessage) mediaType = 'document';
-        else if (msg.message?.stickerMessage) mediaType = 'sticker';
+        if (content?.imageMessage) mediaType = 'image';
+        else if (content?.videoMessage) mediaType = 'video';
+        else if (content?.audioMessage) mediaType = 'audio';
+        else if (content?.documentMessage) mediaType = 'document';
+        else if (content?.stickerMessage) mediaType = 'sticker';
 
         // Message cité et mentions
-        const contextInfo = msg.message?.extendedTextMessage?.contextInfo
-            || msg.message?.imageMessage?.contextInfo
-            || msg.message?.videoMessage?.contextInfo
+        const contextInfo = content?.extendedTextMessage?.contextInfo
+            || content?.imageMessage?.contextInfo
+            || content?.videoMessage?.contextInfo
+            || content?.stickerMessage?.contextInfo // Ajout support sticker replies
             || null;
 
-        const quotedMsg = contextInfo?.quotedMessage
+        const quotedMsg = (contextInfo?.stanzaId && contextInfo?.participant)
             ? {
-                text: contextInfo.quotedMessage.conversation ||
-                    contextInfo.quotedMessage.extendedTextMessage?.text,
+                text: contextInfo.quotedMessage?.conversation ||
+                    contextInfo.quotedMessage?.extendedTextMessage?.text ||
+                    '',
                 sender: contextInfo.participant,
-                message: contextInfo.quotedMessage
+                message: contextInfo.quotedMessage || null,
+                id: contextInfo.stanzaId
             }
             : null;
 
@@ -597,13 +644,37 @@ class BaileysTransport extends EventEmitter {
             message.mentions = mentions;
         }
 
+        const socketOptions = {};
         if (options.reply) {
-            message.quoted = options.reply;
+            socketOptions.quoted = options.reply;
         }
 
-        const sent = await this.sock.sendMessage(chatId, message);
+        const sent = await this.sock.sendMessage(chatId, message, socketOptions);
         eventBus.publish(BotEvents.MESSAGE_SENT, { chatId, text });
-        return sent;
+        return sent; // Retourne le dernier sent
+    }
+
+
+    /**
+     * Envoie une réaction (emoji) sur un message
+     * @param {string} chatId 
+     * @param {Object} key - Clé du message cible
+     * @param {string} emoji 
+     */
+    async sendReaction(chatId, key, emoji) {
+        if (!this.sock) return false;
+        try {
+            await this.sock.sendMessage(chatId, {
+                react: {
+                    text: emoji,
+                    key: key
+                }
+            });
+            return true;
+        } catch (error) {
+            console.error('[Baileys] Erreur sendReaction:', error);
+            return false;
+        }
     }
 
     /**
@@ -616,11 +687,12 @@ class BaileysTransport extends EventEmitter {
             ptt: true // Affiche comme une note vocale
         };
 
+        const socketOptions = {};
         if (options.reply) {
-            message.quoted = options.reply;
+            socketOptions.quoted = options.reply;
         }
 
-        return await this.sock.sendMessage(chatId, message);
+        return await this.sock.sendMessage(chatId, message, socketOptions);
     }
 
     /**
@@ -733,6 +805,31 @@ class BaileysTransport extends EventEmitter {
     }
 
     /**
+     * Définit le statut de présence (typing, recording, etc.)
+     * @param {string} chatId 
+     * @param {string} type - 'composing' | 'recording' | 'paused'
+     */
+    async setPresence(chatId, type) {
+        if (!this.sock) return;
+
+        // Mapping types hive-mind -> baileys
+        const presenceMap = {
+            'composing': 'composing',
+            'recording': 'recording',
+            'paused': 'paused',
+            'available': 'available',
+            'unavailable': 'unavailable'
+        };
+
+        const status = presenceMap[type] || 'composing';
+        try {
+            await this.sock.sendPresenceUpdate(status, chatId);
+        } catch (err) {
+            console.warn(`[Baileys] Warning setPresence: ${err.message}`);
+        }
+    }
+
+    /**
      * (Module 2) Bannit un utilisateur du groupe
      */
     async banUser(groupId, participant) {
@@ -804,229 +901,54 @@ class BaileysTransport extends EventEmitter {
     }
 
     /**
-     * Met à jour les paramètres du groupe (Lock/Unlock)
-     * @param {string} groupId 
-     * @param {string} setting 'announcement' | 'not_announcement' | 'locked' | 'unlocked'
+     * (Monitoring) Récupère les listeners actifs
      */
-    async updateGroupSetting(groupId, setting) {
-        try {
-            await this.sock.groupSettingUpdate(groupId, setting);
-            return true;
-        } catch (error) {
-            console.error('[Baileys] Erreur GroupSetting:', error);
-            return false;
+    getListenerCount() {
+        if (!this.sock || !this.sock.ev) return 0;
+        // [FIX] Vérification safe car l'implémentation de ev peut varier
+        if (typeof this.sock.ev.eventNames === 'function') {
+            return this.sock.ev.eventNames().reduce((acc, name) => {
+                return acc + this.sock.ev.listenerCount(name);
+            }, 0);
+        }
+        return 0;
+    }
+
+    /**
+     * (Monitoring) Lance la surveillance périodique
+     */
+    _startListenerMonitoring() {
+        if (this.listenerMonitor) clearInterval(this.listenerMonitor);
+
+        this.listenerMonitor = setInterval(() => {
+            const count = this.getListenerCount();
+            if (count > 50) {
+                console.warn(`[Baileys:Leak] ⚠️ High listener count: ${count}`);
+                // Force cleanup si critique ?
+            }
+        }, 60000); // Check every minute
+    }
+
+    /**
+     * (Monitoring) Stop la surveillance
+     */
+    _stopListenerMonitoring() {
+        if (this.listenerMonitor) {
+            clearInterval(this.listenerMonitor);
+            this.listenerMonitor = null;
         }
     }
 
     /**
-     * (Module 2) Résout un utilisateur partiel en JID complet
-     * Ex: "903..." -> "jid"
-     */
-    async resolveUser(groupId, partialUser) {
-        try {
-            const metadata = await this.getGroupMetadata(groupId);
-            // Recherche par numéro (fin de chaîne) ou nom
-            const target = metadata.participants.find(p => p.id.includes(partialUser));
-            return target ? target.id : null;
-        } catch (e) {
-            this.logger.error(`[Baileys:resolveUser] ${e.message}`);
-            return null;
-        }
-
-    }
-
-    /**
-     * Envoie un média
-     */
-    async sendMedia(chatId, media, options = {}) {
-        const { type = 'image', caption, filename } = options;
-
-        const message = {};
-        message[type] = media;
-        if (caption) message.caption = caption;
-        if (filename) message.fileName = filename;
-
-        return await this.sock.sendMessage(chatId, message);
-    }
-
-    /**
-     * Envoie un message générique (alias pour sock.sendMessage)
-     */
-    async sendMessage(chatId, content, options = {}) {
-        if (!chatId) return null;
-        return await this.sock.sendMessage(chatId, content, options);
-    }
-
-    /**
-     * Envoie une réaction à un message
-     */
-    async sendReaction(chatId, key, emoji) {
-        if (!chatId || !key) return null;
-        return await this.sock.sendMessage(chatId, {
-            react: {
-                text: emoji,
-                key: key
-            }
-        });
-    }
-
-    /**
-     * Envoie une note vocale (PTT)
-     * Compatible iOS/Android
-     */
-    async sendVoiceNote(chatId, audioPathOrBuffer, options = {}) {
-        await this.sock.sendPresenceUpdate('recording', chatId);
-
-        // Simuler un temps d'enregistrement (ex: 1s par 100 caractères du texte si dispo)
-        const duration = options.duration || 1000;
-        await delay(duration);
-
-        await this.sock.sendMessage(
-            chatId,
-            {
-                audio: typeof audioPathOrBuffer === 'string' ? { url: audioPathOrBuffer } : audioPathOrBuffer,
-                mimetype: 'audio/ogg; codecs=opus',
-                ptt: true
-            }
-        );
-
-        await this.sock.sendPresenceUpdate('paused', chatId);
-    }
-
-    /**
-     * Envoie un sticker
-     */
-    async sendSticker(chatId, stickerBuffer) {
-        return await this.sock.sendMessage(chatId, {
-            sticker: stickerBuffer
-        });
-    }
-
-    /**
-     * Récupère les métadonnées d'un groupe
+     * Récupère les métadonnées d'un groupe (nécessaire pour banUser/resolveMentions)
      */
     async getGroupMetadata(groupId) {
-        const metadata = await this.sock.groupMetadata(groupId);
-        return {
-            id: metadata.id,
-            name: metadata.subject,
-            description: metadata.desc,
-            participants: metadata.participants,
-            admins: metadata.participants.filter(p =>
-                p.admin === 'admin' || p.admin === 'superadmin'
-            ).map(p => p.id)
-        };
-    }
-
-    /**
-     * Télécharge un média depuis un message
-     */
-    async downloadMedia(message) {
-        return await downloadMediaMessage(
-            message.raw,
-            'buffer',
-            {},
-            {
-                reuploadRequest: this.sock.updateMediaMessage
-            }
-        );
-    }
-
-    /**
-     * Définit le callback pour les messages
-     */
-    onMessage(callback) {
-        this.messageCallback = callback;
-    }
-
-    /**
-     * Définit le callback pour les événements de groupe
-     */
-    onGroupEvent(callback) {
-        this.groupEventCallback = callback;
-    }
-
-    /**
-     * Met à jour la présence
-     */
-    async setPresence(chatId, presence) {
-        if (!chatId) {
-            console.warn('[Baileys] ⚠️ Tentative setPresence avec chatId undefined');
-            return;
-        }
-
-        try {
-            // S'assurer que le JID est valide avant de souscrire
-            if (chatId.includes('@')) {
-                await this.sock.presenceSubscribe(chatId);
-                await this.sock.sendPresenceUpdate(presence, chatId);
-            }
-        } catch (err) {
-            console.error('[Baileys] ❌ Erreur setPresence:', err.message);
-        }
-    }
-
-    /**
-     * Vérifie si un utilisateur est admin
-     */
-    async isAdmin(groupId, userId) {
-        // [SUPREME AUTHORITY] Super User is ALWAYS admin
-        if (this.adminService && await this.adminService.isSuperUser(userId)) return true;
-
-        try {
-            const metadata = await this.sock.groupMetadata(groupId);
-
-            // Trouver le participant et vérifier sa propriété admin
-            // On compare à la fois l'ID complet ET juste la partie numérique (pour gérer LID vs phone)
-            const participant = metadata.participants.find(p => {
-                const pId = p.id.split('@')[0];
-                const uId = userId.split('@')[0];
-                return p.id === userId || pId === uId;
-            });
-
-            // Un utilisateur est admin si sa propriété admin n'est PAS null
-            // admin peut être: 'admin', 'superadmin', ou null
-            const isAdminUser = participant?.admin !== null && participant?.admin !== undefined;
-
-            console.log(`[DEBUG isAdmin] User ${userId} admin status: ${isAdminUser} (admin=${participant?.admin})`);
-
-            return isAdminUser;
-        } catch (error) {
-            console.error('[isAdmin] Erreur:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Version silencieuse pour vérifier si un user est admin (sans logs debug)
-     */
-    async _isUserAdmin(groupId, userId) {
-        try {
-            // SuperUser check via DI
-            if (this.adminService && await this.adminService.isSuperUser(userId)) return true;
-
-            const metadata = await this.sock.groupMetadata(groupId);
-            const participant = metadata.participants.find(p => {
-                const pId = p.id.split('@')[0];
-                const uId = userId.split('@')[0];
-                return p.id === userId || pId === uId;
-            });
-            return participant?.admin !== null && participant?.admin !== undefined;
-        } catch {
-            return false;
-        }
-    }
-
-    /**
-     * Simule un délai de frappe naturel
-     */
-    async simulateTyping(chatId, durationMs = 1500) {
-        await this.setPresence(chatId, 'composing');
-        await delay(durationMs);
-        await this.setPresence(chatId, 'paused');
+        if (!this.sock) throw new Error('Socket not initialized');
+        return await this.sock.groupMetadata(groupId);
     }
 }
 
-
-export const baileysTransport = new BaileysTransport();
-export default BaileysTransport;
+// Export singleton
+const baileysTransport = new BaileysTransport();
+export { baileysTransport };
+export default baileysTransport;

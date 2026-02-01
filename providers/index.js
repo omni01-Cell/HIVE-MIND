@@ -5,6 +5,7 @@ import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { classifier } from '../services/ai/classifier.js';
+import { envResolver } from '../services/envResolver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -154,12 +155,8 @@ class ProviderRouter {
      */
     getApiKey(familyName = this.currentFamily) {
         const key = credentials.familles_ia[familyName];
-        // Support Environment Variables if key matches placeholder pattern
-        if (key && key.startsWith('VOTRE_')) {
-            // Check if the placeholder name itself is an env var (e.g. process.env.VOTRE_CLE_OPENAI)
-            if (process.env[key]) return process.env[key];
-        }
-        return key;
+        // Utiliser EnvResolver pour résolution centralisée
+        return envResolver.resolve(key, `${familyName.toUpperCase()}_KEY`);
     }
 
     /**
@@ -322,12 +319,12 @@ class ProviderRouter {
 
         // SKIP Level 3 si c'est un appel de service agent (déjà spécifique)
         if (!options.family && !options.model && !options.isClassifierCall && !options.isServiceAgent) {
-            console.time('[Router] Détection catégorie');
+            const detectionStart = Date.now();
             const lastMsg = messages[messages.length - 1]?.content || "";
 
             try {
                 const category = await classifier.detectCategory(lastMsg, this);
-                console.timeEnd('[Router] Détection catégorie');
+                console.log(`[Router] Détection catégorie: ${(Date.now() - detectionStart).toFixed(3)}ms`);
 
                 if (category) {
                     const candidates = this.getChatCandidates(category);

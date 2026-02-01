@@ -64,24 +64,40 @@ export const groupService = {
 
             // Phase Social Graph: Stocker TOUS les membres avec leurs noms (pour fuzzy matching)
             const members = waMetadata.participants.map(p => {
-                // WOW: Le script de debug a prouvé que p.jid EXISTE et contient le VRAI JID !
-                // p.id contient le LID dans les nouveaux groupes.
                 const realJid = p.jid || p.id;
                 const lid = p.lid || (p.id.endsWith('@lid') ? p.id : null);
 
                 // Enregistrement immédiat du mapping
                 if (realJid.endsWith('@s.whatsapp.net') && lid && this.userService) {
-                    // On ne s'embête pas avec des await ici, on veut juste déclencher l'enregistrement
                     this.userService.registerLid(realJid, lid).catch(() => { });
                 }
 
+                // RÉSOLUTION FIABLE DU NUMÉRO DE TÉLÉPHONE
+                let phoneJid = null;
+                if (realJid.endsWith('@s.whatsapp.net')) {
+                    phoneJid = realJid;
+                }
+
                 return {
-                    jid: realJid, // On stocke le VRAI JID
+                    jid: realJid,
                     lid: lid,
-                    name: p.name || p.notify || null, // Nom affiché (pushName)
+                    phoneNumber: phoneJid,
+                    name: p.name || p.notify || null,
                     isAdmin: p.admin === 'admin' || p.admin === 'superadmin'
                 };
             });
+
+            // [FIX] Enrichissement asynchrone des numéros de téléphone pour les utilisateurs LID-only
+            if (this.userService) {
+                await Promise.all(members.map(async (m) => {
+                    if (!m.phoneNumber && m.jid.endsWith('@lid')) {
+                        const resolved = await this.userService.resolveLid(m.jid);
+                        if (resolved && resolved.endsWith('@s.whatsapp.net')) {
+                            m.phoneNumber = resolved;
+                        }
+                    }
+                }));
+            }
 
             const groupData = {
                 jid: groupJid,

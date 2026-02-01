@@ -11,6 +11,10 @@ class QuotaManager {
         this.client = redisClient;
         this.quotas = {};
         this._loadConfig();
+        
+        // Mode dégradé : tracking local en cas de Redis down
+        this.localRateLimit = new Map(); // chatId → lastRequestTime
+        this.redisDownSince = null; // Timestamp de la panne Redis
     }
 
     _loadConfig() {
@@ -99,7 +103,30 @@ class QuotaManager {
      * @returns {Promise<boolean>} - true si disponible, false sinon
      */
     async isModelAvailable(modelId, estimatedCost = 0) {
-        if (!this.client.isReady) return true; // Fail open
+        // ⚠️ FAIL CLOSED avec mode dégradé si Redis down
+        if (!this.client.isReady) {
+            console.warn('[QuotaManager] ⚠️ Redis indisponible - Mode dégradé actif (1 req/min max)');
+            
+            // Tracking de la durée de panne
+            if (!this.redisDownSince) {
+                this.redisDownSince = Date.now();
+            }
+            
+            const downMinutes = (Date.now() - this.redisDownSince) / 60000;
+            
+            // Si Redis down > 5 minutes, c'est critique
+            if (downMinutes > 5) {
+                console.error('[QuotaManager] 🚨 Redis down depuis > 5 min - BLOCAGE TOTAL');
+                return false; // Fail CLOSED total
+            }
+            
+            // Mode dégradé : 1 requête par minute par modèle (très conservateur)
+            return this._allowWithLocalRateLimit(modelId);
+        }
+        
+        // Redis OK - reset le tracker de panne
+        this.redisDownSince = null;
+        
         if (!modelId) return true;
 
         const date = new Date().toISOString().split('T')[0];
@@ -352,6 +379,40 @@ class QuotaManager {
         }
 
         return healthyFamilies;
+    }
+
+    /**
+     * Mode dégradé : Rate limiting local si Redis down
+     * Limite stricte : 1 requête par minute par modèle
+     * @param {string} modelId - ID du modèle
+     * @returns {boolean} - true si autorisé
+     * @private
+     */
+    _allowWithLocalRateLimit(modelId) {
+        const key = `local:${modelId}`;
+        const lastSeen = this.localRateLimit.get(key);
+        const now = Date.now();
+        
+        // Limite : 60 secondes entre chaque requête
+        if (lastSeen && (now - lastSeen) < 60000) {
+            const waitTime = Math.ceil((60000 - (now - lastSeen)) / 1000);
+            console.log(`[QuotaManager] ❄️ Mode dégradé: ${modelId} doit attendre ${waitTime}s`);
+            return false;
+        }
+        
+        // Autoriser et enregistrer
+        this.localRateLimit.set(key, now);
+        
+        // Cleanup : supprimer les entrées > 5 minutes (éviter memory leak)
+        if (this.localRateLimit.size > 100) {
+            for (const [k, timestamp] of this.localRateLimit.entries()) {
+                if (now - timestamp > 300000) { // 5 min
+                    this.localRateLimit.delete(k);
+                }
+            }
+        }
+        
+        return true;
     }
 }
 

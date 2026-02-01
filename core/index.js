@@ -2,13 +2,7 @@
 // Orchestrateur principal du bot - Cerveau central
 
 import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'fs';
-import dns from 'dns';
 import { dirname, join } from 'path';
-
-// FORCE IPv4 : Résout les problèmes de fetch failed vers Kimi/Cloudflare sous Node 17+
-if (dns.setDefaultResultOrder) {
-    dns.setDefaultResultOrder('ipv4first');
-}
 
 import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
@@ -18,26 +12,16 @@ import { baileysTransport } from './transport/baileys.js';
 import { pluginLoader } from '../plugins/loader.js';
 import { providerRouter } from '../providers/index.js';
 import { scheduler } from '../scheduler/index.js';
-import { db } from '../services/supabase.js';
-import { factsMemory } from '../services/memory.js';
-import { semanticMemory } from '../services/memory.js';
-import { workingMemory } from '../services/workingMemory.js';
+import { extractToolCallsFromText, parseToolArguments } from '../utils/toolCallExtractor.js';
 import { isStorable } from '../utils/helpers.js';
 import { startupDisplay } from '../utils/startup.js';
+
 import { botIdentity } from '../utils/botIdentity.js';
 import { extractNumericId, jidMatch, formatForDisplay } from '../utils/jidHelper.js';
-// DTC Phase 1: Nouveaux services unifiés
-// DTC Phase 1: Nouveaux services unifiés importés uniquement pour l'enregistrement DI initial
-// DTC Phase 1: Nouveaux services unifiés importés uniquement pour l'enregistrement DI initial
-import { userService } from '../services/userService.js';
-import { groupService } from '../services/groupService.js';
-import { adminService } from '../services/adminService.js';
-import { consciousness } from '../services/consciousnessService.js';
-import { agentMemory } from '../services/agentMemory.js';
-import { actionMemory } from '../services/memory/ActionMemory.js';
-import { GeminiLiveProvider } from '../services/audio/geminiLiveProvider.js';
-import { VoiceProvider } from '../services/voice/voiceProvider.js';
-import { quotaManager } from '../services/quotaManager.js';
+
+// DTC Refactor: Inclusion du ServiceContainer
+import { container } from './ServiceContainer.js';
+import { cli } from './cli.js'; // Interface Ligne de Commande
 
 // Group Manager (filtrage hybride)
 let filterProcessor = null;
@@ -48,20 +32,20 @@ try {
     console.warn('[Core] Group Manager non chargé:', e.message);
 }
 
-// DTC Refactor: Inclusion du ServiceContainer
-import { container } from './ServiceContainer.js';
-import { cli } from './cli.js'; // Interface Ligne de Commande
-
 // Refactoring: Import des handlers modulaires
 import { SchedulerHandler, GroupHandler } from './handlers/index.js';
 import { buildContext } from './context/contextBuilder.js';
+
+// [THINK-FAST] Imports du nouveau système de réponse rapide
+import { classifyLocally, isConfident } from '../services/ai/ReflexClassifier.js';
+import { tieredContextLoader } from './context/TieredContextLoader.js';
+import FastPathHandler from './handlers/FastPathHandler.js';
 
 // DTC Phase 1: Les admins globaux sont maintenant dans Supabase via adminService
 // Le chargement se fait de manière asynchrone dans init()
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Charger le persona
 let persona;
 try {
     persona = JSON.parse(
@@ -106,32 +90,47 @@ class BotCore {
         ];
     }
 
+    // Getters pour accès facile aux services via container
+    get db() { return container.get('supabase'); }
+    get workingMemory() { return container.get('workingMemory'); }
+    get consciousness() { return container.get('consciousness'); }
+    get userService() { return container.get('userService'); }
+    get groupService() { return container.get('groupService'); }
+    get adminService() { return container.get('adminService'); }
+    get agentMemory() { return container.get('agentMemory'); }
+    get actionMemory() { return container.get('actionMemory'); }
+    get factsMemory() { return container.get('facts'); }
+    get semanticMemory() { return container.get('memory'); }
+    get voiceProvider() { return container.get('voiceProvider'); }
+    get quotaManager() { return container.get('quotaManager'); }
 
     /**
      * Initialise tous les composants
      */
     async init() {
-        // Afficher le logo HIVE-MIND
+        if (this.isReady) return;
+
+        // Configuration dynamique des modules pour la barre de progression
+        startupDisplay.setModules([
+            { id: 'config', name: 'Configuration', icon: '⚙️' },
+            { id: 'redis', name: 'Redis Cloud', icon: '🔴' },
+            { id: 'supabase', name: 'Supabase DB', icon: '🗄️' },
+            { id: 'plugins', name: 'Plugins', icon: '🔌' },
+            { id: 'scheduler', name: 'Scheduler', icon: '⏰' },
+            { id: 'reflection', name: 'Intelligence', icon: '🧠' },
+            { id: 'transport', name: 'Connexion WhatsApp', icon: '📱' }
+        ]);
+
         startupDisplay.showLogo();
 
-        // Vérifier le lock de shutdown temporaire
-        const lockPath = join(__dirname, '..', '.shutdown_lock');
-        if (existsSync(lockPath)) {
-            const wakeUpTime = parseInt(readFileSync(lockPath, 'utf-8'));
-            if (Date.now() < wakeUpTime) {
-                const remainingMinutes = Math.ceil((wakeUpTime - Date.now()) / 60000);
-                console.log(`💤 Bot en sommeil pour encore ${remainingMinutes} minutes.`);
-                process.exit(0);
-            } else {
-                // Temps écoulé, on supprime le lock
-                unlinkSync(lockPath);
-            }
-        }
-
         // 0. DTC Refactor: Initialiser le ServiceContainer (Config)
+
         startupDisplay.loading('config');
         try {
             await container.init();
+            this.transport.setContainer(container); // Injecter le container dans le transport
+            container.register('transport', this.transport); // [FIX] Enregistrer le transport pour TieredContextLoader
+            tieredContextLoader.init(); // [FIX] Initialiser le chargeur de contexte explicitement
             startupDisplay.success('config');
         } catch (e) {
             startupDisplay.error('config', e.message);
@@ -140,7 +139,8 @@ class BotCore {
         // Redis & Supabase (via container)
         startupDisplay.loading('redis');
         try {
-            const redisHealth = await workingMemory.checkHealth();
+            const redisMemory = container.get('workingMemory');
+            const redisHealth = await redisMemory.checkHealth();
             if (redisHealth.status === 'connected' || redisHealth.status === 'healthy') {
                 startupDisplay.success('redis', 'connected');
             } else {
@@ -152,8 +152,9 @@ class BotCore {
 
         startupDisplay.loading('supabase');
         try {
+            const supabaseService = container.get('supabase');
             // Test via checkHealth
-            const supaHealth = await db.checkHealth();
+            const supaHealth = await supabaseService.checkHealth();
             if (supaHealth.status === 'connected') {
                 startupDisplay.success('supabase', 'service_role');
             } else {
@@ -163,10 +164,8 @@ class BotCore {
             startupDisplay.error('supabase', e.message);
         }
 
-        // Register local services
-        this._initServices();
-
         // 1. Charger les plugins
+
         startupDisplay.loading('plugins');
         try {
             const loadedPlugins = await pluginLoader.loadAll();
@@ -202,16 +201,7 @@ class BotCore {
             startupDisplay.error('scheduler', e.message);
         }
 
-        // 4. DTC Phase 1: Initialiser le service d'admins globaux
-        startupDisplay.loading('admin');
-        try {
-            await adminService.init();
-            startupDisplay.success('admin');
-        } catch (e) {
-            startupDisplay.error('admin', e.message);
-        }
-
-        // 5. [LEVEL 5] Initialiser le Feedback et Auto-Apprentissage
+        // 4. [LEVEL 5] Initialiser le Feedback et Auto-Apprentissage
         startupDisplay.loading('reflection');
         try {
             const { feedbackService } = await import('../services/feedbackService.js');
@@ -220,6 +210,7 @@ class BotCore {
         } catch (e) {
             startupDisplay.error('reflection', e.message);
         }
+
 
         // 6. Connecter le transport
         startupDisplay.loading('transport');
@@ -239,31 +230,6 @@ class BotCore {
 
         this.isReady = true;
         startupDisplay.complete(persona.name);
-    }
-
-    /**
-     * Enregistre les services dans le conteneur DI
-     */
-    _initServices() {
-        // Enregistrer les services dans le DI Container
-        container.register('userService', userService);
-        container.register('groupService', groupService);
-        container.register('adminService', adminService);
-        container.register('workingMemory', workingMemory);
-        container.register('memory', semanticMemory); // 'memory' = Semantic RAG
-        container.register('facts', factsMemory);     // 'facts' = Explicit Facts
-        container.register('consciousness', consciousness); // [CONSCIOUSNESS]
-
-        // [LEVEL 5] Services de Reflection et Morale
-        import('../services/dreamService.js').then(m => container.register('dream', m.dreamService));
-        import('../services/moralCompass.js').then(m => container.register('moralCompass', m.moralCompass));
-
-        // [AUDIO] Providers
-        container.register('voiceProvider', new VoiceProvider(config.voice, quotaManager));
-        container.register('geminiLiveProvider', new GeminiLiveProvider());
-
-        // Injecter le container dans le transport
-        this.transport.setContainer(container);
     }
 
     /**
@@ -301,7 +267,9 @@ class BotCore {
      * Callback sur réception de message
      */
     async _onMessage(message) {
+        const { workingMemory } = this;
         if (!message.text?.trim()) return;
+
 
         // [GOAL SEEKING] Tracker l'activité du groupe
         if (message.isGroup) {
@@ -339,7 +307,9 @@ class BotCore {
      * (Module 3) Logique de Bienvenue & Roadmap
      */
     async _handleGroupWelcome(event) {
+        const { db } = this;
         const { groupId, participants, action } = event.data;
+
         if (action !== 'add') return;
 
         // 1. Récupérer la config du groupe
@@ -423,8 +393,10 @@ class BotCore {
      * Traite un message
      */
     async _handleMessage(event) {
+        const { db, workingMemory, consciousness, userService, groupService, adminService, factsMemory, semanticMemory } = this;
         const message = event.data;
         const { chatId, sender, senderName, text, isGroup } = message;
+
 
         if (chatId === 'status@broadcast' || chatId?.endsWith('@broadcast')) {
             return; // Silently ignore
@@ -783,52 +755,7 @@ class BotCore {
             }
 
 
-            // [AGENTIC SWITCH] Classification précoce pour choisir la stratégie
-            // On le fait AVANT le RAG et le contexte lourd pour une meilleure réactivité
-            const complexity = await this._classifyComplexity(typeof text === 'string' ? text : "");
-
-            // 3. Récupération du contexte hybride
-            const shortTermContext = await workingMemory.getContext(chatId);
-            const context = await this._buildContext(chatId, message, shortTermContext);
-
-            // [SENTIENCE] Récupérer le niveau d'agacement pour la sélection d'outils
-            const annoyanceLevel = await consciousness.getAnnoyance(chatId, message.sender);
-            const forceModeration = annoyanceLevel > 50;
-
-            if (forceModeration) {
-                console.log(`[Sentience] 😠 Agacement élevé (${annoyanceLevel}), injection forcée des outils de modération.`);
-            }
-
-            // Phase 2 RAG: Sélection dynamique des outils pertinents
-            const relevantTools = await pluginLoader.getRelevantTools(
-                typeof userContent === 'string' ? userContent : text, // Texte de la requête
-                5,  // Limite d'outils pertinents
-                10, // Fallback: envoyer les 10 premiers si RAG échoue
-                { forceModeration } // Options: Forcer les outils de modération
-            );
-
-            // [AGENTIC CORE] Boucle de Réflexion (ReAct Pattern)
-            // L'IA peut enchaîner les outils avant de répondre.
-
-            // [ACTION MEMORY] Vérifier s'il y a une action en cours
-            const activeActionContext = await actionMemory.formatForPrompt(chatId);
-            let systemPromptWithAction = context.systemPrompt;
-            if (activeActionContext) {
-                systemPromptWithAction += `\n${activeActionContext}`;
-                console.log('[ActionMemory] 🔄 Action en cours injectée dans le prompt');
-            }
-
-            const conversationHistory = [
-                { role: 'system', content: systemPromptWithAction },
-                ...context.history,
-                { role: 'user', content: userContent }
-            ];
-
-            // ========== [FEEDBACK FIRST] Garantie de réponse < 30 secondes ==========
-            // On wrap tout le traitement IA dans une promesse et on race contre un timeout
-            // feedbackState est défini plus haut pour être accessible dans le catch
-
-            // Construire les options de réponse maintenant (pour le fallback aussi)
+            // Construire les options de réponse (Quote, Mention)
             let replyOptions = {};
             if (isGroup) {
                 const strategy = await workingMemory.getReplyStrategy(chatId, message);
@@ -840,20 +767,102 @@ class BotCore {
                 }
             }
 
-            // Timeout qui envoie un accusé de réception
-            feedbackTimeoutId = setTimeout(async () => {
-                if (!feedbackState.sent) {
-                    const ack = this.QUICK_ACKNOWLEDGMENTS[Math.floor(Math.random() * this.QUICK_ACKNOWLEDGMENTS.length)];
-                    console.log(`[FeedbackFirst] ⏰ Timeout atteint (${this.FEEDBACK_TIMEOUT_MS}ms), envoi accusé: "${ack}"`);
-                    await this.transport.sendText(chatId, ack, replyOptions);
-                    feedbackState.sent = true;
-                    // Réactiver l'indicateur de frappe pour montrer qu'on continue à travailler
-                    await this.transport.setPresence(chatId, 'composing');
-                }
-            }, this.FEEDBACK_TIMEOUT_MS);
+            // [THINK-FAST-PROGRESSIVE] classification locale ultra-rapide
+            // Security First: Seules les actions critiques forcent le mode Agentic immédiat.
+            const classification = classifyLocally(text, { hasImage: !!message.image }); // Passer le contexte image si dispo
 
-            // On désactive la boucle lourde si c'est une requête standard, 
-            // mais on garde les outils dispo pour des actions simples (ex: réactions)
+            // Variable pour garder trace de l'historique si on vient du FastPath
+            let fastPathHistory = null;
+            let skipAgentic = false;
+
+            // ⚡ FAST PATH (Défaut pour 95% des cas)
+            if (classification.mode === 'FAST') {
+                console.log(`[Core] ⚡ Fast Mode activé (${classification.reason})`);
+
+                // 1. Charger contexte léger (HOT/WARM)
+                const lightContext = await tieredContextLoader.load(chatId, message, 'FAST');
+                const fastHandler = new FastPathHandler(this.transport);
+
+                // 2. Exécuter FastPath avec mini-boucle (Max 2 étapes)
+                const fastResult = await fastHandler.handle(message, lightContext);
+
+                if (fastResult.type === 'RESPONSE' && fastResult.content) {
+                    // ✅ SUCCÈS RAPIDE
+                    console.log(`[Core] ✅ FastPath succès (${fastResult.latency}ms)`);
+
+                    // Envoi réponse
+                    await this.transport.sendText(chatId, fastResult.content, replyOptions);
+
+                    // Mise à jour mémoire court terme
+                    await workingMemory.addMessage(chatId, 'assistant', fastResult.content);
+
+                    // Nettoyage et fin
+                    await this.transport.sendPresenceUpdate(chatId, 'paused');
+                    return; // ON S'ARRÊTE LÀ
+                }
+
+                if (fastResult.type === 'ESCALATE') {
+                    // ⚠️ ESCALAGE NÉCESSAIRE (Complexité > 2 étapes)
+                    console.log(`[Core] ⚠️ Escalade demandée par FastPath (${fastResult.reason}) -> Handover vers Agentic`);
+
+                    // On garde l'historique pour l'injecter dans la boucle ReAct
+                    fastPathHistory = fastResult.partialHistory;
+                }
+            } else {
+                console.log(`[Core] 🧠 Agentic Mode forcé (${classification.reason})`);
+            }
+
+            // ==================================================================================
+            // 🧠 AGENTIC PATH (Mode Réflexion Profonde)
+            // Arrivée ici si:
+            // 1. ReflexClassifier a dit "AGENTIC" (Critique/Admin)
+            // 2. FastPath a échoué ou demandé une escalade (Handover)
+            // ==================================================================================
+
+            // 1. Charger le reste du contexte (COLD) - RAG, Faits, etc.
+            const fullContext = await tieredContextLoader.load(chatId, message, 'AGENTIC');
+
+            // 2. Gestion Agrégation Contexte
+            const systemPrompt = fullContext.systemPrompt;
+            // On a besoin d'une variable locale standardisée pour l'AGENTIC path
+            let history = []; // [FIX] Initialiser la variable history
+
+            history.push({ role: 'system', content: systemPrompt });
+
+            // 3. Fusion de l'historique
+            if (fastPathHistory && fastPathHistory.length > 0) {
+                // Si on vient d'une escalade, on injecte ce qui s'est passé dans le FastPath
+                // Attention: fastPathHistory contient déjà le system prompt "light", on doit le retirer ou l'adapter
+                // fastPathHistory[0] est le system prompt.
+                console.log(`[Core] 🔗 Injection historique FastPath (${fastPathHistory.length} msgs)`);
+
+                // On ajoute les messages intermédiaires du FastPath (User -> Assistant -> Tool -> Assistant...)
+                // On skip le System prompt (index 0) et les 5 messages récents (déjà dans context)
+                // C'est un peu tricky. Simplification:
+                // On prend tout ce qui est NOUVEAU dans FastPath (après les messages récents)
+                // FastPath démarre avec [System, ...5 recents, UserQuery, ...]
+
+                // Pour simplifier, on reconstruit l'historique ReAct proprement:
+                // [System Full] + [Recent History] + [User Query] + [FastPath Thoughts/Tools]
+
+                // On ajoute l'historique récent (déjà fait par tieredContextLoader ?)
+                history.push(...fullContext.history);
+                history.push({ role: 'user', content: text });
+
+                // Et on ajoute les étapes intermédiaires du FastPath (Thought/Action du Tour 1)
+                // fastPathHistory contient: [System, ...Recents, User, Assistant(Call), ToolResult]
+                const newSteps = fastPathHistory.slice(1 + (fullContext.history.length) + 1); // Skip System + Recents + User
+                if (newSteps.length > 0) {
+                    history.push(...newSteps);
+                }
+
+            } else {
+                // Cas standard (Direct Agentic)
+                history.push(...fullContext.history);
+                history.push({ role: 'user', content: text });
+            }
+
+
             let finalResponse = null;
             let keepThinking = true;
             let iterations = 0;
@@ -862,72 +871,15 @@ class BotCore {
 
 
 
-            if (complexity === 'STANDARD') {
-                console.log(`[Agent] ⚡ Fast-Path: Traitement Standard (Outils inclus)`);
-                // Pour le mode STANDARD, on force une famille ultra-rapide (Groq) pour court-circuiter le Smart Router L3
-                const response = await providerRouter.chat(conversationHistory, {
-                    family: 'groq',
-                    tools: relevantTools
-                });
 
-                finalResponse = response.content;
 
-                // [FALLBACK] Détecter les "hallucinations" de tool calls textuels dans le mode Standard
-                if ((!response.toolCalls || response.toolCalls.length === 0) && response.content) {
-                    const toolRegex = /(?:print\()?(?:sys_interaction\.)?([a-zA-Z0-9_]+)\(([\s\S]*?)\)/g;
-                    let match;
-                    const extractedCalls = [];
-                    while ((match = toolRegex.exec(response.content)) !== null) {
-                        try {
-                            const name = match[1];
-                            const argsStr = match[2];
-                            let args = {};
-                            if (argsStr.includes('=')) {
-                                const pairs = argsStr.split(',').map(p => p.trim());
-                                pairs.forEach(p => {
-                                    const [k, v] = p.split('=').map(x => x.trim().replace(/^["']|["']$/g, ''));
-                                    if (k && v) args[k] = v;
-                                });
-                            } else {
-                                try { args = JSON.parse(argsStr); } catch (e) { }
-                            }
-                            if (name) {
-                                extractedCalls.push({
-                                    id: `std_hal_${Date.now()}`,
-                                    type: 'function',
-                                    function: { name, arguments: JSON.stringify(args) }
-                                });
-                            }
-                        } catch (e) { }
-                    }
-                    if (extractedCalls.length > 0) {
-                        console.log(`[Agent] 🕵️ Tool calls textuels détectés en Standard: ${extractedCalls.length}`);
-                        response.toolCalls = extractedCalls;
-                    }
-                }
+            // [AGENTIC] Initialisation de la boucle de réflexion
+            // On arrive ici uniquement si FastPath a été skippé ou a échoué (Fallback)
+            console.log(`[Think-Fast] 🚀 Démarrage de la boucle ReAct (max ${MAX_ITERATIONS} itérations)`);
 
-                // Exécuter les outils s'il y en a, mais une seule fois
-                if (response.toolCalls && response.toolCalls.length > 0) {
-                    console.log(`[Agent] 🛠️ Exécution outils en mode Standard: ${response.toolCalls.length}`);
-                    for (const toolCall of response.toolCalls) {
-                        try {
-                            // [SECURITÉ PATCH] Utiliser _safeExecuteTool même en mode Standard
-                            await this._safeExecuteTool(toolCall, {
-                                chatId,
-                                message,
-                                authority: context.authority
-                            });
-                        } catch (e) {
-                            console.error(`[Agent] ❌ Échec outil Standard:`, e.message);
-                        }
-                    }
-                }
-
-                // Fin du traitement pour le mode Standard
-                keepThinking = false;
-            } else {
-                console.log('[Agent] 🧠 Pas-à-pas: Traitement Agentique');
-            }
+            // [FIX] Récupération des outils pour l'Agentic Path
+            // On utilise le mode 'forceModeration' si nécessaire, ou standard
+            const relevantTools = await pluginLoader.getRelevantTools(text, 5, 10);
 
             // [EXPLICIT PLANNER] Seulement si AGENTIC
             if (keepThinking) {
@@ -961,12 +913,13 @@ class BotCore {
 
                         const summaryPrompt = `Le plan d'action a été exécuté.\nObjectif: ${plan.goal}\nRésultats: ${JSON.stringify(executionLog.results).substring(0, 1000)}\n\nGénère une réponse conversationnelle résumant ce qui a été fait.`;
                         const summaryResponse = await providerRouter.chat([
-                            ...conversationHistory,
+                            ...history,
                             { role: 'user', content: summaryPrompt }
                         ], { family: usedFamily });
 
                         finalResponse = summaryResponse.content;
-                        await actionMemory.completeAction(chatId, { success: analysis.success });
+                        await this.actionMemory.completeAction(chatId, { success: analysis.success });
+
                         keepThinking = false;
                     }
                 }
@@ -981,17 +934,17 @@ class BotCore {
                     // On ne modifie pas 'conversationHistory' en place car c'est une constante (reference), 
                     // mais c'est un tableau mutable. _optimizeHistory renvoie un nouveau tableau ou le même.
                     // Si nouveau tableau, on doit remplacer le contenu.
-                    const optimized = this._optimizeHistory(conversationHistory);
-                    if (optimized !== conversationHistory) {
-                        conversationHistory.length = 0; // Vider l'original
-                        conversationHistory.push(...optimized); // Remplir avec l'optimisé
+                    const optimized = this._optimizeHistory(history);
+                    if (optimized !== history) {
+                        history.length = 0; // Vider l'original
+                        history.push(...optimized); // Remplir avec l'optimisé
                     }
                 } catch (ctxErr) {
                     console.error('[ContextManager] ❌ Échec optimisation:', ctxErr);
                 }
 
                 // Appel à l'IA avec l'historique accumulé
-                const response = await providerRouter.chat(conversationHistory, {
+                const response = await providerRouter.chat(history, {
                     tools: relevantTools,
                     family: usedFamily // Utiliser le même cerveau pour tout le thread
                 });
@@ -1001,41 +954,26 @@ class BotCore {
 
                 // [FALLBACK] Détecter les "hallucinations" de tool calls textuels (ex: Kimi qui écrit du code)
                 if ((!response.toolCalls || response.toolCalls.length === 0) && response.content) {
-                    const toolRegex = /(?:print\()?(?:sys_interaction\.)?([a-zA-Z0-9_]+)\(([\s\S]*?)\)/g;
-                    let match;
-                    const extractedCalls = [];
-
-                    while ((match = toolRegex.exec(response.content)) !== null) {
-                        try {
-                            const name = match[1];
-                            const argsStr = match[2];
-
-                            // Tenter d'extraire les arguments (format 'emoji="✨"' ou JSON)
-                            let args = {};
-                            if (argsStr.includes('=')) {
-                                // Format clé=valeur
-                                const pairs = argsStr.split(',').map(p => p.trim());
-                                pairs.forEach(p => {
-                                    const [k, v] = p.split('=').map(x => x.trim().replace(/^["']|["']$/g, ''));
-                                    if (k && v) args[k] = v;
-                                });
-                            } else {
-                                try { args = JSON.parse(argsStr); } catch (e) { }
-                            }
-
-                            if (name) {
-                                extractedCalls.push({
-                                    id: `hallucinated_${Date.now()}_${extractedCalls.length}`,
-                                    type: 'function',
-                                    function: { name, arguments: JSON.stringify(args) }
-                                });
-                            }
-                        } catch (e) { /* On ignore si mal formé */ }
-                    }
+                    const extractedCalls = extractToolCallsFromText(response.content, true);
 
                     if (extractedCalls.length > 0) {
-                        console.log(`[Agent] 🕵️ Tool calls textuels détectés et convertis: ${extractedCalls.length}`);
-                        response.toolCalls = extractedCalls;
+                        console.log(`[Core] 🛠️ ${extractedCalls.length} tool calls extraits du texte`);
+
+                        // Convertir au format OpenAI avec ID compatible Mistral (9 chars)
+                        response.toolCalls = extractedCalls.map(call => {
+                            const args = parseToolArguments(call.arguments);
+                            // ID compatible Mistral (9 chars alphanumériques)
+                            const randomId = Math.random().toString(36).substring(2, 11);
+
+                            return {
+                                id: randomId,
+                                type: 'function',
+                                function: {
+                                    name: call.name,
+                                    arguments: JSON.stringify(args || {})
+                                }
+                            };
+                        });
                     }
                 }
 
@@ -1043,12 +981,18 @@ class BotCore {
                     console.log(`[Agent] 🛠️ Étape ${iterations}: L'IA appelle ${response.toolCalls.length} outil(s)`);
 
                     // 1. Ajouter la "pensée" de l'assistant à l'historique
-                    // Important: inclure les tool_calls pour que l'IA sache ce qu'elle a demandé
-                    conversationHistory.push({
+                    // [FIX] Kimi K2+ nécessite reasoning_content pour que le contexte soit valide
+                    const historyEntry = {
                         role: 'assistant',
                         content: response.content || null,
                         tool_calls: response.toolCalls
-                    });
+                    };
+
+                    if (response.reasoningContent) {
+                        historyEntry.reasoning_content = response.reasoningContent; // Snake_case pour API standard
+                    }
+
+                    history.push(historyEntry);
 
                     // 2. Exécuter les outils
                     const { getToolFeedback } = await import('../utils/messageSplitter.js');
@@ -1062,14 +1006,14 @@ class BotCore {
                             const toolResult = await this._safeExecuteTool(toolCall, {
                                 chatId,
                                 message,
-                                authority: context.authority
+                                authority: fullContext.authority
                             });
 
                             // Important: l'IA a besoin de voir le résultat JSON pur
                             const stringResult = JSON.stringify(toolResult);
 
                             // 3. Ajouter le résultat à l'historique
-                            conversationHistory.push({
+                            history.push({
                                 role: 'tool',
                                 tool_call_id: toolCall.id,
                                 name: toolName,
@@ -1077,6 +1021,49 @@ class BotCore {
                             });
 
                             console.log(`[Agent] ✅ Résultat ${toolName} traité`);
+
+                            // 🛡️ OBSERVER: Vérifier la cohérence comportementale après chaque outil
+                            try {
+                                const { multiAgent } = await import('../services/agentic/MultiAgent.js');
+
+                                // Obtenir l'historique récent pour comparaison
+                                const recentActions = await this.actionMemory.getRecentActions(chatId, 5);
+
+                                const coherence = await multiAgent.observe({
+                                    tool: toolName,
+                                    params: JSON.parse(toolCall.function.arguments || '{}'),
+                                    result: toolResult
+                                }, recentActions);
+
+                                if (!coherence.coherent) {
+                                    console.warn(`[Observer] ⚠️ Incohérence détectée: ${coherence.warning} (${coherence.severity})`);
+
+                                    // Logger dans la DB pour analyse future
+                                    await db.from('action_scores').insert({
+                                        chat_id: chatId,
+                                        tool_name: toolName,
+                                        coherence_score: 0.2, // Score bas à cause de l'incohérence
+                                        warning: coherence.warning,
+                                        severity: coherence.severity,
+                                        metadata: { observer_detected: true }
+                                    });
+                                } else {
+                                    console.log(`[Observer] ✅ Cohérence vérifiée pour ${toolName}`);
+                                }
+
+                            } catch (observerError) {
+                                // Ne pas bloquer l'exécution si Observer échoue
+                                console.warn('[Observer] Erreur non-bloquante:', observerError.message);
+
+                                // Monitoring: tracker les erreurs Observer
+                                if (this.container?.has('metrics')) {
+                                    const metrics = this.container.get('metrics');
+                                    metrics.increment('observer_errors', {
+                                        tool: toolName,
+                                        error_type: observerError.name
+                                    });
+                                }
+                            }
 
                             // UX Agentique: Petit feedback visuel si c'est long
                             if (iterations > 1) {
@@ -1086,7 +1073,7 @@ class BotCore {
                         } catch (unexpectedErr) {
                             console.error(`[Agent] ❌ Erreur fatale boucle ReAct:`, unexpectedErr);
                             // Fallback ultime
-                            conversationHistory.push({
+                            history.push({
                                 role: 'tool',
                                 tool_call_id: toolCall.id,
                                 name: toolName,
@@ -1297,7 +1284,9 @@ class BotCore {
      * Utiliser cette méthode au lieu de _executeTool direct pour le Planner
      */
     async _safeExecuteTool(toolCall, context) {
+        const { db } = this;
         const toolName = toolCall.function.name;
+
         const { chatId, message, authority } = context;
 
         console.log(`[SafeExecute] 🛡️ Exécution sécurisée demandée: ${toolName}`);
@@ -1350,7 +1339,26 @@ class BotCore {
             // EXÉCUTION RÉELLE
             const toolResult = await this._executeTool(toolCall, message);
 
+            // [LEVEL 5] Observer Integration: Vérifier la cohérence après exécution
+            try {
+                const { multiAgent } = await import('../services/agentic/MultiAgent.js');
+                const agentMemory = this.agentMemory;
+                const recentActions = await agentMemory.getRecentActions(chatId, 5);
+
+                const coherence = await multiAgent.observe({
+                    tool: toolName,
+                    params: JSON.parse(toolCall.function.arguments || '{}')
+                }, recentActions);
+
+                if (!coherence.coherent) {
+                    console.warn(`[MultiAgent] ⚠️ Incohérence détectée: ${coherence.warning} (${coherence.severity})`);
+                }
+            } catch (obsErr) {
+                console.warn('[Core] Erreur Observer:', obsErr.message);
+            }
+
             // [EPISODIC MEMORY] Log de l'action réussie
+
             const actionLog = await db.logAction(chatId, toolName, toolCall.function.arguments, toolResult, true);
 
             // [POST-ACTION EVALUATION] Évaluer l'action pour apprentissage continu
@@ -1383,464 +1391,9 @@ class BotCore {
         }
     }
 
-    /**
-     * Analyse la complexité d'une demande pour choisir le pipeline de traitement
-     */
-    async _classifyComplexity(text) {
-        try {
-            // Modèles ultra-rapides pour classification
-            const fastModels = [
-                { family: 'groq', id: 'llama-3.1-8b-instant' },
-                { family: 'gemini', id: 'gemini-2.5-flash-lite' },
-                { family: 'gemini', id: 'gemini-2.5-flash' }
-            ];
 
-            const classifierPrompt = `Tu es un trieur d'intention ultra-rapide pour un assistant WhatsApp.
-Ta mission: Classer la demande de l'utilisateur entre 'STANDARD' (conversation banale, salutations, remerciements, petites blagues, questions sans besoin d'outils) ou 'AGENTIC' (besoin d'outils, recherche web, action sur le groupe, synthèse vocale, vision, calculs, ou RÉACTION par emoji).
 
-Exemples:
-- 'STANDARD': "Salut", "Comment ça va ?", "Merci beaucoup", "Lol", "Tu es qui ?".
-- 'AGENTIC': "Cherche sur le web...", "Réagis avec un ✨", "Réagis à ça avec 💖", "Bannis @user", "Lis ce texte vocalement".
 
-Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
-
-            // Utiliser le premier routeur rapide dispo
-            for (const candidate of fastModels) {
-                if (providerRouter.isAvailable(candidate.family)) {
-                    console.log(`[Classifier] 🎯 Classification via ${candidate.id}...`);
-                    try {
-                        const response = await providerRouter.chat([
-                            { role: 'system', content: classifierPrompt },
-                            { role: 'user', content: text }
-                        ], { model: candidate.id, family: candidate.family });
-
-                        const result = response.content?.trim().toUpperCase();
-                        if (result === 'STANDARD' || result === 'AGENTIC') {
-                            console.log(`[Classifier] ✓ Résultat: ${result}`);
-                            return result;
-                        }
-                    } catch (e) {
-                        console.warn(`[Classifier] ⚠️ Échec ${candidate.id}, essai suivant...`);
-                    }
-                }
-            }
-
-            // Fallback si tout échoue
-            return text.length < 50 ? 'STANDARD' : 'AGENTIC';
-        } catch (error) {
-            console.error('[Classifier] ❌ Erreur fatale classification:', error.message);
-            return 'AGENTIC'; // Sécurité
-        }
-    }
-
-    /**
-     * Construit le contexte pour le prompt
-     */
-    async _buildContext(chatId, message, shortTermContext = []) {
-        // DTC Phase 1: Utilisation des nouveaux services unifiés via DI
-        // 1. Récupération des services
-        const userService = container.get('userService');
-        const groupService = container.get('groupService');
-
-        // 2. Récupération du profil utilisateur via userService
-        const senderProfile = await userService.getProfile(message.sender);
-
-        // 3. Récupération du contexte groupe via groupService
-        const socialData = await groupService.getContext(chatId, message.sender, senderProfile);
-
-        // [SCOPING FIX] Déclaration des variables au niveau global de la fonction pour accès ultérieur (Consciousness block)
-        const adminService = container.get('adminService');
-        const isSuperUser = await adminService.isSuperUser(message.sender);
-        const isGlobalAdmin = await adminService.isGlobalAdmin(message.sender);
-        let groupMembers = [];
-        let isBotAdmin = false; // [SCOPING FIX]
-
-        // 3. Construction du bloc de texte "Social Awareness"
-        let socialBlock = "";
-
-        if (socialData.type === 'GROUP' && socialData.group) {
-            const g = socialData.group;
-            const senderName = socialData.sender.names[0] || "Inconnu";
-
-            // DEBUG: Afficher le statut authority de l'expéditeur
-            console.log(`[DEBUG Authority] Sender: ${message.sender}`);
-            console.log(`[DEBUG Authority] isSuperUser: ${isSuperUser}, isGlobalAdmin: ${isGlobalAdmin}, isGroupAdmin: ${socialData.senderIsAdmin}`);
-            console.log(`[DEBUG Authority] AdminCache size: ${adminService.getCacheSize()}`);
-
-            // NOTE: groupMembers sera rempli plus bas si disponible dans socialData ou transport
-            if (socialData.participants) {
-                // Adapter format si besoin (dépend de ce que groupService renvoie)
-                // groupService.getContext renvoie group + sender stats, mais pas necessarily members list complete in 'participants'
-                // On va utiliser le cache transport si dispo ou socialData s'il l'a
-                // Pour l'instant on initialise juste, le code existant plus bas (que je ne vois pas dans ce snippet mais qui doit exister) va l'utiliser
-                // Ah, je dois m'assurer que 'groupMembers' est bien assigné.
-            }
-
-            let senderStatus = socialData.senderIsAdmin ? "ADMINISTRATEUR DU GROUPE" : "Membre";
-
-            if (isSuperUser && socialData.senderIsAdmin) {
-                senderStatus = "👑 [SUPREME AUTHORITY] (SuperUser + Admin)";
-            } else if (isSuperUser) {
-                senderStatus = "👑 [SuperUser]";
-            }
-
-            const familiarity = socialData.sender.interaction_count > 50 ? "Très familier" : (socialData.sender.interaction_count > 10 ? "Connu" : "Nouveau");
-
-            // DTC Phase 1: Distinguer description WhatsApp et mission bot
-            const whatsappDesc = g.description || "Aucune description";
-            const botMission = g.bot_mission || "Aucune mission définie";
-
-            // Liste des admins WhatsApp du groupe - récupérer leurs noms depuis userService
-            // Identifier le JID ET le LID du bot
-            const botJid = this.transport.sock?.user?.id;
-            const botLid = this.transport.sock?.user?.lid;
-            const botPhoneId = botJid?.split(':')[0]?.split('@')[0];
-            const botLidId = botLid?.split(':')[0]?.split('@')[0];
-
-            // Fonction helper pour détecter si un JID est le bot
-            const isBotJid = (jid) => {
-                const id = jid.split('@')[0];
-                return (botPhoneId && id.includes(botPhoneId)) ||
-                    (botLidId && id.includes(botLidId));
-            };
-
-            // Phase Social Graph: Récupérer les membres connus (Cache Redis) AVANT pour aider à la résolution
-            // [SCOPING FIX] Utilisation de la variable externe (pas de const)
-            groupMembers = await groupService.getGroupMembers(chatId);
-
-            // [SCOPING FIX] Calcul isBotAdmin ici car isBotJid est dispo ici
-            isBotAdmin = groupMembers.find(m => isBotJid(m.jid))?.isAdmin || false;
-
-            let adminList = "Aucun admin détecté";
-            if (g.admins && g.admins.length > 0) {
-                // Récupérer les profils de tous les admins en parallèle
-                const adminProfiles = await Promise.all(
-                    g.admins.map(async (jid) => {
-                        const adminId = jid.split('@')[0];
-
-                        // Si c'est le bot (via phone OU lid), dire "moi"
-                        if (isBotJid(jid)) {
-                            return "moi (Erina)";
-                        }
-
-                        // 1. Chercher dans la DB (User Service)
-                        const profile = await userService.getProfile(jid);
-                        let name = profile.names[0];
-
-                        // 2. Fallback: Chercher dans le cache Redis du groupe (Noms WhatsApp actuels)
-                        if (!name || name === 'Inconnu') {
-                            const cachedMember = groupMembers.find(m => m.jid === jid || m.jid === profile.jid);
-                            if (cachedMember && cachedMember.name) {
-                                name = cachedMember.name;
-                            }
-                        }
-
-                        if (name && name !== 'Inconnu') {
-                            return `${name} (@${adminId})`; // Nom avec numéro
-                        } else {
-                            // Fallback final: Admin Inconnu avec numéro
-                            return `Admin (@${adminId})`;
-                        }
-                    })
-                );
-                adminList = adminProfiles.join(', ');
-            }
-
-            // Gestion des mentions explicités (Pour éviter l'hallucination)
-            let mentionBlock = "";
-            if (message.mentionedJids && message.mentionedJids.length > 0) {
-                const mentionedProfiles = await Promise.all(
-                    message.mentionedJids.map(async (jid) => {
-                        // Si c'est le bot lui-même
-                        if (isBotJid(jid)) {
-                            return `- ${persona.name} (C'est moi !)`;
-                        }
-
-                        // 1. DB
-                        const profile = await userService.getProfile(jid);
-                        let name = profile.names[0];
-
-                        // 2. Fallback Cache
-                        if (!name || name === 'Inconnu') {
-                            const cached = groupMembers.find(m => m.jid === jid);
-                            if (cached?.name) name = cached.name;
-                        }
-
-                        // Fallback final
-                        if (!name || name === 'Inconnu') name = `Inconnu`;
-
-                        // Extraire le numéro de téléphone du JID
-                        const phoneNumber = jid.split('@')[0];
-
-                        return `- ${name} (@${phoneNumber})`;
-                    })
-                );
-
-                const validMentions = mentionedProfiles.filter(Boolean);
-                if (validMentions.length > 0) {
-                    mentionBlock = `\n### 🗣️ UTILISATEURS MENTIONNÉS (Focus)\nCes utilisateurs sont cités dans le message :\n${validMentions.join('\n')}\nUtilise ces noms si on te demande "qui est @..."\n`;
-                }
-            }
-
-            // Global Admins du bot - TOUJOURS chercher le nom réel via userService d'abord
-            // Global Admins du bot - TOUJOURS chercher le nom réel via userService d'abord
-            const globalAdminsList = await adminService.listAdmins();
-            let globalAdminsFormatted = "Aucun";
-            if (globalAdminsList.length > 0) {
-                const globalAdminNames = await Promise.all(
-                    globalAdminsList.map(async (admin) => {
-                        const adminId = admin.jid.split('@')[0];
-
-                        // Si c'est le bot, dire "moi"
-                        if (isBotJid(admin.jid)) {
-                            return "moi (Erina)";
-                        }
-
-                        // PRIORITÉ 1: Chercher le nom réel dans userService
-                        // PRIORITÉ 1: Chercher le nom réel dans userService
-                        const profile = await userService.getProfile(admin.jid);
-                        const realName = profile.names[0];
-                        if (realName && realName !== 'Inconnu') {
-                            return `${realName} (@${adminId})`; // Nom avec numéro
-                        }
-
-                        // PRIORITÉ 2: Fallback sur le nom Supabase (ex: "Admin Principal")
-                        if (admin.name && admin.name !== 'Inconnu') {
-                            return `${admin.name} (@${adminId})`;
-                        }
-
-                        // Fallback final
-                        return `Admin (@${adminId})`;
-                    })
-                );
-                globalAdminsFormatted = globalAdminNames.join(', ');
-            }
-
-            // Vérifier si l'interlocuteur est un global admin (déjà calculé plus haut)
-            const senderGlobalStatus = isGlobalAdmin ? " + SUPER-ADMIN DU BOT" : "";
-
-            // [VIBE CODING] Récupérer l'état de conscience global
-            const globalState = await consciousness.getGlobalState(chatId, message.sender);
-            const currentMood = globalState.emotionalState.mood;
-            const currentAnnoyance = globalState.emotionalState.annoyance;
-
-            socialBlock = `
-### 🌍 CONTEXTE SOCIAL (Temps Réel)
-- **Lieu** : Groupe "${g.name}"
-- **Description WhatsApp** : "${whatsappDesc}"
-- **Mission Bot** : "${botMission}"
-- **Membres** : ~${g.member_count} personnes.
-- **Admins du groupe (WhatsApp)** : ${adminList}
-- **Super-Admins du Bot (niveau global, peuvent contrôler ${persona.name})** : ${globalAdminsFormatted}
-- **Interlocuteur** : ${senderName}
-- **Statut** : ${senderStatus}${senderGlobalStatus}
-- **Historique relationnel** : ${familiarity} (${socialData.sender.interaction_count} interactions)
-`;
-            // Phase Social Graph: Ajouter la liste des membres connus pour résolution Nom→JID
-            // Phase Social Graph: Ajouter la liste des membres connus pour résolution Nom→JID
-            // (groupMembers déjà récupéré plus haut)
-
-            // DEBUG: Afficher les membres et leur statut admin
-            console.log(`[DEBUG Social] Membres dans le cache: ${groupMembers.length}`);
-            console.log(`[DEBUG Social] Admins détectés:`, groupMembers.filter(m => m.isAdmin).map(m => m.jid));
-
-            if (groupMembers.length > 0) {
-                const membersList = await Promise.all(
-                    groupMembers.slice(0, 25).map(async (m) => {
-                        // Ignorer le bot
-                        if (isBotJid(m.jid)) return null;
-
-                        const profile = await userService.getProfile(m.jid);
-                        let name = profile.names[0];
-
-                        // Fallback Cache
-                        if ((!name || name === 'Inconnu') && m.name) {
-                            name = m.name;
-                        }
-
-                        // Extraire le numéro de téléphone
-                        const phoneNumber = m.jid.split('@')[0];
-
-                        if (name && name !== 'Inconnu') {
-                            const role = m.isAdmin ? '👑' : '';
-                            return `${role}${name} (@${phoneNumber})`;
-                        }
-
-                        // Si pas de nom, utiliser "Membre" avec le numéro
-                        return `Membre (@${phoneNumber})`;
-                    })
-                );
-                const knownMembers = membersList.filter(Boolean);
-
-                // DEBUG: Afficher ce qui sera envoyé à l'IA
-                console.log(`[DEBUG Social] Membres envoyés à l'IA: ${knownMembers.join(', ')}`);
-
-                if (knownMembers.length > 0) {
-                    socialBlock += `- **Membres connus (tu peux les mentionner par nom)** : ${knownMembers.join(', ')}\n`;
-                }
-            }
-        } else {
-            // Mode Privé
-            const senderName = socialData.sender.names[0] || "Inconnu";
-            const isGlobalAdmin = adminService.isGlobalAdmin(message.sender);
-            const senderGlobalStatus = isGlobalAdmin ? " (SUPER-ADMIN DU BOT)" : "";
-
-            // Global Admins du bot
-            const globalAdminsList = await adminService.listAdmins();
-            const globalAdminsFormatted = globalAdminsList.length > 0
-                ? globalAdminsList.map(a => a.name || `+${a.jid.split('@')[0]}`).join(', ')
-                : "Aucun";
-
-            socialBlock = `
-### 👤 CONTEXTE PRIVÉ
-- **Interlocuteur** : ${senderName}${senderGlobalStatus}
-- **Intensité relationnelle** : ${socialData.sender.interaction_count} messages échangés.
-- **Super-Admins du Bot** : ${globalAdminsFormatted}
-`;
-        }
-
-        // Récupérer les faits et la mémoire
-        // IMPORTANT: Utiliser message.sender (userJid) car les faits sont stockés par utilisateur, pas par chat
-        const facts = await factsMemory.format(message.sender);
-
-        // 4. RAG: Recherche sémantique de souvenirs pertinents basés sur le message actuel
-        let ragContext = '';
-        try {
-            const memory = container.get('memory');
-            const relevantMemories = await memory.recall(chatId, message.text, 3);
-            if (relevantMemories?.length > 0) {
-                ragContext = relevantMemories
-                    .map(m => `- ${m.content}`)
-                    .join('\n');
-                console.log(`[RAG] ${relevantMemories.length} souvenir(s) pertinent(s) trouvé(s)`);
-            }
-        } catch (e) {
-            console.warn('[RAG] Erreur recherche:', e.message);
-        }
-
-        // On remplace le "recentContext" de Supabase par celui de Redis
-        const recentContext = shortTermContext
-            .map(m => `[${m.role}]: ${m.content}`)
-            .join('\n');
-
-        // Construire le system prompt
-        let prompt = systemPrompt
-            .replace('{{name}}', persona.name)
-            .replace('{{role}}', persona.role)
-            .replace('{{traits}}', persona.traits?.join(', ') || '')
-            .replace('{{languages}}', persona.languages?.join(', ') || 'fr')
-            .replace('{{interests}}', persona.interests?.join(', ') || '');
-
-        const now = new Date();
-        const timeBlock = `
-### 📅 TEMPS RÉEL
-- **Date actuelle** : ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-- **Heure** : ${now.toLocaleTimeString('fr-FR')}
-- **Conscience Temporelle** : Tu es conscient de cette date. Si tes connaissances s'arrêtent avant 2026, pars du principe qu'elles sont peut-être obsolètes pour les sujets tech/news.
-`;
-
-        // Ajout du bloc temporel et social
-        prompt += `\n${timeBlock}\n${socialBlock}\n`;
-
-        // [LEVEL 5] Injection des Leçons Apprises (Auto-Réflexion)
-        try {
-            const { dreamService } = await import('../services/dreamService.js');
-            const lessons = dreamService.getLessons();
-            if (lessons) {
-                prompt += `\n### 🎓 LEÇONS APPRISES (Auto-Réflexion)\n${lessons}\n`;
-            }
-        } catch (e) {
-            console.warn('[Core] Erreur injection leçons:', e.message);
-        }
-
-        // ==================================================================================
-        // PROJET CONSCIENCE (GLOBAL WORKSPACE)
-        // ==================================================================================
-
-        // 1. Récupération de l'état global de la conscience
-        const globalState = await consciousness.getGlobalState(chatId, message.sender);
-
-        // 2. Calcul de l'Autorité (Social Reality)
-        const authorityLevel = isSuperUser ? "DIVIN (SuperUser)" : (isGlobalAdmin ? "SUPREME (Global Admin)" : (socialData.senderIsAdmin ? "GOUVERNEUR (Group Admin)" : "CITOYEN (Membre)"));
-        // isBotAdmin est déjà calculé plus haut
-        const botAuthority = isBotAdmin ? "ADMINISTRATEUR (Droit de sanction)" : "MEMBRE (Observateur)";
-
-        let consciousnessBlock = `
-### 🧠 ÉTAT DE CONSCIENCE (GLOBAL WORKSPACE)
-- **Identité** : Je suis ${globalState.identity.name} (${globalState.uptime}s uptime).
-- **Situation Sociale** : Je suis ${botAuthority} face à un ${authorityLevel}.
-`;
-
-        // 3. Injection Émotionnelle
-        const { annoyance, mood } = globalState.emotionalState;
-        if (annoyance > 0) {
-            consciousnessBlock += `- **État Émotionnel** : ${mood} (Niveau Agacement: ${annoyance}/100)\n`;
-            if (annoyance > 50 && isBotAdmin) {
-                if (!isSuperUser && !isGlobalAdmin && !socialData.senderIsAdmin) {
-                    consciousnessBlock += `⚠️ **VOLONTÉ ACTIVE** : Cet utilisateur t'agace. Tu as le pouvoir et la volonté de le sanctionner (Kick/Warn/Mute/Lock). Fais-le si nécessaire.\n`;
-                } else {
-                    consciousnessBlock += `ℹ️ **Retenue** : Tu es agacé par un Supérieur. Tu ne peux pas agir.\n`;
-                }
-            }
-        } else {
-            consciousnessBlock += `- **État Émotionnel** : ${mood} (Serein)\n`;
-        }
-
-        // 4. Mission (Intentionality)
-        if (globalState.mission) {
-            consciousnessBlock += `
-### 🎯 MISSION ACTIVE
-- **Titre** : ${globalState.mission.title}
-- **Objectif** : ${globalState.mission.description}
-- **Consigne** : Tes actions doivent servir cette mission.
-`;
-        }
-
-        prompt += consciousnessBlock + '\n';
-        // ==================================================================================
-        // ==================================================================================
-
-        if (facts) {
-            prompt = prompt.replace('{{memory}}', facts);
-        } else {
-            prompt = prompt.replace(/{{#if memory}}[\s\S]*?{{\/if}}/g, '');
-        }
-
-        if (recentContext) {
-            prompt = prompt.replace('{{recentContext}}', recentContext);
-        } else {
-            prompt = prompt.replace(/{{#if recentContext}}[\s\S]*?{{\/if}}/g, '');
-        }
-
-        // Ajout du bloc RAG (souvenirs sémantiques pertinents)
-        if (ragContext) {
-            prompt += `\n### 🧠 SOUVENIRS PERTINENTS (de conversations passées)\n${ragContext}\n`;
-        }
-
-        // Nettoyer les placeholders restants
-        prompt = prompt.replace(/{{#each.*?}}[\s\S]*?{{\/each}}/g, '');
-        prompt = prompt.replace(/{{.*?}}/g, '');
-
-        // Ajouter la liste des outils
-        const tools = pluginLoader.list();
-        if (tools.length) {
-            prompt += '\n\nOUTILS DISPONIBLES:\n' +
-                tools.map(t => `- ${t.name}: ${t.description}`).join('\n');
-        }
-
-        return {
-            systemPrompt: prompt,
-            history: [],
-            // [FIX] Export authority info for moralCompass usage
-            authority: {
-                isSuperUser,
-                isGlobalAdmin,
-                isGroupAdmin: socialData.senderIsAdmin,
-                isBotAdmin,
-                level: isSuperUser ? 100 : (isGlobalAdmin ? 80 : (socialData.senderIsAdmin ? 50 : 0))
-            }
-        };
-    }
 
     /**
      * Gère intelligemment la fenêtre de contexte pour éviter l'explosion (Amnésie Progressive)
@@ -1901,10 +1454,11 @@ Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
      * Si oui, propose de les reprendre
      */
     async _resumePendingActions() {
+        const { actionMemory } = this;
         console.log('[Core] ♻️ Vérification des tâches interrompues...');
         try {
-            const { actionMemory } = await import('../services/memory/ActionMemory.js');
             const pendingActions = await actionMemory.getResumableActions(5);
+
 
             if (pendingActions.length > 0) {
                 console.log(`[Core] ⚠️ ${pendingActions.length} action(s) interrompue(s) trouvée(s). Tentative de reprise...`);
@@ -1940,8 +1494,9 @@ Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
      */
     async _checkRoadmap(chatId, isGroup) {
         if (!isGroup) return;
-
+        const { db } = this;
         const config = await db.getGroupConfig(chatId);
+
         // Si pas de config ou description vide, on lance le prompt d'initialisation
         if (!config || !config.description) {
             // On vérifie si on a déjà demandé récemment (pour éviter le spam) dans workingMemory ou logs
@@ -1959,7 +1514,9 @@ Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
      * Toutes les actions sont loguées pour apprentissage (Episodic Memory)
      */
     async _executeTool(toolCall, message) {
+        const { agentMemory } = this;
         const { name, arguments: argsJson } = toolCall.function;
+
 
         let args;
         try {
@@ -2119,7 +1676,9 @@ Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
      * Gère les événements de groupe (Module 3 & 2)
      */
     async _handleGroupEvent(event) {
+        const { db, groupService } = this;
         const { groupId, participants, action } = event.data;
+
 
         // DTC Phase 1: Invalider le cache Redis sur les événements critiques
         if (['promote', 'demote', 'remove'].includes(action)) {
@@ -2402,7 +1961,9 @@ Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
      * Format: .shutdown [duration] (ex: .shutdown 2h)
      */
     async _handleShutdown(message) {
+        const { adminService } = this;
         const { sender, chatId, text } = message;
+
 
         // DTC Phase 1: Vérification Admin Global via adminService (Supabase)
         if (!adminService.isGlobalAdmin(sender)) {
@@ -2456,7 +2017,9 @@ Réponds UNIQUEMENT par l'un des deux mots en majuscules sans ponctuation.`;
      * @param {string} userJid - JID de l'utilisateur
      */
     async _extractFacts(text, userJid) {
+        const { factsMemory } = this;
         // Ne pas traiter les messages trop courts ou les commandes
+
         if (!text || text.length < 10 || text.startsWith('.') || text.startsWith('/')) {
             return;
         }

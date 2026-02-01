@@ -76,6 +76,34 @@
             "cron": "*/10 * * * *",
             "enabled": true,
             "comment": "Exécuté toutes les 10 min, 24/7"
+        },
+        {
+            "name": "dbHealthCheck",
+            "description": "Vérifie la santé de la base de données (taille, performance, indexes)",
+            "cron": "0 6 * * *",
+            "enabled": true,
+            "comment": "Exécuté tous les jours à 6h du matin"
+        },
+        {
+            "name": "dbPerformanceAnalysis",
+            "description": "Analyse les métriques de performance DB (requêtes lentes, temps de réponse)",
+            "cron": "0 * * * *",
+            "enabled": true,
+            "comment": "Exécuté toutes les heures"
+        },
+        {
+            "name": "dbWeeklyReport",
+            "description": "Génère un rapport hebdomadaire complet de santé DB",
+            "cron": "0 8 * * 0",
+            "enabled": true,
+            "comment": "Exécuté tous les dimanches à 8h"
+        },
+        {
+            "name": "dbCleanup",
+            "description": "Nettoie les anciennes données (>90 jours) pour éviter le swelling",
+            "cron": "0 2 * * 0",
+            "enabled": true,
+            "comment": "Exécuté tous les dimanches à 2h du matin"
         }
     ],
     "triggers": {

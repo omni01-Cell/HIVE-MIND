@@ -3,6 +3,8 @@
 // Compatible avec les clés sk-kimi-... via api.kimi.com/coding/v1
 // Supporte le Function Calling natif (100% accuracy on tool calls)
 
+import { fetchWithIPv4Fallback, forceIPv4ForUrl } from '../../utils/dnsHelpers.js';
+
 export default {
     name: 'kimi',
 
@@ -28,6 +30,8 @@ export default {
             messages: messages.map(m => ({
                 role: m.role,
                 content: m.content,
+                // [FIX] Kimi K2 : Injecter reasoning_content si présent
+                ...(m.reasoning_content && { reasoning_content: m.reasoning_content }),
                 // Support pour les messages de réponse d'outil
                 ...(m.tool_calls && { tool_calls: m.tool_calls }),
                 ...(m.tool_call_id && { tool_call_id: m.tool_call_id })
@@ -44,7 +48,15 @@ export default {
             console.log(`[Kimi] Tools envoyés: ${options.tools.length} fonction(s)`);
         }
 
-        const response = await fetch(`${baseUrl}/chat/completions`, {
+        // 🛡️ IPv4 forcing ciblé pour Kimi (résout problèmes Node 17+)
+        const url = `${baseUrl}/chat/completions`;
+        const needsIPv4 = forceIPv4ForUrl(url);
+
+        if (needsIPv4) {
+            console.log(`[Kimi] 🌐 IPv4 forcing activé pour ${url}`);
+        }
+
+        const fetchOptions = {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
@@ -54,7 +66,9 @@ export default {
                 'X-Client-Name': 'claude-code'
             },
             body: JSON.stringify(body)
-        });
+        };
+
+        const response = await fetchWithIPv4Fallback(url, fetchOptions, 2); // 2 retries max
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -73,8 +87,6 @@ export default {
         const choice = data.choices[0];
         const message = choice.message;
 
-
-
         // Parser les tool_calls si présents (Kimi K2 Turbo les supporte nativement)
         let toolCalls = null;
         if (message.tool_calls && message.tool_calls.length > 0) {
@@ -86,17 +98,57 @@ export default {
                     arguments: tc.function.arguments
                 }
             }));
-            console.log(`[Kimi] ✓ Tool calls détectés: ${toolCalls.map(t => t.function.name).join(', ')}`);
+            console.log(`[Kimi] ✅ ${toolCalls.length} tool calls reçus`);
         }
-
-        console.log(`[Kimi] ✓ Réponse reçue (${data.usage?.total_tokens || '?'} tokens)${toolCalls ? ' [AGENTIC]' : ''}`);
 
         return {
             content: message.content,
+            // [FIX] Extraire le reasoning_content pour l'historique
+            reasoningContent: message.reasoning_content || null,
             toolCalls: toolCalls,
-            finishReason: choice.finish_reason,
             usage: data.usage
+        };
+    },
+
+    /**
+     * Génération d'embeddings via Kimi avec IPv4 fallback
+     */
+    async embed(text, options) {
+        const { model, apiKey } = options;
+        const modelId = model || 'kimi-text-embedding';
+        const baseUrl = options.base_url || 'https://api.kimi.com/coding/v1';
+
+        const body = {
+            input: text,
+            model: modelId
+        };
+
+        // 🛡️ IPv4 forcing pour embeddings aussi
+        const url = `${baseUrl}/embeddings`;
+        const fetchOptions = {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        };
+
+        const response = await fetchWithIPv4Fallback(url, fetchOptions, 2);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Kimi Embedding Error ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        // Structure compatible avec OpenAI
+        return {
+            embedding: data.data[0].embedding,
+            usage: {
+                total_tokens: data.usage?.total_tokens || Math.ceil(text.length / 4)
+            }
         };
     }
 };
-

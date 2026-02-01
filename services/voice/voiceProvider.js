@@ -47,34 +47,29 @@ export class VoiceProvider {
     }
 
     /**
-     * Initialise tous les adapters TTS disponibles
+     * Initialise les adaptateurs pour les différents providers
+     * @private
      */
     _initializeAdapters() {
-        const ttsModels = this.config.tts_models || [];
+        // 1. Minimax (Erina)
+        const minimaxKey = this.credentials.minimax;
         const minimaxConfig = this.config.minimax_config || {};
+        this.adapters.set('minimax', new MinimaxTTSAdapter(minimaxKey, minimaxConfig));
 
-        // [PRIORITY 0] Gemini Live - Native Audio HD (PRIMARY)
-        this.adapters.set('gemini-live', new GeminiLiveAdapter(
-            this.credentials.gemini || process.env.VOTRE_CLE_GEMINI,
-            { voice: 'Zephyr' }
-        ));
+        // 2. Gemini TTS
+        const geminiKey = this.credentials.gemini;
+        this.adapters.set('gemini', new GeminiTTSAdapter(geminiKey, {}));
 
-        // [PRIORITY 1] Minimax TTS
-        this.adapters.set('minimax', new MinimaxTTSAdapter(
-            this.credentials.minimax || process.env.VOTRE_CLE_MINIMAX,
-            minimaxConfig
-        ));
+        // 3. Google TTS (Fallback)
+        this.adapters.set('gtts', new GttsTTSAdapter({}));
 
-        // [PRIORITY 2] Gemini TTS classique
-        this.adapters.set('gemini', new GeminiTTSAdapter(
-            this.credentials.gemini || process.env.VOTRE_CLE_GEMINI,
-            { voice: 'Aoede' }
-        ));
-
-        // [PRIORITY 3] GTTS (Fallback ultime)
-        this.adapters.set('gtts', new GttsTTSAdapter({ language: 'fr' }));
+        // 4. Gemini Live (Native Audio)
+        this.adapters.set('gemini_live', new GeminiLiveAdapter(geminiKey, {}));
+        
+        console.log(`[VoiceProvider] 🎙️ ${this.adapters.size} adaptateurs initialisés`);
     }
 
+    /**
     /**
      * TTS: Text → Audio Buffer
      * Itère sur tous les modèles par ordre de priorité jusqu'à succès

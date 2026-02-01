@@ -68,6 +68,11 @@ Before each action, use <thought> tags to plan:
         let finalReport = null;
         let keepSearching = true;
 
+        // TIMEOUT & CONVERGENCE CONFIG
+        const MAX_DURATION_MS = 120000; // 2 minutes max (deep research peut être long mais pas infini)
+        const START_TIME = Date.now();
+        const FEEDBACK_INTERVAL = 3; // Feedback toutes les 3 itérations
+
         // Outils disponibles pour cet agent (Web Search uniquement pour l'instant)
         // On récupère l'outil duckduck_search du plugin duckduck_search
         const { pluginLoader } = await import('../loader.js');
@@ -96,9 +101,46 @@ Before each action, use <thought> tags to plan:
             iterations++;
             console.log(`[DeepResearch] 🔄 Itération ${iterations}/${this.maxIterations}`);
 
-            // Feedback utilisateur toutes les 3 itérations pour ne pas sembler mort
-            if (iterations % 3 === 0) {
-                await this.transport.sendText(this.chatId, `🔎 Recherche en cours... (Étape ${iterations}/${this.maxIterations})`);
+            // 🛡️ CHECK 1: Timeout global
+            const elapsed = Date.now() - START_TIME;
+            if (elapsed > MAX_DURATION_MS) {
+                console.warn(`[DeepResearch] ⏱️ Timeout après ${Math.round(elapsed/1000)}s, forçage de complétion`);
+                await this.transport.sendText(this.chatId, `⏱️ Temps écoulé. Génération du rapport final avec les données collectées...`);
+                
+                // Forcer la génération du rapport final
+                keepSearching = false;
+                
+                // On demande à l'IA de produire un rapport final avec ce qu'elle a
+                this.history.push({
+                    role: 'user',
+                    content: `Temps limite atteint. Génère maintenant un rapport final complet basé sur les ${iterations} recherches effectuées. Utilise toutes les informations collectées.`
+                });
+                break;
+            }
+
+            // 🛡️ CHECK 2: Convergence après 60s
+            if (iterations > 5 && elapsed > 60000) {
+                // Vérifier si on a assez de contenu (heuristique simple)
+                const totalContent = this.history
+                    .filter(m => m.role === 'assistant' && m.content)
+                    .map(m => m.content)
+                    .join(' ');
+                
+                const minContentLength = 1000; // Au moins 1000 caractères de contenu
+                if (totalContent.length < minContentLength) {
+                    console.warn(`[DeepResearch] ⚠️ Pas de convergence après 60s (${totalContent.length} chars), forçage`);
+                    await this.transport.sendText(this.chatId, `⚠️ Recherche difficile. Compilation des résultats...`);
+                    keepSearching = false;
+                }
+            }
+
+            // Feedback utilisateur toutes les FEEDBACK_INTERVAL itérations
+            if (iterations % FEEDBACK_INTERVAL === 0) {
+                const remainingTime = Math.round((MAX_DURATION_MS - elapsed) / 1000);
+                await this.transport.sendText(
+                    this.chatId, 
+                    `🔎 Recherche en cours... (Étape ${iterations}/${this.maxIterations}, ~${remainingTime}s restantes)`
+                );
             }
 
             try {

@@ -18,7 +18,12 @@ export default {
             model: modelId,
             messages: messages.map(m => ({
                 role: m.role,
-                content: m.content
+                content: m.content,
+                // Support des Tools et du Reasoning
+                ...(m.tool_calls && { tool_calls: m.tool_calls }),
+                ...(m.tool_call_id && { tool_call_id: m.tool_call_id }),
+                // Support DeepSeek R1 via Groq
+                ...(m.reasoning_content && { reasoning_content: m.reasoning_content })
             })),
             temperature,
             max_tokens: 4096 // Some models support up to 8k or 32k

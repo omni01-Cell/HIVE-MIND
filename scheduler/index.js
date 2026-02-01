@@ -31,7 +31,9 @@ class Scheduler {
      * Initialise tous les jobs configurés
      */
     init() {
+        if (this.isRunning) return;
         if (!schedulerConfig.enabled) {
+
             // Scheduler désactivé silencieusement
             return;
         }

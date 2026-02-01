@@ -16,25 +16,43 @@ export default {
         const contents = messages
             .filter(m => m.role !== 'system')
             .map(m => {
-                if (m.role === 'assistant' && m.tool_calls) {
-                    return {
-                        role: 'model',
-                        parts: m.tool_calls.map(tc => {
+                if (m.role === 'assistant') {
+                    const parts = [];
+
+                    // 1. D'abord le texte/pensée (S'il existe)
+                    // C'est CRUCIAL pour les modèles "Thinking" (Gemini 2.0/3.0)
+                    // Le texte contient le cheminement de pensée qui justifie l'appel de fonction
+                    if (m.content) {
+                        parts.push({ text: m.content });
+                    }
+
+                    // 2. Ensuite les appels de fonction
+                    if (m.tool_calls && m.tool_calls.length > 0) {
+                        m.tool_calls.forEach(tc => {
                             const part = {
                                 functionCall: {
                                     name: tc.function.name,
                                     args: JSON.parse(tc.function.arguments)
                                 }
                             };
-                            // Réinjecter le thought_signature (SIBLING de functionCall)
-                            // La doc indique "thoughtSignature" (CamelCase) ou "thought_signature"
-                            // On tente le CamelCase car Gemini utilise functionCall (CamelCase)
+
+                            // Réinjecter le thought_signature
+                            // [FIX] Envoyer sous les deux formats pour être sûr (Camel et Snake)
+                            // L'erreur mentionnait spécifiquement "thought_signature"
                             if (tc.thought_signature) {
-                                part.thoughtSignature = tc.thought_signature;
+                                part.thoughtSignature = tc.thought_signature; // Standard SDK
+                                part['thought_signature'] = tc.thought_signature; // Raw REST fallback
                             }
-                            return part;
-                        })
-                    };
+                            parts.push(part);
+                        });
+                    }
+
+                    // Si on a des parts (texte ou tools), on retourne le message modèle
+                    if (parts.length > 0) {
+                        return { role: 'model', parts };
+                    }
+                    // Sinon (cas rare message vide), on renvoie un texte vide pour éviter erreur
+                    return { role: 'model', parts: [{ text: '' }] };
                 }
 
                 // 2. Résultat d'outil (Role: tool)

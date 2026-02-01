@@ -27,6 +27,11 @@ export function acquireLock() {
                 process.exit(1);
             } catch (e) {
                 // ESRCH means the process was not found, so the PID file is stale
+                // EPERM means the process exists but we don't have permission to signal it (e.g. root)
+                if (e.code === 'EPERM') {
+                    console.error(`\x1b[31m[CRITICAL] Another instance is running (PID: ${oldPid}) but we lack permissions to signal it.\x1b[0m`);
+                    process.exit(1);
+                }
                 if (e.code !== 'ESRCH') {
                     throw e;
                 }
@@ -34,7 +39,7 @@ export function acquireLock() {
             }
         }
     }
-    
+
     fs.writeFileSync(PID_FILE, process.pid.toString());
 }
 

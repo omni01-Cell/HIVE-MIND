@@ -20,8 +20,11 @@ import { supabase } from '../supabase.js';
  */
 export class ActionMemory {
     constructor() {
-        this.keyPrefix = 'action:active:';
-        this.defaultTTL = 1800; // 30 minutes
+        this.redis = null; // Sera injecté via init()
+        this.initialized = false;
+        
+        // 🛡️ Cleanup automatique des actions orphelines (toutes les heures)
+        this.startOrphanCleanup();
     }
 
     /**
@@ -81,18 +84,125 @@ export class ActionMemory {
                 return null;
             }
 
-            // Parse les champs JSON
+            // Reconstruire l'objet action depuis Redis hash
             return {
-                ...data,
-                context: JSON.parse(data.context || '{}'),
+                id: data.id,
+                chatId: data.chatId,
+                type: data.type,
+                goal: data.goal,
                 steps: JSON.parse(data.steps || '[]'),
+                status: data.status,
                 startedAt: parseInt(data.startedAt),
-                expiresAt: parseInt(data.expiresAt),
-                priority: parseInt(data.priority || '5')
+                updatedAt: parseInt(data.updatedAt),
+                context: JSON.parse(data.context || '{}')
             };
         } catch (error) {
-            console.error('[ActionMemory] Erreur getActiveAction:', error.message);
+            console.error(`[ActionMemory] Erreur getActiveAction ${chatId}:`, error.message);
             return null;
+        }
+    }
+
+    /**
+     * 🛡️ Cleanup automatique des actions orphelines (anciennes et inactives)
+     * @private
+     */
+    startOrphanCleanup() {
+        // Nettoyer toutes les 60 minutes
+        setInterval(async () => {
+            if (!this.initialized) return;
+            
+            try {
+                console.log('[ActionMemory] 🧹 Début cleanup actions orphelines...');
+                
+                // 1. Cleanup dans Redis (actions > 24h sans mise à jour)
+                await this._cleanupRedisOrphans();
+                
+                // 2. Cleanup dans Supabase (actions > 7 jours et toujours 'active')
+                await this._cleanupSupabaseOrphans();
+                
+                console.log('[ActionMemory] ✅ Cleanup terminé');
+                
+            } catch (error) {
+                console.error('[ActionMemory] ❌ Erreur cleanup:', error.message);
+            }
+        }, 60 * 60 * 1000); // Toutes les heures
+    }
+
+    /**
+     * Cleanup des actions orphelines dans Redis
+     * @private
+     */
+    async _cleanupRedisOrphans() {
+        try {
+            const cutoffTime = Date.now() - 24 * 60 * 60 * 1000; // 24h
+            const pattern = 'action:*';
+            const keys = await this.redis.keys(pattern);
+            
+            let cleaned = 0;
+            
+            for (const key of keys) {
+                const actionData = await this.redis.get(key);
+                if (!actionData) continue;
+                
+                try {
+                    const action = JSON.parse(actionData);
+                    
+                    // Si action > 24h et toujours 'active', c'est un orphan
+                    if (action.status === 'active' && action.updatedAt < cutoffTime) {
+                        await this.redis.del(key);
+                        cleaned++;
+                        console.log(`[ActionMemory] 🗑️ Action orpheline supprimée: ${key}`);
+                    }
+                } catch (e) {
+                    // Si données corrompues, supprimer
+                    await this.redis.del(key);
+                    cleaned++;
+                    console.log(`[ActionMemory] 🗑️ Action corrompue supprimée: ${key}`);
+                }
+            }
+            
+            if (cleaned > 0) {
+                console.log(`[ActionMemory] Nettoyé ${cleaned} actions orphelines Redis`);
+            }
+            
+        } catch (error) {
+            console.error('[ActionMemory] Erreur cleanup Redis:', error.message);
+        }
+    }
+
+    /**
+     * Cleanup des actions orphelines dans Supabase
+     * @private
+     */
+    async _cleanupSupabaseOrphans() {
+        try {
+            const cutoffTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 jours
+            
+            // Compter avant de supprimer
+            const { count } = await supabase
+                .from('agent_actions')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'active')
+                .lt('created_at', cutoffTime);
+            
+            if (count > 0) {
+                console.log(`[ActionMemory] Suppression de ${count} actions orphelines Supabase...`);
+                
+                const { error } = await supabase
+                    .from('agent_actions')
+                    .delete()
+                    .eq('status', 'active')
+                    .lt('created_at', cutoffTime);
+                
+                if (error) {
+                    console.error('[ActionMemory] Erreur cleanup Supabase:', error.message);
+                } else {
+                    console.log(`[ActionMemory] ✅ ${count} actions orphelines Supabase supprimées`);
+                }
+            }
+            
+        } catch (error) {
+            console.error('[ActionMemory] Erreur cleanup Supabase:', error.message);
         }
     }
 
@@ -203,6 +313,41 @@ export class ActionMemory {
     }
 
     /**
+     * Nettoie toutes les actions d'un chat spécifique (quand user quitte groupe)
+     * @param {string} chatId 
+     */
+    async cleanupChatActions(chatId) {
+        try {
+            console.log(`[ActionMemory] 🧹 Cleanup actions pour chat: ${chatId}`);
+            
+            // Cleanup Redis
+            const pattern = `action:*:${chatId}`;
+            const keys = await this.redis.keys(pattern);
+            
+            if (keys.length > 0) {
+                await this.redis.del(...keys);
+                console.log(`[ActionMemory] Nettoyé ${keys.length} actions Redis pour ${chatId}`);
+            }
+            
+            // Cleanup Supabase (marquer comme interrupted)
+            const { error } = await supabase
+                .from('agent_actions')
+                .update({ status: 'interrupted', completed_at: new Date().toISOString() })
+                .eq('chat_id', chatId)
+                .eq('status', 'active');
+            
+            if (error) {
+                console.error(`[ActionMemory] Erreur cleanup Supabase pour ${chatId}:`, error.message);
+            } else {
+                console.log(`[ActionMemory] Actions Supabase marquées comme interrupted pour ${chatId}`);
+            }
+            
+        } catch (error) {
+            console.error(`[ActionMemory] Erreur cleanup chat ${chatId}:`, error.message);
+        }
+    }
+
+    /**
      * Formate l'action active pour l'IA
      * @param {string} chatId 
      * @returns {Promise<string>}
@@ -238,12 +383,14 @@ ${stepsText}
      */
     async getResumableActions(limit = 10) {
         try {
-            // Chercher les actions marquées 'active' dans la DB
-            // Idéalement on filtre sur les dernières 24h pour éviter de déterrer des fantômes
+            // 🛡️ CORRECTION: Filtrer sur les dernières 24h pour éviter de déterrer des fantômes
+            const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            
             const { data, error } = await supabase
                 .from('agent_actions')
                 .select('*')
                 .eq('status', 'active')
+                .gt('created_at', cutoffTime) // ✅ Filtrer actions > 24h
                 .order('created_at', { ascending: false })
                 .limit(limit);
 

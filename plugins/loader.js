@@ -63,7 +63,16 @@ class PluginLoader {
             // Validation du format
             this._validatePlugin(plugin, pluginName);
 
+            // 🛡️ Validation de la structure d'outil (Audit #19 Approach B)
+            if (plugin.toolDefinition) {
+                this._validateToolDefinition(plugin.toolDefinition, pluginName);
+            }
+            if (plugin.toolDefinitions) {
+                plugin.toolDefinitions.forEach(td => this._validateToolDefinition(td, pluginName));
+            }
+
             if (!plugin.enabled) {
+
                 // Plugin désactivé - silencieux
                 return;
             }
@@ -129,7 +138,39 @@ class PluginLoader {
     }
 
     /**
+     * Valide la structure d'une définition d'outil (Audit #19)
+     * @private
+     */
+    _validateToolDefinition(toolDef, pluginName) {
+        if (!toolDef.function) {
+            throw new Error(`Plugin ${pluginName}: définition d'outil manque l'objet "function"`);
+        }
+        
+        const { name, description, parameters } = toolDef.function;
+        
+        if (!name || typeof name !== 'string') {
+            throw new Error(`Plugin ${pluginName}: nom de l'outil manquant ou invalide`);
+        }
+        
+        if (!description || typeof description !== 'string') {
+            throw new Error(`Plugin ${pluginName}: description de l'outil "${name}" manquante`);
+        }
+        
+        if (!parameters || typeof parameters !== 'object') {
+            throw new Error(`Plugin ${pluginName}: paramètres de l'outil "${name}" manquants`);
+        }
+        
+        // Vérifier format parameters (JSON Schema standard)
+        if (parameters.type !== 'object' || !parameters.properties) {
+            console.warn(`[PluginLoader] ⚠️ Outil "${name}" (Plugin: ${pluginName}) utilise un format de paramètres non standard`);
+        }
+        
+        return true;
+    }
+
+    /**
      * Récupère un plugin par son nom
+
      * @param {string} name 
      * @returns {Plugin|undefined}
      */
@@ -250,35 +291,19 @@ class PluginLoader {
         const { forceModeration } = options;
         // Import dynamique pour éviter les dépendances circulaires
         const { supabase } = await import('../services/supabase.js');
-        const { EmbeddingsService } = await import('../services/ai/EmbeddingsService.js');
-        const { readFileSync } = await import('fs');
-        const { join, dirname } = await import('path');
-        const { fileURLToPath } = await import('url');
-
-        // Créer l'instance EmbeddingsService
+        const { container } = await import('../core/ServiceContainer.js');
+        
+        // Utiliser le singleton EmbeddingsService du container (évite duplication)
         let embeddings = null;
         try {
-            const __dirname2 = dirname(fileURLToPath(import.meta.url));
-            const credentials = JSON.parse(readFileSync(join(__dirname2, '..', 'config', 'credentials.json'), 'utf-8'));
-            const modelsConfig = JSON.parse(readFileSync(join(__dirname2, '..', 'config', 'models_config.json'), 'utf-8')); // Load models config
-
-            // Resolve credentials
-            const { resolveApiKey } = await import('../config/keyResolver.js');
-            const geminiKey = resolveApiKey(credentials.familles_ia?.gemini);
-            const openaiKey = resolveApiKey(credentials.familles_ia?.openai);
-
-            // Resolve Model Config
-            const primaryEmbedding = modelsConfig?.reglages_generaux?.embeddings?.primary || {};
-
-            embeddings = new EmbeddingsService({
-                geminiKey: geminiKey,
-                openaiKey: openaiKey,
-                model: primaryEmbedding.model || 'gemini-embedding-001',
-                dimensions: primaryEmbedding.dimensions || 1024
-            });
-
+            if (container.has('embeddings')) {
+                embeddings = container.get('embeddings');
+                console.log('[PluginLoader] ✅ EmbeddingsService chargé depuis container (singleton)');
+            } else {
+                console.warn('[PluginLoader] EmbeddingsService non disponible dans container');
+            }
         } catch (e) {
-            console.warn('[PluginLoader] Impossible de charger EmbeddingsService:', e.message);
+            console.warn('[PluginLoader] Erreur chargement EmbeddingsService depuis container:', e.message);
         }
 
         if (!supabase || !embeddings) {

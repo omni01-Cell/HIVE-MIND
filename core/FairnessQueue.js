@@ -41,56 +41,75 @@ export class FairnessQueue {
 
     /**
      * Récupère le prochain événement selon l'algo Round-Robin
+     * CORRECTION: Utilise un snapshot pour éviter les race conditions
      * @returns {Object|null}
      */
     dequeue() {
         if (this.chatIds.length === 0) return null;
 
-        // Essayer de trouver un chatId avec des items
-        // On parcourt au maximum une fois tous les chats
-        const startCount = this.chatIds.length;
-        let visited = 0;
-
-        while (visited < startCount) {
-            const chatId = this.chatIds[this.currentIndex];
+        // Snapshot du tableau pour éviter les problèmes de modification pendant itération
+        const chatIdsSnapshot = [...this.chatIds];
+        let startIndex = this.currentIndex;
+        
+        // Parcourir tous les chats à partir de l'index courant
+        for (let i = 0; i < chatIdsSnapshot.length; i++) {
+            // Calculer l'index circulaire
+            const actualIndex = (startIndex + i) % chatIdsSnapshot.length;
+            const chatId = chatIdsSnapshot[actualIndex];
+            
+            // Vérifier si ce chat existe encore (pourrait avoir été supprimé)
+            if (!this.chatIds.includes(chatId)) {
+                continue; // Skip si déjà supprimé
+            }
+            
             const queue = this.queues.get(chatId);
-
+            
             if (queue && queue.length > 0) {
+                // Récupérer l'événement
                 const event = queue.shift();
-
-                // Si la file est vide après ça, on nettoie
+                
+                // Nettoyer si la file est maintenant vide
                 if (queue.length === 0) {
                     this.queues.delete(chatId);
-                    this.chatIds.splice(this.currentIndex, 1);
-                    // Ajuster l'index car le tableau a rétréci
-                    if (this.currentIndex >= this.chatIds.length) {
+                    const idx = this.chatIds.indexOf(chatId);
+                    if (idx !== -1) {
+                        this.chatIds.splice(idx, 1);
+                    }
+                    
+                    // Ajuster currentIndex si nécessaire
+                    if (this.currentIndex >= this.chatIds.length && this.chatIds.length > 0) {
                         this.currentIndex = 0;
                     }
                 } else {
-                    // Sinon on passe au suivant pour la prochaine fois
+                    // Avancer pour la prochaine fois
                     this.advance();
                 }
-
+                
                 return event;
-            } else {
-                // File vide (ne devrait pas arriver avec la logique de nettoyage, mais safety first)
+            } else if (queue && queue.length === 0) {
+                // File vide détectée (cas edge) - nettoyer
                 this.queues.delete(chatId);
-                this.chatIds.splice(this.currentIndex, 1);
-                if (this.currentIndex >= this.chatIds.length) {
+                const idx = this.chatIds.indexOf(chatId);
+                if (idx !== -1) {
+                    this.chatIds.splice(idx, 1);
+                }
+                
+                // Ajuster currentIndex
+                if (this.currentIndex >= this.chatIds.length && this.chatIds.length > 0) {
                     this.currentIndex = 0;
                 }
             }
-            // On ne compte pas visited si on a supprimé une entrée, 
-            // car on est "retombé" sur un nouvel élément au même index
-            // Sauf si tableau vide
-            if (this.chatIds.length === 0) return null;
         }
 
         return null;
     }
 
     advance() {
-        this.currentIndex = (this.currentIndex + 1) % this.chatIds.length;
+        if (this.chatIds.length === 0) {
+            this.currentIndex = 0;
+        } else {
+            this.currentIndex = (this.currentIndex + 1) % this.chatIds.length;
+        }
     }
 
     get size() {

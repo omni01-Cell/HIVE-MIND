@@ -48,11 +48,33 @@ if (projUrl && projUrl !== 'https://VOTRE_PROJET.supabase.co') {
  */
 export const db = {
     /**
+     * Instance brute du client Supabase
+     */
+    get client() {
+        return supabase;
+    },
+
+    /**
+     * Proxy vers le client pour compatibilité ascendante (db.from(...) -> db.client.from(...))
+     */
+    from(table) {
+        return supabase?.from(table);
+    },
+
+    /**
+     * Proxy vers RPC
+     */
+    rpc(fn, args) {
+        return supabase?.rpc(fn, args);
+    },
+
+    /**
      * Vérifie si Supabase est disponible
      */
     isAvailable() {
         return supabase !== null;
     },
+
 
     // NOTE: upsertUser, getUser, incrementXP supprimés - utilisez userService à la place
 
@@ -213,35 +235,6 @@ export const db = {
 
         if (error) console.error('[DB] Erreur setGroupFounder:', error);
         return data;
-    },
-
-    /**
-     * Enregistre un événement de membre (join/leave)
-     */
-    async recordMemberEvent(groupJid, userJid, action) {
-        if (!supabase) return null;
-
-        const { data, error } = await supabase
-            .from('group_member_history')
-            .insert({
-                group_jid: groupJid,
-                user_jid: userJid,
-                action: action
-            })
-            .select()
-            .single();
-
-        if (error) {
-            console.error('[DB] Erreur recordMemberEvent:', error);
-            throw error; // Propager l'erreur pour que le caller puisse gérer (ex: sync d'urgence)
-        }
-        return data;
-    },
-
-    /**
-     * Récupère l'historique d'un membre dans un groupe
-     */
-    async getMemberHistory(groupJid, userJid) {
         if (!supabase) return [];
 
         const { data, error } = await supabase

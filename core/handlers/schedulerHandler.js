@@ -71,6 +71,23 @@ export class SchedulerHandler {
                 await this._handleGoalExecution();
                 break;
 
+            // 🛡️ PHASE 3: Jobs de monitoring DB
+            case 'dbHealthCheck':
+                await this._handleDBHealthCheck();
+                break;
+
+            case 'dbPerformanceAnalysis':
+                await this._handleDBPerformanceAnalysis();
+                break;
+
+            case 'dbWeeklyReport':
+                await this._handleDBWeeklyReport();
+                break;
+
+            case 'dbCleanup':
+                await this._handleDBCleanup();
+                break;
+
             default:
                 console.warn(`[Scheduler] Job inconnu: ${event.job}`);
         }
@@ -284,6 +301,49 @@ export class SchedulerHandler {
             console.error('[Scheduler] Erreur memoryDecay:', e.message);
         }
     }
+
+    // 🛡️ PHASE 3: Jobs de monitoring DB (Audit #21)
+
+    async _handleDBHealthCheck() {
+        console.log('[Scheduler] 🏥 Exécution DB Health Check...');
+        try {
+            const { monitorDatabaseHealth } = await import('../../scheduler/dbMonitoring.js');
+            await monitorDatabaseHealth();
+        } catch (e) {
+            console.error('[Scheduler] Erreur dbHealthCheck:', e.message);
+        }
+    }
+
+    async _handleDBPerformanceAnalysis() {
+        console.log('[Scheduler] 📊 Exécution DB Performance Analysis...');
+        try {
+            const { analyzePerformance } = await import('../../scheduler/dbMonitoring.js');
+            await analyzePerformance();
+        } catch (e) {
+            console.error('[Scheduler] Erreur dbPerformanceAnalysis:', e.message);
+        }
+    }
+
+    async _handleDBWeeklyReport() {
+        console.log('[Scheduler] 📋 Génération Rapport Hebdomadaire DB...');
+        try {
+            const { generateWeeklyReport } = await import('../../scheduler/dbMonitoring.js');
+            await generateWeeklyReport();
+        } catch (e) {
+            console.error('[Scheduler] Erreur dbWeeklyReport:', e.message);
+        }
+    }
+
+    async _handleDBCleanup() {
+        console.log('[Scheduler] 🧹 Exécution DB Cleanup (Audit #16)...');
+        try {
+            const { cleanupOldData } = await import('../../scheduler/dbMonitoring.js');
+            await cleanupOldData();
+        } catch (e) {
+            console.error('[Scheduler] Erreur dbCleanup:', e.message);
+        }
+    }
 }
 
 export default SchedulerHandler;
+

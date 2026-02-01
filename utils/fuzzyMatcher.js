@@ -94,16 +94,30 @@ export function findBestMatch(query, candidates, threshold = 0.4) {
     if (isNumericQuery) {
         console.log(`[FuzzyMatcher] Numeric query detected: "${query}" - Searching by phone number...`);
 
-        // Chercher un match exact dans les JIDs
+        // Chercher un match exact dans les JIDs ou le champ phoneNumber explicite
         for (const candidate of candidates) {
+            // 1. Vérifier le champ phoneNumber (ajouté par GroupService pour les LIDs)
+            if (candidate.phoneNumber) {
+                const cleanPhone = candidate.phoneNumber.split('@')[0];
+                if (cleanPhone === query || cleanPhone.startsWith(query)) {
+                    console.log(`[FuzzyMatcher] Phone match found via phoneNumber field: ${query} → ${candidate.name || 'Unknown'} (${cleanPhone})`);
+                    return { match: candidate, score: 1, exact: true };
+                }
+            }
+
+            // 2. Fallback: Vérifier le JID (si c'est un Phone JID)
             if (!candidate.jid) continue;
 
             // Extraire le numéro du JID (partie avant @)
-            const phoneNumber = candidate.jid.split('@')[0];
+            const idPart = candidate.jid.split('@')[0];
 
-            // Match exact ou prefix
-            if (phoneNumber === query || phoneNumber.startsWith(query)) {
-                console.log(`[FuzzyMatcher] Phone match found: ${query} → ${candidate.name || 'Unknown'} (${phoneNumber})`);
+            // Match exact ou prefix, mais SEULEMENT si ce n'est pas un LID (qui commence souvent par des chiffres aussi)
+            // Un LID ressemble à "123456...789@lid", comparer ça à un numéro de tel court "123" est risqué/faux.
+            // On accepte la comparaison seulement si le JID est explicite @s.whatsapp.net OU si on n'a pas mieux.
+            const isLid = candidate.jid.endsWith('@lid');
+
+            if (!isLid && (idPart === query || idPart.startsWith(query))) {
+                console.log(`[FuzzyMatcher] Phone match found: ${query} → ${candidate.name || 'Unknown'} (${idPart})`);
                 return { match: candidate, score: 1, exact: true };
             }
         }

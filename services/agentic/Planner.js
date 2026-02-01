@@ -9,12 +9,212 @@ import { providerRouter } from '../../providers/index.js';
 import { actionMemory } from '../memory/ActionMemory.js';
 import { supabase } from '../supabase.js';
 
+// 🛡️ Parsing JSON robuste - bibliothèques externes
+// Ces imports seront dynamiques pour éviter les erreurs si non installées
+let json5, jsonRepair, Ajv;
+
+// Chargement dynamique des bibliothèques (évite crash si pas installées)
+async function loadJsonLibraries() {
+    if (json5 && jsonRepair && Ajv) return { json5, jsonRepair, Ajv };
+    
+    try {
+        const json5Module = await import('json5');
+        const jsonRepairModule = await import('jsonrepair');
+        const ajvModule = await import('ajv');
+        
+        json5 = json5Module;
+        jsonRepair = jsonRepairModule;
+        Ajv = ajvModule;
+        
+        console.log('[Planner] ✅ Bibliothèques JSON chargées (json5, jsonrepair, ajv)');
+        return { json5, jsonRepair, Ajv };
+    } catch (e) {
+        console.warn('[Planner] ⚠️ Bibliothèques JSON non disponibles, fallback sur parsing natif:', e.message);
+        return null;
+    }
+}
+
+// Schéma de validation pour les plans
+const PLAN_SCHEMA = {
+    type: 'object',
+    properties: {
+        steps: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    id: { type: 'number' },
+                    action: { type: 'string', minLength: 1 },
+                    tool: { type: 'string', minLength: 1 },
+                    params: { type: 'object' },
+                    estimated_time: { type: 'number', minimum: 0 },
+                    depends_on: { 
+                        type: 'array',
+                        items: { type: 'number' }
+                    }
+                },
+                required: ['id', 'action', 'tool']
+            },
+            minItems: 1
+        },
+        total_time_estimate: { type: 'number', minimum: 0 },
+        complexity: { 
+            type: 'string', 
+            enum: ['low', 'medium', 'high'] 
+        }
+    },
+    required: ['steps']
+};
+
 /**
  * Planificateur explicite pour tâches multi-étapes
  */
 export class ExplicitPlanner {
     constructor() {
         this.complexityThreshold = 3; // Nb d'outils estimés pour déclencher planning
+    }
+
+    /**
+     * 🛡️ Parse le JSON du plan avec bibliothèques robustes et validation
+     * @param {string} planText - Texte JSON potentiellement malformé
+     * @returns {Object|null} - Plan validé ou null
+     */
+    async _parsePlanJson(planText) {
+        if (!planText) return null;
+
+        try {
+            // 1. Charger les bibliothèques JSON robustes
+            const libs = await loadJsonLibraries();
+            
+            let cleanedJson = planText.trim();
+            
+            // 2. Extraire JSON des balises markdown si présentes
+            const markdownMatch = cleanedJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (markdownMatch && markdownMatch[1]) {
+                cleanedJson = markdownMatch[1];
+            } else {
+                // Sinon, chercher le premier { et le dernier }
+                const jsonMatch = cleanedJson.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    cleanedJson = jsonMatch[0];
+                }
+            }
+
+            let parsedPlan;
+
+            // 3. Tenter parsing avec bibliothèques robustes
+            if (libs) {
+                try {
+                    // 3a. Réparer avec json-repair (corrige les malformations)
+                    const repairedJson = libs.jsonRepair.repair(cleanedJson);
+                    
+                    // 3b. Parser avec json5 (plus tolérant)
+                    parsedPlan = libs.json5.parse(repairedJson);
+                    
+                    console.log('[Planner] ✅ JSON réparé avec json-repair + json5');
+                } catch (libError) {
+                    console.warn('[Planner] ⚠️ Bibliothèques JSON ont échoué, fallback natif:', libError.message);
+                    throw libError; // On relance pour passer au fallback
+                }
+            } else {
+                // Fallback: parsing natif avec nettoyage manuel
+                throw new Error('Bibliothèques JSON non disponibles');
+            }
+
+            // 4. Valider contre le schéma
+            if (libs.Ajv) {
+                const ajv = new libs.Ajv({ useDefaults: true, allErrors: true });
+                const validate = ajv.compile(PLAN_SCHEMA);
+                
+                if (!validate(parsedPlan)) {
+                    console.warn('[Planner] ⚠️ Plan invalide selon schéma:', validate.errors);
+                    
+                    // Tenter de corriger automatiquement
+                    const correctedPlan = this._autoCorrectPlan(parsedPlan);
+                    if (correctedPlan) {
+                        console.log('[Planner] ✅ Plan corrigé automatiquement');
+                        return correctedPlan;
+                    }
+                    
+                    throw new Error(`Plan invalide: ${validate.errors[0].message}`);
+                }
+            }
+
+            return parsedPlan;
+
+        } catch (mainError) {
+            // Fallback: parsing natif avec nettoyage
+            console.warn('[Planner] ⚠️ Fallback parsing natif:', mainError.message);
+            return this._parseJsonFallback(cleanedJson);
+        }
+    }
+
+    /**
+     * 🛡️ Fallback parsing natif avec nettoyage manuel
+     * @private
+     */
+    _parseJsonFallback(jsonText) {
+        try {
+            // Nettoyage manuel (logique originale améliorée)
+            const fixedJson = jsonText
+                .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Guillemets clés
+                .replace(/'/g, '"') // Simple quotes → double
+                .replace(/,\s*([}\]])/g, '$1') // Virgules traînantes
+                .replace(/([{,]\s*)"([^"]+)"\s*:\s*'(.*?)'/g, '$1"$2":"$3"') // Valeurs simple quotes
+                .trim();
+            
+            return JSON.parse(fixedJson);
+            
+        } catch (e) {
+            console.error('[Planner] ❌ Échec parsing JSON après toutes les tentatives:', e.message);
+            return null;
+        }
+    }
+
+    /**
+     * 🛡️ Corrige automatiquement les plans mal formés
+     * @private
+     */
+    _autoCorrectPlan(plan) {
+        try {
+            const corrected = { ...plan };
+            
+            // S'assurer que steps existe et est un tableau
+            if (!Array.isArray(corrected.steps)) {
+                corrected.steps = [];
+            }
+            
+            // Filtrer et corriger les étapes invalides
+            corrected.steps = corrected.steps
+                .filter(step => step && typeof step === 'object')
+                .map((step, index) => ({
+                    id: Number(step.id) || index + 1,
+                    action: String(step.action || 'unknown_action'),
+                    tool: String(step.tool || 'unknown_tool'),
+                    params: step.params || {},
+                    estimated_time: Number(step.estimated_time) || 0,
+                    depends_on: Array.isArray(step.depends_on) ? step.depends_on.map(Number) : []
+                }));
+            
+            // S'assurer qu'il y a au moins une étape
+            if (corrected.steps.length === 0) {
+                return null;
+            }
+            
+            // Ajouter les champs manquants avec valeurs par défaut
+            corrected.total_time_estimate = Number(corrected.total_time_estimate) || 
+                corrected.steps.reduce((sum, step) => sum + (step.estimated_time || 0), 0);
+            
+            corrected.complexity = ['low', 'medium', 'high'].includes(corrected.complexity) 
+                ? corrected.complexity 
+                : 'medium';
+            
+            return corrected;
+            
+        } catch (e) {
+            console.error('[Planner] Erreur auto-correction:', e.message);
+            return null;
+        }
     }
 
     /**
@@ -139,42 +339,33 @@ Plan:`;
                 throw new Error('AI response is empty or null');
             }
 
-            // Nettoyage robuste : Extraire uniquement ce qui ressemble à du JSON
-            let planText = response.content;
+            // 🛡️ Parsing JSON robuste avec bibliothèques externes et validation
+            const plan = await this._parsePlanJson(response.content);
+            
+            if (!plan) {
+                throw new Error('Impossible de parser le plan JSON après toutes les tentatives');
+            }
 
-            // 1. Tenter d'extraire via balises markdown ```json ... ```
-            const markdownMatch = planText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (markdownMatch && markdownMatch[1]) {
-                planText = markdownMatch[1];
-            } else {
-                // 2. Sinon, chercher le premier { et le dernier }
-                const jsonMatch = planText.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    planText = jsonMatch[0];
+            // 🛡️ Validation détaillée du plan
+            if (!plan.steps || !Array.isArray(plan.steps) || plan.steps.length === 0) {
+                throw new Error('Plan invalide: pas d\'étapes définies');
+            }
+
+            // Valider chaque étape
+            for (let i = 0; i < plan.steps.length; i++) {
+                const step = plan.steps[i];
+                if (!step || typeof step !== 'object') {
+                    throw new Error(`Étape ${i + 1} invalide: pas un objet`);
+                }
+                if (!step.action || !step.tool) {
+                    throw new Error(`Étape ${i + 1} invalide: action ou tool manquant`);
+                }
+                if (typeof step.id !== 'number') {
+                    step.id = i + 1; // Auto-correct ID
                 }
             }
 
-            let plan;
-            try {
-                // Nettoyage final (espaces, sauts de ligne parasites)
-                planText = planText.trim();
-                plan = JSON.parse(planText);
-            } catch (e) {
-                console.warn('[Planner] ⚠️ Échec parsing JSON standard, tentative de nettoyage...');
-                try {
-                    // Si échec, tentative de nettoyage des clés sans guillemets (erreur commune LLM)
-                    const fixedJson = planText
-                        .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Ajout guillemets aux clés
-                        .replace(/'/g, '"') // Remplacement simple quotes par double quotes
-                        .replace(/,\s*([}\]])/g, '$1'); // Suppression virgules traînantes
-                    plan = JSON.parse(fixedJson);
-                } catch (innerE) {
-                    console.error('[Planner] ❌ Erreur fatale parsing JSON:', innerE.message);
-                    console.log('[Planner] Début contenu:', planText.substring(0, 100));
-                    console.log('[Planner] Fin contenu:', planText.substring(planText.length - 100));
-                    throw new Error('AI response is not valid JSON');
-                }
-            }
+            console.log(`[Planner] ✅ Plan validé: ${plan.steps.length} étapes`);
 
             // Stocker le plan dans ActionMemory
             const planId = await actionMemory.startAction(context.chatId, {

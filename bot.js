@@ -5,6 +5,7 @@ import 'dotenv/config';
 import { acquireLock, releaseLock } from './utils/pidLock.js';
 import { botCore } from './core/index.js';
 import { userService } from './services/userService.js';
+import { eventBus } from './core/events.js';
 
 import { StateManager } from './services/state/StateManager.js';
 
@@ -47,6 +48,7 @@ process.on('SIGINT', async () => {
     console.log('💾 Synchronisation des buffers...');
     await userService.flushAll(); // Déjà mappé vers StateManager.processSyncQueue
     console.log('✅ Buffers synchronisés. Au revoir !');
+    eventBus.removeAllListeners();
     releaseLock();
     process.exit(0);
 });
@@ -56,11 +58,13 @@ process.on('SIGTERM', async () => {
     console.log('💾 Synchronisation des buffers...');
     await userService.flushAll();
     console.log('✅ Buffers synchronisés. Au revoir !');
+    eventBus.removeAllListeners();
     releaseLock();
     process.exit(0);
 });
 
 process.on('exit', () => {
+    eventBus.removeAllListeners();
     releaseLock();
 });
 
