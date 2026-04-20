@@ -175,6 +175,7 @@ export class ActionMemory {
      * @private
      */
     async _cleanupSupabaseOrphans() {
+        if (!supabase) return;
         try {
             const cutoffTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 jours
             
@@ -330,16 +331,18 @@ export class ActionMemory {
             }
             
             // Cleanup Supabase (marquer comme interrupted)
-            const { error } = await supabase
-                .from('agent_actions')
-                .update({ status: 'interrupted', completed_at: new Date().toISOString() })
-                .eq('chat_id', chatId)
-                .eq('status', 'active');
-            
-            if (error) {
-                console.error(`[ActionMemory] Erreur cleanup Supabase pour ${chatId}:`, error.message);
-            } else {
-                console.log(`[ActionMemory] Actions Supabase marquées comme interrupted pour ${chatId}`);
+            if (supabase) {
+                const { error } = await supabase
+                    .from('agent_actions')
+                    .update({ status: 'interrupted', completed_at: new Date().toISOString() })
+                    .eq('chat_id', chatId)
+                    .eq('status', 'active');
+                
+                if (error) {
+                    console.error(`[ActionMemory] Erreur cleanup Supabase pour ${chatId}:`, error.message);
+                } else {
+                    console.log(`[ActionMemory] Actions Supabase marquées comme interrupted pour ${chatId}`);
+                }
             }
             
         } catch (error) {
@@ -382,6 +385,7 @@ ${stepsText}
      * @returns {Promise<Array>}
      */
     async getResumableActions(limit = 10) {
+        if (!supabase) return [];
         try {
             // 🛡️ CORRECTION: Filtrer sur les dernières 24h pour éviter de déterrer des fantômes
             const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

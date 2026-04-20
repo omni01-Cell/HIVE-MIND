@@ -22,3 +22,5 @@ Thumbs.db
 # IDE
 .idea/
 *.swp
+.GCC/
+.agent/

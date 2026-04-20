@@ -35,6 +35,7 @@ export function extractToolCallsFromText(text, includeSystemInteraction = true) 
             // Groupe 6/7: Generic XML tag (name match[6], args match[7])
 
             let toolName, argsText;
+            const EXCLUDED_TAGS = ['thought', 'think', 'thought_process'];
 
             if (includeSystemInteraction) {
                 if (match[1]) {
@@ -47,14 +48,12 @@ export function extractToolCallsFromText(text, includeSystemInteraction = true) 
                     toolName = match[4];
                     argsText = match[5];
                 } else if (match[6]) { // Generic XML
+                    if (EXCLUDED_TAGS.includes(match[6].toLowerCase())) continue;
                     toolName = match[6];
                     argsText = match[7];
                 }
             } else {
                 // Pour le mode simple
-                // Groupe 1/2: func(args)
-                // Groupe 3: <function>name</function>
-                // Groupe 4/5: <tag>args</tag>
                 if (match[1]) {
                     toolName = match[1];
                     argsText = match[2];
@@ -62,6 +61,7 @@ export function extractToolCallsFromText(text, includeSystemInteraction = true) 
                     toolName = match[3];
                     argsText = '{}';
                 } else if (match[4]) { // Generic XML
+                    if (EXCLUDED_TAGS.includes(match[4].toLowerCase())) continue;
                     toolName = match[4];
                     argsText = match[5];
                 }
@@ -131,22 +131,43 @@ export function isValidToolCall(toolCall) {
 export function parseToolArguments(argsText) {
     if (!argsText || typeof argsText !== 'string') return null;
 
+    let preCleaned = argsText.trim();
+
+    // S'il ne commence pas par '{', on essaie d'extraire le premier bloc JSON trouvé
+    if (!preCleaned.startsWith('{')) {
+        const jsonMatch = preCleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            preCleaned = jsonMatch[0];
+        }
+    }
+
     try {
-        // Tenter de parser comme JSON
-        return JSON.parse(argsText.trim());
+        // Tenter de parser comme JSON direct
+        return JSON.parse(preCleaned);
     } catch (e) {
         console.warn('[ToolCallExtractor] Arguments JSON invalides, tentative de réparation...');
 
         try {
-            // Nettoyage basique
-            let cleaned = argsText.trim()
+            // Nettoyage agressif pour les LLMs
+            let cleaned = preCleaned
                 .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Guillemets clés
                 .replace(/'/g, '"') // Simple quotes
                 .replace(/,\s*([}\]])/g, '$1'); // Virgules traînantes
 
             return JSON.parse(cleaned);
         } catch (repairError) {
-            console.error('[ToolCallExtractor] Impossible de réparer les arguments:', repairError.message);
+            console.error('[ToolCallExtractor] Impossible de réparer les arguments:', argsText.substring(0, 50));
+            
+            // Si c'est une simple string sans accolades (hallucination de contenu), on tente d'enrober
+            if (!preCleaned.includes('{')) {
+                try {
+                    // Stratégie de survie: on enrobe le texte dans un paramètre générique (ex: query ou text)
+                    // Cela évite de planter des outils comme send_message ou search
+                    console.warn('[ToolCallExtractor] Fallback: Enrobage du texte brut dans {"text": ...}');
+                    return { text: preCleaned, message: preCleaned, query: preCleaned };
+                } catch(e) {}
+            }
+            
             return null;
         }
     }

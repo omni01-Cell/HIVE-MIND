@@ -44,23 +44,43 @@ process.on('unhandledRejection', (reason) => {
 
 // Gestion de l'arrêt propre avec synchronisation des buffers
 process.on('SIGINT', async () => {
-    console.log('\n👋 Arrêt du bot...');
-    console.log('💾 Synchronisation des buffers...');
-    await userService.flushAll(); // Déjà mappé vers StateManager.processSyncQueue
-    console.log('✅ Buffers synchronisés. Au revoir !');
-    eventBus.removeAllListeners();
-    releaseLock();
-    process.exit(0);
+    console.log('\n👋 Arrêt du bot (SIGINT)...');
+    
+    // Protection contre les blocages lors de l'arrêt
+    const forceExitTimeout = setTimeout(() => {
+        console.warn('⚠️ Shutdown timeout reached. Force exiting...');
+        process.exit(1);
+    }, 5000);
+
+    try {
+        console.log('💾 Synchronisation des buffers...');
+        await userService.flushAll();
+        
+        console.log('🔌 Fermeture de la connexion WhatsApp...');
+        await botCore.transport.disconnect();
+        
+        console.log('✅ Nettoyage terminé. Au revoir !');
+        eventBus.removeAllListeners();
+        releaseLock();
+        clearTimeout(forceExitTimeout);
+        process.exit(0);
+    } catch (err) {
+        console.error('❌ Erreur pendant le shutdown:', err.message);
+        process.exit(1);
+    }
 });
 
 process.on('SIGTERM', async () => {
-    console.log('\n👋 Arrêt du bot...');
-    console.log('💾 Synchronisation des buffers...');
-    await userService.flushAll();
-    console.log('✅ Buffers synchronisés. Au revoir !');
-    eventBus.removeAllListeners();
-    releaseLock();
-    process.exit(0);
+    console.log('\n👋 Arrêt du bot (SIGTERM)...');
+    try {
+        await userService.flushAll();
+        await botCore.transport.disconnect();
+        eventBus.removeAllListeners();
+        releaseLock();
+        process.exit(0);
+    } catch (err) {
+        process.exit(1);
+    }
 });
 
 process.on('exit', () => {

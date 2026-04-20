@@ -6,6 +6,7 @@
             "mistral",
             "anthropic",
             "kimi",
+            "nvidia",
             "github",
             "groq"
         ],
@@ -43,9 +44,9 @@
         },
         "service_agents": {
             "EXECUTOR": {
-                "family": "kimi",
-                "model": "kimi-for-coding",
-                "fallback": "qwen/qwen3-32b",
+                "family": "nvidia",
+                "model": "z-ai/glm5",
+                "fallback": "moonshotai/kimi-k2.5",
                 "temperature": 0.7
             },
             "CRITIC": {
@@ -61,8 +62,8 @@
                 "temperature": 0.1
             },
             "PLANNER": {
-                "family": "kimi",
-                "model": "kimi-for-coding",
+                "family": "nvidia",
+                "model": "moonshotai/kimi-k2.5",
                 "fallback": "mistral-large-latest",
                 "temperature": 0.5
             },
@@ -106,7 +107,7 @@
         "chat_agents": {
             "categories": {
                 "CODING": {
-                    "primary": "kimi-for-coding",
+                    "primary": "moonshotai/kimi-k2.5",
                     "fallback": "codestral-latest",
                     "description": "Code complexe, algorithmes, debugging"
                 },
@@ -116,8 +117,8 @@
                     "description": "Logique, mathématiques, raisonnement profond"
                 },
                 "FAST_CHAT": {
-                    "primary": "gemini-2.5-flash-lite",
-                    "fallback": "qwen/qwen3-32b",
+                    "primary": "minimaxai/minimax-m2.1",
+                    "fallback": "gemini-2.5-flash-lite",
                     "description": "Salutations, questions simples, chat rapide"
                 },
                 "MULTIMODAL": {
@@ -131,7 +132,7 @@
                     "description": "Analyse d'images, OCR, génération visuelle"
                 },
                 "AGENTIC": {
-                    "primary": "kimi-for-coding",
+                    "primary": "moonshotai/kimi-k2.5",
                     "fallback": "mistral-large-latest",
                     "description": "Tâches multi-étapes, planification autonome"
                 },
@@ -714,6 +715,54 @@
                     "quota": {
                         "rpm": 20,
                         "rpd": 2000
+                    }
+                }
+            ]
+        },
+        "nvidia": {
+            "nom_affiche": "NVIDIA AI (NIM)",
+            "base_url": "https://integrate.api.nvidia.com/v1",
+            "modeles": [
+                {
+                    "id": "moonshotai/kimi-k2.5",
+                    "description": "Kimi K2.5 via NVIDIA NIM: Modèle de raisonnement avancé avec thinking mode (16K tokens output).",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 20,
+                        "tpm": 100000,
+                        "rpd": 1000
+                    }
+                },
+                {
+                    "id": "z-ai/glm5",
+                    "description": "GLM-5 via NVIDIA NIM: Modèle de raisonnement avec thinking mode avancé (enable_thinking).",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 20,
+                        "tpm": 100000,
+                        "rpd": 1000
+                    }
+                },
+                {
+                    "id": "minimaxai/minimax-m2.1",
+                    "description": "MiniMax M2.1 via NVIDIA NIM: Modèle généraliste performant (8K tokens output).",
+                    "types": [
+                        "chat",
+                        "fast"
+                    ],
+                    "quota": {
+                        "rpm": 20,
+                        "tpm": 100000,
+                        "rpd": 1000
                     }
                 }
             ]

@@ -649,7 +649,8 @@ async function loadAdapters() {
         'moonshot': ['moonshot'], // Moonshot AI standard
         'github': ['github'],     // GitHub Models (Free Tier)
         'groq': ['groq'],         // Groq LPU (Fast Inference)
-        'huggingface': ['huggingface'] // HF Router
+        'huggingface': ['huggingface'], // HF Router
+        'nvidia': ['nvidia']       // NVIDIA AI Platform (NIM)
     };
 
     for (const [fileName, registerNames] of Object.entries(adapterMapping)) {

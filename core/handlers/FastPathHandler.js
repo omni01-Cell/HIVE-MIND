@@ -16,7 +16,8 @@ export class FastPathHandler {
     constructor(transport) {
         this.transport = transport;
         this.MAX_TOKENS = 500; // Réponses concises
-        this.FAST_FAMILY = 'groq'; // Famille la plus rapide
+        this.FAST_FAMILY = 'nvidia'; // Famille NVIDIA
+        this.FAST_MODEL = 'minimaxai/minimax-m2.1';
     }
 
     /**
@@ -46,7 +47,7 @@ export class FastPathHandler {
             // Sinon on prend context.recentMessages
             startMessages = [
                 { role: 'system', content: context.systemPrompt },
-                ...(context.history || context.recentMessages || []).slice(-5),
+                ...(context.history || context.recentMessages || []).slice(-3), // Réduction à 3 pour alléger le payload
                 { role: 'user', content: message.text }
             ];
 
@@ -60,6 +61,7 @@ export class FastPathHandler {
                 // Appel LLM
                 const response = await providerRouter.chat(history, {
                     family: this.FAST_FAMILY,
+                    model: this.FAST_MODEL,
                     tools: quickTools.length > 0 ? quickTools : undefined,
                     maxTokens: this.MAX_TOKENS,
                     skipClassification: true
@@ -67,54 +69,56 @@ export class FastPathHandler {
 
                 lastResponse = response;
 
-                // Ajouter la réponse assistant à l'historique
-                if (response.message) {
-                    history.push(response.message);
-                } else {
-                    console.warn('[FastPath] ⚠️ Réponse sans message structuré, reconstruction...');
-                    history.push({ role: 'assistant', content: response.content || '' });
-                }
-
-                // Cas A: Réponse texte directe (pas d'outil détecté nativement)
+                // [FALLBACK] Vérifier si le modèle a écrit l'outil dans le texte (Hallucination XML)
+                // On le fait AVANT d'ajouter à l'historique pour que l'objet soit complet
                 if (!response.toolCalls || response.toolCalls.length === 0) {
-
-                    // [FALLBACK] Vérifier si le modèle a écrit l'outil dans le texte (Hallucination XML)
                     const textToolCalls = extractToolCallsFromText(response.content || '');
 
                     if (textToolCalls.length > 0) {
                         console.log(`[FastPath] 🕵️ ${textToolCalls.length} outils extraits du texte (XML Hallucination)`);
 
-                        // On convertit ces appels textuels en format standard et on continue le traitement
                         response.toolCalls = textToolCalls.map(call => ({
                             id: `call_${Math.random().toString(36).substring(7)}`,
                             type: 'function',
                             function: {
                                 name: call.name,
-                                arguments: call.arguments // Déjà string
+                                arguments: call.arguments
                             }
                         }));
 
                         // On nettoie le content car il a été transformé en action
-                        // (Sauf s'il y a du texte autour ? Pour l'instant on assume que c'est une commande pure)
                         response.content = this._cleanToolCallsFromText(response.content);
-
-                        // On laisse couler vers le bloc "Cas B: Outil demandé" ci-dessous
-                    } else {
-                        console.log(`[FastPath] ✅ Réponse directe trouvée.`);
-
-                        // CLEANUP: Supprimer les tags <thought> ET les tool calls textuels
-                        let cleanContent = (response.content || '') // [FIX] Safe access
-                            .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
-                            .trim();
-
-                        cleanContent = this._cleanToolCallsFromText(cleanContent);
-
-                        return {
-                            type: 'RESPONSE',
-                            content: cleanContent,
-                            latency: Date.now() - startTime
-                        };
                     }
+                }
+
+                // Ajouter la réponse assistant à l'historique (Maintenant garanti complet)
+                if (response.message) {
+                    history.push(response.message);
+                } else {
+                    history.push({ 
+                        role: 'assistant', 
+                        content: response.content || '',
+                        // Inclure les tool_calls (natifs ou extraits)
+                        ...(response.toolCalls && response.toolCalls.length > 0 && { tool_calls: response.toolCalls })
+                    });
+                }
+
+                // Cas A: Réponse texte directe (pas d'outil détecté, ni natif ni extrait)
+                if (!response.toolCalls || response.toolCalls.length === 0) {
+                    console.log(`[FastPath] ✅ Réponse directe trouvée.`);
+
+                    // CLEANUP: Supprimer les tags <thought>
+                    let cleanContent = (response.content || '')
+                        .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+                        .trim();
+
+                    cleanContent = this._cleanToolCallsFromText(cleanContent);
+
+                    return {
+                        type: 'RESPONSE',
+                        content: cleanContent,
+                        latency: Date.now() - startTime
+                    };
                 }
 
                 // Cas B: Outil demandé
@@ -139,13 +143,34 @@ export class FastPathHandler {
                     ));
 
                     // Ajouter les résultats à l'historique
+                    let communicationHandled = false;
+
                     for (let j = 0; j < response.toolCalls.length; j++) {
+                        const callName = response.toolCalls[j].function.name;
+                        const tResult = toolResults[j] || {};
+                        
                         history.push({
                             role: 'tool',
                             tool_call_id: response.toolCalls[j].id || `call_${Math.random().toString(36).substring(7)}`,
-                            name: response.toolCalls[j].function.name,
-                            content: JSON.stringify(toolResults[j] || {}) // Secure empty results
+                            name: callName,
+                            content: JSON.stringify(tResult) // Secure empty results
                         });
+
+                        // Anti-Doublon: Seulement si l'IA a déja envoyé un vrai message texte, on ne doit pas renvoyer son texte.
+                        // On exclut react_to_message car c'est juste un emoji, le texte de la réponse finale est quand même attendu !
+                        if (tResult.success && callName === 'send_message') {
+                            communicationHandled = true;
+                        }
+                    }
+
+                    // Si on est au dernier tour ET que la communication texte a été gérée par send_message,
+                    // inutile de rendre la réponse texte finale de l'IA (qui créerait un doublon)
+                    if (i === MAX_FAST_STEPS - 1 && communicationHandled) {
+                        return {
+                            type: 'RESPONSE',
+                            content: '', // Vide pour ne pas déclencher le sendText de core
+                            latency: Date.now() - startTime
+                        };
                     }
 
                 } catch (e) {

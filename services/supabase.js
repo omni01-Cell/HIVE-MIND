@@ -235,6 +235,12 @@ export const db = {
 
         if (error) console.error('[DB] Erreur setGroupFounder:', error);
         return data;
+    },
+
+    /**
+     * Récupère l'historique d'un membre dans un groupe
+     */
+    async getMemberHistory(groupJid, userJid) {
         if (!supabase) return [];
 
         const { data, error } = await supabase

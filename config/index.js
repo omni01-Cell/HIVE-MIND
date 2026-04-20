@@ -94,7 +94,8 @@ export const config = {
         anthropic: process.env.ANTHROPIC_KEY || resolveEnvValue(credentials.familles_ia?.anthropic),
         groq: process.env.GROQ_KEY || resolveEnvValue(credentials.familles_ia?.groq),
         mistral: process.env.MISTRAL_KEY || resolveEnvValue(credentials.familles_ia?.mistral),
-        minimax: process.env.MINIMAX_KEY || resolveEnvValue(credentials.familles_ia?.minimax)
+        minimax: process.env.MINIMAX_KEY || resolveEnvValue(credentials.familles_ia?.minimax),
+        nvidia: process.env.VOTRE_CLE_NVIDIA || resolveEnvValue(credentials.familles_ia?.nvidia)
     },
 
     // === Modèles IA ===

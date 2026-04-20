@@ -242,7 +242,14 @@ class BaileysTransport extends EventEmitter {
             }
         });
 
-        // Écoute des messages
+        // 🛡️ Monitor encryption errors (to detect MessageCounterError)
+        self.sock.ev.on('messages.upsert', async ({ messages, type }) => {
+            for (const msg of messages) {
+                if (msg.messageStubType === 'CIPHERTEXT' || msg.message?.protocolMessage?.type === 'EPHEMERAL_SETTING') {
+                    // Possible decryption error metadata or protocol noisiness
+                }
+            }
+        });
         self.sock.ev.on('messages.upsert', async ({ messages, type }) => {
             if (type !== 'notify') {
                 return;
@@ -278,17 +285,15 @@ class BaileysTransport extends EventEmitter {
                         continue;
                     }
 
-                    const messageType = Object.keys(msg.message)[0];
-                    const pushName = msg.pushName;
-                    const chatId = remoteJid;
-                    const isGroup = chatId.endsWith('@g.us');
-                    const senderId = sender;
+                    // [REFACTOR] Centralized Robust Normalization
+                    const normalizedMsg = self._normalizeMessage(msg);
+                    const { chatId, isGroup, sender: senderId, pushName, type: messageType } = normalizedMsg;
 
                     console.log(`[Baileys] 📝 Type=${messageType}, chatId=${chatId}, isGroup=${isGroup}`);
 
                     // 1. MISE À JOUR SOCIALE (USER)
                     if (self.userService) {
-                        await self.userService.recordInteraction(senderId, msg.pushName, isGroup ? chatId : null);
+                        await self.userService.recordInteraction(senderId, pushName, isGroup ? chatId : null);
                     }
 
                     // 2. AUTO-DISCOVERY (GROUPES)
@@ -319,40 +324,12 @@ class BaileysTransport extends EventEmitter {
                     }
 
                     // 3. TRANSCRIPTION & AUDIO HANDLING (V6)
-                    const isAudio = msg.message?.audioMessage;
-                    let transcribedText = null;
-
-                    // Préparer normalizedMsg
-                    const normalizedMsg = {
-                        id: msg.key.id,
-                        chatId: remoteJid, // CRITICAL: Propagate chatId
-                        remoteJid: remoteJid,
-                        sender: sender,
-                        senderName: senderName,
-                        pushName: pushName,
-                        fromMe: msg.key.fromMe || false,
-                        isGroup: isGroup,
-                        timestamp: msg.messageTimestamp,
-                        type: messageType,
-                        raw: msg
-                    };
-
-                    if (isAudio) {
-                        transcribedText = await this.audioHandler.processAudioMessage(msg, normalizedMsg);
-                    }
-
-                    // Assigner le texte transcrit
-                    if (transcribedText) {
-                        normalizedMsg.text = transcribedText;
-                        normalizedMsg.isTranscribed = true;
-                    } else if (!normalizedMsg.text && !normalizedMsg.useNativeAudio) {
-                        // Fallback text extraction if not audio
-                        let textBody = '';
-                        if (msg.message?.conversation) textBody = msg.message.conversation;
-                        else if (msg.message?.extendedTextMessage?.text) textBody = msg.message.extendedTextMessage.text;
-                        else if (msg.message?.imageMessage?.caption) textBody = msg.message.imageMessage.caption;
-                        else if (msg.message?.videoMessage?.caption) textBody = msg.message.videoMessage.caption;
-                        normalizedMsg.text = textBody;
+                    if (normalizedMsg.mediaType === 'audio') {
+                        const transcribedText = await self.audioHandler.processAudioMessage(msg, normalizedMsg);
+                        if (transcribedText) {
+                            normalizedMsg.text = transcribedText;
+                            normalizedMsg.isTranscribed = true;
+                        }
                     }
 
                     // 🛡️ ANTI-DELETE logic avec protection race condition
@@ -411,6 +388,13 @@ class BaileysTransport extends EventEmitter {
         // REACTION: écoute des réactions
         self.sock.ev.on('messages.reaction', async (reactions) => {
             for (const reaction of reactions) {
+                // [FIX Anti-doublon] On ne compte que les réactions SOUS les messages du BOT (fromMe: true)
+                // Baileys: reaction.key est la clé du MESSAGE qui reçoit la réaction (pas la clé de la réaction elle-même)
+                if (!reaction.key.fromMe) {
+                    // Cette réaction est sur un message d'un AUTRE utilisateur, on ignore
+                    continue;
+                }
+
                 const reactionData = {
                     chatId: reaction.key.remoteJid,
                     messageId: reaction.key.id,
@@ -418,7 +402,7 @@ class BaileysTransport extends EventEmitter {
                     reaction: reaction.reaction.text,
                     timestamp: reaction.reaction.messageTimestamp
                 };
-                console.log(`[Baileys] 👍 Réaction reçue: ${reactionData.reaction} dans ${reactionData.chatId}`);
+                console.log(`[Baileys] 👍 Réaction reçue: ${reactionData.reaction} dans ${reactionData.chatId} (sur message bot)`);
                 eventBus.publish(BotEvents.REACTION_RECEIVED, reactionData);
             }
         });
@@ -560,8 +544,10 @@ class BaileysTransport extends EventEmitter {
             chatId,
             sender,
             senderName: msg.pushName || sender.split('@')[0],
+            pushName: msg.pushName,
             text,
             isGroup,
+            type: Object.keys(msg.message)[0],
             mediaType,
             quotedMsg,
             mentionedJids, // Nouveau champ
@@ -945,6 +931,35 @@ class BaileysTransport extends EventEmitter {
     async getGroupMetadata(groupId) {
         if (!this.sock) throw new Error('Socket not initialized');
         return await this.sock.groupMetadata(groupId);
+    }
+
+    /**
+     * Termine proprement la connexion WhatsApp
+     */
+    async disconnect() {
+        if (!this.sock) return;
+
+        console.log('[Baileys] 🔌 Déconnexion demandée...');
+        
+        try {
+            // 1. Désactiver le monitoring
+            this._stopListenerMonitoring();
+
+            // 2. Notifier WhatsApp (optionnel mais recommandé pour le statut)
+            await this.sock.sendPresenceUpdate('unavailable');
+            
+            // 3. Fermer le socket proprement
+            // Note: end(undefined) permet une fermeture propre sans erreur levée
+            this.sock.end(undefined);
+            
+            // 4. Nettoyer les listeners
+            this.sock.ev.removeAllListeners();
+            this.sock = null;
+            
+            console.log('[Baileys] ✅ Connexion fermée proprement.');
+        } catch (error) {
+            console.error('[Baileys] ⚠️ Erreur lors de la déconnexion:', error.message);
+        }
     }
 }
 

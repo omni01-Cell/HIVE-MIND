@@ -161,6 +161,23 @@ node scripts/debug-wa-metadata.js 123456789@g.us
 
 ---
 
+## 📱 Commandes SESSION / RÉPARATION
+
+| Commande | Description |
+|----------|-------------|
+| `npm run repair` | Nettoie le cache de session corrompu (MessageCounterError) tout en gardant l'appairage. |
+
+### Pourquoi utiliser `repair` ?
+En cas d'erreurs répétées du type `MessageCounterError` ou `Key used already`, cela signifie que le cache local de Baileys est désynchronisé.
+Cette commande supprime les fichiers temporaires de session **mais conserve `creds.json`**, vous évitant ainsi de devoir rescanner le QR Code.
+
+### Exemple
+```bash
+npm run repair
+```
+
+---
+
 ## 📊 Commandes SYSTÈME
 
 | Commande | Description |

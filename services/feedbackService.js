@@ -28,17 +28,21 @@ export const feedbackService = {
         if (!isPositive && !isNegative) return;
 
         try {
-            // 1. Mettre à jour le score du souvenir associé (si c'était un message stocké en RAG)
+            // 1. Mettre à jour le score du souvenir associé (seulement si c'est une réponse du bot)
+            // Note: On utilise un filtre explicite sur le rôle 'assistant' pour éviter de tagguer des messages utilisateurs
             const { data: memory, error } = await supabase
                 .from('memories')
                 .update({
                     metadata: {
                         feedback: isPositive ? 'positive' : 'negative',
-                        last_reaction: reaction
+                        last_reaction: reaction,
+                        msgId: messageId // On réinjecte le msgId pour éviter de l'écraser si le client ne fait pas de merge
                     }
                 })
                 .eq('chat_id', chatId)
-                .contains('metadata', { msgId: messageId }); // Supposant qu'on stocke l'ID message dans metadata
+                .eq('role', 'assistant')
+                .contains('metadata', { msgId: messageId });
+ // Supposant qu'on stocke l'ID message dans metadata
 
             // 2. Loguer l'événement pour le DreamService (Mémoire épisodique)
             await agentMemory.logAction(

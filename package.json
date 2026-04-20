@@ -13,6 +13,7 @@
         "lint": "eslint . --ext .js",
         "lint:fix": "eslint . --ext .js --fix",
         "cli": "node scripts/admin-cli.js",
+        "repair": "node scripts/repair-session.js",
         "audit:group": "node scripts/audit-group.js",
         "fix:usernames": "node scripts/fix-missing-usernames.js",
         "test": "node --test",

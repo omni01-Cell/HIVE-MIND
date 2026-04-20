@@ -123,6 +123,8 @@ export class EnvResolver {
             'VOTRE_CLE_MISTRAL': 'MISTRAL_KEY',
             'VOTRE_CLE_MINIMAX': 'MINIMAX_KEY',
             'VOTRE_CLE_KIMI': 'KIMI_KEY',
+            'VOTRE_CLE_NVIDIA': 'NVIDIA_API_KEY',
+            'VOTRE_CLE_HF': 'HF_API_KEY',
             'VOTRE_SUPABASE_URL': 'SUPABASE_URL',
             'VOTRE_SUPABASE_KEY': 'SUPABASE_KEY',
             'VOTRE_REDIS_URL': 'REDIS_URL'
