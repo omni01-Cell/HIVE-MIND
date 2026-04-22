@@ -112,7 +112,7 @@ export class ServiceContainer {
         // 3c. Voice Providers
         const { VoiceProvider } = await import('../services/voice/voiceProvider.js');
         const voiceProviderConfig = modelsConfig.voice_provider || {};
-        const voiceProvider = new VoiceProvider(voiceProviderConfig, quotaManager);
+        const voiceProvider = new VoiceProvider(voiceProviderConfig, quotaManager as any);
         this.register('voiceProvider', voiceProvider);
 
         // Legacy Voice

@@ -105,7 +105,7 @@ export function jidInList(jid: string | null | undefined, jidList: string[] | Se
   if (!jid || !jidList) return false;
 
   const list = Array.isArray(jidList) ? jidList : Array.from(jidList);
-  return list.some(item => jidMatch(jid, item));
+  return list.some((item: any) => jidMatch(jid, item));
 }
 
 /**

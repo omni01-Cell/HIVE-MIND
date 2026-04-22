@@ -65,7 +65,7 @@ export function classifyLocally(text: string | undefined, context: ReflexContext
   const normalized = text?.toLowerCase().trim() || '';
 
   // 1. SECURITY FIRST: If critical pattern matches -> direct AGENTIC
-  if (CRITICAL_PATTERNS.some(p => p.test(normalized))) {
+  if (CRITICAL_PATTERNS.some((p: any) => p.test(normalized))) {
     return { mode: 'AGENTIC', confidence: 1.0, reason: 'security_critical' };
   }
 

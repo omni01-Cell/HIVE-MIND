@@ -326,7 +326,7 @@ export class ActionMemory {
 
     const elapsed = Math.floor((Date.now() - action.startedAt) / 1000);
     const stepsText = action.steps.length > 0
-      ? action.steps.map(s => `  - ${s.step}`).join('\n')
+      ? action.steps.map((s: any) => `  - ${s.step}`).join('\n')
       : '  (No steps completed)';
 
     return `
@@ -358,7 +358,7 @@ ${stepsText}
 
       if (error) throw error;
 
-      return (data as any[]).map(row => ({
+      return (data as any[]).map((row: any) => ({
         id: row.id,
         chatId: row.chat_id,
         type: row.tool_name,

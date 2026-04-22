@@ -17,7 +17,7 @@ export function acquireLock(): void {
     let oldPid: number | undefined;
     try {
       oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8'));
-    } catch (e) {
+    } catch (e: any) {
       // Si le fichier existe mais est illisible, on l'écrasera
     }
 
@@ -59,7 +59,7 @@ export function releaseLock(): void {
         fs.unlinkSync(PID_FILE);
       }
     }
-  } catch (e) {
+  } catch (e: any) {
     // Échec silencieux lors de la fermeture
   }
 }
@@ -74,7 +74,7 @@ export function isLocked(): boolean {
     const oldPid = parseInt(content);
     process.kill(oldPid, 0);
     return true;
-  } catch (e) {
+  } catch (e: any) {
     return false;
   }
 }

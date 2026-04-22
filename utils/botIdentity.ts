@@ -64,7 +64,7 @@ export class BotIdentity {
     if (this._nameParts.length > 0) return this._nameParts;
 
     const parts = this.fullName.split(/\s+/).slice(0, 2);
-    this._nameParts = parts.filter(p => p.length > 0);
+    this._nameParts = parts.filter((p: any) => p.length > 0);
     return this._nameParts;
   }
 
@@ -178,7 +178,7 @@ export class BotIdentity {
   public isMentioned(text: string | null | undefined): boolean {
     if (!text) return false;
     const lower = text.toLowerCase();
-    return this.textVariants.some(v => lower.includes(v.toLowerCase()));
+    return this.textVariants.some((v: any) => lower.includes(v.toLowerCase()));
   }
 
   /**
@@ -187,7 +187,7 @@ export class BotIdentity {
   public isVocallyMentioned(transcription: string | null | undefined): boolean {
     if (!transcription) return false;
     const lower = transcription.toLowerCase();
-    return this.vocalVariants.some(v => lower.includes(v));
+    return this.vocalVariants.some((v: any) => lower.includes(v));
   }
 
   /**

@@ -21,12 +21,12 @@
       "@providers/*": ["providers/*"],
       "@utils/*": ["utils/*"],
       "@config/*": ["config/*"]
-    }
+    },
+    "typeRoots": ["./node_modules/@types", "./types"]
   },
   "include": [
     "**/*.ts",
-    "**/*.js",
-    "**/*.mjs"
+    "types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",

@@ -70,9 +70,10 @@ function loadJsonConfig(filename: string): any {
 /**
  * Resolves an environment value (literal or ${ENV_VAR} notation).
  */
-function resolveEnvValue(value: string | undefined): string | undefined {
+function resolveEnvValue(value: string | undefined | null): string | undefined {
   if (!value) return undefined;
-  return envResolver.resolve(value);
+  const resolved = envResolver.resolve(value);
+  return resolved !== null ? resolved : undefined;
 }
 
 // 1. Load Base Configurations
@@ -149,10 +150,12 @@ export const config: HIVEConfig = {
 
   models: modelsConfig,
   priorityFamilies: modelsConfig.reglages_generaux?.familles_prioritaires || ['gemini'],
-  embeddings: modelsConfig.reglages_generaux?.embeddings?.primary || {
-    provider: 'gemini',
-    model: 'gemini-embedding-001',
-    dimensions: 1024
+  embeddings: modelsConfig.reglages_generaux?.embeddings || {
+    primary: {
+      provider: 'gemini',
+      model: 'gemini-embedding-001',
+      dimensions: 1024
+    }
   },
 
   voice: modelsConfig.reglages_generaux?.audio_strategy || {},

@@ -94,7 +94,7 @@ export class SemanticMemory {
 
       if (error) throw error;
 
-      return (data as any[]).map(m => ({
+      return (data as any[]).map((m: any) => ({
         content: m.content,
         role: m.role,
         similarity: m.similarity
@@ -124,7 +124,7 @@ export class SemanticMemory {
 
     if (!keepIds || keepIds.length === 0) return;
 
-    const ids = keepIds.map(k => k.id);
+    const ids = keepIds.map((k: any) => k.id);
 
     // Delete everything else
     await this.supabase

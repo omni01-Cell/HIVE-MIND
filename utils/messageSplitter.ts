@@ -25,7 +25,7 @@ export function splitMessage(text: string | null | undefined, maxLength: number 
         parts.push(section.trim());
       }
     }
-    return parts.filter(p => p.length > 0);
+    return parts.filter((p: any) => p.length > 0);
   }
 
   // 2. Sinon couper par paragraphe
@@ -65,7 +65,7 @@ function splitByParagraph(text: string, maxLength: number): string[] {
 
   if (current.trim()) parts.push(current.trim());
 
-  return parts.filter(p => p.length > 0);
+  return parts.filter((p: any) => p.length > 0);
 }
 
 /**

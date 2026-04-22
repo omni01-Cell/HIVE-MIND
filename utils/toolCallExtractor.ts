@@ -98,8 +98,8 @@ export function extractToolCallsFromOpenAI(toolCalls: any[]): ToolCall[] {
   if (!Array.isArray(toolCalls)) return [];
 
   return toolCalls
-    .filter(call => call?.function)
-    .map(call => ({
+    .filter((call: any) => call?.function)
+    .map((call: any) => ({
       id: call.id,
       name: call.function.name,
       arguments: call.function.arguments,
@@ -139,7 +139,7 @@ export function parseToolArguments<T = any>(argsText: string | null | undefined)
 
   try {
     return JSON.parse(preCleaned);
-  } catch (e) {
+  } catch (e: any) {
     console.warn('[ToolCallExtractor] Arguments JSON invalides, tentative de réparation...');
 
     try {
@@ -150,7 +150,7 @@ export function parseToolArguments<T = any>(argsText: string | null | undefined)
         .replace(/,\s*([}\]])/g, '$1');
 
       return JSON.parse(cleaned);
-    } catch (repairError) {
+    } catch (repairError: any) {
       console.error('[ToolCallExtractor] Impossible de réparer les arguments:', argsText.substring(0, 50));
       
       if (!preCleaned.includes('{')) {
@@ -187,7 +187,7 @@ export function deduplicateToolCalls<T extends ToolCall>(toolCalls: T[]): T[] {
   if (!Array.isArray(toolCalls)) return [];
 
   const seen = new Set<string>();
-  return toolCalls.filter(call => {
+  return toolCalls.filter((call: any) => {
     if (!call || !call.name) return false;
 
     const key = `${call.name}:${call.arguments}`;
@@ -204,10 +204,10 @@ export function deduplicateToolCalls<T extends ToolCall>(toolCalls: T[]): T[] {
 export function getToolCallStats(toolCalls: Partial<ToolCall>[]): ToolCallStats {
   if (!Array.isArray(toolCalls)) return { total: 0, valid: 0, unique: 0, byName: {} };
 
-  const validCalls = toolCalls.filter(call => isValidToolCall(call)) as ToolCall[];
+  const validCalls = toolCalls.filter((call: any) => isValidToolCall(call)) as ToolCall[];
   const byName: Record<string, number> = {};
 
-  validCalls.forEach(call => {
+  validCalls.forEach((call: any) => {
     byName[call.name] = (byName[call.name] || 0) + 1;
   });
 

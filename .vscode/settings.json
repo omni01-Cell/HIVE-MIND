@@ -1,0 +1,6 @@
+{
+    "jest.jestCommandLine": "npm test --",
+    "jest.rootPath": ".",
+    "jest.disabledWorkspaceFolders": [],
+    "jest.shell": "/bin/bash"
+}

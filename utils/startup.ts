@@ -52,7 +52,7 @@ function generateLogo(botName: string): string {
   let output = `\n${THEME.PRIMARY}╔═══════════════════════════════════════════════════════════════════════╗${THEME.RESET}\n`;
   output += `${THEME.PRIMARY}║                                                                       ║${THEME.RESET}\n`;
 
-  logo3D.forEach(line => {
+  logo3D.forEach((line: any) => {
     output += `${THEME.PRIMARY}║ ${line}${THEME.PRIMARY}║${THEME.RESET}\n`;
   });
 
@@ -160,7 +160,7 @@ export class StartupDisplay {
   }
 
   public loading(moduleId: string): void {
-    const module = this.modules.find(m => m.id === moduleId);
+    const module = this.modules.find((m: any) => m.id === moduleId);
     if (module && this.progressBar) {
       const label = `${module.icon} ${module.name}...`;
       this.progressBar.update(this.currentStep, { module: label });
@@ -168,7 +168,7 @@ export class StartupDisplay {
   }
 
   public success(moduleId: string, detail = ''): void {
-    const module = this.modules.find(m => m.id === moduleId);
+    const module = this.modules.find((m: any) => m.id === moduleId);
     if (module) {
       this.currentStep++;
       const statusText = detail ? `${module.icon} ${module.name} (${detail})` : `${module.icon} ${module.name}`;
@@ -181,7 +181,7 @@ export class StartupDisplay {
   }
 
   public error(moduleId: string, errorMsg: string): void {
-    const module = this.modules.find(m => m.id === moduleId);
+    const module = this.modules.find((m: any) => m.id === moduleId);
     if (module) {
       this.currentStep++;
       this.results.set(moduleId, { status: 'error', module, error: errorMsg });

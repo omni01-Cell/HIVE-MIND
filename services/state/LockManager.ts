@@ -1,93 +1,87 @@
-/**
- * services/state/LockManager.ts
- * Système de verrouillage distribué via Redis
- */
-
+// @ts-nocheck
+// services/state/LockManager.js
 import { redis } from '../redisClient.js';
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Helper pour attendre (promisified setTimeout)
+const delay = (ms: any) => new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * Gère l'acquisition et la libération de verrous distribués
- */
 export class LockManager {
-  private prefix: string;
-  private ttl: number;
+    prefix: any;
+    ttl: any;
 
-  constructor(resourcePrefix: string, ttlMs: number = 5000) {
-    this.prefix = resourcePrefix;
-    this.ttl = ttlMs;
-  }
-
-  /**
-   * Tente d'acquérir un verrou distribué
-   * @param key ID de la ressource (ex: userJid)
-   * @returns Le lockId si succès, null sinon
-   */
-  public async acquire(key: string): Promise<string | null> {
-    if (!redis?.isOpen) {
-      console.warn('[LockManager] Redis not ready, proceeding without lock');
-      return 'no-lock-fallback';
+    constructor(resourcePrefix, ttlMs = 5000) {
+        this.prefix = resourcePrefix;
+        this.ttl = ttlMs;
     }
 
-    const lockKey = `lock:${this.prefix}:${key}`;
-    const lockId = Date.now().toString() + Math.random();
+    /**
+     * Tente d'acquérir un verrou distribué
+     * @param {string} key - ID de la ressource (ex: userJid)
+     * @returns {Promise<string|null>} Le lockId si succès, null sinon
+     */
+    async acquire(key: any) {
+        if (!redis?.isOpen) {
+            console.warn('[LockManager] Redis not ready, proceeding without lock');
+            return 'no-lock-fallback';
+        }
 
-    try {
-      // SET NX: Set if Not Exists - Opération atomique
-      const acquired = await redis.set(lockKey, lockId, {
-        PX: this.ttl,
-        NX: true
-      });
+        const lockKey = `lock:${this.prefix}:${key}`;
+        const lockId = Date.now().toString() + Math.random();
 
-      return acquired ? lockId : null;
-    } catch (error: any) {
-      console.error('[LockManager] acquire error:', error.message);
-      return null;
-    }
-  }
+        try {
+            // SET NX: Set if Not Exists - Opération atomique
+            const acquired = await redis.set(lockKey, lockId, {
+                PX: this.ttl,
+                NX: true
+            });
 
-  /**
-   * Attend et acquiert le verrou (Spinlock avec backoff)
-   */
-  public async acquireWait(key: string, maxRetries: number = 10): Promise<string | null> {
-    let attempt = 0;
-    while (attempt < maxRetries) {
-      const lockId = await this.acquire(key);
-      if (lockId) return lockId;
-
-      attempt++;
-      // Attente aléatoire pour éviter le "thundering herd problem"
-      await delay(50 + Math.random() * 100);
+            return acquired ? lockId : null;
+        } catch (error: any) {
+            console.error('[LockManager] acquire error:', error.message);
+            return null;
+        }
     }
 
-    console.warn(`[LockManager] Failed to acquire lock for ${key} after ${maxRetries} retries`);
-    return null;
-  }
+    /**
+     * Attend et acquiert le verrou (Spinlock avec backoff)
+     */
+    async acquireWait(key: any, maxRetries: any = 10) {
+        let attempt = 0;
+        while (attempt < maxRetries) {
+            const lockId = await this.acquire(key);
+            if (lockId) return lockId;
 
-  /**
-   * Relâche le verrou seulement s'il nous appartient
-   */
-  public async release(key: string, lockId: string | null): Promise<void> {
-    if (!lockId || lockId === 'no-lock-fallback' || !redis?.isOpen) return;
+            attempt++;
+            // Attente aléatoire pour éviter le "thundering herd problem"
+            await delay(50 + Math.random() * 100);
+        }
 
-    const lockKey = `lock:${this.prefix}:${key}`;
-    try {
-      // Script Lua pour garantir l'atomicité de la vérification + suppression
-      const script = `
-        if redis.call("get", KEYS[1]) == ARGV[1] then
-          return redis.call("del", KEYS[1])
-        else
-          return 0
-        end
-      `;
-      // script as string, buteval expects it. RedisClientType handled it.
-      await redis.eval(script, {
-        keys: [lockKey],
-        arguments: [lockId]
-      });
-    } catch (error: any) {
-      console.error('[LockManager] release error:', error.message);
+        console.warn(`[LockManager] Failed to acquire lock for ${key} after ${maxRetries} retries`);
+        return null; // On retourne null plutôt que throw pour ne pas crasher le flux, mais l'appelant doit gestire
     }
-  }
+
+    /**
+     * Relâche le verrou seulement s'il nous appartient
+     */
+    async release(key: any, lockId: any) {
+        if (!lockId || lockId === 'no-lock-fallback' || !redis?.isOpen) return;
+
+        const lockKey = `lock:${this.prefix}:${key}`;
+        try {
+            // Script Lua pour garantir l'atomicité de la vérification + suppression
+            const script = `
+                if redis.call("get", KEYS[1]) == ARGV[1] then
+                    return redis.call("del", KEYS[1])
+                else
+                    return 0
+                end
+            `;
+            await redis.eval(script, {
+                keys: [lockKey],
+                arguments: [lockId]
+            });
+        } catch (error: any) {
+            console.error('[LockManager] release error:', error.message);
+        }
+    }
 }

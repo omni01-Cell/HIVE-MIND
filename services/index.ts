@@ -1,36 +1,34 @@
-/**
- * services/index.ts
- * Barrel export pour tous les services
- */
+// services/index.js
+// Barrel export pour tous les services - Simplifie les imports
+// Usage: import { userService, groupService } from '../services/index.js';
 
-// =================== SERVICES MIGRÉS (TS) ===================
+// =================== SERVICES PRINCIPAUX ===================
 export { userService } from './userService.js';
 export { groupService } from './groupService.js';
 export { adminService } from './adminService.js';
+
+// =================== MÉMOIRE ===================
 export { workingMemory } from './workingMemory.js';
-export { consciousness } from './consciousnessService.js';
 export { factsMemory, semanticMemory } from './memory.js';
 export { graphMemory } from './graphMemory.js';
-export { moralCompass } from './moralCompass.js';
+
+// =================== BASE DE DONNÉES ===================
 export { supabase, db } from './supabase.js';
 export { redis, ensureConnected } from './redisClient.js';
+
+// =================== CONSCIENCE & RÉFLEXION ===================
+export { consciousness } from './consciousnessService.js';
+export { dreamService } from './dreamService.js';
+export { moralCompass } from './moralCompass.js';
+export { feedbackService } from './feedbackService.js';
+
+// =================== AGENTS & PROACTIVITÉ ===================
+export { agentMemory } from './agentMemory.js';
+export { goalsService } from './goalsService.js';
+export { socialCueWatcher } from './socialCueWatcher.js';
+
+// =================== UTILITAIRES ===================
+export { consolidationService } from './consolidationService.js';
+export { knowledgeWeaver } from './knowledgeWeaver.js';
 export { quotaManager } from './quotaManager.js';
 export { CleanupService } from './cleanup.js';
-
-// =================== SERVICES EN ATTENTE (JS) ===================
-// @ts-ignore
-export { dreamService } from './dreamService.js';
-// @ts-ignore
-export { moralCompass } from './moralCompass.js';
-// @ts-ignore
-export { feedbackService } from './feedbackService.js';
-// @ts-ignore
-export { agentMemory } from './agentMemory.js';
-// @ts-ignore
-export { goalsService } from './goalsService.js';
-// @ts-ignore
-export { socialCueWatcher } from './socialCueWatcher.js';
-// @ts-ignore
-export { consolidationService } from './consolidationService.js';
-// @ts-ignore
-export { knowledgeWeaver } from './knowledgeWeaver.js';

@@ -35,7 +35,7 @@ export function forceIPv4ForUrl(url: string | null | undefined): boolean {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname;
 
-    const needsIPv4 = IPV4_REQUIRED_DOMAINS.some(domain =>
+    const needsIPv4 = IPV4_REQUIRED_DOMAINS.some((domain: any) =>
       hostname === domain || hostname.endsWith('.' + domain)
     );
 
@@ -103,7 +103,7 @@ export function shouldTryIPv4Fallback(error: any, url: string): boolean {
   ];
 
   const errorStr = error.toString().toLowerCase();
-  const isNetworkError = errorMessages.some(msg => errorStr.includes(msg.toLowerCase()));
+  const isNetworkError = errorMessages.some((msg: any) => errorStr.includes(msg.toLowerCase()));
 
   if (isNetworkError) {
     console.log(`[DNS] 🔄 IPv4 fallback suggéré pour: ${url}`);

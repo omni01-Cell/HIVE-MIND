@@ -44,7 +44,7 @@ export const AUDIO_FORMATS = {
  * @returns Audio PCM 16-bit, 16kHz, Mono
  */
 export async function oggToPcm(oggPath: string): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve: any, reject: any) => {
     const chunks: Buffer[] = [];
 
     const ffmpeg = spawn(FFMPEG_BIN, [
@@ -59,7 +59,7 @@ export async function oggToPcm(oggPath: string): Promise<Buffer> {
     ffmpeg.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
     ffmpeg.stderr.on('data', () => { }); // Ignorer les logs ffmpeg
 
-    ffmpeg.on('close', (code) => {
+    ffmpeg.on('close', (code: any) => {
       if (code === 0) {
         resolve(Buffer.concat(chunks));
       } else {
@@ -81,7 +81,7 @@ export async function pcmToOgg(pcmBuffer: Buffer, options: { sampleRate?: number
   const sampleRate = options.sampleRate || 24000;
   const outputPath = join(tmpdir(), `gemini_audio_${randomUUID()}.ogg`);
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve: any, reject: any) => {
     const ffmpeg = spawn(FFMPEG_BIN, [
       '-f', 's16le',           // Input format: PCM 16-bit
       '-ar', sampleRate.toString(),
@@ -100,7 +100,7 @@ export async function pcmToOgg(pcmBuffer: Buffer, options: { sampleRate?: number
 
     ffmpeg.stderr.on('data', () => { }); // Ignorer les logs
 
-    ffmpeg.on('close', (code) => {
+    ffmpeg.on('close', (code: any) => {
       if (code === 0) {
         resolve(outputPath);
       } else {
@@ -120,7 +120,7 @@ export async function pcmToOgg(pcmBuffer: Buffer, options: { sampleRate?: number
 export async function wavToOgg(wavPath: string): Promise<string> {
   const outputPath = join(tmpdir(), `gemini_audio_${randomUUID()}.ogg`);
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve: any, reject: any) => {
     const ffmpeg = spawn(FFMPEG_BIN, [
       '-i', wavPath,
       '-c:a', 'libopus',
@@ -132,7 +132,7 @@ export async function wavToOgg(wavPath: string): Promise<string> {
 
     ffmpeg.stderr.on('data', () => { });
 
-    ffmpeg.on('close', (code) => {
+    ffmpeg.on('close', (code: any) => {
       if (code === 0) {
         resolve(outputPath);
       } else {
@@ -154,7 +154,7 @@ export function cleanupTempFiles(...paths: (string | null | undefined)[]): void 
       if (path && existsSync(path)) {
         unlinkSync(path);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn('[AudioConverter] Cleanup failed:', path);
     }
   }
@@ -164,9 +164,9 @@ export function cleanupTempFiles(...paths: (string | null | undefined)[]): void 
  * Vérifie si ffmpeg est disponible
  */
 export async function checkFfmpeg(): Promise<boolean> {
-  return new Promise((resolve) => {
+  return new Promise((resolve: any) => {
     const ffmpeg = spawn(FFMPEG_BIN, ['-version']);
-    ffmpeg.on('close', (code) => resolve(code === 0));
+    ffmpeg.on('close', (code: any) => resolve(code === 0));
     ffmpeg.on('error', () => resolve(false));
   });
 }

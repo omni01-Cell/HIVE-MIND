@@ -3,24 +3,26 @@
     "version": "1.0.0",
     "description": "Bot WhatsApp modulaire avec architecture Brick-Like et multi-modèles IA",
     "type": "module",
-    "main": "bot.js",
+    "main": "bot.ts",
     "bin": {
-        "hive-mind": "./bin/hive-mind.js"
+        "hive-mind": "./bin/hive-mind.ts"
     },
     "scripts": {
-        "start": "tsx bot.js",
-        "dev": "tsx --watch bot.js",
+        "start": "tsx bot.ts",
+        "dev": "tsx --watch bot.ts",
         "build": "tsc --noEmit",
         "lint": "eslint . --ext .js,.ts",
         "lint:fix": "eslint . --ext .js,.ts --fix",
-        "cli": "tsx scripts/admin-cli.js",
-        "repair": "tsx scripts/repair-session.js",
-        "audit:group": "tsx scripts/audit-group.js",
-        "fix:usernames": "tsx scripts/fix-missing-usernames.js",
-        "test": "tsx --test",
-        "test:unit": "tsx --test tests/unit/**/*.test.js",
-        "test:supabase": "tsx --test tests/supabase.test.js",
-        "test:providers": "tsx --test tests/providers.test.js"
+        "cli": "tsx scripts/admin-cli.ts",
+        "repair": "tsx scripts/repair-session.ts",
+        "audit:group": "tsx scripts/audit-group.ts",
+        "fix:usernames": "tsx scripts/fix-missing-usernames.ts",
+        "test": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest",
+        "test:unit": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/unit",
+        "test:integration": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/integration",
+        "test:e2e": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/e2e",
+        "test:supabase": "tsx --test tests/supabase.test.ts",
+        "test:providers": "tsx --test tests/providers.test.ts"
     },
     "keywords": [
         "whatsapp",
@@ -58,8 +60,14 @@
         "zod": "^4.3.6"
     },
     "devDependencies": {
+        "@types/cli-progress": "^3.11.6",
+        "@types/fluent-ffmpeg": "^2.1.28",
+        "@types/jest": "^30.0.0",
         "@types/node": "^25.6.0",
+        "@types/node-cron": "^3.0.11",
         "eslint": "^9.39.2",
+        "jest": "^30.3.0",
+        "ts-jest": "^29.4.9",
         "tsx": "^4.21.0",
         "typescript": "^6.0.3"
     }

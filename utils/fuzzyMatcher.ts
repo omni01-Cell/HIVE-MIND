@@ -254,7 +254,7 @@ export function resolveImplicitMentions(text: string | null | undefined, members
   const resolvedJids: string[] = [];
   const resolvedMembers: Member[] = [];
 
-  const sortedMembers = [...members].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
+  const sortedMembers = [...members].sort((a: any, b: any) => (b.name?.length || 0) - (a.name?.length || 0));
 
   for (const member of sortedMembers) {
     const MIN_NAME_LEN = 3;

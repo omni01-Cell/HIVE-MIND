@@ -131,7 +131,7 @@ export const isStorable = (text: string | null | undefined, role: string): boole
 
   // 1. Exclure les commandes (commençant par !, /, .)
   const COMMAND_PREFIXES = ['!', '/', '.', '?'];
-  if (COMMAND_PREFIXES.some(prefix => cleanText.startsWith(prefix))) return false;
+  if (COMMAND_PREFIXES.some((prefix: any) => cleanText.startsWith(prefix))) return false;
 
   // 2. Exclure les messages trop courts (peu de valeur sémantique)
   const MIN_STORABLE_LENGTH = 5;
@@ -145,7 +145,7 @@ export const isStorable = (text: string | null | undefined, role: string): boole
     /Veuillez patienter/i,
     /Scannez le QR Code/i
   ];
-  if (NOISE_PATTERNS.some(pattern => pattern.test(cleanText))) return false;
+  if (NOISE_PATTERNS.some((pattern: any) => pattern.test(cleanText))) return false;
 
   // 4. Exclure les messages de l'assistant qui sont des refus
   if (role === 'assistant' && (cleanText.includes("Désolé") || cleanText.includes("Je ne peux pas"))) {
