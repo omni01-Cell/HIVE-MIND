@@ -81,21 +81,22 @@ export default {
                 }
             }
         },
-        type: 'function',
-        function: {
-            name: 'cancel_goal',
-            description: 'Annule un objectif autonome.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    goalId: {
-                        type: 'string',
-                        description: 'ID de l\'objectif à annuler'
-                    }
-                },
-                required: ['goalId']
+        {
+            type: 'function',
+            function: {
+                name: 'cancel_goal',
+                description: 'Annule un objectif autonome.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        goalId: {
+                            type: 'string',
+                            description: 'ID de l\'objectif à annuler'
+                        }
+                    },
+                    required: ['goalId']
+                }
             }
-        }
         }
     ],
 

@@ -8,18 +8,19 @@
         "hive-mind": "./bin/hive-mind.js"
     },
     "scripts": {
-        "start": "node bot.js",
-        "dev": "node --watch bot.js",
-        "lint": "eslint . --ext .js",
-        "lint:fix": "eslint . --ext .js --fix",
-        "cli": "node scripts/admin-cli.js",
-        "repair": "node scripts/repair-session.js",
-        "audit:group": "node scripts/audit-group.js",
-        "fix:usernames": "node scripts/fix-missing-usernames.js",
-        "test": "node --test",
-        "test:unit": "node --test tests/unit/**/*.test.js",
-        "test:supabase": "node --test tests/supabase.test.js",
-        "test:providers": "node --test tests/providers.test.js"
+        "start": "tsx bot.js",
+        "dev": "tsx --watch bot.js",
+        "build": "tsc --noEmit",
+        "lint": "eslint . --ext .js,.ts",
+        "lint:fix": "eslint . --ext .js,.ts --fix",
+        "cli": "tsx scripts/admin-cli.js",
+        "repair": "tsx scripts/repair-session.js",
+        "audit:group": "tsx scripts/audit-group.js",
+        "fix:usernames": "tsx scripts/fix-missing-usernames.js",
+        "test": "tsx --test",
+        "test:unit": "tsx --test tests/unit/**/*.test.js",
+        "test:supabase": "tsx --test tests/supabase.test.js",
+        "test:providers": "tsx --test tests/providers.test.js"
     },
     "keywords": [
         "whatsapp",
@@ -53,9 +54,13 @@
         "redis": "^4.6.12",
         "wa-sticker-formatter": "^4.4.4",
         "wikipedia": "^2.1.2",
-        "ws": "^8.19.0"
+        "ws": "^8.19.0",
+        "zod": "^4.3.6"
     },
     "devDependencies": {
-        "eslint": "^9.39.2"
+        "@types/node": "^25.6.0",
+        "eslint": "^9.39.2",
+        "tsx": "^4.21.0",
+        "typescript": "^6.0.3"
     }
 }

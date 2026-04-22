@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "ignoreDeprecations": "6.0",
+    "outDir": "./dist",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "checkJs": false,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["core/*"],
+      "@services/*": ["services/*"],
+      "@plugins/*": ["plugins/*"],
+      "@providers/*": ["providers/*"],
+      "@utils/*": ["utils/*"],
+      "@config/*": ["config/*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.js",
+    "**/*.mjs"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "session",
+    "temp",
+    ".agent",
+    ".GCC"
+  ]
+}
