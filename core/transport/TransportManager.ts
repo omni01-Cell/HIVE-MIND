@@ -135,6 +135,10 @@ export class TransportManager {
         return this.getTransport(sourceChannel).sendReaction(channelId, key, emoji);
     }
 
+    async sendMedia(channelId: string, media: any, options: any = {}, sourceChannel?: string) {
+        return this.getTransport(sourceChannel).sendMedia(channelId, media, options);
+    }
+
     async disconnect() {
         const disconnectPromises = this.activeTransports.map(async (name) => {
             const transport = this.transports.get(name);

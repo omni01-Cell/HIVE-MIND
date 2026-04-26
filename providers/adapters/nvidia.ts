@@ -121,7 +121,7 @@ export default {
         } catch (err: any) {
             clearTimeout(timeoutId);
             if (err.name === 'AbortError') {
-                throw new Error('[NVIDIA Adapter] Timeout API (30s dépassés)');
+                throw new Error('[NVIDIA Adapter] Timeout API (90s dépassés)');
             }
             throw err;
         }

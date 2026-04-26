@@ -17,6 +17,8 @@ import { isStorable } from '../utils/helpers.js';
 
 // [PTC] Programmatic Tool Calling — Pilier D AION
 import { ptcExecutor, buildToolFunctions } from '../services/ptc/index.js';
+// [WAKE] WakeSystem — Push-based long-running agent tasks (OpenClaw Heartbeat pattern)
+import { hiveWakeSystem } from '../services/ptc/WakeSystem.js';
 import { startupDisplay } from '../utils/startup.js';
 
 import { botIdentity } from '../utils/botIdentity.js';
@@ -213,6 +215,24 @@ export class BotCore {
         } catch (e: any) {
             startupDisplay.error('scheduler', e.message);
         }
+
+        // [WAKE] Démarrer le WakeSystem (Heartbeat 5s pour tâches longue durée)
+        hiveWakeSystem.start();
+        // Enregistrer le callback global : quand un Wake Event expire, re-injecter
+        // le prompt dans la boucle comme si c'était un nouveau message entrant.
+        hiveWakeSystem.on('wake', async (event: any) => {
+            console.log(`[WakeSystem] ⏰ Réveil générique pour chatId=${event.chatId}, prompt="${event.prompt.slice(0, 60)}..."`);
+            // Ré-injecter comme message système dans la boucle principale
+            await this._onMessage({
+                chatId: event.chatId,
+                sender: 'system@wake',
+                senderName: 'WAKE_SYSTEM',
+                text: `[WAKE_EVENT] ${event.prompt}`,
+                isGroup: event.chatId?.endsWith('@g.us') ?? false,
+                isSystem: true,
+                sourceChannel: 'internal',
+            } as any);
+        });
 
         // 4. [LEVEL 5] Initialiser le Feedback et Auto-Apprentissage
         startupDisplay.loading('reflection');
@@ -965,13 +985,23 @@ export class BotCore {
                         });
                         const analysis = await planner.review(executionLog);
 
-                        const summaryPrompt = `Le plan d'action a été exécuté.\nObjectif: ${(plan as any).goal}\nRésultats: ${JSON.stringify((executionLog as any).results).substring(0, 1000)}\n\nGénère une réponse conversationnelle résumant ce qui a été fait.`;
-                        const summaryResponse = await providerRouter.chat([
-                            ...history,
-                            { role: 'user', content: summaryPrompt }
-                        ], { family: usedFamily });
+                        // [BUG #6 FIX] usedFamily est null ici (ReAct loop pas encore exécutée)
+                        // Utiliser category: 'AGENTIC' pour la résolution via Smart Router
+                        try {
+                            const summaryPrompt = `Le plan d'action a été exécuté.\nObjectif: ${(plan as any).goal}\nRésultats: ${JSON.stringify((executionLog as any).results).substring(0, 1000)}\n\nGénère une réponse conversationnelle résumant ce qui a été fait.`;
+                            const summaryResponse = await providerRouter.chat([
+                                ...history,
+                                { role: 'user', content: summaryPrompt }
+                            ], { category: 'AGENTIC' });
 
-                        finalResponse = summaryResponse.content;
+                            finalResponse = summaryResponse.content;
+                        } catch (summaryErr: any) {
+                            // [BUG #7 FIX] Ne jamais laisser l'utilisateur sans réponse
+                            console.error('[Planner] ❌ Échec génération résumé:', summaryErr.message);
+                            const successCount = (executionLog as any).completed?.length || 0;
+                            const failCount = (executionLog as any).failed?.length || 0;
+                            finalResponse = `✅ Plan exécuté (${successCount} étapes réussies, ${failCount} échouées). Je n'ai pas pu générer un résumé détaillé, mais les actions ont été traitées.`;
+                        }
                         await this.actionMemory.completeAction(chatId, { success: (analysis as any).success });
 
                         keepThinking = false;
@@ -1100,9 +1130,44 @@ export class BotCore {
                                 );
 
                                 try {
-                                    // Exécuter le code dans le sandbox VM
-                                    const ptcResult = await ptcExecutor.execute(codeArgs.code, toolFns);
-                                    toolResult = ptcResult;
+                                    // Construire le bridge HIVE pour ce chatId (WakeSystem)
+                                    const hiveBridge = hiveWakeSystem.buildHiveBridge(chatId);
+
+                                    // Enregistrer le callback de réveil spécifique à ce chatId
+                                    hiveWakeSystem.registerWakeCallback(chatId, async (wakeEvent) => {
+                                        console.log(`[WakeSystem] ⏰ Réveil contextuel pour chatId=${chatId}`);
+                                        await this._onMessage({
+                                            chatId: wakeEvent.chatId,
+                                            sender: 'system@wake',
+                                            senderName: 'WAKE_SYSTEM',
+                                            text: `[WAKE_EVENT] ${wakeEvent.prompt}`,
+                                            isGroup: wakeEvent.chatId?.endsWith('@g.us') ?? false,
+                                            isSystem: true,
+                                            sourceChannel: 'internal',
+                                        } as any);
+                                    });
+
+                                    // Exécuter le code dans le sandbox VM (avec bridge HIVE)
+                                    const ptcResult = await ptcExecutor.execute(codeArgs.code, toolFns, hiveBridge);
+
+                                    // [SLEEP_SCHEDULED] Si le script a planifié un réveil, ne PAS
+                                    // renvoyer le résultat brut au LLM — c'est un signal interne.
+                                    // Le WakeSystem se chargera de relancer la boucle au bon moment.
+                                    if (ptcResult.metadata.sleepScheduled) {
+                                        const sleep = ptcResult.metadata.sleepScheduled;
+                                        console.log(`[PTC] 💤 SLEEP_SCHEDULED — id=${sleep.wakeEventId}, réveil dans ${Math.round((sleep.wakeAtMs - Date.now()) / 1000)}s`);
+                                        // Informer le LLM de manière concise (pas le résultat brut)
+                                        toolResult = {
+                                            success: true,
+                                            type: 'SLEEP_SCHEDULED',
+                                            message: sleep.message,
+                                            wakeEventId: sleep.wakeEventId,
+                                            wakeAtMs: sleep.wakeAtMs,
+                                        };
+                                    } else {
+                                        toolResult = ptcResult;
+                                    }
+
                                     console.log(`[PTC] 📊 ${ptcResult.metadata.toolCallCount} tools exécutés, ~${ptcResult.metadata.totalTokensSaved} tokens économisés`);
                                 } catch (ptcErr: any) {
                                     // [FALLBACK] Si PTC refuse (1 seul outil), exécuter via tool calling natif
@@ -1393,6 +1458,20 @@ export class BotCore {
             }
 
             if (!finalResponse) return;
+
+            // ── [SILENT TOKEN] Inspiré d'OpenClaw — Supprimer les messages "internes" ──
+            // WHY: Quand l'agent planifie une tâche en background via HIVE.sleepAndWake(),
+            // il répond SILENT_HM pour signaler qu'il n'a rien à dire à l'utilisateur.
+            // On intercepte ce token ici et on n'envoie RIEN sur le canal (WhatsApp/Discord).
+            const SILENT_TOKEN = 'SILENT_HM';
+            if (finalResponse.trim() === SILENT_TOKEN) {
+                console.log('[Core] 🤫 SILENT_HM intercepté — aucun message envoyé à l\'utilisateur.');
+                // Stocker quand même en mémoire pour la cohérence de l'historique
+                await workingMemory.addMessage(chatId, 'assistant', '[ACTION_SILENCIEUSE]');
+                clearTimeout(feedbackTimeoutId ?? undefined);
+                feedbackState.sent = true;
+                return;
+            }
 
             // ========== [FEEDBACK FIRST] Nettoyer le timeout et envoyer la réponse ==========
             clearTimeout(feedbackTimeoutId ?? undefined);
@@ -2245,6 +2324,8 @@ ${textToCompress}`
 
         // Laisser le temps au message de partir
         setTimeout(() => {
+            // [WAKE] Arrêter proprement le heartbeat pour permettre un shutdown clean
+            hiveWakeSystem.stop();
             console.log('🛑 Arrêt du processus.');
             process.exit(0);
         }, 2000);

@@ -160,6 +160,10 @@ export class ServiceContainer {
         const { factsMemory } = await import('../services/memory.js');
         this.register('facts', factsMemory);
 
+        // 8. Provider Router (singleton global — utilisé par ShoppingAgent, DeepResearch, JournalGenerator)
+        const { providerRouter } = await import('../providers/index.js');
+        this.register('providerRouter', providerRouter);
+
         this.initialized = true;
     }
 

@@ -357,7 +357,7 @@ class PluginLoader {
             }
 
             // 3. Fusionner avec les CORE TOOLS (Outils toujours disponibles)
-            let CORE_TOOLS = ['get_my_capabilities', 'send_message', 'react_to_message', 'use_tool'];
+            let CORE_TOOLS = ['get_my_capabilities', 'send_message', 'send_file', 'react_to_message', 'use_tool'];
 
             // [SENTIENCE] Si l'IA est énervée, on arme le système
             if (forceModeration) {
@@ -387,7 +387,7 @@ class PluginLoader {
         } catch (error: any) {
             console.error('[PluginLoader] Erreur getRelevantTools:', error.message);
             // Fallback: Core Tools + Premiers outils
-            const CORE_TOOLS = ['get_my_capabilities', 'send_message', 'react_to_message'];
+            const CORE_TOOLS = ['get_my_capabilities', 'send_message', 'send_file', 'react_to_message'];
             const coreToolDefs = this.toolDefinitions.filter((t: any) => t.function && CORE_TOOLS.includes(t.function.name));
             const fallbackTools = this.toolDefinitions.slice(0, fallbackLimit);
 

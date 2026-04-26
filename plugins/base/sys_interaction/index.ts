@@ -80,6 +80,23 @@ export default {
         {
             type: 'function',
             function: {
+                name: 'send_file',
+                description: 'Envoie un fichier (image, vidéo, document) sur le réseau cible. Universel (Discord, Telegram, WhatsApp).',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        filePath: { type: 'string', description: 'Le chemin absolu ou l\'URL du fichier à envoyer.' },
+                        caption: { type: 'string', description: 'Texte optionnel accompagnant le fichier.' },
+                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optionnel. Le réseau de destination. Par défaut, le réseau actuel.' },
+                        target_chat_id: { type: 'string', description: 'Optionnel. L\'ID du chat/utilisateur de destination.' }
+                    },
+                    required: ['filePath']
+                }
+            }
+        },
+        {
+            type: 'function',
+            function: {
                 name: 'get_my_capabilities',
                 description: 'Liste TOUTES les fonctionnalités, plugins et outils dont je dispose. À utiliser quand l\'utilisateur demande "Que sais-tu faire ?" ou "Liste tes fonctions", car ta mémoire courante peut être incomplète.',
                 parameters: {
@@ -221,6 +238,20 @@ export default {
                     // Utiliser sendText pour bénéficier du formatage auto et splitting
                     await transport.sendText(msgTargetChatId, text, {}, msgTargetChannel);
                     return { success: true, message: `[ACTION] Message envoyé sur ${msgTargetChannel} au chat ${msgTargetChatId}.` };
+
+                case 'send_file':
+                case 'send_files': {
+                    const { filePath, caption } = args;
+                    if (!filePath) return { success: false, message: 'Chemin de fichier (filePath) requis.' };
+
+                    const fileTargetChannel = args.target_channel || context.sourceChannel;
+                    const fileTargetChatId = args.target_chat_id || chatId;
+
+                    // Support universel via sendMedia
+                    // Le transport adaptera l'envoi en fonction de ses propres capacités
+                    await transport.sendMedia(fileTargetChatId, filePath, { caption }, fileTargetChannel);
+                    return { success: true, message: `[ACTION] Fichier envoyé sur ${fileTargetChannel} au chat ${fileTargetChatId}.` };
+                }
 
                 default:
                     return { success: false, message: `Outil inconnu: ${toolName}` };

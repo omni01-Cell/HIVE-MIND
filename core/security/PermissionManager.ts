@@ -14,6 +14,7 @@
 // ============================================================================
 
 import { resolve, isAbsolute } from 'path';
+import * as fs from 'fs';
 import { transportManager } from '../transport/TransportManager.js';
 import { adminService } from '../../services/adminService.js';
 
@@ -49,6 +50,7 @@ interface PendingRequest {
 
 export class PermissionManager {
     private originalCwd: string;
+    public sandboxDir: string;
     private allowedDirectories: Set<string> = new Set();
     private sessionPermissions: Set<string> = new Set();
 
@@ -75,8 +77,15 @@ export class PermissionManager {
 
     constructor() {
         this.originalCwd = process.cwd();
-        const sandboxDir = process.env.SANDBOX_DIR || '/home/omni/Code/Sandbox1';
-        this.allowedDirectories.add(sandboxDir);
+        this.sandboxDir = process.env.SANDBOX_DIR 
+            ? resolve(process.env.SANDBOX_DIR) 
+            : resolve(this.originalCwd, 'Sandbox1');
+            
+        if (!fs.existsSync(this.sandboxDir)) {
+            fs.mkdirSync(this.sandboxDir, { recursive: true });
+        }
+        
+        this.allowedDirectories.add(this.sandboxDir);
         this.allowedDirectories.add(resolve(this.originalCwd, 'storage_hm'));
     }
 

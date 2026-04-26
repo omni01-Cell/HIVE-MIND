@@ -23,6 +23,7 @@ import type {
 } from './types.js';
 import { SANDBOX_HELPERS_SOURCE } from './SandboxHelpers.js';
 import { validateCode, autoRepairCode } from './SafeScriptValidator.js';
+import type { HiveWakeBridge, SleepResult } from './WakeSystem.js';
 
 const DEFAULT_CONFIG: PTCConfig = {
     timeoutMs: 30_000,
@@ -100,7 +101,21 @@ RÈGLES:
 1. Appeler chaque outil avec UN SEUL objet: nomOutil({ param1: val, param2: val })
 2. TOUJOURS retourner le résultat final avec \`return\`
 3. Utiliser \`await\` pour chaque appel d'outil
-4. Utiliser \`Promise.all()\` pour les appels parallèles`,
+4. Utiliser \`Promise.all()\` pour les appels parallèles
+
+TÂCHES LONGUES (>30s) — API HIVE:
+L'objet global \`HIVE\` est disponible pour gérer les tâches qui dépassent le timeout LLM.
+- \`await HIVE.sleepAndWake(delayMs, "Prompt de réveil")\` — Libère la boucle LLM et programme un réveil automatique après \`delayMs\` ms. HIVE-MIND se réveillera et exécutera le prompt automatiquement.
+- \`await HIVE.waitForBackground(commandId, checkEveryMs, "Prompt")\` — Attend la fin d'une commande background et se réveille quand c'est terminé.
+QUAND UTILISER : scraping long, compilation, attente d'un webhook, surveillance d'un service.
+RÈGLE CRITIQUE : Après avoir appelé \`HIVE.sleepAndWake()\`, retourne UNIQUEMENT le résultat de sleepAndWake et réponds \`SILENT_HM\` dans ton message final.
+
+EXEMPLE TÂCHE LONGUE:
+\`\`\`javascript
+// Vérifier un endpoint dans 60 secondes
+const result = await HIVE.sleepAndWake(60000, "Vérifie si https://api.example.com/health répond avec status 200 et préviens l'utilisateur");
+return result; // Type SLEEP_SCHEDULED
+\`\`\``,
                 parameters: {
                     type: 'object',
                     properties: {
@@ -118,14 +133,16 @@ RÈGLES:
 
     /**
      * Exécute le code JS généré par le LLM dans un sandbox VM.
-     * 
+     *
      * @param code — Code JS généré par le LLM
      * @param toolFunctions — Map nom → fonction exécutable pour chaque outil
+     * @param hiveBridge — Bridge HIVE injecté dans le VM (WakeSystem, etc.)
      * @returns Résultat + métriques d'économies de tokens
      */
     async execute(
         code: string,
         toolFunctions: ReadonlyMap<string, ToolFunction>,
+        hiveBridge?: HiveWakeBridge,
     ): Promise<PTCExecutionResult> {
         const startTime = Date.now();
         const toolCalls: ToolCallRecord[] = [];
@@ -133,13 +150,13 @@ RÈGLES:
 
         // ── Guard : Rejeter si le code n'appelle qu'un seul outil ──
         // Le PTC est rentable à partir de 2+ appels d'outils.
-        // Pour 1 seul outil, le Tool Calling natif est plus rapide (~10ms de vérification AST
-        // au lieu de ~2-5s d'un round-trip LLM gaspillé si le code est buggé).
+        // Bien que le Tool Calling natif soit plus adapté pour 1 seul appel, 
+        // jeter une erreur ici forcerait un nouveau round-trip LLM (~2-5s).
+        // Il est beaucoup plus rapide d'exécuter la VM (~5ms) et d'ajouter un warning au résultat.
         const { countToolCalls } = await import('./SafeScriptValidator.js');
         const toolCallCount = countToolCalls(code, availableToolNames);
         if (toolCallCount < 2) {
-            console.log(`[PTC] ⏭️ Code rejeté : seulement ${toolCallCount} appel(s) d'outil détecté(s). Tool Calling natif plus efficace.`);
-            throw new Error('PTC_SINGLE_TOOL: Le code ne contient qu\'un seul appel d\'outil. Utilise le tool calling natif.');
+            console.log(`[PTC] ⚠️ Code contient seulement ${toolCallCount} appel(s) d'outil. Exécution VM autorisée (plus rapide qu'un retry LLM).`);
         }
 
         // ── Layer 1 : Validation statique (AST + scope) ──
@@ -172,8 +189,8 @@ RÈGLES:
             console.warn(`[PTC] ⚠️ SafeScript warning: ${warning.type} — ${warning.message}`);
         }
 
-        // Construire le contexte VM avec les tools injectés
-        const sandboxGlobals = this.buildSandboxContext(toolFunctions, toolCalls);
+        // Construire le contexte VM avec les tools injectés + bridge HIVE
+        const sandboxGlobals = this.buildSandboxContext(toolFunctions, toolCalls, hiveBridge);
 
         // ── Layer 2 : Scope Guard (Proxy) — appliqué dans buildSandboxContext ──
 
@@ -206,8 +223,14 @@ ${SANDBOX_HELPERS_SOURCE}
         // Sérialiser le résultat
         const serializableOutput = this.safeSerialize(output, toolCalls);
 
+        // Extraire le SleepResult si HIVE.sleepAndWake() a été appelé dans le script
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const capturedSleep: SleepResult | undefined = (sandboxGlobals as any).__hiveSleepResult;
+
         return {
-            result: serializableOutput,
+            result: capturedSleep
+                ? { type: 'SLEEP_SCHEDULED', sleepResult: capturedSleep }
+                : serializableOutput,
             metadata: {
                 toolCallCount: toolCalls.length,
                 intermediateTokensSaved: tokenSavings.intermediateResults,
@@ -216,6 +239,8 @@ ${SANDBOX_HELPERS_SOURCE}
                 toolsUsed: [...new Set(toolCalls.map((c) => c.toolName))],
                 executionTimeMs: executionTime,
                 sandboxToolCalls: toolCalls,
+                sleepScheduled: capturedSleep,
+                ...(toolCallCount < 2 ? { warning: "ATTENTION: Tu n'as appelé qu'un seul outil. À l'avenir, n'utilise 'code_execution' QUE pour 2+ outils. Utilise le Tool Calling natif pour un seul outil." } : {})
             },
         };
     }
@@ -227,10 +252,12 @@ ${SANDBOX_HELPERS_SOURCE}
     /**
      * Construit le contexte global injecté dans le VM.
      * Chaque outil HIVE-MIND devient une fonction globale `async toolName(args)`.
+     * L'objet global `HIVE` est injecté avec le bridge WakeSystem.
      */
     private buildSandboxContext(
         toolFunctions: ReadonlyMap<string, ToolFunction>,
         toolCalls: ToolCallRecord[],
+        hiveBridge?: HiveWakeBridge,
     ): Record<string, unknown> {
         const globals: Record<string, unknown> = {
             // Standard JS globals nécessaires dans le VM
@@ -282,6 +309,41 @@ ${SANDBOX_HELPERS_SOURCE}
                     // Retourner l'erreur au code au lieu de crasher
                     return { success: false, error: errorMsg, gracefulDegradation: true };
                 }
+            };
+        }
+
+        // Injecter le bridge HIVE dans le sandbox
+        // `HIVE.sleepAndWake(delayMs, prompt)` permet au script de planifier son propre réveil.
+        // La variable __hiveSleepResult capture le résultat pour le retourner dans les métadonnées.
+        if (hiveBridge) {
+            globals['HIVE'] = {
+                sleepAndWake: async (delayMs: number, wakePrompt: string) => {
+                    const result = await hiveBridge.sleepAndWake(delayMs, wakePrompt);
+                    // Capturer pour le caller (ProgrammaticExecutor.execute)
+                    globals['__hiveSleepResult'] = result;
+                    return result;
+                },
+                waitForBackground: async (commandId: string, checkEveryMs: number, wakePrompt: string) => {
+                    const result = await hiveBridge.waitForBackground(commandId, checkEveryMs, wakePrompt);
+                    globals['__hiveSleepResult'] = result;
+                    return result;
+                },
+            };
+        } else {
+            // Si pas de bridge, injecter un stub no-op qui ne crash pas
+            globals['HIVE'] = {
+                sleepAndWake: async (_delayMs: number, _wakePrompt: string) => ({
+                    type: 'SLEEP_ERROR',
+                    wakeEventId: '',
+                    wakeAtMs: 0,
+                    message: '[HIVE] WakeSystem non disponible dans ce contexte.',
+                }),
+                waitForBackground: async (_commandId: string, _checkEveryMs: number, _wakePrompt: string) => ({
+                    type: 'SLEEP_ERROR',
+                    wakeEventId: '',
+                    wakeAtMs: 0,
+                    message: '[HIVE] WakeSystem non disponible dans ce contexte.',
+                }),
             };
         }
 

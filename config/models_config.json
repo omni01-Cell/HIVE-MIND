@@ -43,7 +43,7 @@
             "max_native_duration_seconds": 60,
             "native_voice": "Aoede"
         },
-        "service_agents": {
+        "service_recipes": {
             "EXECUTOR": {
                 "family": "openrouter",
                 "model": "google/gemma-4-31b-it:free",
@@ -58,8 +58,8 @@
             },
             "OBSERVER": {
                 "family": "groq",
-                "model": "qwen/qwen3-32b",
-                "fallback": "groq/llama-3.1-8b-instant",
+                "model": "openai/gpt-oss-20b",
+                "fallback": "llama-3.1-8b-instant",
                 "temperature": 0.1
             },
             "PLANNER": {
@@ -105,7 +105,7 @@
                 "temperature": 0
             }
         },
-        "chat_agents": {
+        "chat_recipes": {
             "categories": {
                 "CODING": {
                     "primary": "moonshotai/kimi-k2.5",

@@ -1,6 +1,8 @@
 // plugins/dev_tools/PersistentShell.ts
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { EventEmitter } from 'events';
+import * as path from 'path';
+import * as fs from 'fs';
 
 /**
  * Gère un processus Shell persistant (bash) pour conserver l'état (CWD, Env vars).
@@ -9,13 +11,18 @@ import { EventEmitter } from 'events';
 class PersistentShell extends EventEmitter {
     private shell: ChildProcessWithoutNullStreams | null = null;
     private outputBuffer: string = '';
-    private currentCwd: string = process.cwd();
+    private currentCwd: string = process.env.SANDBOX_DIR 
+        ? path.resolve(process.env.SANDBOX_DIR) 
+        : path.resolve(process.cwd(), 'Sandbox1');
     private sentinel: string = '__HIVE_MIND_SHELL_DONE__';
     private isExecuting: boolean = false;
     private executionPromise: { resolve: (val: any) => void, reject: (err: any) => void } | null = null;
 
     constructor() {
         super();
+        if (!fs.existsSync(this.currentCwd)) {
+            fs.mkdirSync(this.currentCwd, { recursive: true });
+        }
         this._initShell();
     }
 

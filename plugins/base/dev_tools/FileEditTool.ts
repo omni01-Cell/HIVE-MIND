@@ -44,7 +44,7 @@ export default {
         const { chatId, sourceChannel } = context;
         
         // 1. Déterminer le chemin absolu
-        const absolutePath = path.isAbsolute(file_path) ? file_path : path.resolve(process.cwd(), file_path);
+        const absolutePath = path.isAbsolute(file_path) ? file_path : path.resolve(permissionManager.sandboxDir, file_path);
 
         // 2. Validation de sécurité (Sandbox)
         const validation = permissionManager.validateFileWrite(absolutePath);

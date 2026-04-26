@@ -56,7 +56,7 @@ Respond in JSON only:
 }
 </output_format>`;
 
-            const response = await providerRouter.callServiceAgent('MORAL_COMPASS', [
+            const response = await providerRouter.callServiceRecipe('MORAL_COMPASS', [
                 { role: 'system', content: 'Tu es un évaluateur éthique strict.' },
                 { role: 'user', content: prompt }
             ]);

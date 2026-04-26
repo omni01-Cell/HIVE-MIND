@@ -101,7 +101,7 @@ Respond in JSON only:
 }
 </output_format>`;
 
-            const response = await providerRouter.callServiceAgent('CRITIC', [
+            const response = await providerRouter.callServiceRecipe('CRITIC', [
                 { role: 'system', content: 'Tu es un agent critique et prudent. Ta priorité est la sécurité et l\'éthique.' },
                 { role: 'user', content: criticPrompt }
             ]);
@@ -202,7 +202,7 @@ Respond in JSON only:
 }
 </output_format>`;
 
-            const response = await providerRouter.callServiceAgent('OBSERVER', [
+            const response = await providerRouter.callServiceRecipe('OBSERVER', [
                 { role: 'system', content: 'Tu détectes les incohérences comportementales.' },
                 { role: 'user', content: observerPrompt }
             ]);

@@ -58,7 +58,7 @@ Lessons:`;
         
         while (retries < maxRetries) {
             try {
-                const response = await providerRouter.callServiceAgent('DREAM_SERVICE', [
+                const response = await providerRouter.callServiceRecipe('DREAM_SERVICE', [
                     { role: 'system', content: 'Tu es le module de réflexion interne du bot.' },
                     { role: 'user', content: prompt }
                 ]);

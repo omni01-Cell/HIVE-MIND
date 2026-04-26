@@ -72,22 +72,22 @@ class ProviderRouter {
     }
 
     /**
-     * Appel direct d'un service agent (sans classification Level 3)
+     * Appel direct d'une recette de service (sans classification Level 3)
      * Utilise le modèle assigné + fallback automatique si nécessaire
      */
-    async callServiceAgent(serviceName: string, messages: any[], options: any = {}) {
-        const agent = modelsConfig.reglages_generaux.service_agents?.[serviceName];
+    async callServiceRecipe(serviceName: string, messages: any[], options: any = {}) {
+        const recipe = modelsConfig.reglages_generaux.service_recipes?.[serviceName];
 
-        if (!agent) {
-            throw new Error(`[Router] Service agent "${serviceName}" non trouvé dans models_config.json`);
+        if (!recipe) {
+            throw new Error(`[Router] Service recipe "${serviceName}" non trouvé dans models_config.json`);
         }
 
-        console.log(`[Router] 🔧 Service Agent: ${serviceName} → ${agent.model}`);
+        console.log(`[Router] 🔧 Service Recipe: ${serviceName} → ${recipe.model}`);
 
         // Préparer la cascade: primary → fallback
-        const modelsToTry = [agent.model];
-        if (agent.fallback) {
-            modelsToTry.push(agent.fallback);
+        const modelsToTry = [recipe.model];
+        if (recipe.fallback) {
+            modelsToTry.push(recipe.fallback);
         }
 
         let lastError: any = null;
@@ -105,12 +105,12 @@ class ProviderRouter {
                     ...options,
                     family: parsed.family,
                     model: parsed.model,
-                    temperature: agent.temperature ?? options.temperature,
-                    isServiceAgent: true, // Flag pour éviter classification
-                    isFallback: modelStr === agent.fallback
+                    temperature: recipe.temperature ?? options.temperature,
+                    isServiceRecipe: true, // Flag pour éviter classification
+                    isFallback: modelStr === recipe.fallback
                 });
 
-                if (modelStr === agent.fallback) {
+                if (modelStr === recipe.fallback) {
                     console.log(`[Router] ⚠️ ${serviceName} utilisé fallback: ${modelStr}`);
                 }
 
@@ -128,7 +128,7 @@ class ProviderRouter {
      * Retourne les modèles candidats pour une catégorie chat Level 3
      */
     getChatCandidates(category: string) {
-        const categoryConfig = modelsConfig.reglages_generaux.chat_agents?.categories?.[category];
+        const categoryConfig = modelsConfig.reglages_generaux.chat_recipes?.categories?.[category];
 
         if (!categoryConfig) {
             console.warn(`[Router] ⚠️ Catégorie chat "${category}" introuvable`);
@@ -372,8 +372,8 @@ class ProviderRouter {
         // Si on n'a pas de famille/modèle forcé, on détecte la catégorie 
         // et on récupère les 2 modèles précis (primary + fallback)
 
-        // SKIP Level 3 si c'est un appel de service agent (déjà spécifique)
-        if (!options.family && !options.model && !options.isClassifierCall && !options.isServiceAgent) {
+        // SKIP Level 3 si c'est un appel de service recipe (déjà spécifique)
+        if (!options.family && !options.model && !options.isClassifierCall && !options.isServiceRecipe) {
             let category: string | null = null;
 
             // Raccourci: si l'appelant connaît déjà la catégorie (ex: FastPath → FAST_CHAT)

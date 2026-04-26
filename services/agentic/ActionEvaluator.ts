@@ -126,7 +126,7 @@ No explanation, no text, just the score.
 
 Score:`;
 
-            const response = await providerRouter.callServiceAgent('ACTION_EVALUATOR', [
+            const response = await providerRouter.callServiceRecipe('ACTION_EVALUATOR', [
                 { role: 'system', content: 'Tu es un évaluateur de qualité objectif.' },
                 { role: 'user', content: prompt }
             ]);

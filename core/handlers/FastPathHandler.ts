@@ -4,9 +4,14 @@
 // Objectif: Latence < 1s pour 95% des messages (conversations simples)
 // ============================================================================
 
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { providerRouter } from '../../providers/index.js';
 import { pluginLoader } from '../../plugins/loader.js';
 import { extractToolCallsFromText, parseToolArguments } from '../../utils/toolCallExtractor.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Handler pour le mode FastPath
@@ -237,10 +242,9 @@ export class FastPathHandler {
      */
     _resolvePrimaryModel(): string {
         try {
-            const { readFileSync } = require('fs');
-            const configPath = require('path').join(process.cwd(), 'config', 'models_config.json');
+            const configPath = join(__dirname, '..', '..', 'config', 'models_config.json');
             const config = JSON.parse(readFileSync(configPath, 'utf8'));
-            return config.reglages_generaux?.chat_agents?.categories?.[this.FAST_CATEGORY]?.primary || 'unknown';
+            return config.reglages_generaux?.chat_recipes?.categories?.[this.FAST_CATEGORY]?.primary || 'unknown';
         } catch { return 'unknown'; }
     }
 
@@ -249,10 +253,7 @@ export class FastPathHandler {
      */
     _getModelPtcTier(modelId: string): string {
         try {
-            const { readFileSync } = require('fs');
-            const { join, dirname } = require('path');
-            const { fileURLToPath } = require('url');
-            const configPath = join(process.cwd(), 'config', 'models_config.json');
+            const configPath = join(__dirname, '..', '..', 'config', 'models_config.json');
             const config = JSON.parse(readFileSync(configPath, 'utf8'));
             
             for (const family of Object.values(config.familles || {}) as any[]) {

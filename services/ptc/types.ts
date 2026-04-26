@@ -1,7 +1,10 @@
 /**
  * Types pour le Programmatic Tool Calling (PTC)
  * Pilier D du projet AION
+ *
+ * Inclut les types pour le WakeSystem (OpenClaw Heartbeat pattern)
  */
+import type { SleepResult } from './WakeSystem.js';
 
 /** Enregistrement d'un appel d'outil exécuté dans le sandbox */
 export interface ToolCallRecord {
@@ -26,6 +29,10 @@ export interface CodeExecutionMetadata {
     readonly toolsUsed: readonly string[];
     readonly executionTimeMs: number;
     readonly sandboxToolCalls: readonly ToolCallRecord[];
+    /** Présent si le script a appelé HIVE.sleepAndWake() */
+    readonly sleepScheduled?: SleepResult;
+    /** Avertissement non-bloquant (ex: PTC_SINGLE_TOOL) */
+    readonly warning?: string;
 }
 
 /** Résultat complet d'une exécution PTC */

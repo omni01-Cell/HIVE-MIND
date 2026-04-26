@@ -1,7 +1,6 @@
-// tests/unit/plugins/subAgentTool.test.ts
-// MOD 2 — SubAgent Isolé (delegate_task)
-// Note: ESM modules require jest.unstable_mockModule instead of jest.fn() on module members
-import { describe, it, beforeEach, afterEach, jest, expect } from '@jest/globals';
+// tests/unit/plugins/SystemScratchpadTool.test.ts
+// MOD 2 — SystemScratchpadTool (run_scratchpad)
+import { describe, it, beforeEach, afterEach, jest, expect, beforeAll } from '@jest/globals';
 
 // Mock loader BEFORE import
 jest.unstable_mockModule('../../../plugins/loader.js', () => ({
@@ -17,19 +16,28 @@ jest.unstable_mockModule('../../../plugins/loader.js', () => ({
     }
 }));
 
-// Dynamic import AFTER mock registration
-const { default: SubAgentTool } = await import('../../../plugins/base/dev_tools/SubAgentTool.js');
-const { pluginLoader } = await import('../../../plugins/loader.js');
-const providersModule = await import('../../../providers/index.js');
-
-describe('SubAgentTool (MOD 2)', () => {
+describe('SystemScratchpadTool (run_scratchpad)', () => {
+    let SystemScratchpadTool: any;
+    let pluginLoader: any;
+    let providersModule: any;
     let chatSpy: any;
+
+    beforeAll(async () => {
+        // Dynamic import AFTER mock registration
+        const mod1 = await import('../../../plugins/base/dev_tools/SystemScratchpadTool.js');
+        SystemScratchpadTool = mod1.default;
+        
+        const mod2 = await import('../../../plugins/loader.js');
+        pluginLoader = mod2.pluginLoader;
+        
+        providersModule = await import('../../../providers/index.js');
+    });
 
     beforeEach(() => {
         jest.clearAllMocks();
         // Use spyOn since ESM module exports are live bindings
         chatSpy = jest.spyOn(providersModule.providerRouter, 'chat').mockResolvedValue({
-            content: 'SubAgent report: found 5 TS files.',
+            content: 'Scratchpad report: found 5 TS files.',
             toolCalls: null
         } as any);
     });
@@ -39,25 +47,25 @@ describe('SubAgentTool (MOD 2)', () => {
     });
 
     it('returns null for wrong toolName', async () => {
-        const result = await SubAgentTool.execute({}, {}, 'wrong_tool');
+        const result = await SystemScratchpadTool.execute({}, {}, 'wrong_tool');
         expect(result).toBeNull();
     });
 
     it('returns a report with success=true on normal completion', async () => {
-        const result = await SubAgentTool.execute(
+        const result = await SystemScratchpadTool.execute(
             { instructions: 'Find all TS files in services/' },
             {},
-            'delegate_task'
+            'run_scratchpad'
         );
 
         expect(result).not.toBeNull();
         expect(result!.success).toBe(true);
-        expect(result!.message).toContain('RAPPORT DU SOUS-AGENT');
+        expect(result!.message).toContain('Rapport de SystemScratchpad');
         expect(result!.message).toContain('found 5 TS files');
     });
 
     it('filters tools to READ-ONLY whitelist only', async () => {
-        await SubAgentTool.execute({ instructions: 'test' }, {}, 'delegate_task');
+        await SystemScratchpadTool.execute({ instructions: 'test' }, {}, 'run_scratchpad');
 
         expect(chatSpy).toHaveBeenCalled();
         const options = chatSpy.mock.calls[0][1] as any;
@@ -80,7 +88,7 @@ describe('SubAgentTool (MOD 2)', () => {
             // Second call: LLM produces final text
             .mockResolvedValueOnce({ content: 'Done.', toolCalls: null } as any);
 
-        await SubAgentTool.execute({ instructions: 'test' }, {}, 'delegate_task');
+        await SystemScratchpadTool.execute({ instructions: 'test' }, {}, 'run_scratchpad');
 
         const executeCalls = (pluginLoader.execute as jest.Mock).mock.calls;
         const bashCalls = executeCalls.filter((c: any) => c[0] === 'execute_bash_command');
@@ -94,29 +102,29 @@ describe('SubAgentTool (MOD 2)', () => {
             toolCalls: [{ id: 'tc', function: { name: 'read_file', arguments: '{"file_path":"test"}' } }]
         } as any);
 
-        await SubAgentTool.execute({ instructions: 'loop forever' }, {}, 'delegate_task');
+        await SystemScratchpadTool.execute({ instructions: 'loop forever' }, {}, 'run_scratchpad');
 
-        expect(chatSpy.mock.calls.length).toBeLessThanOrEqual(5);
+        expect(chatSpy.mock.calls.length).toBeLessThanOrEqual(6); // 5 iterations + 1 forced conclusion
     });
 
     it('returns error on LLM failure', async () => {
         chatSpy.mockRejectedValueOnce(new Error('API timeout') as never);
 
-        const result = await SubAgentTool.execute({ instructions: 'fail' }, {}, 'delegate_task');
+        const result = await SystemScratchpadTool.execute({ instructions: 'fail' }, {}, 'run_scratchpad');
 
         expect(result).not.toBeNull();
         expect(result!.success).toBe(false);
-        expect(result!.message).toContain('itération');
+        expect(result!.message).toContain('Impossible de terminer la tâche');
         expect(result!.message).toContain('API timeout');
     });
 
     it('uses isolated history starting with system role', async () => {
-        await SubAgentTool.execute({ instructions: 'Explore services/' }, {}, 'delegate_task');
+        await SystemScratchpadTool.execute({ instructions: 'Explore services/' }, {}, 'run_scratchpad');
 
         expect(chatSpy).toHaveBeenCalled();
         const history = chatSpy.mock.calls[0][0] as any[];
 
         expect(history[0].role).toBe('system');
-        expect(history[0].content).toContain('Sous-Agent');
+        expect(history[0].content).toContain('Scratchpad');
     });
 });

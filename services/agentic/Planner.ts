@@ -23,9 +23,12 @@ async function loadJsonLibraries() {
         const jsonRepairModule = await import('jsonrepair');
         const ajvModule = await import('ajv');
         
-        json5 = json5Module;
+        // ESM: json5 exporte { default: { parse, stringify } }
+        json5 = json5Module.default || json5Module;
+        // ESM: jsonrepair exporte { jsonrepair: fn } directement
         jsonRepair = jsonRepairModule;
-        Ajv = ajvModule;
+        // ESM: ajv exporte { default: AjvClass }
+        Ajv = ajvModule.default || ajvModule;
         
         console.log('[Planner] ✅ Bibliothèques JSON chargées (json5, jsonrepair, ajv)');
         return { json5, jsonRepair, Ajv };
@@ -85,11 +88,12 @@ export class ExplicitPlanner {
     async _parsePlanJson(planText: any) {
         if (!planText) return null;
 
+        // Déclaration hors du try pour rester accessible dans le catch
+        let cleanedJson = planText.trim();
+
         try {
             // 1. Charger les bibliothèques JSON robustes
             const libs = await loadJsonLibraries();
-            
-            let cleanedJson = planText.trim();
             
             // 2. Extraire JSON des balises markdown si présentes
             const markdownMatch = cleanedJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -117,29 +121,36 @@ export class ExplicitPlanner {
                     console.log('[Planner] ✅ JSON réparé avec json-repair + json5');
                 } catch (libError: any) {
                     console.warn('[Planner] ⚠️ Bibliothèques JSON ont échoué, fallback natif:', libError.message);
-                    throw libError; // On relance pour passer au fallback
+                    // Fallback natif au lieu de re-throw
+                    parsedPlan = this._parseJsonFallback(cleanedJson);
+                    if (!parsedPlan) return null;
                 }
             } else {
                 // Fallback: parsing natif avec nettoyage manuel
-                throw new Error('Bibliothèques JSON non disponibles');
+                parsedPlan = this._parseJsonFallback(cleanedJson);
+                if (!parsedPlan) return null;
             }
 
-            // 4. Valider contre le schéma
-            if (libs.Ajv) {
-                const ajv = new libs.Ajv({ useDefaults: true, allErrors: true });
-                const validate = ajv.compile(PLAN_SCHEMA);
-                
-                if (!validate(parsedPlan)) {
-                    console.warn('[Planner] ⚠️ Plan invalide selon schéma:', validate.errors);
+            // 4. Valider contre le schéma (Ajv est déjà le constructor grâce au .default)
+            if (libs && Ajv) {
+                try {
+                    const ajv = new Ajv({ useDefaults: true, allErrors: true });
+                    const validate = ajv.compile(PLAN_SCHEMA);
                     
-                    // Tenter de corriger automatiquement
-                    const correctedPlan = this._autoCorrectPlan(parsedPlan);
-                    if (correctedPlan) {
-                        console.log('[Planner] ✅ Plan corrigé automatiquement');
-                        return correctedPlan;
+                    if (!validate(parsedPlan)) {
+                        console.warn('[Planner] ⚠️ Plan invalide selon schéma:', validate.errors);
+                        
+                        // Tenter de corriger automatiquement
+                        const correctedPlan = this._autoCorrectPlan(parsedPlan);
+                        if (correctedPlan) {
+                            console.log('[Planner] ✅ Plan corrigé automatiquement');
+                            return correctedPlan;
+                        }
+                        
+                        console.warn(`[Planner] ⚠️ Plan invalide: ${validate.errors?.[0]?.message}`);
                     }
-                    
-                    throw new Error(`Plan invalide: ${validate.errors[0].message}`);
+                } catch (ajvErr: any) {
+                    console.warn('[Planner] ⚠️ Validation Ajv échouée, plan retourné sans validation:', ajvErr.message);
                 }
             }
 
@@ -354,6 +365,11 @@ Plan:`;
                 throw new Error('Plan invalide: pas d\'étapes définies');
             }
 
+            // 🛡️ [BUG #3 FIX] Construire la liste des outils disponibles
+            const availableToolNames = new Set(
+                context.tools.map((t: any) => t.function?.name || t.name).filter(Boolean)
+            );
+
             // Valider chaque étape
             for (let i = 0; i < plan.steps.length; i++) {
                 const step = plan.steps[i];
@@ -366,6 +382,29 @@ Plan:`;
                 if (typeof step.id !== 'number') {
                     step.id = i + 1; // Auto-correct ID
                 }
+
+                // Vérifier que l'outil existe dans la liste disponible
+                if (!availableToolNames.has(step.tool)) {
+                    console.warn(`[Planner] ⚠️ Étape ${step.id}: outil "${step.tool}" halluciné (n'existe pas dans les ${availableToolNames.size} outils disponibles)`);
+                    // Tenter de trouver un outil similaire (fuzzy match basique)
+                    const closest = [...availableToolNames].find(t =>
+                        step.tool.includes(t) || t.includes(step.tool) ||
+                        step.tool.replace(/_/g, '').includes(t.replace(/_/g, ''))
+                    );
+                    if (closest) {
+                        console.log(`[Planner] 🔧 Auto-correction: "${step.tool}" → "${closest}"`);
+                        step.tool = closest;
+                    } else {
+                        console.warn(`[Planner] ❌ Suppression de l'étape ${step.id} (outil "${step.tool}" introuvable)`);
+                        plan.steps.splice(i, 1);
+                        i--; // Reculer l'index après suppression
+                    }
+                }
+            }
+
+            // Vérifier qu'il reste des étapes valides
+            if (plan.steps.length === 0) {
+                throw new Error('Plan invalide après validation: tous les outils étaient hallucinés');
             }
 
             console.log(`[Planner] ✅ Plan validé: ${plan.steps.length} étapes`);
@@ -446,6 +485,21 @@ Plan:`;
                 const result = await context.executeToolFn(toolCall, context.message);
 
                 executionLog.results[step.id] = result;
+
+                // [BUG #8 FIX] Vérifier si l'outil a réellement réussi
+                if (result && (result.error === true || result.success === false)) {
+                    console.warn(`[Planner] ⚠️ Étape ${step.id} échouée (outil): ${result.message || 'erreur inconnue'}`);
+                    executionLog.failed.push(step.id);
+                    await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - ${result.message || 'erreur'}`);
+
+                    // Analyser si échec critique
+                    if (this._isCriticalFailure(step, new Error(result.message || 'tool_error'))) {
+                        console.warn(`[Planner] 🛑 Échec critique détecté, replanification...`);
+                        return await this._replan(plan, executionLog, context);
+                    }
+                    continue;
+                }
+
                 executionLog.completed.push(step.id);
 
                 // Mettre à jour ActionMemory

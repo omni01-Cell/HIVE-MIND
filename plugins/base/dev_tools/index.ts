@@ -8,7 +8,8 @@
 import BashTool from './BashTool.js';
 import FileEditTool from './FileEditTool.js';
 import SearchTools from './SearchTools.js';
-import SubAgentTool from './SubAgentTool.js';
+import SystemScratchpadTool from './SystemScratchpadTool.js';
+import SpawnSubAgentTool from './SpawnSubAgentTool.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MATCHERS TEXTUELS — Commandes admin rapides (sans LLM)
@@ -36,13 +37,14 @@ const AGGREGATED_TOOL_DEFINITIONS = [
     ...BashTool.toolDefinitions,
     ...FileEditTool.toolDefinitions,
     ...SearchTools.toolDefinitions,
-    ...SubAgentTool.toolDefinitions,
+    ...SystemScratchpadTool.toolDefinitions,
+    ...SpawnSubAgentTool.toolDefinitions,
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MAP outil → sous-module (routing O(1))
 // ──────────────────────────────────────────────────────────────────────────────
-const TOOL_ROUTER: Record<string, typeof BashTool | typeof FileEditTool | typeof SearchTools | typeof SubAgentTool> = {};
+const TOOL_ROUTER: Record<string, typeof BashTool | typeof FileEditTool | typeof SearchTools | typeof SystemScratchpadTool | typeof SpawnSubAgentTool> = {};
 
 for (const toolDef of BashTool.toolDefinitions) {
     const toolName = toolDef.function?.name;
@@ -56,9 +58,13 @@ for (const toolDef of SearchTools.toolDefinitions) {
     const toolName = toolDef.function?.name;
     if (toolName) TOOL_ROUTER[toolName] = SearchTools;
 }
-for (const toolDef of SubAgentTool.toolDefinitions) {
+for (const toolDef of SystemScratchpadTool.toolDefinitions) {
     const toolName = toolDef.function?.name;
-    if (toolName) TOOL_ROUTER[toolName] = SubAgentTool;
+    if (toolName) TOOL_ROUTER[toolName] = SystemScratchpadTool;
+}
+for (const toolDef of SpawnSubAgentTool.toolDefinitions) {
+    const toolName = toolDef.function?.name;
+    if (toolName) TOOL_ROUTER[toolName] = SpawnSubAgentTool;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

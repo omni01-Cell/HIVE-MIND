@@ -12,7 +12,7 @@ import { ModelsConfig } from '../../config/config.schema.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface IClassifierRouter {
-  callServiceAgent(agentName: string, messages: { role: string; content: string }[]): Promise<{ content: string }>;
+  callServiceRecipe(recipeName: string, messages: { role: string; content: string }[]): Promise<{ content: string }>;
 }
 
 export class ClassifierService {
@@ -41,7 +41,7 @@ export class ClassifierService {
    * @returns Detected category ID.
    */
   async detectCategory(query: string, router: IClassifierRouter): Promise<string> {
-    const categories = this.config?.reglages_generaux?.chat_agents?.categories;
+    const categories = this.config?.reglages_generaux?.chat_recipes?.categories;
 
     if (!categories) {
       console.warn('[Classifier] No chat categories configured, falling back to FAST_CHAT');
@@ -93,7 +93,7 @@ Example: CODING
 Category:`;
 
     try {
-      const response = await router.callServiceAgent('CLASSIFIER', [
+      const response = await router.callServiceRecipe('CLASSIFIER', [
         { role: 'user', content: prompt }
       ]);
 
@@ -171,7 +171,7 @@ Example: gemini
 Best family ID:`;
 
     try {
-      const response = await router.callServiceAgent('CLASSIFIER', [
+      const response = await router.callServiceRecipe('CLASSIFIER', [
         { role: 'user', content: prompt }
       ]);
 
