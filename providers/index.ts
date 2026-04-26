@@ -7,6 +7,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { classifier } from '../services/ai/classifier.js';
 import { envResolver } from '../services/envResolver.js';
+import { costTracker } from '../services/finops/CostTracker.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -33,12 +34,15 @@ class ProviderRouter {
     currentFamily: string;
     usageStats: Map<string, number>;
     circuitStats: Map<string, { failureCount: number, cooldownUntil: number }>;
+    /** Failure score par modèle (non-quota) : plus haut = relégué en fin de rotation */
+    modelFailureScore: Map<string, { score: number, lastFailureAt: number }>;
 
     constructor() {
         this.adapters = new Map();
         this.currentFamily = modelsConfig.reglages_generaux?.famille_active || 'openai';
         this.usageStats = new Map(); // Tracking des appels par famille
         this.circuitStats = new Map(); // Circuit Breaker: { failureCount: 0, cooldownUntil: 0 }
+        this.modelFailureScore = new Map(); // Reliability score par modèle
     }
 
     /**
@@ -218,10 +222,55 @@ class ProviderRouter {
      */
     _resetCircuit(family: string) {
         if (this.circuitStats.has(family)) {
-            // On reset seulement le failureCount partiel, ou tout si on veut être gentil
-            // Ici on clean tout pour redonner sa chance
             this.circuitStats.delete(family);
         }
+    }
+
+    // =========================================================================
+    // RELIABILITY SCORING — Modèles défaillants relegués en fin de rotation
+    // =========================================================================
+
+    /**
+     * Incrémente le failure score d'un modèle non-quota.
+     * Score max: 10. Décroît de 50% toutes les 30 minutes (half-life).
+     */
+    _recordModelFailure(model: string) {
+        const now = Date.now();
+        const HALF_LIFE_MS = 30 * 60 * 1000; // 30 min
+        const existing = this.modelFailureScore.get(model) || { score: 0, lastFailureAt: now };
+
+        // Appliquer le déclin exponentiel depuis le dernier échec
+        const elapsed = now - existing.lastFailureAt;
+        const decayFactor = Math.pow(0.5, elapsed / HALF_LIFE_MS);
+        const decayedScore = existing.score * decayFactor;
+
+        const newScore = Math.min(10, decayedScore + 1);
+        this.modelFailureScore.set(model, { score: newScore, lastFailureAt: now });
+        console.log(`[Router] 📉 Reliability score ${model}: ${newScore.toFixed(2)} (+1 échec)`);
+    }
+
+    /**
+     * Trie un tableau de modèles par fiabilité : les moins défaillants en premier.
+     * Les modèles sans historique d'échec restent à leur position.
+     */
+    _sortModelsByReliability(models: string[]): string[] {
+        const now = Date.now();
+        const HALF_LIFE_MS = 30 * 60 * 1000;
+
+        return [...models].sort((a, b) => {
+            const statsA = this.modelFailureScore.get(a);
+            const statsB = this.modelFailureScore.get(b);
+
+            // Calculer le score actuel (avec déclin temporel)
+            const scoreA = statsA
+                ? statsA.score * Math.pow(0.5, (now - statsA.lastFailureAt) / HALF_LIFE_MS)
+                : 0;
+            const scoreB = statsB
+                ? statsB.score * Math.pow(0.5, (now - statsB.lastFailureAt) / HALF_LIFE_MS)
+                : 0;
+
+            return scoreA - scoreB; // Moins d'échecs en premier
+        });
     }
 
     /**
@@ -325,49 +374,62 @@ class ProviderRouter {
 
         // SKIP Level 3 si c'est un appel de service agent (déjà spécifique)
         if (!options.family && !options.model && !options.isClassifierCall && !options.isServiceAgent) {
-            const detectionStart = Date.now();
-            const lastMsg = messages[messages.length - 1]?.content || "";
+            let category: string | null = null;
 
-            try {
-                const category = await classifier.detectCategory(lastMsg, this);
-                console.log(`[Router] Détection catégorie: ${(Date.now() - detectionStart).toFixed(3)}ms`);
+            // Raccourci: si l'appelant connaît déjà la catégorie (ex: FastPath → FAST_CHAT)
+            // on skip la classification LLM (coûteuse) mais on respecte toute la cascade
+            if (options.category) {
+                category = options.category;
+                console.log(`[Router] ⚡ Catégorie pré-définie: ${category} (skip classification)`);
+            } else {
+                const detectionStart = Date.now();
+                const lastMsg = messages[messages.length - 1]?.content || "";
 
-                if (category) {
-                    const candidates = this.getChatCandidates(category);
+                try {
+                    category = await classifier.detectCategory(lastMsg, this);
+                    console.log(`[Router] Détection catégorie: ${(Date.now() - detectionStart).toFixed(3)}ms`);
+                } catch (err: any) {
+                    console.warn(`[Router] ⚠️ Échec détection catégorie: ${err.message}`);
+                }
+            }
 
-                    if (candidates && candidates.primary) {
-                        console.log(`[Router] 🎯 Catégorie détectée: ${category}`);
-                        console.log(`[Router] 📋 Modèles: ${candidates.primary} (fallback: ${candidates.fallback})`);
+            if (category) {
+                const candidates = this.getChatCandidates(category);
 
-                        // Parser le primary model pour extraire famille + model ID
-                        const primaryParsed = this.parseModelString(candidates.primary);
-                        const fallbackParsed = candidates.fallback ? this.parseModelString(candidates.fallback) : null;
+                if (candidates && candidates.primary) {
+                    console.log(`[Router] 🎯 Catégorie: ${category}`);
+                    console.log(`[Router] 📋 Modèles: ${candidates.primary} (fallback: ${candidates.fallback})`);
 
-                        if (primaryParsed) {
-                            options.family = primaryParsed.family;
-                            options.model = primaryParsed.model;
+                    // Parser le primary model pour extraire famille + model ID
+                    const primaryParsed = this.parseModelString(candidates.primary);
+                    const fallbackParsed = candidates.fallback ? this.parseModelString(candidates.fallback) : null;
 
-                            // Réorganiser availableFamilies pour mettre le choix en premier
-                            if (availableFamilies.includes(primaryParsed.family)) {
-                                availableFamilies = [primaryParsed.family, ...availableFamilies.filter((f: string) => f !== primaryParsed.family)];
-                            }
+                    if (primaryParsed) {
+                        options.family = primaryParsed.family;
+                        options.model = primaryParsed.model;
 
-                            // Si fallback disponible et différent, l'ajouter
-                            if (fallbackParsed && fallbackParsed.family !== primaryParsed.family) {
-                                if (availableFamilies.includes(fallbackParsed.family)) {
-                                    availableFamilies = [
-                                        primaryParsed.family,
-                                        fallbackParsed.family,
-                                        ...availableFamilies.filter((f: string) => f !== primaryParsed.family && f !== fallbackParsed.family)
-                                    ];
-                                }
+                        if (fallbackParsed) {
+                            options.fallbackFamily = fallbackParsed.family;
+                            options.fallbackModel = fallbackParsed.model;
+                        }
+
+                        // Réorganiser availableFamilies pour mettre le choix en premier
+                        if (availableFamilies.includes(primaryParsed.family)) {
+                            availableFamilies = [primaryParsed.family, ...availableFamilies.filter((f: string) => f !== primaryParsed.family)];
+                        }
+
+                        // Si fallback disponible et différent, l'ajouter
+                        if (fallbackParsed && fallbackParsed.family !== primaryParsed.family) {
+                            if (availableFamilies.includes(fallbackParsed.family)) {
+                                availableFamilies = [
+                                    primaryParsed.family,
+                                    fallbackParsed.family,
+                                    ...availableFamilies.filter((f: string) => f !== primaryParsed.family && f !== fallbackParsed.family)
+                                ];
                             }
                         }
                     }
                 }
-            } catch (err: any) {
-                console.warn(`[Router] ⚠️ Échec détection catégorie: ${err.message}`);
-                // Fallback: continuer avec availableFamilies par défaut
             }
         }
 
@@ -393,17 +455,26 @@ class ProviderRouter {
             const familyConfig = this.getFamilyConfig(family);
 
             // Modèles à tester pour cette famille
-            // SÉCURITÉ CRITIQUE: Si options.model est défini, on ne l'utilise QUE si c'est la bonne famille
             let modelsToTry = [];
 
             if (options.model && family === options.family) {
                 // Si on a un modèle spécifique forcé ET que c'est la bonne famille
-                modelsToTry = [options.model];
-            } else {
+                modelsToTry.push(options.model);
+            }
+            if (options.fallbackModel && family === options.fallbackFamily) {
+                // S'il y a un fallback dans la même famille
+                if (!modelsToTry.includes(options.fallbackModel)) {
+                    modelsToTry.push(options.fallbackModel);
+                }
+            }
+
+            if (modelsToTry.length === 0) {
                 // Sinon (fallback ou famille différente), on cherche les modèles 'chat' de cette famille
-                modelsToTry = familyConfig?.modeles
+                const rawModels = familyConfig?.modeles
                     ?.filter((m: any) => m.types?.includes('chat'))
                     .map((m: any) => m.id) || [];
+                // [RELIABILITY] Trier par fiabilité — modèles défaillants relégués en dernier
+                modelsToTry = this._sortModelsByReliability(rawModels);
             }
 
 
@@ -431,14 +502,20 @@ class ProviderRouter {
                     // ✅ SUCCÈS
                     this._resetCircuit(family);
 
-                    // 📊 Enregistrer Usage (QuotaManager)
-                    // On estime les tokens (très approximatif : 1 mot ~ 1.3 tokens, input+output)
-                    const inputTxt = messages.map((m: any) => m.content).join(' ');
-                    const outputTxt = result.content || '';
-                    const estimatedTokens = Math.ceil((inputTxt.length + outputTxt.length) / 4); // ~4 chars per token
+                    // 💰 [FINOPS] Enregistrer le coût via CostTracker (Kill Switch)
+                    const promptTokens = result.usage?.prompt_tokens || 0;
+                    const completionTokens = result.usage?.completion_tokens || 0;
+                    const usageRecord = costTracker.recordUsage(model, promptTokens, completionTokens);
+
+                    if (!usageRecord.budgetSafe) {
+                        throw new Error('BUDGET_EXCEEDED: Le budget maximum de la session a été atteint. Arrêt de sécurité.');
+                    }
+
+                    // 📊 Enregistrer Usage (QuotaManager) — tokens estimés si usage absent
+                    const estimatedTokens = promptTokens + completionTokens ||
+                        Math.ceil(((messages.map((m: any) => m.content).join(' ').length) + (result.content || '').length) / 4);
 
                     if (quotaManager) {
-                        // Sig: recordUsage(provider, modelId, tokens)
                         quotaManager.recordUsage(family, model, estimatedTokens).catch((e: any) => console.error(e));
                     }
 
@@ -459,7 +536,6 @@ class ProviderRouter {
                         let waitTime = 60; // Défaut 1 minute
 
                         // Tentative d'extraction du temps d'attente précis
-                        // Regex pour "retry in 39.37s" ou "after 60s"
                         const matchWait = error.message.match(/retry in\s+([\d.]+)\s*s/i) ||
                             error.message.match(/after\s+([\d.]+)\s*s/i);
 
@@ -471,8 +547,9 @@ class ProviderRouter {
                         await quotaManager.recordQuotaExceeded(model, waitTime);
                         console.log(`[Router] 🛡️ Modèle ${model} bloqué pour ${waitTime}s (Feedback Temps Réel)`);
                     } else {
-                        // Pour les autres erreurs (réseau, crash), on pénalise la famille
+                        // Erreur non-quota: pénaliser la famille ET le modèle spécifique
                         this._recordFailure(family, error);
+                        this._recordModelFailure(model);
                     }
 
                     // Si on était en mode "Famille Forcée" (contexte) mais que ça a échoué
@@ -656,7 +733,8 @@ async function loadAdapters() {
         'github': ['github'],     // GitHub Models (Free Tier)
         'groq': ['groq'],         // Groq LPU (Fast Inference)
         'huggingface': ['huggingface'], // HF Router
-        'nvidia': ['nvidia']       // NVIDIA AI Platform (NIM)
+        'nvidia': ['nvidia'],       // NVIDIA AI Platform (NIM)
+        'openrouter': ['openrouter'] // OpenRouter (Multi-provider fast gateway)
     };
 
     for (const [fileName, registerNames] of Object.entries(adapterMapping)) {

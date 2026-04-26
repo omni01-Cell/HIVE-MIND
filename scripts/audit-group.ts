@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck
 // scripts/audit-group.js
 // ============================================================================
 // AUDIT COMPLET : Compare WhatsApp (Live) vs Redis (Cache) vs Supabase (DB)

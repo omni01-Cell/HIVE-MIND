@@ -1,3 +1,10 @@
+export interface UniversalResponse {
+    data?: any;             // Raw data (JSON)
+    markdown: string;      // Standard Markdown (Pivot format)
+    plainText?: string;     // Sanitized text for WhatsApp (concise)
+    visual?: any;          // Rich components (Rich CLI, Discord Embeds)
+}
+
 export interface MessageData {
     chatId: string;
     sender: string;
@@ -12,6 +19,7 @@ export interface MessageData {
     audioBuffer?: Buffer;
     raw?: any;
     id?: string;
+    sourceChannel?: string; // Origin (whatsapp, cli, etc.)
 }
 
 export interface BotEvent {
@@ -19,6 +27,7 @@ export interface BotEvent {
     chatId?: string;
     data: MessageData | any;
     priority?: number;
+    sourceChannel?: string;
 }
 
 export interface ContextData {

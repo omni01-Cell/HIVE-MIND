@@ -281,7 +281,7 @@ export const groupService = {
                     const { data: config } = await supabase
                         .from('groups')
                         .select('bot_mission')
-                        .eq('jid', chatJid)
+                        .eq('platform_group_id', chatJid)
                         .single();
 
                     if (config?.bot_mission) {
@@ -359,8 +359,8 @@ export const groupService = {
         try {
             const { data, error } = await supabase
                 .from('groups')
-                .select('name, bot_mission') // 'admins' retiré car absent du schéma
-                .eq('jid', groupJid)
+                .select('name, bot_mission')
+                .eq('platform_group_id', groupJid)
                 .single();
 
             if (error && error.code !== 'PGRST116') {
@@ -395,12 +395,11 @@ export const groupService = {
             const { error } = await supabase
                 .from('groups')
                 .upsert({
-                    jid: groupJid,
-                    name: title,                // <-- Titre de la Mission
-                    bot_mission: description    // <-- Description de la Mission
-                    // admins: [author]         // <-- Retiré car colonne absente
-                    // Note: updated_at géré automatiquement par trigger PostgreSQL
-                }, { onConflict: 'jid' });
+                    platform: 'whatsapp',
+                    platform_group_id: groupJid,
+                    name: title,
+                    bot_mission: description
+                }, { onConflict: 'platform,platform_group_id' });
 
             if (error) {
                 console.error('[GroupService] setBotMission error:', error);

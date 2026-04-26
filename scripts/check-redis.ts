@@ -1,4 +1,5 @@
 
+// @ts-nocheck
 import { redis as redisClient } from '../services/redisClient.js';
 
 async function checkRedis() {

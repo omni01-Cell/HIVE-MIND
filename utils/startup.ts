@@ -38,7 +38,7 @@ export interface ModuleResult {
  * Génère le logo ASCII HIVE-MIND avec effet 3D
  */
 function generateLogo(botName: string): string {
-  const displayName = `🧠 ${botName} AI - v3.0`;
+  const displayName = `🧠 ${botName} AI - v1.0`;
 
   const logo3D = [
     `${THEME.ACCENT} ██╗  ██╗${THEME.CYAN}██╗${THEME.ACCENT}██╗   ██╗${THEME.CYAN}███████╗${THEME.SHADOW}      ${THEME.ACCENT}███╗   ███╗${THEME.CYAN}██╗${THEME.ACCENT}███╗   ██╗${THEME.CYAN}██████╗ `,
@@ -91,7 +91,7 @@ export class StartupDisplay {
   private suppressedLogs: { type: 'log' | 'warn' | 'info'; args: any[] }[] = [];
   private isLoading: boolean = false;
 
-  constructor() {}
+  constructor() { }
 
   public suppressLogs(): void {
     this.isLoading = true;

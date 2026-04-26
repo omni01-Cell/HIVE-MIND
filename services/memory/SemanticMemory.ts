@@ -35,16 +35,18 @@ export class SemanticMemory {
     this.logger = dependencies.logger;
   }
 
-  /**
-   * Stores a memory (Vectorizes + Saves).
-   * @param chatId Unique identifier for the chat.
-   * @param content The text content to remember.
-   * @param role The role of the speaker (user, assistant, etc.).
-   */
   async store(chatId: string, content: string, role: string): Promise<void> {
     if (!content || !this.supabase) return;
 
     try {
+      // 0. Resolve Omni-Channel UUID
+      const { default: db } = await import('../supabase.js');
+      const resolved = await db.resolveContextFromLegacyId(chatId);
+      if (!resolved) {
+        this.logger?.warn(`[Memory] Could not resolve context ID for ${chatId}`);
+        return;
+      }
+
       // 1. Vectorization
       const vector = await this.embeddings.embed(content);
       if (!vector) {
@@ -56,7 +58,7 @@ export class SemanticMemory {
       const { error } = await this.supabase
         .from('memories')
         .insert({
-          chat_id: chatId,
+          context_id: resolved.context_id,
           content: content,
           role: role,
           embedding: vector
@@ -70,16 +72,15 @@ export class SemanticMemory {
     }
   }
 
-  /**
-   * Recalls similar memories based on a query.
-   * @param chatId Unique identifier for the chat.
-   * @param query The search query.
-   * @param limit Maximum number of results to return.
-   */
   async recall(chatId: string, query: string, limit: number = 5): Promise<MemoryRecord[]> {
     if (!this.supabase || !query) return [];
 
     try {
+      // 0. Resolve Omni-Channel UUID
+      const { default: db } = await import('../supabase.js');
+      const resolved = await db.resolveContextFromLegacyId(chatId);
+      if (!resolved) return [];
+
       // 1. Vectorize the current query
       const queryVector = await this.embeddings.embed(query);
       if (!queryVector) return [];
@@ -89,7 +90,7 @@ export class SemanticMemory {
         query_embedding: queryVector,
         match_threshold: 0.7,
         match_count: limit,
-        match_chat_id: chatId
+        match_context_id: resolved.context_id
       });
 
       if (error) throw error;
@@ -106,32 +107,35 @@ export class SemanticMemory {
     }
   }
 
-  /**
-   * Prunes old memories to prevent DB clutter.
-   * @param chatId Unique identifier for the chat.
-   * @param keepLast Number of recent memories to keep.
-   */
   async prune(chatId: string, keepLast: number = 50): Promise<void> {
     if (!this.supabase) return;
 
-    // Get IDs to keep
-    const { data: keepIds } = await this.supabase
-      .from('memories')
-      .select('id')
-      .eq('chat_id', chatId)
-      .order('created_at', { ascending: false })
-      .limit(keepLast);
+    try {
+      const { default: db } = await import('../supabase.js');
+      const resolved = await db.resolveContextFromLegacyId(chatId);
+      if (!resolved) return;
 
-    if (!keepIds || keepIds.length === 0) return;
+      // Get IDs to keep
+      const { data: keepIds } = await this.supabase
+        .from('memories')
+        .select('id')
+        .eq('context_id', resolved.context_id)
+        .order('created_at', { ascending: false })
+        .limit(keepLast);
 
-    const ids = keepIds.map((k: any) => k.id);
+      if (!keepIds || keepIds.length === 0) return;
 
-    // Delete everything else
-    await this.supabase
-      .from('memories')
-      .delete()
-      .eq('chat_id', chatId)
-      .not('id', 'in', `(${ids.join(',')})`);
+      const ids = keepIds.map((k: any) => k.id);
+
+      // Delete everything else
+      await this.supabase
+        .from('memories')
+        .delete()
+        .eq('context_id', resolved.context_id)
+        .not('id', 'in', `(${ids.join(',')})`);
+    } catch (error: any) {
+      this.logger?.error(`[Memory] Prune Error: ${error.message}`);
+    }
   }
 
   /**

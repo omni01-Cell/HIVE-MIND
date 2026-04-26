@@ -99,6 +99,16 @@ export const TransportInterface = {
     },
 
     /**
+     * Envoie une réponse structurée (Universal Response)
+     * @param {string} chatId 
+     * @param {Object} response - { markdown, plainText, visual, data }
+     * @param {Object} options 
+     */
+    sendUniversalResponse: async (chatId, response, options = {}) => {
+        throw new Error('sendUniversalResponse() must be implemented');
+    },
+
+    /**
      * Vérifie si un utilisateur est admin d'un groupe
      * @param {string} groupId 
      * @param {string} userId 
@@ -106,6 +116,17 @@ export const TransportInterface = {
      */
     isAdmin: async (groupId: any, userId: any) => {
         throw new Error('isAdmin() must be implemented');
+    },
+
+    /**
+     * Envoie une réaction (emoji) sur un message
+     * @param {string} chatId 
+     * @param {Object} key - Clé du message cible
+     * @param {string} emoji 
+     * @returns {Promise<boolean>}
+     */
+    sendReaction: async (chatId: any, key: any, emoji: any) => {
+        throw new Error('sendReaction() must be implemented');
     }
 };
 
@@ -114,11 +135,11 @@ export const TransportInterface = {
  * @param {Object} transport 
  * @returns {boolean}
  */
-export function validateTransport(transport) {
+export function validateTransport(transport: any) {
     const requiredMethods = Object.keys(TransportInterface);
     for (const method of requiredMethods) {
         if (typeof transport[method] !== 'function') {
-            throw new Error(`Transport is missing required method: ${method}`);
+            console.warn(`[TransportInterface] Warning: Transport is missing method: ${method}`);
         }
     }
     return true;

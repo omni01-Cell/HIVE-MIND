@@ -28,7 +28,7 @@
 // ============================================================================
 
 import { redis } from '../redisClient.js';
-import { supabase } from '../supabase.js';
+import db, { supabase } from '../supabase.js';
 import { LockManager } from './LockManager.js';
 import { IdentityMap } from './IdentityMap.js';
 
@@ -48,7 +48,14 @@ export const StateManager = {
      */
     async getUser(identifier: any) {
         const jid = await IdentityMap.resolve(identifier);
-        const cacheKey = `user:${jid}:data`;
+        const resolved = await db.resolveContextFromLegacyId(jid);
+        
+        if (!resolved || resolved.type !== 'user') {
+            return { jid, names: ['Inconnu'], interaction_count: 0 };
+        }
+        
+        const uuid = resolved.context_id;
+        const cacheKey = `user:${uuid}:data`;
 
         // 1. Lecture Cache
         let userData = await redis?.hGetAll(cacheKey);
@@ -56,10 +63,10 @@ export const StateManager = {
         // 2. Cache Miss: Lecture DB + Hydratation
         if (!userData || Object.keys(userData).length === 0) {
             // Verrouillage pour éviter "Thundering Herd" si 50 messages arrivent en même temps
-            const lockId = await userLock.acquireWait(jid);
+            const lockId = await userLock.acquireWait(uuid);
             if (!lockId) {
                 // Fallback si lock fail: retour mininal
-                return { jid, names: ['Inconnu'], interaction_count: 0 };
+                return { jid, id: uuid, names: ['Inconnu'], interaction_count: 0 };
             }
 
             try {
@@ -67,7 +74,7 @@ export const StateManager = {
                 userData = await redis?.hGetAll(cacheKey);
                 if (!userData || Object.keys(userData).length === 0) {
                     if (supabase) {
-                        const { data } = await supabase.from('users').select('*').eq('jid', jid).single();
+                        const { data } = await supabase.from('users').select('*').eq('id', uuid).single();
                         if (data) {
                             userData = this._flattenForRedis(data);
                             await redis?.hSet(cacheKey, userData);
@@ -76,11 +83,11 @@ export const StateManager = {
                     }
                 }
             } finally {
-                await userLock.release(jid, lockId);
+                await userLock.release(uuid, lockId);
             }
         }
 
-        return { jid, ...this._unflattenFromRedis(userData) };
+        return { jid, id: uuid, ...this._unflattenFromRedis(userData) };
     },
 
     /**
@@ -88,7 +95,11 @@ export const StateManager = {
      */
     async updateUserInteraction(identifier: any, pushName: any) {
         const jid = await IdentityMap.resolve(identifier);
-        const cacheKey = `user:${jid}:data`;
+        const resolved = await db.resolveContextFromLegacyId(jid);
+        if (!resolved || resolved.type !== 'user') return;
+        
+        const uuid = resolved.context_id;
+        const cacheKey = `user:${uuid}:data`;
 
         if (!redis?.isOpen) return; // Fail safe
 
@@ -109,8 +120,8 @@ export const StateManager = {
         pipeline.expire(cacheKey, 86400);
 
         // 4. Ajouter à la "Dirty Queue" (Set pour éviter doublons)
-        // Ceci remplace le buffer RAM. Si le bot crash, l'ID reste dans Redis.
-        pipeline.sAdd(SYNC_QUEUE_KEY, jid);
+        // Ceci remplace le buffer RAM. On stocke le UUID.
+        pipeline.sAdd(SYNC_QUEUE_KEY, uuid);
 
         await pipeline.exec();
     },
@@ -122,44 +133,39 @@ export const StateManager = {
     async processSyncQueue(batchSize: any = 50) {
         if (!redis?.isOpen) return;
 
-        // 1. Récupérer N items de la queue
-        const jids = await redis.sPop(SYNC_QUEUE_KEY, batchSize);
-        if (!jids || jids.length === 0) return;
+        // 1. Récupérer N items de la queue (ce sont des UUIDs maintenant)
+        const uuids = await redis.sPop(SYNC_QUEUE_KEY, batchSize);
+        if (!uuids || uuids.length === 0) return;
 
-        console.log(`[StateManager] Syncing ${jids.length} users to DB...`);
+        console.log(`[StateManager] Syncing ${uuids.length} users to DB...`);
 
         const updates = [];
 
         // 2. Construire le batch
-        // Note: On utilise pipeline pour performance
         const pipeline = redis.multi();
-        jids.forEach((jid: any) => pipeline.hGetAll(`user:${jid}:data`));
-        const results = await pipeline.exec(); // [[err, data], [err, data]]
+        uuids.forEach((uuid: any) => pipeline.hGetAll(`user:${uuid}:data`));
+        const results = await pipeline.exec(); 
 
-        for (let i = 0; i < jids.length; i++) {
-            // Redis multi exec returns array of results directly if no error, or throws?
-            // node-redis v4 returns results. If there's an error in one command it might be different depending on config?
-            // Assuming standard v4 behavior: array of responses.
+        for (let i = 0; i < uuids.length; i++) {
             const data = results[i];
 
-            // data is the HGETALL result
             if (data && Object.keys(data).length > 0) {
                 updates.push({
-                    jid: jids[i],
-                    username: data.last_pushname || 'Inconnu', // Legacy logic: Syncs WhatsApp name directly to username
+                    id: uuids[i],
+                    username: data.last_pushname || 'Inconnu', // Legacy logic
                     interaction_count: parseInt(data.interaction_count || 0),
                     updated_at: new Date().toISOString()
                 });
             }
         }
 
-        // 3. Batch Upsert Supabase
+        // 3. Batch Upsert Supabase (onConflict: 'id')
         if (updates.length > 0 && supabase) {
-            const { error } = await supabase.from('users').upsert(updates, { onConflict: 'jid' });
+            const { error } = await supabase.from('users').upsert(updates, { onConflict: 'id' });
             if (error) {
                 console.error('[StateManager] Sync Error:', error);
-                // ROLLBACK: Remettre les JIDs dans la queue pour réessayer
-                await redis.sAdd(SYNC_QUEUE_KEY, jids);
+                // ROLLBACK: Remettre les UUIDs dans la queue pour réessayer
+                await redis.sAdd(SYNC_QUEUE_KEY, uuids);
             }
         }
     },

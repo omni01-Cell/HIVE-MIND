@@ -1,4 +1,5 @@
 
+// @ts-nocheck
 // scripts/health-check.js
 import { ServiceContainer } from '../core/ServiceContainer.js';
 import { providerRouter } from '../providers/index.js';

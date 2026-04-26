@@ -109,7 +109,7 @@ export class ExplicitPlanner {
             if (libs) {
                 try {
                     // 3a. Réparer avec json-repair (corrige les malformations)
-                    const repairedJson = libs.jsonRepair.repair(cleanedJson);
+                    const repairedJson = libs.jsonRepair.jsonrepair(cleanedJson);
                     
                     // 3b. Parser avec json5 (plus tolérant)
                     parsedPlan = libs.json5.parse(repairedJson);

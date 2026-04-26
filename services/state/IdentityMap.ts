@@ -45,37 +45,45 @@ export const IdentityMap = {
         // Groupes: pas de résolution nécessaire
         if (identifier.endsWith('@g.us')) return identifier;
 
-        // Nettoyage: retirer le device suffix (ex: "123:45@s.whatsapp.net" -> "123@s.whatsapp.net")
-        const id = identifier.split(':')[0];
+        // Nettoyage (supprime le ':12' de '33612345678:12@s.whatsapp.net')
+        const id = identifier.replace(/:\d+@/, '@');
 
-        // Cas 1: Déjà un JID (numéro de téléphone) → Retour direct
         if (id.endsWith('@s.whatsapp.net')) return id;
 
-        // Cas 2: C'est un LID → Chercher le mapping
         if (id.endsWith('@lid')) {
             const numericId = extractNumericId(id);
             const lidKey = `map:lid:${numericId}`;
 
-            // A. Cache Redis (Rapide, <1ms)
+            // A. Cache Redis
             const cachedJid = await redis?.get(lidKey);
             if (cachedJid) return cachedJid;
 
-            // B. Fallback Supabase (Lent, ~50-200ms)
+            // B. Fallback Supabase (Recherche d'une identité soeur)
             if (supabase) {
-                const { data } = await supabase
-                    .from('users')
-                    .select('jid')
-                    .eq('lid', id)
+                // Trouver le user_id de ce LID
+                const { data: lidIdentity } = await supabase
+                    .from('user_identities')
+                    .select('user_id')
+                    .eq('platform', 'whatsapp')
+                    .eq('platform_user_id', id)
                     .single();
 
-                if (data?.jid) {
-                    // Hydrater le cache pour les prochaines requêtes
-                    await redis?.set(lidKey, data.jid, { EX: 86400 * 7 }); // TTL: 7 jours
-                    return data.jid;
+                if (lidIdentity?.user_id) {
+                    // Trouver le JID associé à ce même user_id
+                    const { data: phoneIdentity } = await supabase
+                        .from('user_identities')
+                        .select('platform_user_id')
+                        .eq('platform', 'whatsapp')
+                        .eq('user_id', lidIdentity.user_id)
+                        .like('platform_user_id', '%@s.whatsapp.net')
+                        .single();
+
+                    if (phoneIdentity?.platform_user_id) {
+                        await redis?.set(lidKey, phoneIdentity.platform_user_id, { EX: 86400 * 7 });
+                        return phoneIdentity.platform_user_id;
+                    }
                 }
             }
-
-            // C. Inconnu: Retourner le LID tel quel (évite les crashs)
             return id;
         }
 
@@ -86,30 +94,11 @@ export const IdentityMap = {
     // MÉTHODE DE FUSION D'IDENTITÉ (Ghost User Merge)
     // ========================================================================
 
-    /**
-     * Enregistre l'association LID <-> JID et fusionne les comptes fantômes
-     * 
-     * SCÉNARIO TYPE:
-     * 1. User "Irving" envoie un status WhatsApp → Bot reçoit son LID
-     * 2. Bot crée un profil avec JID = LID (car on ne connait pas encore son vrai numéro)
-     * 3. Plus tard, Irving rejoint un groupe → Bot reçoit [JID, LID] côte à côte
-     * 4. Cette méthode détecte le "fantôme" et FUSIONNE les comptes
-     * 
-     * @param {string} id1 - Premier identifiant (JID ou LID, ordre indifférent)
-     * @param {string} id2 - Second identifiant (JID ou LID, ordre indifférent)
-     * 
-     * @example
-     * // Appelé automatiquement par GroupService lors du scan des membres
-     * await IdentityMap.register('33612345678@s.whatsapp.net', '186101520...@lid');
-     */
     async register(id1: any, id2: any) {
         if (!id1 || !id2) return;
 
-        // ──────────────────────────────────────────────────────────────────
-        // ÉTAPE 1: Détection automatique des types (ordre-agnostique)
-        // ──────────────────────────────────────────────────────────────────
-        let phoneJid: any = null;  // Le "vrai" identifiant (numéro de téléphone)
-        let deviceLid: any = null; // L'identifiant device (cryptique)
+        let phoneJid: any = null;
+        let deviceLid: any = null;
 
         if (id1.includes('@s.whatsapp.net')) phoneJid = id1;
         else if (id1.includes('@lid')) deviceLid = id1;
@@ -117,74 +106,82 @@ export const IdentityMap = {
         if (id2.includes('@s.whatsapp.net')) phoneJid = id2;
         else if (id2.includes('@lid')) deviceLid = id2;
 
-        // Si on n'a pas les deux types, impossible de faire le mapping
         if (!phoneJid || !deviceLid) return;
 
-        // ──────────────────────────────────────────────────────────────────
-        // ÉTAPE 2: Mise à jour du cache Redis (toujours faire en premier)
-        // ──────────────────────────────────────────────────────────────────
         const lidKey = `map:lid:${extractNumericId(deviceLid)}`;
-        await redis?.set(lidKey, phoneJid); // Écrase toute valeur précédente
+        await redis?.set(lidKey, phoneJid);
 
         if (supabase) {
             try {
-                // A. Vérifier si le "Fantôme" (LID stocké comme JID) existe
-                // C'est le cas critique : User enregistré via LID avant qu'on connaisse son JID
-                const { data: ghostUser } = await supabase
-                    .from('users')
-                    .select('*')
-                    .eq('jid', deviceLid) // On cherche le LID dans la colonne JID
+                // A. Trouver l'identité du Fantôme (LID)
+                const { data: ghostIdentity } = await supabase
+                    .from('user_identities')
+                    .select('id, user_id, users(interaction_count)')
+                    .eq('platform', 'whatsapp')
+                    .eq('platform_user_id', deviceLid)
                     .single();
 
-                if (ghostUser) {
+                // B. Trouver l'identité du Vrai (JID)
+                const { data: realIdentity } = await supabase
+                    .from('user_identities')
+                    .select('id, user_id, users(interaction_count)')
+                    .eq('platform', 'whatsapp')
+                    .eq('platform_user_id', phoneJid)
+                    .single();
+
+                // Cas 1: Fantôme et Réel existent et sont différents -> FUSION
+                if (ghostIdentity && realIdentity && ghostIdentity.user_id !== realIdentity.user_id) {
                     const debugIdentity = await redis?.get('config:debug:identity') === 'true';
-                    if (debugIdentity) {
-                        console.log(`[IdentityMap] 👻 Fantôme détecté (${deviceLid}). Fusion vers le JID réel (${phoneJid})...`);
-                    }
+                    if (debugIdentity) console.log(`[IdentityMap] 👻 Fusion fantôme: ${deviceLid} -> ${phoneJid}`);
 
-                    // B. Récupérer ou créer le vrai User
-                    const { data: realUser } = await supabase
-                        .from('users')
-                        .select('*')
-                        .eq('jid', phoneJid)
-                        .single();
-
-                    // C. Calculer les nouvelles stats fusionnées
-                    const ghostXp = parseInt(ghostUser.interaction_count) || 0;
-                    const realXp = realUser ? (parseInt(realUser.interaction_count) || 0) : 0;
+                    const ghostXp = parseInt(ghostIdentity.users?.interaction_count || 0);
+                    const realXp = parseInt(realIdentity.users?.interaction_count || 0);
                     const newXp = ghostXp + realXp;
 
-                    // D. Transaction de fusion (Sequentielle)
-                    // 1. Mettre à jour le vrai user (ou le créer s'il n'existe pas encore)
-                    const { error: upsertError } = await supabase.from('users').upsert({
-                        jid: phoneJid,
-                        lid: deviceLid, // On lie enfin le LID
-                        // On garde le nom le plus récent ou celui du fantôme si pas de réal
-                        // Note: username depend de la structure de table, assumons validité
-                        username: realUser?.username || ghostUser.username,
-                        interaction_count: newXp,
-                        updated_at: new Date().toISOString()
-                    }, { onConflict: 'jid' });
-
-                    if (!upsertError) {
-                        // 2. Supprimer le fantôme SEULEMENT si l'upsert a réussi
-                        await supabase.from('users').delete().eq('jid', deviceLid);
-                        if (debugIdentity) {
-                            console.log(`[IdentityMap] ✨ Fusion terminée : ${deviceLid} -> ${phoneJid} (Total XP: ${newXp})`);
-                        }
-                    } else {
-                        console.error('[IdentityMap] Echec fusion (Upsert failed):', upsertError.message);
-                    }
+                    // 1. Assigner le LID au vrai user_id
+                    await supabase.from('user_identities').update({ user_id: realIdentity.user_id }).eq('id', ghostIdentity.id);
+                    
+                    // 2. Mettre à jour l'XP
+                    await supabase.from('users').update({ interaction_count: newXp }).eq('id', realIdentity.user_id);
+                    
+                    // 3. Supprimer le user fantôme orphelin
+                    await supabase.from('users').delete().eq('id', ghostIdentity.user_id);
+                    
                     return;
                 }
 
-                // E. Cas Standard : Pas de fantôme, on fait juste un upsert normal
-                // (Mise à jour du LID sur un user existant ou création)
-                await supabase.from('users').upsert({
-                    jid: phoneJid,
-                    lid: deviceLid,
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'jid' });
+                // Cas 2: Seulement le LID existe -> Le promouvoir en rajoutant l'identité JID
+                if (ghostIdentity && !realIdentity) {
+                    await supabase.from('user_identities').insert({
+                        user_id: ghostIdentity.user_id,
+                        platform: 'whatsapp',
+                        platform_user_id: phoneJid
+                    });
+                    return;
+                }
+
+                // Cas 3: Seulement le JID existe -> Lui rajouter l'identité LID
+                if (realIdentity && !ghostIdentity) {
+                    await supabase.from('user_identities').insert({
+                        user_id: realIdentity.user_id,
+                        platform: 'whatsapp',
+                        platform_user_id: deviceLid
+                    });
+                    return;
+                }
+
+                // Cas 4: Aucun n'existe -> Créer les deux
+                if (!realIdentity && !ghostIdentity) {
+                    // C'est géré naturellement par Supabase (resolveUser) plus tard si besoin,
+                    // mais on peut créer l'utilisateur pro-activement ici.
+                    const { data: newUser } = await supabase.from('users').insert({ username: phoneJid }).select().single();
+                    if (newUser) {
+                        await supabase.from('user_identities').insert([
+                            { user_id: newUser.id, platform: 'whatsapp', platform_user_id: phoneJid },
+                            { user_id: newUser.id, platform: 'whatsapp', platform_user_id: deviceLid }
+                        ]);
+                    }
+                }
 
             } catch (error: any) {
                 console.error('[IdentityMap] Erreur process identity:', error.message);

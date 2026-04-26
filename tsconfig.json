@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "ignoreDeprecations": "6.0",
     "outDir": "./dist",
     "rootDir": ".",
@@ -13,6 +13,7 @@
     "allowJs": true,
     "checkJs": false,
     "resolveJsonModule": true,
+    "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
       "@core/*": ["core/*"],
@@ -26,6 +27,7 @@
   },
   "include": [
     "**/*.ts",
+    "**/*.tsx",
     "types/**/*.d.ts"
   ],
   "exclude": [

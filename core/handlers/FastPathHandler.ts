@@ -15,14 +15,12 @@ import { extractToolCallsFromText, parseToolArguments } from '../../utils/toolCa
 export class FastPathHandler {
     transport: any;
     MAX_TOKENS: any;
-    FAST_FAMILY: any;
-    FAST_MODEL: any;
+    FAST_CATEGORY: string;
 
     constructor(transport: any) {
         this.transport = transport;
         this.MAX_TOKENS = 500; // Réponses concises
-        this.FAST_FAMILY = 'nvidia'; // Famille NVIDIA
-        this.FAST_MODEL = 'minimaxai/minimax-m2.1';
+        this.FAST_CATEGORY = 'FAST_CHAT'; // Résolu dynamiquement via models_config.json
     }
 
     /**
@@ -58,21 +56,22 @@ export class FastPathHandler {
 
             let history = [...startMessages];
             let lastResponse: any = null;
+            let usedModel: string | null = null;
 
             // 3. Mini-Boucle (Max 2 itérations)
             for (let i = 0; i < MAX_FAST_STEPS; i++) {
                 console.log(`[FastPath] 🔄 Itération ${i + 1}/${MAX_FAST_STEPS}`);
 
-                // Appel LLM
+                // Appel LLM via le Smart Router (respecte quotas, circuit breaker, reliability, fallback)
                 const response = await providerRouter.chat(history, {
-                    family: this.FAST_FAMILY,
-                    model: this.FAST_MODEL,
+                    category: this.FAST_CATEGORY,   // Résolu par le router → primary/fallback depuis config
                     tools: quickTools.length > 0 ? quickTools : undefined,
                     maxTokens: this.MAX_TOKENS,
-                    skipClassification: true
+                    skipClassification: true         // On fournit déjà la catégorie, pas besoin du classifier LLM
                 });
 
                 lastResponse = response;
+                usedModel = response.usedModel || usedModel;
 
                 // [FALLBACK] Vérifier si le modèle a écrit l'outil dans le texte (Hallucination XML)
                 // On le fait AVANT d'ajouter à l'historique pour que l'objet soit complet
@@ -202,12 +201,29 @@ export class FastPathHandler {
     }
 
     /**
-     * Récupère les 3 outils les plus pertinents pour ce message
+     * Récupère les outils pertinents pour ce message
      */
     async _getQuickTools(text: any) {
         try {
             // Utiliser le RAG de pluginLoader pour obtenir les outils pertinents
             const relevantTools = await pluginLoader.getRelevantTools(text, 3, 5);
+            
+            // [PTC] Injecter le meta-tool code_execution SEULEMENT si le modèle FastPath est capable
+            // Les modèles Tier C (<20B params) ne génèrent pas du code JS fiable
+            const ptcEnabled = process.env.PTC_ENABLED !== 'false';
+            if (ptcEnabled) {
+                // Résoudre le modèle primary FAST_CHAT depuis la config (même source que le router)
+                const primaryModel = this._resolvePrimaryModel();
+                const ptcTier = this._getModelPtcTier(primaryModel);
+                if (ptcTier !== 'C') {
+                    const { ptcExecutor } = await import('../../services/ptc/index.js');
+                    const codeExecToolDef = ptcExecutor.buildCodeExecutionToolDef(relevantTools);
+                    relevantTools.push(codeExecToolDef);
+                } else {
+                    console.log(`[FastPath] ⏭️ PTC désactivé pour ${primaryModel} (Tier C)`);
+                }
+            }
+            
             return relevantTools || [];
         } catch (e: any) {
             console.warn('[FastPath] Erreur récupération outils:', e.message);
@@ -217,11 +233,43 @@ export class FastPathHandler {
     }
 
     /**
+     * Résout le modèle primary de la catégorie FAST_CHAT depuis models_config.json
+     */
+    _resolvePrimaryModel(): string {
+        try {
+            const { readFileSync } = require('fs');
+            const configPath = require('path').join(process.cwd(), 'config', 'models_config.json');
+            const config = JSON.parse(readFileSync(configPath, 'utf8'));
+            return config.reglages_generaux?.chat_agents?.categories?.[this.FAST_CATEGORY]?.primary || 'unknown';
+        } catch { return 'unknown'; }
+    }
+
+    /**
+     * Récupère le ptc_tier d'un modèle depuis la config
+     */
+    _getModelPtcTier(modelId: string): string {
+        try {
+            const { readFileSync } = require('fs');
+            const { join, dirname } = require('path');
+            const { fileURLToPath } = require('url');
+            const configPath = join(process.cwd(), 'config', 'models_config.json');
+            const config = JSON.parse(readFileSync(configPath, 'utf8'));
+            
+            for (const family of Object.values(config.familles || {}) as any[]) {
+                for (const model of family.modeles || []) {
+                    if (model.id === modelId) return model.ptc_tier || 'C';
+                }
+            }
+        } catch { /* fallback */ }
+        return 'C'; // Sécurité : inconnu = pas de PTC
+    }
+
+    /**
      * Exécute un seul outil (pas de boucle ReAct)
      */
     async _executeSingleTool(toolCall: any, message: any, context: any) {
         const toolName = toolCall.function.name;
-        let args = {};
+        let args: any = {};
 
         try {
             args = JSON.parse(toolCall.function.arguments || '{}');
@@ -229,7 +277,36 @@ export class FastPathHandler {
             console.warn('[FastPath] Erreur parsing arguments:', e.message);
         }
 
-        // Exécuter via pluginLoader
+        // [PTC] Route spéciale pour code_execution dans le FastPath
+        if (toolName === 'code_execution') {
+            try {
+                const { ptcExecutor, buildToolFunctions } = await import('../../services/ptc/index.js');
+                const relevantTools = await this._getQuickTools(message.text);
+                
+                const toolFns = buildToolFunctions(
+                    relevantTools,
+                    (name: string, toolArgs: any, ctx: any) => pluginLoader.execute(name, toolArgs, ctx),
+                    {
+                        transport: this.transport,
+                        message,
+                        chatId: message.chatId,
+                        sender: message.sender,
+                        sourceChannel: message.sourceChannel,
+                        onProgress: (status: string) => {
+                            console.log(`[FastPath PTC Progress] ${status}`);
+                        }
+                    }
+                );
+                
+                const ptcResult = await ptcExecutor.execute(args.code, toolFns);
+                return ptcResult;
+            } catch (err: any) {
+                console.error('[FastPath] Erreur PTC:', err);
+                return { success: false, error: err.message };
+            }
+        }
+
+        // Exécuter via pluginLoader pour les autres outils
         const result = await pluginLoader.execute(toolName, args, {
             transport: this.transport,
             message,

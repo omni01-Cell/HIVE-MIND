@@ -8,12 +8,15 @@ import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
 import { orchestrator } from './orchestrator.js';
 import { eventBus, BotEvents } from './events.js';
-import { baileysTransport } from './transport/baileys.js';
+import { transportManager } from './transport/TransportManager.js';
 import { pluginLoader } from '../plugins/loader.js';
 import { providerRouter } from '../providers/index.js';
 import { scheduler } from '../scheduler/index.js';
 import { extractToolCallsFromText, parseToolArguments } from '../utils/toolCallExtractor.js';
 import { isStorable } from '../utils/helpers.js';
+
+// [PTC] Programmatic Tool Calling — Pilier D AION
+import { ptcExecutor, buildToolFunctions } from '../services/ptc/index.js';
 import { startupDisplay } from '../utils/startup.js';
 
 import { botIdentity } from '../utils/botIdentity.js';
@@ -27,7 +30,7 @@ import type { MessageData, BotEvent } from './types/BotTypes.js';
 // Group Manager (filtrage hybride)
 let filterProcessor: any = null;
 try {
-    const groupManager = await import('../plugins/group_manager/index.js');
+    const groupManager = await import('../plugins/whatsapp/group_manager/index.js');
     filterProcessor = groupManager.default.processor;
 } catch (e: any) {
     console.warn('[Core] Group Manager non chargé:', e.message);
@@ -41,6 +44,7 @@ import { buildContext } from './context/contextBuilder.js';
 import { classifyLocally, isConfident } from '../services/ai/ReflexClassifier.js';
 import { tieredContextLoader } from './context/TieredContextLoader.js';
 import FastPathHandler from './handlers/FastPathHandler.js';
+import { permissionManager } from './security/PermissionManager.js';
 
 // DTC Phase 1: Les admins globaux sont maintenant dans Supabase via adminService
 // Le chargement se fait de manière asynchrone dans init()
@@ -85,7 +89,7 @@ export class BotCore {
     groupHandler: any;
 
     constructor() {
-        this.transport = baileysTransport;
+        this.transport = transportManager;
         this.isReady = false;
 
         // [FEEDBACK FIRST] Constantes pour réponse rapide < 30s
@@ -224,8 +228,21 @@ export class BotCore {
         // 6. Connecter le transport
         startupDisplay.loading('transport');
         try {
-            await this.transport.connect();
-            startupDisplay.success('transport', 'WhatsApp');
+            let activeTransports = process.env.ACTIVE_TRANSPORTS ? process.env.ACTIVE_TRANSPORTS.split(',') : ['whatsapp'];
+            
+            // Environment Detection Logic
+            const appEnv = process.env.APP_ENV || 'local';
+            
+            if (appEnv === 'server') {
+                console.log('[Core] 🌐 Mode SERVEUR (Headless). CLI désactivée.');
+                activeTransports = activeTransports.filter(t => t !== 'cli' && t !== 'ink-cli');
+            } else if (appEnv === 'local' && !activeTransports.includes('ink-cli')) {
+                console.log('[Core] 💻 Mode LOCAL. Activation de la CLI (Ink).');
+                activeTransports.push('ink-cli');
+            }
+
+            await this.transport.initialize(activeTransports);
+            startupDisplay.success('transport', `Connecté (${activeTransports.join(', ')})`);
         } catch (e: any) {
             startupDisplay.error('transport', e.message);
         }
@@ -509,6 +526,20 @@ export class BotCore {
             return; // On arrête le flux ici, pas d'IA si c'est une commande
         }
 
+        // ======== INTERCEPTION PERMISSION MANAGER — Admin Hub (.approve/.reject) ========
+        if (text.startsWith('.approve') || text.startsWith('.reject')) {
+            if (permissionManager.handleAdminCommand(text)) {
+                console.log(`[Core] 🏢 Commande Admin Hub consommée par le PermissionManager`);
+                return;
+            }
+        }
+
+        // ======== INTERCEPTION PERMISSION MANAGER — In-Band (oui/non) ========
+        if (permissionManager.handleUserResponse(text)) {
+            console.log(`[Core] 🛡️ Message consommé par le PermissionManager (In-Band)`);
+            return;
+        }
+
         // ======== COMMANDES .TASK (Group Manager) ========
         if (text.toLowerCase().startsWith('.task') && isGroup) {
             const groupManager = pluginLoader.get('group_manager');
@@ -621,11 +652,10 @@ export class BotCore {
 
                 if (container.has('geminiLiveProvider')) {
                     const geminiLive = container.get('geminiLiveProvider');
-                    const config = container.get('config'); // RécupConfig
-                    const shortTermContext = await workingMemory.getContext(chatId);
+                    const hiveCfg = container.get('config');
 
-                    // Constuire le contexte (pour le system prompt)
-                    const context: any = await (this as any)._buildContext(chatId, message, shortTermContext);
+                    // Construire le contexte via le loader canonique (FAST = léger, suffisant pour l'audio)
+                    const context: any = await tieredContextLoader.load(chatId, message, 'FAST');
 
                     // Tools sélection
                     // On charge les outils génériques car on a pas encore le texte
@@ -643,8 +673,8 @@ export class BotCore {
                         audioBuffer: message.audioBuffer,
                         systemPrompt: context.systemPrompt,
                         tools: relevantTools,
-                        conversationHistory: context.messages.slice(-5), // Limite contexte audio
-                        voice: config.models?.voice_provider?.audio_strategy?.native_voice || 'Aoede'
+                        conversationHistory: (context.history || []).slice(-5), // Limite contexte audio
+                        voice: hiveCfg.models?.reglages_generaux?.audio_strategy?.native_voice || 'Aoede'
                     });
 
                     // 1. Envoyer la réponse AUDIO
@@ -766,11 +796,18 @@ export class BotCore {
             let replyOptions: Record<string, any> = {};
             if (isGroup) {
                 const strategy = await workingMemory.getReplyStrategy(chatId, message);
-                if (strategy.useQuote && message.raw) {
+                const isBotDirectlyAddressed = mentionsBot || isContextualReply;
+
+                // LOGIQUE D'HUMANISATION (Quote vs Tag)
+                // 1. Les humains ne font jamais de "mentions fantômes" (forcer un tag sans écrire le @Nom dans le texte).
+                // 2. Si le chat est en chaos (useMention = true), le Quote prendrait trop de place verticale.
+                //    On désactive le Quote automatique, l'IA se chargera d'écrire `@Nom` si elle le juge nécessaire.
+                if (strategy.useMention) {
+                    // Mode Chaos : Pas de Quote, pas de Tag automatique. 
+                    // C'est le parser (baileys.ts) qui gérera les tags si l'IA écrit "@Prénom".
+                } else if ((strategy.useQuote || isBotDirectlyAddressed) && message.raw) {
+                    // Mode Actif/Calm/Solo : On cite le message pour garder le contexte visuel (très humain).
                     replyOptions.reply = message.raw;
-                }
-                if (strategy.useMention && sender) {
-                    replyOptions.mentions = [sender];
                 }
             }
 
@@ -797,14 +834,14 @@ export class BotCore {
                     // ✅ SUCCÈS RAPIDE
                     console.log(`[Core] ✅ FastPath succès (${(fastResult as any).latency}ms)`);
 
-                    // Envoi réponse
-                    await this.transport.sendText(chatId, fastResult.content, replyOptions);
+                    // Envoi réponse universelle
+                    await this.transport.sendUniversalResponse(chatId, { markdown: fastResult.content }, replyOptions, message.sourceChannel);
 
                     // Mise à jour mémoire court terme
                     await workingMemory.addMessage(chatId, 'assistant', fastResult.content);
 
                     // Nettoyage et fin
-                    await this.transport.sendPresenceUpdate(chatId, 'paused');
+                    await this.transport.setPresence(chatId, 'paused');
                     return; // ON S'ARRÊTE LÀ
                 }
 
@@ -888,6 +925,16 @@ export class BotCore {
             // On utilise le mode 'forceModeration' si nécessaire, ou standard
             const relevantTools = await pluginLoader.getRelevantTools(text, 5, 10);
 
+            // [PTC] Injecter le meta-tool code_execution — TOUJOURS disponible (CORE TOOL)
+            // Sa description liste dynamiquement les outils RAG sélectionnés ci-dessus,
+            // ce qui permet au LLM de savoir exactement quels outils il peut orchestrer.
+            const ptcEnabled = process.env.PTC_ENABLED !== 'false'; // Activé par défaut
+            if (ptcEnabled) {
+                const codeExecToolDef = ptcExecutor.buildCodeExecutionToolDef(relevantTools);
+                relevantTools.push(codeExecToolDef);
+                console.log(`[PTC] 🚀 Meta-tool code_execution injecté (${relevantTools.length - 1} outils orchestrables)`);
+            }
+
             // [EXPLICIT PLANNER] Seulement si AGENTIC
             if (keepThinking) {
                 const { planner } = await import('../services/agentic/Planner.js');
@@ -935,26 +982,47 @@ export class BotCore {
             while (keepThinking && iterations < MAX_ITERATIONS) {
                 iterations++;
 
-                // [PHASE 2] GESTION DE CONTEXTE INTELLIGENTE
-                // Purger l'historique des résultats trop lourds pour éviter l'explosion
+                // [PHASE 2+] GESTION DE CONTEXTE INTELLIGENTE (2 niveaux)
+                // Niveau 1 : Compression LLM (résumé sémantique via modèle rapide)
+                // Niveau 2 : Troncature mécanique (fallback si LLM échoue)
                 try {
-                    // On ne modifie pas 'conversationHistory' en place car c'est une constante (reference), 
-                    // mais c'est un tableau mutable. _optimizeHistory renvoie un nouveau tableau ou le même.
-                    // Si nouveau tableau, on doit remplacer le contenu.
-                    const optimized = this._optimizeHistory(history);
-                    if (optimized !== history) {
-                        history.length = 0; // Vider l'original
-                        history.push(...optimized); // Remplir avec l'optimisé
+                    const compacted = await this._compactHistory(history, chatId);
+                    if (compacted !== history) {
+                        history.length = 0;
+                        history.push(...compacted);
+                    } else {
+                        // Si _compactHistory n'a rien fait (sous le seuil), tenter la troncature classique
+                        const optimized = this._optimizeHistory(history);
+                        if (optimized !== history) {
+                            history.length = 0;
+                            history.push(...optimized);
+                        }
                     }
                 } catch (ctxErr: any) {
                     console.error('[ContextManager] ❌ Échec optimisation:', ctxErr);
                 }
 
                 // Appel à l'IA avec l'historique accumulé
-                const response = await providerRouter.chat(history, {
-                    tools: relevantTools,
-                    family: usedFamily // Utiliser le même cerveau pour tout le thread
-                });
+                let response: any;
+                try {
+                    response = await providerRouter.chat(history, {
+                        tools: relevantTools,
+                        // Premier tour: résolution via catégorie AGENTIC (quotas, fallback, reliability)
+                        // Tours suivants: garder la même famille pour cohérence du thread
+                        ...(usedFamily
+                            ? { family: usedFamily }
+                            : { category: 'AGENTIC' })
+                    });
+                } catch (chatErr: any) {
+                    // [FINOPS] Kill Switch : arrêt propre si budget dépassé
+                    if (chatErr.message?.includes('BUDGET_EXCEEDED')) {
+                        console.error('[FinOps] 🚨 Budget dépassé, arrêt de la boucle ReAct.');
+                        finalResponse = '⚠️ Le budget de cette session est épuisé. Je dois m\'arrêter ici pour éviter des coûts supplémentaires.';
+                        keepThinking = false;
+                        break;
+                    }
+                    throw chatErr; // Re-throw les autres erreurs
+                }
 
                 // Sauvegarder la famille utilisée au premier tour
                 if (!usedFamily) usedFamily = response.usedFamily;
@@ -1008,33 +1076,109 @@ export class BotCore {
                         const toolName = toolCall.function.name;
 
                         try {
-                            // [MIGRATION vers _safeExecuteTool]
-                            // Centralisation de toute la logique de sécurité (MultiAgent, MoralCompass) et de logging
-                            const toolResult = await this._safeExecuteTool(toolCall, {
-                                chatId,
-                                message,
-                                authority: fullContext.authority
-                            });
+                            let toolResult: any;
 
-                            // Important: l'IA a besoin de voir le résultat JSON pur
-                            const stringResult = JSON.stringify(toolResult);
+                            // [PTC] Route spéciale pour le meta-tool code_execution
+                            if (toolName === 'code_execution') {
+                                console.log('[PTC] ⚡ Exécution programmatique déclenchée par le LLM');
+                                const codeArgs = JSON.parse(toolCall.function.arguments || '{}');
+
+                                // Construire les fonctions tool pour le sandbox
+                                const toolFns = buildToolFunctions(
+                                    relevantTools,
+                                    (name: string, args: any, ctx: any) => pluginLoader.execute(name, args, ctx),
+                                    {
+                                        transport: this.transport,
+                                        message,
+                                        chatId,
+                                        sender: message.sender,
+                                        sourceChannel: message.sourceChannel,
+                                        onProgress: (status: string) => {
+                                            eventBus.publish(BotEvents.TOOL_PROGRESS, { tool: 'code_execution', status, chatId });
+                                        },
+                                    }
+                                );
+
+                                try {
+                                    // Exécuter le code dans le sandbox VM
+                                    const ptcResult = await ptcExecutor.execute(codeArgs.code, toolFns);
+                                    toolResult = ptcResult;
+                                    console.log(`[PTC] 📊 ${ptcResult.metadata.toolCallCount} tools exécutés, ~${ptcResult.metadata.totalTokensSaved} tokens économisés`);
+                                } catch (ptcErr: any) {
+                                    // [FALLBACK] Si PTC refuse (1 seul outil), exécuter via tool calling natif
+                                    if (ptcErr.message?.startsWith('PTC_SINGLE_TOOL')) {
+                                        console.log('[PTC] ⏭️ Fallback tool calling natif (1 seul outil détecté)');
+                                        // Extraire le nom de l'outil et les args du code généré
+                                        const singleToolMatch = codeArgs.code?.match(/(?:await\s+)?(\w+)\s*\(\s*(\{[\s\S]*?\})\s*\)/);
+                                        if (singleToolMatch) {
+                                            const [, extractedTool, extractedArgs] = singleToolMatch;
+                                            try {
+                                                const parsedArgs = JSON.parse(extractedArgs);
+                                                toolResult = await pluginLoader.execute(extractedTool, parsedArgs, {
+                                                    transport: this.transport,
+                                                    message,
+                                                    chatId,
+                                                    sender: message.sender,
+                                                    isGroup: message.isGroup,
+                                                    authority: fullContext.authority,
+                                                    sourceChannel: message.sourceChannel,
+                                                });
+                                                console.log(`[PTC→Native] ✅ Exécuté ${extractedTool} via fallback natif`);
+                                            } catch {
+                                                // L'extraction des args a échoué → renvoyer l'erreur au LLM
+                                                toolResult = { success: false, error: `PTC fallback: impossible d'extraire les arguments pour ${extractedTool}` };
+                                            }
+                                        } else {
+                                            toolResult = { success: false, error: ptcErr.message };
+                                        }
+                                    } else {
+                                        // Autre erreur PTC (SafeScript, timeout, etc.) → renvoyer au LLM
+                                        console.error('[PTC] ❌ Erreur:', ptcErr.message);
+                                        toolResult = { success: false, error: ptcErr.message };
+                                    }
+                                }
+                            } else {
+                                // [CLASSIQUE] _safeExecuteTool pour les appels normaux
+                                toolResult = await this._safeExecuteTool(toolCall, {
+                                    chatId,
+                                    message,
+                                    authority: fullContext.authority
+                                });
+                            }
+
+                            // --- LE DOUBLE RENDU (DUAL RENDERING) ---
+
+                            // 1. Rendu pour l'utilisateur (Instantané) — CLI UNIQUEMENT
+                            if (toolResult && toolResult.userOutput && message.sourceChannel === 'cli') {
+                                const userMsg = typeof toolResult.userOutput === 'string'
+                                    ? toolResult.userOutput
+                                    : JSON.stringify(toolResult.userOutput);
+
+                                // Envoi immédiat pour faire patienter l'utilisateur pendant que l'IA "réfléchit" à la suite
+                                await this.transport.sendUniversalResponse(chatId, { markdown: userMsg }, {}, message.sourceChannel);
+                            }
+
+                            // 2. Rendu pour le LLM (Optimisé / Tronqué)
+                            const llmContent = (toolResult && toolResult.llmOutput)
+                                ? (typeof toolResult.llmOutput === 'string' ? toolResult.llmOutput : JSON.stringify(toolResult.llmOutput))
+                                : JSON.stringify(toolResult); // Fallback pour les anciens plugins
 
                             // 3. Ajouter le résultat à l'historique
                             history.push({
                                 role: 'tool',
                                 tool_call_id: toolCall.id,
                                 name: toolName,
-                                content: stringResult
+                                content: llmContent
                             });
 
-                            console.log(`[Agent] ✅ Résultat ${toolName} traité`);
+                            console.log(`[Agent] ✅ Résultat ${toolName} traité (Dual Render: ${!!(toolResult && toolResult.userOutput)})`);
 
                             // 🛡️ OBSERVER: Vérifier la cohérence comportementale après chaque outil
                             try {
                                 const { multiAgent } = await import('../services/agentic/MultiAgent.js');
 
                                 // Obtenir l'historique récent pour comparaison
-                                const recentActions = await this.actionMemory.getRecentActions(chatId, 5);
+                                const recentActions = await this.agentMemory.getRecentActions(chatId, 5);
 
                                 const coherence: any = await multiAgent.observe({
                                     tool: toolName,
@@ -1093,12 +1237,26 @@ export class BotCore {
                     continue;
 
                 } else {
-                    // 4. L'IA n'a plus d'outils à appeler, c'est la réponse finale
+                    // 4. L'IA n'a plus d'outils à appeler
                     console.log(`[Agent] 🏁 Fin de réflexion à l'étape ${iterations}.`);
 
-                    // DEBUG: Voir ce que le provider retourne
-                    console.log(`[Agent Debug] response.content type: ${typeof response.content}, value: "${String(response.content).substring(0, 100)}"`);
-                    console.log(`[Agent Debug] response keys: ${Object.keys(response).join(', ')}`);
+                    // [CoT] Détection pensée-seulement : si le contenu est uniquement des tags <thought>,
+                    // forcer une itération supplémentaire pour obtenir une vraie réponse.
+                    const contentStr = response.content || '';
+                    const thoughtOnlyCheck = contentStr.replace(/<(think|thought|thinking)>[\s\S]*?<\/\1>/gi, '').trim();
+
+                    if (!thoughtOnlyCheck && contentStr.length > 0 && iterations < MAX_ITERATIONS) {
+                        console.log('[CoT] ⚠️ Réponse contenant uniquement des pensées. Relance pour obtenir une réponse utilisateur.');
+                        history.push({
+                            role: 'assistant',
+                            content: contentStr
+                        });
+                        history.push({
+                            role: 'user',
+                            content: 'Tu as réfléchi dans tes balises <thought>, mais tu n\'as produit aucune réponse pour l\'utilisateur ni appelé d\'outils. Réponds-moi directement.'
+                        });
+                        continue; // Force une itération supplémentaire
+                    }
 
                     finalResponse = response.content;
                     keepThinking = false;
@@ -1194,18 +1352,24 @@ export class BotCore {
             // [AGENTIC] Nettoyage de la pensée interne (Invisible pour l'utilisateur)
             // Supporte <think>, <thought>, <thinking> (DeepSeek, Gemini, etc.)
             const thoughtRegex = /<(think|thought|thinking)>[\s\S]*?<\/\1>/gi;
-            if (thoughtRegex.test(finalResponse)) {
-                const thoughts = finalResponse.match(thoughtRegex);
-                console.log('[Agent] 🧠 Pensée détectée et filtrée:', thoughts ? thoughts.length : 0);
+            const thoughts: string[] = [];
+            let thoughtMatch: RegExpExecArray | null;
+            const extractRegex = /<(think|thought|thinking)>([\s\S]*?)<\/\1>/gi;
+            while ((thoughtMatch = extractRegex.exec(finalResponse)) !== null) {
+                thoughts.push(thoughtMatch[2].trim());
+            }
+
+            if (thoughts.length > 0) {
+                console.log(`[CoT] 🧠 Pensée de l'agent (${thoughts.length} bloc(s)) :`);
+                thoughts.forEach((t, i) => console.log(`  [${i + 1}] ${t.substring(0, 200)}${t.length > 200 ? '...' : ''}`));
 
                 finalResponse = finalResponse.replace(thoughtRegex, '').trim();
 
-                // Si après nettoyage il ne reste rien, mais qu'il y a eu de l'activité
+                // Si après nettoyage il ne reste rien
                 if (!finalResponse) {
                     if (iterations > 0) {
                         finalResponse = "*(Réflexion terminée sans réponse textuelle)*";
                     } else {
-                        // Cas rare: Le modèle n'a renvoyé QUE de la pensée sans tool call ni réponse
                         return;
                     }
                 }
@@ -1239,8 +1403,8 @@ export class BotCore {
             const messageParts = splitMessage(finalResponse, 1500);
 
             for (let i = 0; i < messageParts.length; i++) {
-                // Quote seulement sur la première partie (replyOptions déjà défini plus haut)
-                await this.transport.sendText(chatId, messageParts[i], i === 0 ? replyOptions : {});
+                // Envoi réponse universelle (replyOptions déjà défini plus haut)
+                await this.transport.sendUniversalResponse(chatId, { markdown: messageParts[i] }, i === 0 ? replyOptions : {}, message.sourceChannel);
 
                 // Petit délai naturel entre les parties (sauf la dernière)
                 if (i < messageParts.length - 1) {
@@ -1276,9 +1440,17 @@ export class BotCore {
             // await db.log('message', ...);
 
         } catch (error: any) {
-            clearTimeout(feedbackTimeoutId ?? undefined); // Important: Clear timeout on error
+            clearTimeout(feedbackTimeoutId ?? undefined);
             console.error('[Core] Erreur traitement:', error);
-            await this.transport.sendText(chatId, "Oups, j'ai bugué 😅 Réessaie !");
+
+            // [FINOPS] Message spécifique pour Kill Switch budgétaire
+            if (error.message?.includes('BUDGET_EXCEEDED')) {
+                await this.transport.sendUniversalResponse(chatId, {
+                    markdown: '⚠️ **Budget de session épuisé.** Pour protéger ton portefeuille, je me mets en pause. Relance-moi pour une nouvelle session.'
+                }, {}, message.sourceChannel);
+            } else {
+                await this.transport.sendUniversalResponse(chatId, { markdown: "Oups, j'ai bugué 😅 Réessaie !" }, {}, message.sourceChannel);
+            }
             await this.transport.setPresence(chatId, 'paused');
         }
     }
@@ -1403,15 +1575,81 @@ export class BotCore {
 
 
     /**
+     * Compresse l'historique via un LLM rapide quand la fenêtre de contexte sature.
+     * Inspiré de Claude Code /compact : on résume la conversation passée,
+     * puis on reconstruit un historique minimal (system + résumé + derniers échanges).
+     *
+     * @param history - L'historique complet de la boucle ReAct
+     * @param chatId - Pour les logs
+     * @returns L'historique compressé ou l'original si sous le seuil
+     */
+    async _compactHistory(history: any[], chatId: string): Promise<any[]> {
+        const TOTAL_CHAR_LIMIT = 25000;
+        const currentSize = JSON.stringify(history).length;
+
+        if (currentSize < TOTAL_CHAR_LIMIT) return history;
+
+        console.log(`[ContextManager] ⚠️ Saturation (${currentSize} chars). Déclenchement du Garbage Collector IA...`);
+
+        // Isoler le System Prompt (index 0) et les 2 derniers échanges
+        const systemPrompt = history[0];
+        const lastInteraction = history.slice(-2);
+
+        // Messages à compresser : tout entre system prompt et les 2 derniers
+        const messagesToCompress = history.slice(1, -2);
+        if (messagesToCompress.length === 0) return history;
+
+        const textToCompress = JSON.stringify(messagesToCompress);
+
+        const summaryPrompt = [
+            {
+                role: 'user',
+                content: `Tu es le gestionnaire de mémoire de HIVE-MIND.
+Voici l'historique d'une longue session de travail d'un agent IA.
+Fais un résumé TRÈS DENSE et TECHNIQUE de ce qui s'est passé.
+Concentre-toi UNIQUEMENT sur :
+1. L'objectif initial de l'utilisateur.
+2. Les fichiers modifiés ou lus, et les commandes exécutées.
+3. Les erreurs rencontrées et les solutions trouvées.
+4. L'état actuel exact (ce qu'il reste à faire).
+
+Historique à compresser :
+${textToCompress}`
+            }
+        ];
+
+        try {
+            const response = await providerRouter.chat(summaryPrompt, {
+                family: 'groq',
+                model: 'llama-3.3-70b-versatile',
+                temperature: 0.1
+            });
+
+            const summary = response.content;
+            console.log(`[ContextManager] ✅ Historique compressé (${currentSize} → résumé)`);
+
+            // Reconstruire : System → Faux rappel user → Résumé assistant → Derniers échanges
+            return [
+                systemPrompt,
+                { role: 'user', content: 'Nous avons travaillé sur une longue tâche. Rappelle-moi où nous en sommes pour continuer.' },
+                { role: 'assistant', content: `Voici le résumé condensé de notre progression :\n\n${summary}` },
+                ...lastInteraction
+            ];
+        } catch (e: any) {
+            console.error(`[ContextManager] ❌ Échec compression IA, fallback troncature:`, e.message);
+            return this._optimizeHistory(history);
+        }
+    }
+
+    /**
      * Gère intelligemment la fenêtre de contexte pour éviter l'explosion (Amnésie Progressive)
      * Tronque les sorties d'outils volumineuses tout en gardant l'instruction utilisateur
-     * @param {Array} history - Historique complet
-     * @returns {Array} Historique optimisé
+     * @param history - Historique complet
+     * @returns Historique optimisé
      */
     _optimizeHistory(history: any[]) {
-        // Paramètres
-        const TOTAL_CHAR_LIMIT = 25000; // ~6k tokens
-        const TOOL_OUTPUT_LIMIT = 2000; // Limite par outil résumé
+        const TOTAL_CHAR_LIMIT = 25000;
+        const TOOL_OUTPUT_LIMIT = 2000;
 
         let currentSize = JSON.stringify(history).length;
 
@@ -1419,32 +1657,21 @@ export class BotCore {
             return history;
         }
 
-        console.log(`[ContextManager] ⚠️ Surcharge contexte détectée (${currentSize} chars). Optimisation...`);
-
-        // Stratégie: Supprimer/Tronquer les vieux tool_outputs, mais GARDEZ :
-        // 1. Le System Prompt (Index 0)
-        // 2. Le User Message original (Le dernier User message du début de chaine) => Souvent index 1 ou 2
-        // 3. Les 3 derniers échanges (User/Assistant/Tool)
+        console.log(`[ContextManager] ⚠️ Surcharge contexte détectée (${currentSize} chars). Troncature mécanique...`);
 
         const optimizedHistory = [...history];
-
-        // On parcourt de l'index 2 (après system/user prompt) jusqu'à length-3
-        // On ne touche PAS aux 3 derniers messages pour garder la cohérence immédiate
         const safeZoneStart = 2;
         const safeZoneEnd = optimizedHistory.length - 3;
-
         let trimmedCount = 0;
 
         for (let i = safeZoneStart; i < safeZoneEnd; i++) {
             const msg = optimizedHistory[i];
 
-            // Cible n°1: Les résultats d'outils volumineux
             if (msg.role === 'tool' && msg.content && msg.content.length > TOOL_OUTPUT_LIMIT) {
                 const originalLen = msg.content.length;
-                const summary = msg.content.substring(0, TOOL_OUTPUT_LIMIT) +
-                    `\n... [DONNÉES VOLUMINEUSES TRONQUÉES: ${originalLen - TOOL_OUTPUT_LIMIT} chars masqués pour préserver la mémoire. L'essentiel a été lu.]`;
+                msg.content = msg.content.substring(0, TOOL_OUTPUT_LIMIT) +
+                    `\n... [TRONQUÉ: ${originalLen - TOOL_OUTPUT_LIMIT} chars masqués]`;
 
-                msg.content = summary;
                 trimmedCount++;
                 currentSize = JSON.stringify(optimizedHistory).length;
 
@@ -1452,7 +1679,7 @@ export class BotCore {
             }
         }
 
-        console.log(`[ContextManager] ✅ Optimisation terminée. ${trimmedCount} outils tronqués. Nouvelle taille: ${currentSize} chars.`);
+        console.log(`[ContextManager] ✅ Troncature terminée. ${trimmedCount} outils tronqués. Taille: ${currentSize} chars.`);
         return optimizedHistory;
     }
 
@@ -1553,7 +1780,15 @@ export class BotCore {
             transport: this.transport,
             message,
             chatId: message.chatId,
-            sender: message.sender
+            sender: message.sender,
+            // sourceChannel is used by PermissionManager.askPermission to route
+            // the sandbox permission prompt to the correct transport adapter.
+            sourceChannel: message.sourceChannel ?? (message.chatId?.endsWith('@g.us') ? 'group' : 'private'),
+            // [ASYNC RENDERING] Callback de progression pour feedback temps réel
+            onProgress: (statusMessage: string) => {
+                eventBus.publish(BotEvents.TOOL_PROGRESS, { tool: name, status: statusMessage, chatId: message.chatId });
+                console.log(`[Tool Progress] ⏳ ${name}: ${statusMessage}`);
+            }
         };
 
         // [AGENTIC] Vérifier si cet outil a récemment échoué (éviter répétition)
@@ -1960,7 +2195,7 @@ export class BotCore {
         ]);
 
         await this._naturalDelay();
-        await this.transport.sendText(chatId, response.content);
+        await this.transport.sendUniversalResponse(chatId, { markdown: response.content }, {}, (event.data as any).sourceChannel);
     }
 
     /**

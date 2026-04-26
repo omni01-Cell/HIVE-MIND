@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js';
 import db from '../services/supabase.js';
 import { CredentialsSchema, Credentials } from '../config/credentials.schema.js';
 import { ModelsConfigSchema, ModelsConfig } from '../config/config.schema.js';
+import { config as appConfig } from '../config/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -56,6 +57,7 @@ export class ServiceContainer {
         // 2. Enregistrer les Services de Base
         this.register('logger', logger);
         this.register('supabase', db);
+        this.register('config', appConfig);
 
         // 2b. Services Dynamiques (ESM)
         const { redis } = await import('../services/redisClient.js');

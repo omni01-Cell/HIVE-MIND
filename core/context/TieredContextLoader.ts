@@ -364,6 +364,12 @@ export class TieredContextLoader {
 `;
         }
 
+        // [RAPPEL OUTILS] Indiquer clairement à l'IA qu'elle possède des outils et comment les lister
+        prompt += `\n### 🛠️ OUTILS ET CAPACITÉS
+Tu disposes d'outils natifs (fonctions) que tu peux appeler.
+IMPORTANT : Si l'utilisateur te demande quelles sont tes capacités, tes fonctions, ou si tu as un outil spécifique (comme code_execution), **APPELLE IMMÉDIATEMENT l'outil \`get_my_capabilities\`** pour lui répondre de manière exhaustive. Ne réponds jamais de mémoire sur tes outils.
+`;
+
         // Nettoyer les placeholders restants
         prompt = prompt.replace(/{{#each.*?}}[\s\S]*?{{\/each}}/g, '');
         prompt = prompt.replace(/{{.*?}}/g, '');

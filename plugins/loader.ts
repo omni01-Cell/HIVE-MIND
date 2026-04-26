@@ -39,14 +39,20 @@ class PluginLoader {
     async loadAll() {
         // Chargement silencieux pour ne pas casser la barre de progression
         const entries = await readdir(__dirname, { withFileTypes: true });
-        const pluginDirs = entries.filter((e: any) => e.isDirectory());
+        const categories = entries.filter((e: any) => e.isDirectory());
         const loadErrors = [];
 
-        for (const dir of pluginDirs) {
-            try {
-                await this.load(dir.name);
-            } catch (error: any) {
-                loadErrors.push({ name: dir.name, error: error.message });
+        for (const category of categories) {
+            const catPath = join(__dirname, category.name);
+            const pluginEntries = await readdir(catPath, { withFileTypes: true });
+            const pluginDirs = pluginEntries.filter((e: any) => e.isDirectory());
+
+            for (const dir of pluginDirs) {
+                try {
+                    await this.load(`${category.name}/${dir.name}`);
+                } catch (error: any) {
+                    loadErrors.push({ name: dir.name, error: error.message });
+                }
             }
         }
 
@@ -75,6 +81,14 @@ class PluginLoader {
             }
             if (plugin.toolDefinitions) {
                 plugin.toolDefinitions.forEach((td: any) => this._validateToolDefinition(td, pluginName));
+            }
+
+            if (typeof plugin.init === 'function') {
+                try {
+                    await plugin.init();
+                } catch (e: any) {
+                    console.error(`[PluginLoader] Error initializing plugin ${pluginName}:`, e.message);
+                }
             }
 
             if (!plugin.enabled) {
@@ -491,11 +505,16 @@ class PluginLoader {
             this.plugins.delete(name);
         }
 
-        // Trouve le dossier correspondant
-        const entries = await readdir(__dirname, { withFileTypes: true });
-        const dir = entries.find((e: any) => e.isDirectory() && e.name === name);
-        if (dir) {
-            await this.load(name);
+        // Find the plugin path across categories
+        const categories = await readdir(__dirname, { withFileTypes: true });
+        for (const category of categories.filter((e: any) => e.isDirectory())) {
+            const catPath = join(__dirname, category.name);
+            const plugins = await readdir(catPath, { withFileTypes: true });
+            const dir = plugins.find((e: any) => e.isDirectory() && e.name === name);
+            if (dir) {
+                await this.load(`${category.name}/${name}`);
+                return;
+            }
         }
     }
 }

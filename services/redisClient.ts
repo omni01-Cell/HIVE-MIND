@@ -56,7 +56,7 @@ const redis = createClient({
 
 // Event handlers
 redis.on('error', err => console.error('[Redis] Erreur Connexion:', err.message));
-redis.on('connect', () => { /* Connexion silencieuse pour ne pas casser la barre de progression */ });
+redis.on('connect', () => { /* Connexion silencieuse */ });
 redis.on('reconnecting', () => console.log('[Redis] Reconnexion en cours...'));
 
 // Connexion asynchrone
@@ -64,7 +64,6 @@ let connectionPromise: any = null;
 
 /**
  * Assure que Redis est connecté avant toute opération
- * @returns {Promise<void>}
  */
 const ensureConnected = async () => {
     if (redis.isOpen) return;
@@ -87,7 +86,6 @@ if (process.env.NODE_ENV !== 'test') {
 
 /**
  * Vérifie l'état de santé de Redis
- * @returns {Promise<Object>} Status et métriques
  */
 const checkHealth = async () => {
     if (!redis.isOpen) {
@@ -115,7 +113,6 @@ const checkHealth = async () => {
 
 /**
  * Ferme proprement la connexion Redis
- * @returns {Promise<void>}
  */
 const disconnect = async () => {
     if (redis.isOpen) {

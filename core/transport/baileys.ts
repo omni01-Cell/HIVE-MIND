@@ -22,7 +22,7 @@ import swarm from '../concurrency/SwarmDispatcher.js'; // [NEW] Module Swarm
 // import { userService } from '../../services/userService.js'; // REMOVED FOR DI
 // import { groupService } from '../../services/groupService.js'; // REMOVED FOR DI
 import { eventBus, BotEvents } from '../events.js';
-import { formatToWhatsApp } from '../../utils/helpers.js';
+import { formatToWhatsApp, sanitizeForWhatsApp } from '../../utils/helpers.js';
 import { workingMemory } from '../../services/workingMemory.js';
 import { botIdentity } from '../../utils/botIdentity.js';
 import { resolveMentionsInText } from '../../utils/fuzzyMatcher.js';
@@ -533,11 +533,14 @@ class BaileysTransport extends EventEmitter {
         else if (content?.documentMessage) mediaType = 'document';
         else if (content?.stickerMessage) mediaType = 'sticker';
 
-        // Message cité et mentions
+        // Message cité et mentions — couvrir TOUS les types de messages
         const contextInfo = content?.extendedTextMessage?.contextInfo
             || content?.imageMessage?.contextInfo
             || content?.videoMessage?.contextInfo
-            || content?.stickerMessage?.contextInfo // Ajout support sticker replies
+            || content?.audioMessage?.contextInfo      // Réponse à un audio
+            || content?.documentMessage?.contextInfo   // Réponse à un document
+            || content?.stickerMessage?.contextInfo    // Réponse à un sticker
+            || content?.conversation?.contextInfo      // Réponse à un texte simple (rare mais possible)
             || null;
 
         const quotedMsg = (contextInfo?.stanzaId && contextInfo?.participant)
@@ -577,6 +580,50 @@ class BaileysTransport extends EventEmitter {
      * Envoie un message texte avec résolution automatique des @mentions
      */
     async sendText(chatId: any, text: any, options: any = {}) {
+        // ... (existing code remains, but we want to implement the new method below)
+        // Note: existing sendText is kept for backward compatibility and internal use
+        return this._executeSendText(chatId, text, options);
+    }
+
+    /**
+     * Envoie une réponse universelle formatée pour WhatsApp
+     */
+    async sendUniversalResponse(chatId: any, response: any, options: any = {}) {
+        let text = response.plainText || response.markdown;
+        
+        // 1. Sanitize
+        text = sanitizeForWhatsApp(text);
+        
+        // 2. Format
+        text = formatToWhatsApp(text);
+        
+        return this._executeSendText(chatId, text, options);
+    }
+
+    async sendMedia(chatId: string, media: any, options: any = {}) {
+        console.warn('[Baileys] sendMedia pas encore implémenté.');
+        return {};
+    }
+
+    async sendSticker(chatId: string, stickerBuffer: any) {
+        console.warn('[Baileys] sendSticker pas encore implémenté.');
+        return {};
+    }
+
+    async downloadMedia(message: any) {
+        console.warn('[Baileys] downloadMedia pas encore implémenté.');
+        return Buffer.from('');
+    }
+
+    async isAdmin(groupId: string, userId: string) {
+        console.warn('[Baileys] isAdmin pas encore implémenté complètement.');
+        return false;
+    }
+
+    /**
+     * Méthode d'exécution interne pour l'envoi de texte
+     */
+    async _executeSendText(chatId: any, text: any, options: any = {}) {
         if (!text) return;
 
         // 0. SPLITTING : Gestion des messages trop longs (WhatsApp limit ~65536, mais pour UX ~4096)
@@ -621,14 +668,15 @@ class BaileysTransport extends EventEmitter {
                             mentions = [...mentions, ...resolved.mentions];
                         }
 
-                        // 2. Résolution Implicite (Nom sans @) - NOUVEAU
-                        // On passe le texte déjà formaté (qui a peut-être déjà des @id)
+                        // 2. Résolution Implicite (Nom sans @) - DÉSACTIVÉ (Laisse le choix à l'IA de taguer ou non)
+                        /*
                         const implicitResolved = resolveImplicitMentions(formattedText, members);
                         if (implicitResolved.mentions.length > 0) {
                             formattedText = implicitResolved.text;
                             mentions = [...mentions, ...implicitResolved.mentions];
                             console.log(`[Baileys] 🕵️ Mentions implicites trouvées: ${implicitResolved.resolved.map((m) => m.name).join(', ')}`);
                         }
+                        */
 
                         // Dédoublonnage
                         mentions = [...new Set(mentions)];

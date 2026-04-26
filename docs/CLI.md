@@ -14,11 +14,11 @@ npm run cli <commande> [options]
 ```
 
 ### Méthode Globale (hive-mind)
-Une fois installé (via `npm link`), vous pouvez utiliser la commande courte :
+Une fois installé (via `npm link`), vous pouvez utiliser la commande courte `hive-mind` :
 ```bash
 hive-mind start          # Démarrer le bot
-hive-mind cli <cmd>      # Admin CLI
-hive-mind audit <jid>    # Audit Groupe
+hive-mind tools:index    # Indexer les outils
+hive-mind status         # Voir l'état du système
 ```
 
 ---
@@ -27,11 +27,11 @@ hive-mind audit <jid>    # Audit Groupe
 
 | Commande | Description |
 |----------|-------------|
-| `debug:on` | Active tous les logs DEBUG |
-| `debug:off` | Désactive les logs DEBUG |
-| `debug:status` | Affiche l'état actuel du debug |
-| `debug:reset` | Réinitialise (toutes catégories actives) |
-| `debug:categories <cat1> <cat2>` | Active uniquement certaines catégories |
+| `debug on` | Active tous les logs DEBUG |
+| `debug off` | Désactive les logs DEBUG |
+| `debug status` | Affiche l'état actuel du debug |
+| `debug reset` | Réinitialise (toutes catégories actives) |
+| `debug categories <cat1> <cat2>` | Active uniquement certaines catégories |
 
 ### Catégories disponibles
 - `mention` - Détection des mentions du bot
@@ -44,13 +44,13 @@ hive-mind audit <jid>    # Audit Groupe
 ### Exemples
 ```bash
 # Activer uniquement les logs de mention et authority
-npm run cli debug:categories mention authority
+hive-mind debug categories mention authority
 
 # Désactiver tous les logs DEBUG
-npm run cli debug:off
+hive-mind debug off
 
 # Voir l'état actuel
-npm run cli debug:status
+hive-mind debug status
 ```
 
 ---
@@ -59,21 +59,21 @@ npm run cli debug:status
 
 | Commande | Description |
 |----------|-------------|
-| `redis:stats` | Affiche les statistiques du cache |
-| `redis:flush --yes` | ⚠️ Efface TOUT le cache Redis |
-| `redis:clear-group <jid>` | Nettoie le cache d'un groupe spécifique |
+| `redis stats` | Affiche les statistiques du cache |
+| `redis flush --yes` | ⚠️ Efface TOUT le cache Redis |
+| `redis clear-group <jid>` | Nettoie le cache d'un groupe spécifique |
 
 ### Exemples
 ```bash
 # Voir les statistiques
-npm run cli redis:stats
+hive-mind redis stats
 # Output: { groups: 5, users: 42, workingMemory: 10, total: 57 }
 
 # Nettoyer le cache d'un groupe (force le rescan)
-npm run cli redis:clear-group 123456789@g.us
+hive-mind redis clear-group 123456789@g.us
 
 # ⚠️ Effacer tout le cache (confirmation requise)
-npm run cli redis:flush --yes
+hive-mind redis flush --yes
 ```
 
 ### Quand nettoyer le cache ?
@@ -87,24 +87,24 @@ npm run cli redis:flush --yes
 
 | Commande | Description |
 |----------|-------------|
-| `admin:refresh` | Rafraîchit le cache des admins globaux |
-| `admin:list` | Liste tous les admins globaux |
-| `admin:add <jid> [name] [role]` | Ajoute un admin global |
-| `admin:remove <jid>` | Retire un admin global |
+| `admin refresh` | Rafraîchit le cache des admins globaux |
+| `admin list` | Liste tous les admins globaux |
+| `admin add <jid> [name] [role]` | Ajoute un admin global |
+| `admin remove <jid>` | Retire un admin global |
 
 ### Exemples
 ```bash
 # Rafraîchir le cache (utile après avoir ajouté un admin en DB)
-npm run cli admin:refresh
+hive-mind admin refresh
 
 # Ajouter un admin
-npm run cli admin:add 33612345678@s.whatsapp.net "Pierre" moderator
+hive-mind admin add 33612345678@s.whatsapp.net "Pierre" moderator
 
 # Retirer un admin
-npm run cli admin:remove 33612345678@s.whatsapp.net
+hive-mind admin remove 33612345678@s.whatsapp.net
 
 # Voir la liste des admins
-npm run cli admin:list
+hive-mind admin list
 # Output:
 #   - 22569456432@s.whatsapp.net (owner)
 #   - 33612345678@s.whatsapp.net (moderator)

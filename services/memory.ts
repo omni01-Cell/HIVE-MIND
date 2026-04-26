@@ -131,11 +131,23 @@ export const semanticMemory = {
             return this._formatWithAge(data || []);
         }
 
+        // [OMNI-CHANNEL] Résoudre le chatId (JID legacy) en UUID context_id
+        let contextId = chatId;
+        try {
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (resolved) {
+                contextId = resolved.context_id;
+            }
+        } catch (e: any) {
+            console.warn('[Memory] Résolution context_id échouée, skip recall:', e.message);
+            return [];
+        }
+
         // Recherche par similarité vectorielle
         const { data, error } = await supabase
             .rpc('match_memories', {
                 query_embedding: vector,
-                match_chat_id: chatId,
+                match_context_id: contextId,
                 match_threshold: 0.7,
                 match_count: limit
             });
@@ -152,7 +164,7 @@ export const semanticMemory = {
             const { data: gData, error: gError } = await supabase
                 .rpc('match_memories', {
                     query_embedding: vector,
-                    match_chat_id: 'global', // ID Spécial
+                    match_context_id: 'global', // ID Spécial
                     match_threshold: 0.65,   // Seuil légèrement plus bas/haut selon besoin
                     match_count: limit
                 });

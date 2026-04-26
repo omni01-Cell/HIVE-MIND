@@ -67,6 +67,9 @@ export const BotEvents = {
     PLUGIN_EXECUTED: 'plugin:executed',
     PLUGIN_ERROR: 'plugin:error',
 
+    // Tool Progress (Async Rendering)
+    TOOL_PROGRESS: 'tool:progress',
+
     // Scheduler
     JOB_TRIGGERED: 'scheduler:job_triggered',
     JOB_COMPLETED: 'scheduler:job_completed',
@@ -85,7 +88,10 @@ export const BotEvents = {
 
     // Mémoire
     MEMORY_STORED: 'memory:stored',
-    MEMORY_RECALLED: 'memory:recalled'
+    MEMORY_RECALLED: 'memory:recalled',
+
+    // Système (Kill Switch, erreurs critiques)
+    SYSTEM_ERROR: 'system:error'
 };
 
 export const eventBus = new EventBus();

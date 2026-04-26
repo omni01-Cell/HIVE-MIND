@@ -5,7 +5,7 @@
  */
 
 import { redis } from '../redisClient.js';
-import { supabase } from '../supabase.js';
+import db, { supabase } from '../supabase.js';
 
 export interface ActionStep {
   step: string;
@@ -71,12 +71,15 @@ export class ActionMemory {
 
       // Log in Supabase for history
       if (supabase) {
-        await supabase.from('agent_actions').insert({
-          chat_id: chatId,
-          tool_name: type,
-          params: JSON.stringify({ goal, context }),
-          status: 'active'
-        });
+        const resolved = await db.resolveContextFromLegacyId(chatId);
+        if (resolved) {
+          await supabase.from('agent_actions').insert({
+            context_id: resolved.context_id,
+            tool_name: type,
+            params: JSON.stringify({ goal, context }),
+            status: 'active'
+          });
+        }
       }
 
       console.log(`[ActionMemory] 🎬 Action started: ${type} (${goal})`);
@@ -215,10 +218,13 @@ export class ActionMemory {
       await redis.hSet(key, 'updatedAt', Date.now().toString());
 
       if (supabase) {
-        await supabase.from('agent_actions')
-          .update({ steps: JSON.stringify(action.steps) })
-          .eq('chat_id', chatId)
-          .eq('status', 'active');
+        const resolved = await db.resolveContextFromLegacyId(chatId);
+        if (resolved) {
+          await supabase.from('agent_actions')
+            .update({ steps: JSON.stringify(action.steps) })
+            .eq('context_id', resolved.context_id)
+            .eq('status', 'active');
+        }
       }
 
       return true;
@@ -244,16 +250,19 @@ export class ActionMemory {
       await redis.hSet(key, 'updatedAt', Date.now().toString());
 
       if (supabase) {
-        await supabase.from('agent_actions')
-          .update({
-            status: 'completed',
-            result: JSON.stringify(result)
-          })
-          .eq('chat_id', chatId)
-          .eq('tool_name', action.type)
-          .is('result', null)
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const resolved = await db.resolveContextFromLegacyId(chatId);
+        if (resolved) {
+          await supabase.from('agent_actions')
+            .update({
+              status: 'completed',
+              result: JSON.stringify(result)
+            })
+            .eq('context_id', resolved.context_id)
+            .eq('tool_name', action.type)
+            .is('result', null)
+            .order('created_at', { ascending: false })
+            .limit(1);
+        }
       }
 
       // Expire from Redis after 60s
@@ -305,14 +314,17 @@ export class ActionMemory {
       await redis.del(key);
       
       if (supabase) {
-        const { error } = await supabase
-          .from('agent_actions')
-          .update({ status: 'interrupted', completed_at: new Date().toISOString() })
-          .eq('chat_id', chatId)
-          .eq('status', 'active');
-        
-        if (error) {
-          console.error(`[ActionMemory] Supabase cleanup error for ${chatId}:`, error.message);
+        const resolved = await db.resolveContextFromLegacyId(chatId);
+        if (resolved) {
+          const { error } = await supabase
+            .from('agent_actions')
+            .update({ status: 'interrupted', completed_at: new Date().toISOString() })
+            .eq('context_id', resolved.context_id)
+            .eq('status', 'active');
+          
+          if (error) {
+            console.error(`[ActionMemory] Supabase cleanup error for ${chatId}:`, error.message);
+          }
         }
       }
     } catch (error: any) {
@@ -360,7 +372,7 @@ ${stepsText}
 
       return (data as any[]).map((row: any) => ({
         id: row.id,
-        chatId: row.chat_id,
+        chatId: row.context_id,
         type: row.tool_name,
         params: typeof row.params === 'string' ? JSON.parse(row.params) : row.params,
         steps: typeof row.steps === 'string' ? JSON.parse(row.steps) : (row.steps || []),
@@ -385,7 +397,7 @@ ${stepsText}
 
       const actionData: any = {
         id: data.id.toString(),
-        chatId: data.chat_id,
+        chatId: data.context_id,
         type: data.tool_name,
         goal: typeof data.params === 'string' ? JSON.parse(data.params).goal : data.params.goal,
         context: typeof data.params === 'string' ? JSON.parse(data.params).context : JSON.stringify(data.params.context || {}),

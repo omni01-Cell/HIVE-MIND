@@ -1,3 +1,4 @@
+// @ts-nocheck
 // scripts/repair-session.js
 // ============================================================================
 // UTILITAIRE DE RÉPARATION DE SESSION

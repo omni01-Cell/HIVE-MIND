@@ -1,0 +1,110 @@
+
+> hive-mind@1.0.0 test
+> NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest
+
+FAIL tests/integration/core.test.ts
+  ● Test suite failed to run
+
+    [96mcore/security/PermissionManager.ts[0m:[93m144[0m:[93m55[0m - [91merror[0m[90m TS2345: [0mArgument of type 'string | undefined' is not assignable to parameter of type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+
+    [7m144[0m             const callback = this.pendingRequests.get(firstKey);
+    [7m   [0m [91m                                                      ~~~~~~~~[0m
+
+
+ReferenceError: You are trying to `import` a file after the Jest environment has been torn down. From tests/integration/core.test.ts.
+(node:30956) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL tests/e2e/bot.e2e.test.ts
+  ● Test suite failed to run
+
+    [96mcore/security/PermissionManager.ts[0m:[93m144[0m:[93m55[0m - [91merror[0m[90m TS2345: [0mArgument of type 'string | undefined' is not assignable to parameter of type 'string'.
+      Type 'undefined' is not assignable to type 'string'.
+
+    [7m144[0m             const callback = this.pendingRequests.get(firstKey);
+    [7m   [0m [91m                                                      ~~~~~~~~[0m
+
+
+ReferenceError: You are trying to `import` a file after the Jest environment has been torn down. From tests/e2e/bot.e2e.test.ts.
+(node:30957) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS tests/unit/services/userService.test.ts
+PASS tests/integration/services.test.ts
+PASS tests/unit/services/envResolver.test.ts
+  ● Console
+
+    console.log
+      [EnvResolver] Cache vidé
+
+      at EnvResolver.clearCache (services/envResolver.ts:164:17)
+
+    console.log
+      [EnvResolver] Cache vidé
+
+      at EnvResolver.clearCache (services/envResolver.ts:164:17)
+
+    console.log
+      [EnvResolver] Cache vidé
+
+      at EnvResolver.clearCache (services/envResolver.ts:164:17)
+
+    console.log
+      [EnvResolver] Cache vidé
+
+      at EnvResolver.clearCache (services/envResolver.ts:164:17)
+
+    console.log
+      [EnvResolver] Cache vidé
+
+      at EnvResolver.clearCache (services/envResolver.ts:164:17)
+
+    console.log
+      [EnvResolver] Cache vidé
+
+      at EnvResolver.clearCache (services/envResolver.ts:164:17)
+
+    console.warn
+      [EnvResolver] ⚠️ Variable non résolue: VOTRE_MISSING_VAR
+
+      92 |         this.stats.misses++;
+      93 |         this.stats.warnings.push(`Variable non résolue: ${value} (varName: ${varName || 'N/A'})`);
+    > 94 |         console.warn(`[EnvResolver] ⚠️ Variable non résolue: ${value}`);
+         |                 ^
+      95 |         
+      96 |         this._cache(cacheKey, null);
+      97 |         return null;
+
+      at EnvResolver.resolve (services/envResolver.ts:94:17)
+      at Object.<anonymous> (tests/unit/services/envResolver.test.ts:39:24)
+
+    console.log
+      [EnvResolver] Cache vidé
+
+      at EnvResolver.clearCache (services/envResolver.ts:164:17)
+
+PASS tests/unit/transport/handlers/antiDeleteHandler.test.ts
+PASS tests/unit/utils/helpers.test.ts
+PASS tests/unit/utils/pidLock.test.ts
+  ● Console
+
+    console.log
+      [Startup] Found stale PID file (PID: 999999). Cleaning up...
+
+      at acquireLock (utils/pidLock.ts:42:17)
+
+(node:30963) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS tests/unit/transport/handlers/audioHandler.test.ts (17.83 s)
+  ● Console
+
+    console.log
+      [dotenv@17.2.3] injecting env (16) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+
+      at _log (node_modules/dotenv/lib/main.js:142:11)
+
+
+Test Suites: 2 failed, 7 passed, 9 total
+Tests:       43 passed, 43 total
+Snapshots:   0 total
+Time:        19.321 s
+Ran all test suites.

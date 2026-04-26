@@ -165,45 +165,72 @@ export const formatToWhatsApp = (text: string | null | undefined): string => {
 
   let formatted = text;
 
-  // 1. Convertir le GRAS+ITALIQUE (***text***) en WhatsApp (*_text_*)
-  formatted = formatted.replace(/\*\*\*(.*?)\*\*\*/g, '*_$1_*');
+  // 1. Convertir les liens Markdown [Texte](URL) en "Texte (URL)"
+  // On le fait en premier pour éviter que les * ou _ dans les URL ne soient formatés
+  formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
 
-  // Guard: Si le texte est trop long, on simplifie le formatage
+  // 2. Convertir les TITRES Markdown (# Titre) en (**TITRE EN MAJUSCULES**) pour que le Bold processing (5) le gère
+  formatted = formatted.replace(/^#+\s*(.*$)/gm, (_, title: string) => {
+    return `**${title.toUpperCase().trim()}**`;
+  });
+
+  // Guard: Si le texte est très long, on limite les remplacements complexes
   const MAX_COMPLEX_FORMAT_LENGTH = 5000;
   if (formatted.length > MAX_COMPLEX_FORMAT_LENGTH) {
     return formatted.replace(/\*\*(.*?)\*\*/g, '*$1*');
   }
 
-  // 2. Convertir le GRAS standard (**text**) en WhatsApp (*text*)
-  formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '*$1*');
+  // 3. Convertir le GRAS+ITALIQUE (***text*** ou ___text___) en WhatsApp (*_text_*)
+  formatted = formatted.replace(/\*\*\*([^\*]+)\*\*\*/g, '*_$1_*');
+  formatted = formatted.replace(/___([^_]+)___/g, '*_$1_*');
 
-  // 3. Convertir les TITRES Markdown (# Titre) en (*TITRE EN MAJUSCULES*)
-  formatted = formatted.replace(/^#+\s*(.*$)/gm, (_, title: string) => {
-    return `\n*${title.toUpperCase().trim()}*`;
-  });
+  // 4. Convertir l'ITALIQUE Markdown simple (*text*) en WhatsApp (_text_)
+  // Regex : un seul astérisque, pas d'espace juste après ni juste avant
+  formatted = formatted.replace(/(?<!\*)\*(?!\s)([^\*]+?)(?<!\s)\*(?!\*)/g, '_$1_');
 
-  // 4. Convertir les liens Markdown [Texte](URL) en "Texte (URL)"
-  formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+  // 5. Convertir le GRAS Markdown (**text**) en WhatsApp (*text*)
+  formatted = formatted.replace(/\*\*([^\*]+)\*\*/g, '*$1*');
 
-  // 5. Convertir l'italique Markdown (__text__) en WhatsApp (_text_)
-  formatted = formatted.replace(/__(.*?)__/g, '_$1_');
+  // 6. Convertir l'italique Markdown alternatif (__text__) en WhatsApp (_text_)
+  formatted = formatted.replace(/__([^_]+)__/g, '_$1_');
 
-  // 6. Convertir le barré (~~text~~) en WhatsApp (~text~)
-  formatted = formatted.replace(/~~(.*?)~~/g, '~$1~');
+  // 7. Convertir le barré (~~text~~) en WhatsApp (~text~)
+  formatted = formatted.replace(/~~([^~]+)~~/g, '~$1~');
 
-  // 7. Nettoyer les blocs de code
-  formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/gs, '```\n$2```');
+  // 8. Nettoyer les blocs de code (WhatsApp supporte ```code``` nativement, on s'assure juste de la propreté)
+  formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/gs, (_, lang, code) => `\`\`\`\n${code.trim()}\n\`\`\``);
 
-  // 8. Standardiser les listes
-  formatted = formatted.replace(/^\s*[-*]\s+/gm, '• ');
+  // 9. Listes et Citations : WhatsApp supporte nativement -, *, 1. et >
+  // On nettoie juste les espaces superflus en début de ligne pour garantir la détection par WhatsApp
+  formatted = formatted.replace(/^[ \t]+([-*]|\d+\.|>)\s/gm, '$1 ');
 
-  // 9. Nettoyer les sauts de ligne excessifs
+  // 10. Nettoyer les sauts de ligne excessifs
   formatted = formatted.replace(/\n{3,}/g, '\n\n');
 
-  // 10. Nettoyer les espaces en début de ligne (sauf pour les listes)
-  formatted = formatted.replace(/^[ \t]+(?!•)/gm, '');
-
   return formatted.trim();
+};
+
+/**
+ * Nettoie le texte pour WhatsApp en retirant les informations sensibles
+ * (chemins de fichiers locaux, commandes système, etc.)
+ * @param text 
+ */
+export const sanitizeForWhatsApp = (text: string | null | undefined): string => {
+  if (!text) return '';
+  
+  let sanitized = text;
+  
+  // 1. Masquer les chemins de fichiers (ex: /home/user/...)
+  sanitized = sanitized.replace(/\/home\/[a-zA-Z0-9._-]+\//g, '~/');
+  
+  // 2. Masquer les variables d'environnement sensibles
+  const SENSITIVE_VARS = ['API_KEY', 'SECRET', 'PASSWORD', 'TOKEN', 'SUPABASE_KEY', 'OPENAI_API_KEY'];
+  SENSITIVE_VARS.forEach(v => {
+    const regex = new RegExp(`${v}=[a-zA-Z0-9._-]+`, 'gi');
+    sanitized = sanitized.replace(regex, `${v}=********`);
+  });
+
+  return sanitized;
 };
 
 export default {

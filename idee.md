@@ -1,7 +1,7 @@
 # HIVE-MIND: The Autonomous Hive Meta-Mind
 
 ## Original Idea & Vision
-HIVE-MIND is designed to be a high-intelligence, autonomous WhatsApp bot framework. It acts as a "Meta-Mind" orchestrating multiple specialized plugins and AI providers to provide a seamless, rich interactive experience.
+HIVE-MIND is designed to be a high-intelligence, Omni-Channel Autonomous Agent framework. It acts as a "Meta-Mind" orchestrating multiple specialized plugins and AI providers to provide a seamless, rich interactive experience across various interfaces (CLI, WhatsApp, Discord, etc.).
 
 ### Core Objectives
 1. **Autonomy**: Ability to process messages, trigger actions, and manage its own state with minimal intervention.

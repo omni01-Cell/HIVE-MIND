@@ -347,17 +347,12 @@ class QuotaManager {
     async filterHealthyModels(modelIds: any,  margins = { rpm: 0.20,  tpm: 0.10,  rpd: 0.05 }) {
         if (!this.client.isReady) return modelIds; // Fail open
 
-        const healthy = [];
-        for (const modelId of modelIds) {
+        const results = await Promise.all(modelIds.map(async (modelId: any) => {
             const health = await this.getModelHealth(modelId, margins);
-            if (health.healthy) {
-                healthy.push(modelId);
-            } else {
-                // Log optionnel pour debug
-                // console.log(`[QuotaManager] ⏭️ ${modelId} excluded: ${health.reason}`);
-            }
-        }
-        return healthy;
+            return { modelId, healthy: health.healthy };
+        }));
+
+        return results.filter((r: any) => r.healthy).map((r: any) => r.modelId);
     }
 
     /**
@@ -367,24 +362,20 @@ class QuotaManager {
      * @returns {Promise<Array<string>>} - Liste des noms de familles saines
      */
     async getHealthyFamilies(familiesConfig: any,  margins = { rpm: 0.20,  tpm: 0.10,  rpd: 0.05 }) {
-        const healthyFamilies = [];
-
-        for (const [familyName, familyConfig] of Object.entries(familiesConfig)) {
+        const familyResults = await Promise.all(Object.entries(familiesConfig).map(async ([familyName, familyConfig]: any) => {
             const models = familyConfig.modeles || familyConfig.models || [];
             // Exclure les modèles d'embedding du check chat
             const chatModels = models
                 .filter((m: any) => !m.id?.includes('embedding') && !m.types?.includes('embedding'))
                 .map((m: any) => m.id);
 
-            if (chatModels.length === 0) continue;
+            if (chatModels.length === 0) return { familyName, healthy: false };
 
             const healthyModels = await this.filterHealthyModels(chatModels, margins);
-            if (healthyModels.length > 0) {
-                healthyFamilies.push(familyName);
-            }
-        }
+            return { familyName, healthy: healthyModels.length > 0 };
+        }));
 
-        return healthyFamilies;
+        return familyResults.filter((r: any) => r.healthy).map((r: any) => r.familyName);
     }
 
     /**

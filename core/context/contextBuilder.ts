@@ -333,12 +333,35 @@ ${mentionBlock}`;
     prompt = prompt.replace(/{{#each.*?}}[\s\S]*?{{\/each}}/g, '');
     prompt = prompt.replace(/{{.*?}}/g, '');
 
-    // Ajouter les outils
-    const tools = pluginLoader.list();
-    if (tools.length) {
-        prompt += '\n\nOUTILS DISPONIBLES:\n' +
-            tools.map((t: any) => `- ${t.name}: ${t.description}`).join('\n');
+    // 5. [NEW] Injection du snippet de rendu selon le canal
+    const sourceChannel = message.sourceChannel || 'whatsapp';
+    let renderingSnippet = "";
+    
+    if (sourceChannel === 'whatsapp') {
+        renderingSnippet = `
+### 📱 DIRECTIVE D'AFFICHAGE : WHATSAPP
+- Réponds de manière concise et directe.
+- Utilise le formatage WhatsApp : *gras*, _italique_, ~barré~, \`\`\`code bloc\`\`\`.
+- Ne fais pas de tableaux Markdown (non supportés).
+- Évite les blocs de code trop longs ou les logs techniques denses sauf si demandé explicitement.
+`;
+    } else if (sourceChannel === 'cli') {
+        renderingSnippet = `
+### 💻 DIRECTIVE D'AFFICHAGE : TERMINAL (CLI/TUI)
+- Tu es en mode console. Tu peux être plus verbeux et technique.
+- Utilise des structures de données (JSON, Tableaux) et des logs détaillés.
+- Le rendu supporte les couleurs et le Markdown riche.
+`;
+    } else if (sourceChannel === 'discord' || sourceChannel === 'telegram') {
+        renderingSnippet = `
+### 💬 DIRECTIVE D'AFFICHAGE : ${sourceChannel.toUpperCase()}
+- Utilise le Markdown standard riche.
+- Tu peux utiliser des blocs de code avec coloration syntaxique.
+- Organise tes réponses avec des titres et des listes.
+`;
     }
+
+    prompt += `\n${renderingSnippet}\n`;
 
     return {
         systemPrompt: prompt,

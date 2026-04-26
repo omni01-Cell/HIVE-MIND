@@ -133,7 +133,7 @@ export const graphMemory = {
 
             const { data, error } = await supabase.rpc('match_entities', {
                 query_embedding: vector,
-                match_chat_id: chatId,
+                match_context_id: chatId,
                 match_threshold: 0.7,
                 match_count: limit
             });

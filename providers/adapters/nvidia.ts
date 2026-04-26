@@ -1,7 +1,7 @@
 // @ts-nocheck
 // providers/adapters/nvidia.js
 // Adaptateur pour l'API NVIDIA NIM (integrate.api.nvidia.com)
-// Supporte: moonshotai/kimi-k2.5, z-ai/glm5, minimaxai/minimax-m2.1
+// Supporte: moonshotai/kimi-k2.5, z-ai/glm-5.1, minimaxai/minimax-m2.7
 
 // Paramètres spécifiques par modèle
 const MODEL_CONFIG = {
@@ -9,11 +9,11 @@ const MODEL_CONFIG = {
         max_tokens: 16384,
         chat_template_kwargs: { thinking: true }
     },
-    'z-ai/glm5': {
+    'z-ai/glm-5.1': {
         max_tokens: 16384,
         chat_template_kwargs: { enable_thinking: true, clear_thinking: false }
     },
-    'minimaxai/minimax-m2.1': {
+    'minimaxai/minimax-m2.7': {
         max_tokens: 8192,
         top_p: 0.95
         // Pas de thinking mode

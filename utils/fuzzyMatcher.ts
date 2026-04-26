@@ -89,7 +89,7 @@ function isPrefixOrNickname(query: string, target: string): boolean {
 /**
  * Trouve le meilleur match pour une query parmi une liste de candidats
  */
-export function findBestMatch(query: string, candidates: Member[], threshold: number = 0.4): MatchResult {
+export function findBestMatch(query: string, candidates: Member[], threshold: number = 0.65): MatchResult {
   if (!query || !candidates || candidates.length === 0) {
     return { match: null, score: 0, exact: false };
   }
@@ -229,7 +229,7 @@ export function resolveMentionsInText(text: string | null | undefined, members: 
 
       const phoneNumber = match.jid.split('@')[0];
       processedText = processedText.replace(
-        new RegExp(`@${mentionName}\\b`, 'gi'),
+        new RegExp(`@${mentionName}(?![\\p{L}\\p{N}])`, 'giu'),
         `@${phoneNumber}`
       );
     }

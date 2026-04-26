@@ -109,7 +109,7 @@ Respond in JSON only:
             if (!response?.content) {
                 throw new Error('Critic response is empty');
             }
-            const resultText = response.content.replace(/```json|```/g, '').trim();
+            const resultText = response.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim();
             const result = JSON.parse(resultText);
 
             if (!result.approved) {
@@ -210,7 +210,7 @@ Respond in JSON only:
             if (!response?.content) {
                 throw new Error('Observer response is empty');
             }
-            const resultText = response.content.replace(/```json|```/g, '').trim();
+            const resultText = response.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim();
             const result = JSON.parse(resultText);
 
             if (!result.coherent) {
@@ -266,11 +266,11 @@ Propose une solution en JSON: { "solution": "...", "risks": ["..."], "confidence
             ]);
 
             const executorSolution = executorResponse?.content
-                ? JSON.parse(executorResponse.content.replace(/```json|```/g, '').trim())
+                ? JSON.parse(executorResponse.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim())
                 : { solution: "N/A", confidence: 0 };
 
             const criticSolution = criticResponse?.content
-                ? JSON.parse(criticResponse.content.replace(/```json|```/g, '').trim())
+                ? JSON.parse(criticResponse.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim())
                 : { solution: "N/A", risks: [], confidence: 0 };
 
             // Synthèse (simple: choisir selon confiance)

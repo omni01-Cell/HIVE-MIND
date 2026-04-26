@@ -64,8 +64,8 @@ describe('helpers.ts unit tests', () => {
     it('should convert lists to bullet points', () => {
       const input = '- Item 1\n* Item 2';
       const output = formatToWhatsApp(input);
-      expect(output).toContain('• Item 1');
-      expect(output).toContain('• Item 2');
+      expect(output).toContain('- Item 1');
+      expect(output).toContain('* Item 2');
     });
 
     it('should handle code blocks', () => {

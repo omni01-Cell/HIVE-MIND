@@ -6,6 +6,7 @@
             "mistral",
             "anthropic",
             "kimi",
+            "openrouter",
             "nvidia",
             "github",
             "groq"
@@ -26,8 +27,8 @@
         },
         "quota_safety": {
             "comment": "Marges de sécurité pour le routeur Zero-429. Valeurs = pourcentage de marge.",
-            "rpm_margin": 0.20,
-            "tpm_margin": 0.10,
+            "rpm_margin": 0.2,
+            "tpm_margin": 0.1,
             "rpd_margin": 0.05,
             "emergency_rpm_margin": 0.05,
             "emergency_tpm_margin": 0.05,
@@ -44,9 +45,9 @@
         },
         "service_agents": {
             "EXECUTOR": {
-                "family": "nvidia",
-                "model": "z-ai/glm5",
-                "fallback": "moonshotai/kimi-k2.5",
+                "family": "openrouter",
+                "model": "google/gemma-4-31b-it:free",
+                "fallback": "z-ai/glm-5.1",
                 "temperature": 0.7
             },
             "CRITIC": {
@@ -62,9 +63,9 @@
                 "temperature": 0.1
             },
             "PLANNER": {
-                "family": "nvidia",
-                "model": "moonshotai/kimi-k2.5",
-                "fallback": "mistral-large-latest",
+                "family": "openrouter",
+                "model": "google/gemma-4-31b-it:free",
+                "fallback": "moonshotai/kimi-k2.5",
                 "temperature": 0.5
             },
             "DREAM_SERVICE": {
@@ -117,9 +118,9 @@
                     "description": "Logique, mathématiques, raisonnement profond"
                 },
                 "FAST_CHAT": {
-                    "primary": "minimaxai/minimax-m2.1",
-                    "fallback": "gemini-2.5-flash-lite",
-                    "description": "Salutations, questions simples, chat rapide"
+                    "primary": "gemini-3.1-flash-lite-preview",
+                    "fallback": "minimax/minimax-m2.5:free",
+                    "description": "Salutations, questions simples, chat rapide (363 tok/s)"
                 },
                 "MULTIMODAL": {
                     "primary": "microsoft/Phi-4-multimodal-instruct",
@@ -132,9 +133,9 @@
                     "description": "Analyse d'images, OCR, génération visuelle"
                 },
                 "AGENTIC": {
-                    "primary": "moonshotai/kimi-k2.5",
-                    "fallback": "mistral-large-latest",
-                    "description": "Tâches multi-étapes, planification autonome"
+                    "primary": "gemini-3.1-flash-lite-preview",
+                    "fallback": "gemini-3-flash-preview",
+                    "description": "Tâches agentic rapides, function calling natif (363 tok/s)"
                 },
                 "CREATIVITY": {
                     "primary": "qwen/qwen3-32b",
@@ -218,7 +219,8 @@
                         "vision",
                         "computer_use",
                         "reasoning"
-                    ]
+                    ],
+                    "ptc_tier": "S"
                 },
                 {
                     "id": "claude-4-5-sonnet-20250929",
@@ -231,7 +233,8 @@
                         "rpm": 5,
                         "tpm": 100000,
                         "rpd": 500
-                    }
+                    },
+                    "ptc_tier": "S"
                 }
             ]
         },
@@ -240,7 +243,7 @@
             "modeles": [
                 {
                     "id": "gemini-3-flash-preview",
-                    "description": "Modèle Flagship ultra-rapide (2026 Standard).",
+                    "description": "Gemini 3 Flash: Raisonnement niveau Doctorat (SWE-bench 78.0%, GPQA 90.4%), pensée dynamique, agentic coding, multimodalisme natif avancé.",
                     "types": [
                         "agentic",
                         "chat",
@@ -251,7 +254,8 @@
                         "rpm": 5,
                         "tpm": 250000,
                         "rpd": 20
-                    }
+                    },
+                    "ptc_tier": "S"
                 },
                 {
                     "id": "gemini-2.5-flash",
@@ -265,7 +269,8 @@
                         "rpm": 5,
                         "tpm": 250000,
                         "rpd": 20
-                    }
+                    },
+                    "ptc_tier": "A"
                 },
                 {
                     "id": "gemini-2.5-flash-lite",
@@ -282,7 +287,45 @@
                     "specialties": [
                         "FAST_RESPONDER",
                         "CLASSIFIER"
-                    ]
+                    ],
+                    "ptc_tier": "C"
+                },
+                {
+                    "id": "gemini-3.1-flash-lite-preview",
+                    "description": "Gemini 3.1 Flash Lite: SOTA ultra-rapide (363 tok/s), $0.25/M input. Function calling natif, code exec, structured outputs.",
+                    "types": [
+                        "chat",
+                        "fast",
+                        "reasoning",
+                        "vision",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 1000000,
+                        "rpd": 1500
+                    },
+                    "specialties": [
+                        "FAST_RESPONDER",
+                        "FAST_CHAT",
+                        "AGENTIC"
+                    ],
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "gemini-3.1-flash-live-preview",
+                    "description": "Gemini 3.1 Flash Live: Modèle SOTA pour le Live API (audio natif bidirectionnel, function calling).",
+                    "types": [
+                        "live_api",
+                        "chat",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 10,
+                        "tpm": 500000,
+                        "rpd": 500
+                    },
+                    "ptc_tier": "A"
                 },
                 {
                     "id": "gemini-embedding-001",
@@ -338,7 +381,8 @@
                         "rpm": 60,
                         "tpm": 150000,
                         "rpd": 10000
-                    }
+                    },
+                    "ptc_tier": "S"
                 },
                 {
                     "id": "gpt-5-mini",
@@ -346,7 +390,8 @@
                     "types": [
                         "chat",
                         "reasoning"
-                    ]
+                    ],
+                    "ptc_tier": "S"
                 }
             ]
         },
@@ -364,7 +409,8 @@
                         "rpm": 5,
                         "tpm": 500000,
                         "rpd": 1000
-                    }
+                    },
+                    "ptc_tier": "A"
                 },
                 {
                     "id": "codestral-latest",
@@ -377,7 +423,8 @@
                         "rpm": 10,
                         "tpm": 200000,
                         "rpd": 2000
-                    }
+                    },
+                    "ptc_tier": "A"
                 },
                 {
                     "id": "mistral-small-latest",
@@ -389,7 +436,8 @@
                         "rpm": 10,
                         "tpm": 500000,
                         "rpd": 1000
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "open-mistral-nemo",
@@ -401,7 +449,8 @@
                         "rpm": 60,
                         "tpm": 1000000,
                         "rpd": 10000
-                    }
+                    },
+                    "ptc_tier": "C"
                 }
             ]
         },
@@ -422,7 +471,8 @@
                         "rpm": 50,
                         "tpm": 1000000,
                         "rpd": 5000
-                    }
+                    },
+                    "ptc_tier": "S"
                 }
             ]
         },
@@ -440,7 +490,8 @@
                         "rpm": 3,
                         "tpm": 32000,
                         "rpd": 200
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "moonshot-v1-32k",
@@ -453,7 +504,8 @@
                         "rpm": 3,
                         "tpm": 32000,
                         "rpd": 200
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "moonshot-v1-128k",
@@ -466,7 +518,8 @@
                         "rpm": 3,
                         "tpm": 128000,
                         "rpd": 200
-                    }
+                    },
+                    "ptc_tier": "C"
                 }
             ]
         },
@@ -486,7 +539,8 @@
                         "rpm": 15,
                         "tpm": 128000,
                         "rpd": 150
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "microsoft/Phi-4-multimodal-instruct",
@@ -506,7 +560,8 @@
                         "rpm": 15,
                         "tpm": 130000,
                         "rpd": 150
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "Llama-3.3-70B-Instruct",
@@ -519,7 +574,8 @@
                         "rpm": 10,
                         "tpm": 8000,
                         "rpd": 50
-                    }
+                    },
+                    "ptc_tier": "A"
                 },
                 {
                     "id": "DeepSeek-V3",
@@ -532,7 +588,8 @@
                         "rpm": 10,
                         "tpm": 8000,
                         "rpd": 50
-                    }
+                    },
+                    "ptc_tier": "A"
                 },
                 {
                     "id": "DeepSeek-R1",
@@ -545,7 +602,8 @@
                         "rpm": 10,
                         "tpm": 8000,
                         "rpd": 50
-                    }
+                    },
+                    "ptc_tier": "A"
                 },
                 {
                     "id": "Cohere-Command-R",
@@ -557,7 +615,8 @@
                         "rpm": 15,
                         "tpm": 128000,
                         "rpd": 150
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "gpt-4o-mini",
@@ -569,7 +628,8 @@
                         "rpm": 15,
                         "tpm": 130000,
                         "rpd": 150
-                    }
+                    },
+                    "ptc_tier": "B"
                 }
             ]
         },
@@ -588,7 +648,8 @@
                         "rpm": 30,
                         "tpm": 15000,
                         "rpd": 14400
-                    }
+                    },
+                    "ptc_tier": "B"
                 },
                 {
                     "id": "llama-3.1-8b-instant",
@@ -600,7 +661,8 @@
                         "rpm": 30,
                         "tpm": 15000,
                         "rpd": 14400
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "mixtral-8x7b-32768",
@@ -613,7 +675,8 @@
                         "rpm": 30,
                         "tpm": 15000,
                         "rpd": 14400
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "groq/compound",
@@ -628,7 +691,8 @@
                         "rpm": 30,
                         "tpm": 70000,
                         "rpd": 250
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "groq/compound-mini",
@@ -642,7 +706,8 @@
                         "rpm": 30,
                         "tpm": 70000,
                         "rpd": 250
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "openai/gpt-oss-120b",
@@ -659,7 +724,8 @@
                         "rpd": 1000,
                         "tpm": 8000,
                         "tpd": 200000
-                    }
+                    },
+                    "ptc_tier": "A"
                 },
                 {
                     "id": "openai/gpt-oss-20b",
@@ -675,7 +741,8 @@
                         "rpd": 1000,
                         "tpm": 8000,
                         "tpd": 200000
-                    }
+                    },
+                    "ptc_tier": "B"
                 },
                 {
                     "id": "qwen/qwen3-32b",
@@ -690,7 +757,8 @@
                         "rpm": 60,
                         "tpm": 6000,
                         "rpd": 1000
-                    }
+                    },
+                    "ptc_tier": "B"
                 },
                 {
                     "id": "whisper-large-v3",
@@ -736,11 +804,12 @@
                         "rpm": 20,
                         "tpm": 100000,
                         "rpd": 1000
-                    }
+                    },
+                    "ptc_tier": "S"
                 },
                 {
-                    "id": "z-ai/glm5",
-                    "description": "GLM-5 via NVIDIA NIM: Modèle de raisonnement avec thinking mode avancé (enable_thinking).",
+                    "id": "z-ai/glm-5.1",
+                    "description": "GLM-5.1 via NVIDIA NIM: Dernière version avec thinking mode avancé (enable_thinking).",
                     "types": [
                         "chat",
                         "reasoning",
@@ -750,11 +819,12 @@
                         "rpm": 20,
                         "tpm": 100000,
                         "rpd": 1000
-                    }
+                    },
+                    "ptc_tier": "A"
                 },
                 {
-                    "id": "minimaxai/minimax-m2.1",
-                    "description": "MiniMax M2.1 via NVIDIA NIM: Modèle généraliste performant (8K tokens output).",
+                    "id": "minimaxai/minimax-m2.7",
+                    "description": "MiniMax M2.7 via NVIDIA NIM: Dernière version généraliste performante (8K tokens output).",
                     "types": [
                         "chat",
                         "fast"
@@ -763,7 +833,8 @@
                         "rpm": 20,
                         "tpm": 100000,
                         "rpd": 1000
-                    }
+                    },
+                    "ptc_tier": "C"
                 }
             ]
         },
@@ -782,7 +853,8 @@
                         "rpm": 30,
                         "tpm": 100000,
                         "rpd": 1000
-                    }
+                    },
+                    "ptc_tier": "C"
                 },
                 {
                     "id": "moonshotai/Kimi-K2-Instruct-0905",
@@ -794,7 +866,62 @@
                         "rpm": 30,
                         "tpm": 100000,
                         "rpd": 1000
-                    }
+                    },
+                    "ptc_tier": "B"
+                }
+            ]
+        },
+        "openrouter": {
+            "nom_affiche": "OpenRouter (Gateway Rapide)",
+            "base_url": "https://openrouter.ai/api/v1",
+            "modeles": [
+                {
+                    "id": "google/gemma-4-31b-it:free",
+                    "description": "Gemma 4 31B: Reasoning rapide, coding, agentic (Free Tier).",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "coding",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 20,
+                        "tpm": 100000,
+                        "rpd": 1000
+                    },
+                    "ptc_tier": "B"
+                },
+                {
+                    "id": "minimax/minimax-m2.5:free",
+                    "description": "MiniMax M2.5: SOTA Agentic & Coding (SWE-Bench 80.2%, BFCL 76.8%). MoE 230B/10B active. Free Tier.",
+                    "types": [
+                        "chat",
+                        "fast",
+                        "coding",
+                        "agentic",
+                        "reasoning"
+                    ],
+                    "quota": {
+                        "rpm": 20,
+                        "tpm": 100000,
+                        "rpd": 1000
+                    },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "z-ai/glm-4.5-air:free",
+                    "description": "GLM-4.5 Air: Raisonnement et tâches agentiques (Free Tier).",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic"
+                    ],
+                    "quota": {
+                        "rpm": 20,
+                        "tpm": 100000,
+                        "rpd": 1000
+                    },
+                    "ptc_tier": "B"
                 }
             ]
         }
@@ -866,9 +993,9 @@
             "Sulafar"
         ],
         "minimax_config": {
-            "speed": 1.0,
+            "speed": 1,
             "pitch": 0,
-            "vol": 1.0
+            "vol": 1
         }
     }
 }

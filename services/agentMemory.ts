@@ -3,7 +3,7 @@
 // Mémoire épisodique des actions de l'agent
 // Utilise la table Supabase agent_actions pour tracer et apprendre de chaque action
 
-import { supabase } from './supabase.js';
+import db, { supabase } from './supabase.js';
 
 /**
  * Service de mémoire épisodique
@@ -24,10 +24,13 @@ export const agentMemory = {
      */
     async logAction(chatId: any, toolName: any, params: any, result: any, status: any, errorMessage: any = null) {
         try {
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (!resolved) return;
+
             const { error } = await supabase
                 .from('agent_actions')
                 .insert({
-                    chat_id: chatId,
+                    context_id: resolved.context_id,
                     tool_name: toolName,
                     params: params,
                     result: result,
@@ -52,10 +55,13 @@ export const agentMemory = {
      */
     async getRecentActions(chatId: any, limit: any = 5) {
         try {
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (!resolved) return [];
+
             const { data, error } = await supabase
                 .from('agent_actions')
                 .select('tool_name, status, error_message, created_at')
-                .eq('chat_id', chatId)
+                .eq('context_id', resolved.context_id)
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
@@ -78,10 +84,13 @@ export const agentMemory = {
         try {
             const cutoff = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString();
 
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (!resolved) return { hasFailure: false, errorMessage: null };
+
             const { data, error } = await supabase
                 .from('agent_actions')
                 .select('error_message')
-                .eq('chat_id', chatId)
+                .eq('context_id', resolved.context_id)
                 .eq('tool_name', toolName)
                 .eq('status', 'error')
                 .gte('created_at', cutoff)
@@ -111,10 +120,13 @@ export const agentMemory = {
      */
     async getToolStats(chatId: any) {
         try {
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (!resolved) return {};
+
             const { data, error } = await supabase
                 .from('agent_actions')
                 .select('tool_name, status')
-                .eq('chat_id', chatId);
+                .eq('context_id', resolved.context_id);
 
             if (error) throw error;
 
@@ -142,10 +154,13 @@ export const agentMemory = {
      */
     async getLessonsLearned(chatId: any, limit: any = 3) {
         try {
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (!resolved) return [];
+
             const { data, error } = await supabase
                 .from('agent_actions')
                 .select('tool_name, error_message, created_at')
-                .eq('chat_id', chatId)
+                .eq('context_id', resolved.context_id)
                 .eq('status', 'error')
                 .not('error_message', 'is', null)
                 .order('created_at', { ascending: false })

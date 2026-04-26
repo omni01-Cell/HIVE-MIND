@@ -4,12 +4,10 @@
 // Source de vérité: Supabase global_admins
 // Cache RAM avec refresh automatique
 
-import { supabase } from './supabase.js';
-import { findInJidMap } from '../utils/jidHelper.js';
-// import { userService } from './userService.js'; // REMOVED FOR DI
+import { supabase, default as db } from './supabase.js';
 
 // Cache RAM pour vérification instantanée (0ms)
-let adminCache = new Map(); // JID -> Role ('owner', 'moderator')
+let adminCache = new Map(); // UUID -> Role ('owner', 'moderator')
 let lastRefresh = 0;
 const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
 
@@ -26,34 +24,21 @@ export const adminService = {
     get userService() {
         return this.container?.get('userService');
     },
-    /**
-     * Initialise et charge les admins depuis Supabase
-     * Appelé au démarrage du bot
-     */
+    
     async init() {
         await this.refresh();
-
-        // Auto-refresh périodique
         setInterval(() => {
             this.refresh().catch(console.error);
         }, REFRESH_INTERVAL);
-
-        // Initialisé silencieusement
     },
 
-    /**
-     * Rafraîchit le cache des admins depuis Supabase
-     */
     async refresh() {
-        if (!supabase) {
-            console.warn('[AdminService] Supabase non disponible, cache vide');
-            return;
-        }
+        if (!supabase) return;
 
         try {
             const { data, error } = await supabase
                 .from('global_admins')
-                .select('jid, role');
+                .select('user_id, role');
 
             if (error) {
                 console.error('[AdminService] Erreur refresh:', error);
@@ -61,76 +46,72 @@ export const adminService = {
             }
 
             adminCache.clear();
-            data.forEach((a: any) => adminCache.set(a.jid, a.role || 'moderator'));
+            data.forEach((a: any) => adminCache.set(a.user_id, a.role || 'moderator'));
             lastRefresh = Date.now();
-
-            // Cache rafraîchi silencieusement
-
         } catch (error: any) {
             console.error('[AdminService] Erreur refresh:', error.message);
         }
     },
 
-    /**
-     * Vérifie si un JID est admin global (supporte LID et JID via jidHelper)
-     * @param {string} jid 
-     * @returns {boolean}
-     */
     async isGlobalAdmin(jid: any) {
-        // 1. Résoudre l'identité (LID -> JID)
+        if (!jid) return false;
+        
         let resolvedJid = jid;
         if (this.userService) {
-            resolvedJid = await this.userService.resolveLid(jid);
+            resolvedJid = await this.userService.resolveLid(jid) || jid;
         }
 
-        const found = findInJidMap(resolvedJid, adminCache);
-        if (found) {
-            console.log(`[AdminService] ✓ GlobalAdmin match: ${resolvedJid} ↔ ${found.key}`);
+        const resolved = await db.resolveContextFromLegacyId(resolvedJid);
+        if (!resolved || resolved.type !== 'user') return false;
+
+        const role = adminCache.get(resolved.context_id);
+        if (role) {
+            console.log(`[AdminService] ✓ GlobalAdmin match: ${resolvedJid} ↔ UUID`);
         }
-        return found !== null;
+        return !!role;
     },
 
-    /**
-     * Vérifie si un JID est Super User (Owner)
-     * @param {string} jid 
-     * @returns {boolean}
-     */
     async isSuperUser(jid: any) {
-        // 1. Résoudre l'identité (LID -> JID)
+        if (!jid) return false;
+
         let resolvedJid = jid;
         if (this.userService) {
-            resolvedJid = await this.userService.resolveLid(jid);
+            resolvedJid = await this.userService.resolveLid(jid) || jid;
         }
 
-        const found = findInJidMap(resolvedJid, adminCache);
-        if (found?.value === 'owner') {
-            console.log(`[AdminService] ✓ SuperUser match: ${resolvedJid} ↔ ${found.key}`);
+        const resolved = await db.resolveContextFromLegacyId(resolvedJid);
+        if (!resolved || resolved.type !== 'user') return false;
+
+        const role = adminCache.get(resolved.context_id);
+        if (role === 'owner') {
+            console.log(`[AdminService] ✓ SuperUser match: ${resolvedJid} ↔ UUID`);
             return true;
         }
         return false;
     },
 
-    /**
-     * Ajoute un admin global
-     * @param {string} jid 
-     * @param {string} name 
-     * @param {string} role - 'owner' ou 'moderator'
-     */
     async addAdmin(jid: any, name: any = null, role: any = 'moderator') {
         if (!supabase) return false;
 
         try {
+            const resolved = await db.resolveContextFromLegacyId(jid);
+            if (!resolved || resolved.type !== 'user') return false;
+
+            // Optional: update user name if provided
+            if (name) {
+                await supabase.from('users').update({ username: name }).eq('id', resolved.context_id);
+            }
+
             const { error } = await supabase
                 .from('global_admins')
-                .insert({ jid, name, role });
+                .upsert({ user_id: resolved.context_id, role });
 
             if (error) {
                 console.error('[AdminService] Erreur addAdmin:', error);
                 return false;
             }
 
-            // Mettre à jour le cache local
-            adminCache.set(jid, role);
+            adminCache.set(resolved.context_id, role);
             console.log(`[AdminService] Admin ajouté: ${jid}`);
             return true;
 
@@ -140,26 +121,24 @@ export const adminService = {
         }
     },
 
-    /**
-     * Retire un admin global
-     * @param {string} jid 
-     */
     async removeAdmin(jid: any) {
         if (!supabase) return false;
 
         try {
+            const resolved = await db.resolveContextFromLegacyId(jid);
+            if (!resolved || resolved.type !== 'user') return false;
+
             const { error } = await supabase
                 .from('global_admins')
                 .delete()
-                .eq('jid', jid);
+                .eq('user_id', resolved.context_id);
 
             if (error) {
                 console.error('[AdminService] Erreur removeAdmin:', error);
                 return false;
             }
 
-            // Mettre à jour le cache local
-            adminCache.delete(jid);
+            adminCache.delete(resolved.context_id);
             console.log(`[AdminService] Admin retiré: ${jid}`);
             return true;
 
@@ -169,17 +148,14 @@ export const adminService = {
         }
     },
 
-    /**
-     * Liste tous les admins globaux
-     * @returns {Promise<Array>}
-     */
     async listAdmins() {
         if (!supabase) return [];
 
         try {
+            // Join with users to get username
             const { data, error } = await supabase
                 .from('global_admins')
-                .select('*')
+                .select('*, users(username)')
                 .order('created_at', { ascending: true });
 
             if (error) {
@@ -187,7 +163,14 @@ export const adminService = {
                 return [];
             }
 
-            return data || [];
+            // Map to old format for compatibility if needed
+            return (data || []).map((row: any) => ({
+                id: row.id,
+                user_id: row.user_id,
+                name: row.users?.username || 'Unknown',
+                role: row.role,
+                created_at: row.created_at
+            }));
 
         } catch (error: any) {
             console.error('[AdminService] Erreur listAdmins:', error.message);
@@ -195,9 +178,6 @@ export const adminService = {
         }
     },
 
-    /**
-     * Retourne la taille du cache (pour debug)
-     */
     getCacheSize() {
         return adminCache.size;
     }
