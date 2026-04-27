@@ -1,15 +1,16 @@
-# 🧠 HIVE-MIND V1 : L'IA Sociale & Autonome pour WhatsApp
+# 🧠 HIVE-MIND V3 : Agent IA Social, Autonome & Omni-Channel
 
-![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/Version-3.0.0-blue.svg)
 ![Type](https://img.shields.io/badge/Status-Agentic_Level_5-green.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ---
 
 ## 📖 Sommaire
 1. [Introduction](#-cest-quoi-hive-mind-)
-2. [Les 3 Piliers](#-les-3-piliers-de-lintelligence-hive-mind)
-3. [Fonctionnement (ReAct)](#-comment-ça-marche-le-cerveau)
+2. [Piliers Architecturaux](#-les-piliers-architecturaux-de-lintelligence)
+3. [Fonctionnement (ReAct & Swarm)](#-comment-ça-marche-le-cerveau)
 4. [Modèles & APIs](#-modèles--apis-supportés)
 5. [Guide d'Installation](#-guide-dinstallation)
 6. [Structure du Projet](#-structure-du-projet)
@@ -19,58 +20,56 @@
 
 ## 📖 C'est quoi HIVE-MIND ?
 
-HIVE-MIND n'est pas un simple "chat-bot" qui répond à des questions. C'est un **Agent Autonome de Niveau 5**. 
+HIVE-MIND n'est pas un simple "chat-bot" qui répond à des questions. C'est un **Agent Autonome de Niveau 5** totalement écrit en TypeScript strict.
 
-Contrairement aux bots classiques qui attendent une commande, HIVE-MIND possède une **vie interne** : il réfléchit à ses erreurs, se fixe ses propres objectifs, et observe les conversations de groupe pour intervenir au bon moment, même si on ne lui parle pas directement.
+Contrairement aux bots classiques qui attendent une commande, HIVE-MIND possède une **vie interne permanente** (WakeSystem) : il réfléchit en arrière-plan, se fixe ses propres objectifs, et observe les conversations pour intervenir de manière asynchrone, même sans être sollicité.
 
-Il est conçu pour être un membre à part entière d'une communauté WhatsApp, capable de modérer, d'aider, de chercher des informations et de tisser des liens logiques entre les connaissances qu'il acquiert.
+Désormais **Omni-Channel** (WhatsApp, Discord, Telegram, CLI TUI), il est capable d'orchestrer dynamiquement ses propres sous-agents (Swarm Architecture) et d'exécuter du code de façon autonome via un environnement sécurisé (Programmatic Tool Calling).
 
 ---
 
-## 🌟 Les 3 Piliers de l'Intelligence HIVE-MIND
+## 🌟 Les Piliers Architecturaux de l'Intelligence
 
-### 🧠 1. Mémoire Multi-Couches
-- **Mémoire Immédiate (Redis)** : Gestion du contexte en temps réel et vélocité du chat.
-- **Mémoire Long Terme (Vecteurs)** : Souvenirs persistants et RAG (Retrieval-Augmented Generation).
-- **Graphe Social** : Compréhension des relations entre utilisateurs et hiérarchie.
+### 🧠 1. Mémoire Omni-Channel & Identité
+- **Identité Unifiée** : Gestion des utilisateurs cross-plateforme via base de données centralisée.
+- **Mémoire Immédiate (Redis)** : Gestion du contexte en temps réel et haute vélocité.
+- **Mémoire Sémantique (Vecteurs)** : Souvenirs persistants et RAG (Retrieval-Augmented Generation).
 
-### 🧘 2. Conscience & Auto-Réflexion
-- **Mode Rêve (Dreaming)** : Analyse nocturne des interactions pour l'auto-amélioration.
-- **Boussole Morale** : Filtrage éthique des actions et vérification d'autorité.
-- **Apprentissage par Feedback** : Adaptation dynamique via les réactions (emoji) des utilisateurs.
+### 🧘 2. Conscience & GWT (Global Workspace Theory)
+- **WakeSystem & Inner Monologue** : L'agent dispose d'une boucle d'exécution asynchrone qui lui permet de "penser" et d'agir en arrière-plan (utilisation du tag silencieux `SILENT_HM`).
+- **Context Loader (GWT)** : Système de prompts dynamiques intégrant l'identité, l'état de conscience et la zone d'exécution en temps réel.
+- **Apprentissage par Feedback** : Adaptation dynamique selon l'historique et les corrections.
 
-### 🚀 3. Proactivité Sociale
-- **Social Cue Watcher** : Intervention autonome basée sur le sentiment ou les besoins détectés.
-- **Auto-Gestion d'Objectifs** : Planification et exécution de tâches à long terme sans intervention humaine.
+### 🚀 3. Orchestration Swarm & PTC
+- **SubAgentEngine** : Capacité de générer et piloter dynamiquement des sous-agents spécialisés (Shopping, Deep Research, etc.).
+- **Programmatic Tool Calling (PTC)** : Exécution de scripts ultra-rapide validée par SafeScript (AST Validator) dans une VM Sandbox sécurisée.
 
 ---
 
 ## 🛠️ Comment ça marche (Le Cerveau)
 
-HIVE-MIND utilise le pattern **ReAct** (Reasoning + Acting) :
-1. **Perception** : Analyse hybride du message, des souvenirs et de l'état émotionnel.
-2. **Réflexion** : Génération d'une pensée interne invisible pour l'utilisateur.
-3. **Action** : Utilisation dynamique d'outils (Search, Admin, Media, etc.).
-4. **Observation** : Analyse des résultats et boucle de correction automatique.
+HIVE-MIND utilise un pattern **ReAct avancé** (Reasoning + Acting) couplé à une architecture Swarm :
+1. **Perception** : Analyse hybride multi-canaux, souvenirs et état émotionnel (GWT).
+2. **Réflexion** : Génération d'une pensée interne invisible (`<think>` et monologue interne).
+3. **Action Rapide / Complexe** : Routage intelligent entre actions rapides (FastPath PTC) ou déploiement de sous-agents (Swarm).
+4. **Observation & Auto-Correction** : Analyse continue des résultats avec auto-réparation des erreurs syntaxiques.
 
 ---
 
 ## 🤖 Modèles & APIs Supportés
 
-Doté du routeur **Zero-429**, le bot bascule intelligemment entre les modèles pour optimiser coûts et performances.
+Doté du Smart Router **Zero-429** et d'une intégration native avec **OpenRouter**, le bot bascule intelligemment et en temps réel entre les fournisseurs selon la criticité (S/A/B/C tier) et les capacités requises.
 
 ### 🧠 LLM (Cerveaux)
-- **Google** : Gemini 3 Flash, 2.5 Flash, Gemma 2.
-- **OpenAI** : GPT-5.2, GPT-5 Mini.
-- **Anthropic** : Claude 4.5 Opus/Sonnet.
-- **Open Source** : Mistral, Llama 3.3, DeepSeek (via GitHub/Groq).
+- **Google** : Gemini 3.1 Flash (Primary Agentic), Gemini 3.1 Flash-Lite, Gemini Live 2.5 (Native Audio).
+- **Minimax** : Minimax m2.5 (Tier S pour PTC et Swarm).
+- **Anthropic & OpenAI** : Claude 3.5 Sonnet, GPT-4o.
+- **Open Source** : Mistral, Llama 3.1, Qwen (via OpenRouter/Groq).
 
-### 🎙️ Audio & Voix
-- **Transcription** : Groq Whisper-Large-v3 (<500ms).
-- **Synthèse (TTS)** : 
-    - **Minimax** : Voix HD clonée (de votre persona).
-    - **Gemini TTS** : 30 voix natives multilingues.
-    - **gTTS** : Fallback universel.
+### 🎙️ Audio & Multimédia
+- **Reconnaissance Visuelle & Audio native** : Support du Voice-to-Voice natif (Gemini Live) pour les channels vocaux.
+- **Transcription** : Groq Whisper-Large-v3.
+- **Web Search** : Google AI Search via SerpApi (Standard, Chat, New modes).
 
 ---
 
@@ -104,15 +103,16 @@ Doté du routeur **Zero-429**, le bot bascule intelligemment entre les modèles 
 
 ---
 
-## 📂 Structure du Projet
+## 📂 Structure du Projet (TypeScript)
 
 ```text
-/core      -> Orchestration, logique ReAct, contexte.
-/services  -> Mémoires (Redis/Vecteurs/Graph), Conscience, Goals.
-/plugins   -> Catalogue d'outils et commandes.
-/providers -> Adapters IA (Gemini, OpenAI, Mistral, etc.).
-/persona   -> Profile, traits de caractère et prompts système.
-/config    -> Configuration des modèles et scheduler.
+/core      -> Orchestration globale, Smart Router, Core Hub.
+/services  -> Mémoires (Redis/Supabase), Agentic Swarm (/agentic), PTC & Sandbox (/ptc), Conscience (WakeSystem).
+/plugins   -> Outils natifs (Web Search, File Edit, etc.) et commandes.
+/providers -> Adapters IA et Transporteurs Omni-Channel (WhatsApp, CLI, Telegram, Discord).
+/persona   -> Contextes dynamiques GWT et identité.
+/.GCC      -> Git-Context-Controller : Mémoire persistante du développement.
+/Sandbox1  -> Environnement de confinement pour l'exécution PTC.
 ```
 
 ---
