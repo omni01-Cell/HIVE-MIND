@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Chargement du persona depuis profile.json
-let personaName = 'Erina Nakiri'; // Fallback par défaut
+let personaName = 'HIVE-MIND'; // Fallback par défaut
 try {
     const persona = JSON.parse(readFileSync(join(__dirname, '..', 'persona', 'profile.json'), 'utf-8'));
     personaName = persona.name || personaName;
@@ -27,7 +27,7 @@ class ConsciousnessService {
 
     constructor() {
         this.identity = {
-            name: 'Erina',
+            name: 'HIVE-MIND',
             jid: null, // "xxx@s.whatsapp.net"
             lid: null, // "xxx@lid"
             phoneNumber: null

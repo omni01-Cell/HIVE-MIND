@@ -57,7 +57,7 @@ export class VoiceProvider {
      * @private
      */
     _initializeAdapters() {
-        // 1. Minimax (Erina)
+        // 1. Minimax (HIVE-MIND)
         const minimaxKey = this.credentials.minimax;
         const minimaxConfig = this.config.minimax_config || {};
         this.adapters.set('minimax', new MinimaxTTSAdapter(minimaxKey, minimaxConfig));

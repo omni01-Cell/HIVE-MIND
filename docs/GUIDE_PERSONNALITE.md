@@ -1,6 +1,6 @@
 # 🎭 Guide de Personnalisation de l'IA
 
-Ce guide vous explique comment modifier la personnalité, le ton et le comportement de votre bot WhatsApp (son nom est Erina par default). Toute la configuration se trouve dans le dossier `persona/`.
+Ce guide vous explique comment modifier la personnalité, le ton et le comportement de votre bot WhatsApp (son nom est HIVE-MIND par default). Toute la configuration se trouve dans le dossier `persona/`.
 
 ---
 
@@ -13,7 +13,7 @@ Ce fichier JSON définit les attributs statiques de votre bot. C'est sa "carte d
 ### Structure :
 ```json
 {
-  "name": "Erina",            // Le nom du bot (utilisé dans les prompts)
+  "name": "HIVE-MIND",            // Le nom du bot (utilisé dans les prompts)
   "role": "Assistante Culinare", // Son rôle principal
   "age": 25,                  // (Optionnel) Âge fictif
   "traits": [                 // Adjectifs décrivant son caractère
@@ -50,7 +50,7 @@ C'est le fichier **le plus important**. Il contient le "System Prompt" (la consi
 
 ### Exemple de modification :
 
-*Pour transformer Erina en un robot froid et calculateur :*
+*Pour transformer HIVE-MIND en un robot froid et calculateur :*
 ```markdown
 # Identité
 Tu es UNIT-734, une IA analytique.

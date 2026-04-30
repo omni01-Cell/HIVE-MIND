@@ -145,7 +145,7 @@ export async function buildContext(chatId, message, shortTermContext = [], trans
         if (globalAdminsList.length > 0) {
             const globalAdminNames = await Promise.all(
                 globalAdminsList.map(async (admin: any) => {
-                    if (isBotJid(admin.jid)) return "moi (Erina)";
+                    if (isBotJid(admin.jid)) return `moi (${personaName})`;
 
                     const profile = await userService.getProfile(admin.jid);
                     const realName = profile.names[0];

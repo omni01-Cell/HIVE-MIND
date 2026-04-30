@@ -28,7 +28,7 @@ persona/
 Le nom **doit contenir au maximum 2 mots** pour la détection vocale et textuelle.
 
 **Exemples valides :**
-- `"Erina Nakiri"` → Détection: Erina, Nakiri, Erina Nakiri
+- `"HIVE-MIND"` → Détection: HIVE-MIND
 - `"Luna"` → Détection: Luna
 - `"Max AI"` → Détection: Max, AI, Max AI
 
@@ -40,10 +40,10 @@ Le nom **doit contenir au maximum 2 mots** pour la détection vocale et textuell
 Le système génère automatiquement :
 
 1. **Variantes textuelles** : Pour la détection de mention dans les messages WhatsApp
-   - Exemple: `["Erina", "Nakiri", "Erina Nakiri", "erina", "nakiri"]`
+   - Exemple: `["HIVE-MIND", "hive-mind", "hive", "mind"]`
 
 2. **Variantes vocales** : Pour la détection dans les transcriptions audio (erreurs STT courantes)
-   - Exemple: `["erina", "elina", "et rina", "erinah", ...]`
+   - Exemple: `["hive-mind", "hive mind", "hive", "mind"]`
 
 ### Personnalisation avancée
 

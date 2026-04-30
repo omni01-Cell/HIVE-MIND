@@ -1,6 +1,6 @@
 // @ts-nocheck
 // providers/adapters/minimaxTTS.js
-// Minimax TTS Adapter - Voix Erina (Primary)
+// Minimax TTS Adapter - Voix HIVE-MIND (Primary)
 // Documentation: https://platform.minimax.io/docs/
 
 import fs from 'fs';
