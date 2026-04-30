@@ -6,20 +6,10 @@ import { redis } from './redisClient.js';
 import { workingMemory } from './workingMemory.js';
 import { extractNumericId } from '../utils/jidHelper.js';
 import { userService } from './userService.js';
-import { readFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { botIdentity } from '../utils/botIdentity.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Chargement du persona depuis profile.json
-let personaName = 'HIVE-MIND'; // Fallback par défaut
-try {
-    const persona = JSON.parse(readFileSync(join(__dirname, '..', 'persona', 'profile.json'), 'utf-8'));
-    personaName = persona.name || personaName;
-} catch (e: any) {
-    console.warn('[Consciousness] Impossible de charger profile.json, utilisation du nom par défaut.');
-}
+// Le nom du persona est extrait dynamiquement via botIdentity (depuis system.md)
+const personaName = botIdentity.fullName;
 
 class ConsciousnessService {
     identity: any;
