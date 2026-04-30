@@ -134,6 +134,25 @@ export const db = {
      * Legacy JID resolver for backward compatibility
      * Déduit automatiquement la plateforme depuis le format du JID WhatsApp/Telegram/Discord
      */
+    /**
+     * Resolves a legacy JID from a context UUID
+     */
+    async resolveLegacyIdFromContext(contextId: string): Promise<string | null> {
+        if (!supabase) return null;
+        
+        const { data: group } = await supabase.from('groups').select('platform_group_id').eq('id', contextId).maybeSingle();
+        if (group) return group.platform_group_id;
+        
+        const { data: identity } = await supabase.from('user_identities').select('platform_user_id').eq('user_id', contextId).maybeSingle();
+        if (identity) return identity.platform_user_id;
+        
+        return null;
+    },
+
+    /**
+     * Legacy JID resolver for backward compatibility
+     * Déduit automatiquement la plateforme depuis le format du JID WhatsApp/Telegram/Discord
+     */
     async resolveContextFromLegacyId(legacyId: string): Promise<{ context_id: string, type: 'user'|'group' } | null> {
         if (!legacyId) return null;
         
@@ -276,6 +295,18 @@ export const db = {
         await supabase
             .from('reminders')
             .update({ sent: true })
+            .eq('id', reminderId);
+    },
+
+    /**
+     * Reprogramme un rappel récurrent
+     */
+    async rescheduleReminder(reminderId: any, nextDate: any) {
+        if (!supabase) return;
+
+        await supabase
+            .from('reminders')
+            .update({ remind_at: nextDate.toISOString(), sent: false })
             .eq('id', reminderId);
     },
 

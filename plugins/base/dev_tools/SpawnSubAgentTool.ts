@@ -29,7 +29,7 @@ export default {
                         },
                         persona: {
                             type: 'string',
-                            description: 'Le prompt système complet qui définit la personnalité, le rôle et les règles strictes du sous-agent (ex: "Tu es un expert en cybersécurité. Ta mission est...").'
+                            description: 'The complete system prompt that defines the personality, role, and strict rules of the sub-agent (e.g. "You are a cybersecurity expert. Your mission is...").'
                         },
                         tools: {
                             type: 'array',

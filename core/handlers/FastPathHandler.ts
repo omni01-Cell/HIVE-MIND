@@ -118,7 +118,7 @@ export class FastPathHandler {
 
                     // CLEANUP: Supprimer les tags <thought>
                     let cleanContent = (response.content || '')
-                        .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+                        .replace(/<(think|thought|thinking)>([\s\S]*?)(?:<\/\1>|$)/gi, '')
                         .trim();
 
                     cleanContent = this._cleanToolCallsFromText(cleanContent);
@@ -340,6 +340,7 @@ export class FastPathHandler {
             /```json\s*\{[\s\S]*?"name"[\s\S]*?\}[\s\S]*?```/gi,
             /```xml\s*<tool_code>[\s\S]*?<\/tool_code>\s*```/gi,
             /\[TOOL_CALL:.*?\]/gi,
+            /```(?:javascript|js|typescript|ts)\s*\n[\s\S]*?```/gi, // Empêche l'envoi de code brut à l'utilisateur
         ];
 
         let cleaned = text;

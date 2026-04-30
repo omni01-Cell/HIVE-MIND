@@ -130,7 +130,7 @@ export class FilterProcessor {
      * NIVEAU 1: Analyse contextuelle par LLM
      */
     async _contextualAnalysis(text: any, filter: any) {
-        const prompt = `Tu es un modérateur de groupe WhatsApp. Analyse ce message:
+        const prompt = `You are a WhatsApp group moderator. Analyze this message:
 
 MESSAGE: "${text}"
 

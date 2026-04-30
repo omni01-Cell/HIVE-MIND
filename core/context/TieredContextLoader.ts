@@ -21,7 +21,7 @@ try {
         join(__dirname, '..', '..', 'persona', 'prompts', 'system.md'), 'utf-8'
     );
 } catch {
-    minimalSystemPrompt = 'Tu es un assistant amical.';
+    minimalSystemPrompt = 'You are a friendly assistant.';
 }
 
 /**
@@ -37,8 +37,10 @@ export class TieredContextLoader {
     groupService: any;
     adminService: any;
     factsMemory: any;
+    workspaceMemory: any;
     consciousness: any;
     memory: any;
+    browser: any;
     localCache: any;
     authorityCache: any;
     AUTHORITY_CACHE_TTL: any;
@@ -50,19 +52,14 @@ export class TieredContextLoader {
         this.groupService = null;
         this.adminService = null;
         this.factsMemory = null;
+        this.workspaceMemory = null;
         this.consciousness = null;
         this.memory = null;
+        this.browser = null;
 
         // Cache local en mémoire (ultra-rapide)
-        const profile = botIdentity.profile;
         this.localCache = {
-            botIdentity: {
-                name: profile.name,
-                role: profile.role,
-                traits: profile.traits?.join(', ') || '',
-                languages: profile.languages?.join(', ') || 'fr',
-                interests: profile.interests || []
-            },
+            botIdentity: { name: botIdentity.fullName }, // minimal keep for fastpath if used elsewhere
             systemPromptTemplate: minimalSystemPrompt
         };
 
@@ -82,10 +79,12 @@ export class TieredContextLoader {
             this.groupService = container.get('groupService');
             this.adminService = container.get('adminService');
             this.factsMemory = container.get('facts'); // Correct key is 'facts'
+            this.workspaceMemory = container.get('workspace');
             this.consciousness = container.get('consciousness');
             this.memory = container.get('memory');
+            this.browser = container.get('browser');
 
-            console.log(`[TieredContext] ✅ Init Success. WM: ${!!this.workingMemory}, UserSvc: ${!!this.userService}`);
+            console.log(`[TieredContext] ✅ Init Success. WM: ${!!this.workingMemory}, Browser: ${!!this.browser}`);
         } catch (e: any) {
             console.error('[TieredContext] ❌ Init Failed:', e.message);
         }
@@ -162,12 +161,14 @@ export class TieredContextLoader {
         const startTime = Date.now();
 
         // PARALLÉLISATION TOTALE de tous les appels lourds
-        const [facts, ragResults, groupMembers, consciousnessState, lessons] = await Promise.all([
+        const [facts, ragResults, groupMembers, consciousnessState, lessons, workspaceKeys, browserAvailable] = await Promise.all([
             this._loadFacts(message.sender),
             this._loadRAG(chatId, message.text),
             this._loadGroupMembers(chatId),
             this._loadConsciousness(chatId, message.sender),
-            this._loadLessons()
+            this._loadLessons(),
+            this._loadWorkspaceKeys(chatId),
+            this.browser ? this.browser.isAvailable() : Promise.resolve(false)
         ]);
 
         const coldData = {
@@ -175,7 +176,9 @@ export class TieredContextLoader {
             rag: ragResults,
             groupMembers,
             consciousness: consciousnessState,
-            lessons
+            lessons,
+            workspaceKeys,
+            browserAvailable
         };
 
         console.log(`[TieredContext] COLD chargé en ${Date.now() - startTime}ms`);
@@ -333,43 +336,45 @@ export class TieredContextLoader {
         }
     }
 
+    async _loadWorkspaceKeys(chatId: any) {
+        try {
+            if (!this.workspaceMemory) return [];
+            const keys = await this.workspaceMemory.getKeys(chatId);
+            return keys || [];
+        } catch (e: any) {
+            console.warn('[TieredContext] Erreur chargement workspace keys:', e.message);
+            return [];
+        }
+    }
+
     // ========================================================================
     // MÉTHODES PRIVÉES - Builders de contexte
     // ========================================================================
 
     _buildMinimalPrompt(userSnapshot: any, authority: any, group: any = null) {
         // 1. STRATE 1 : NOYAU D'IDENTITÉ (Froid, très cachable)
-        let identityXml = `<system_identity>\n`;
-        identityXml += `Name: ${this.localCache.botIdentity.name}\n`;
-        identityXml += `Role: ${this.localCache.botIdentity.role}\n`;
-        identityXml += `Traits: ${this.localCache.botIdentity.traits}\n`;
-        identityXml += `Languages: ${this.localCache.botIdentity.languages}\n`;
-        identityXml += `Interests: ${this.localCache.botIdentity.interests}\n`;
-        // Intégrer les règles métier de base si présentes dans le template
-        // WHY: On nettoie seulement les placeholders Handlebars non-résolus,
-        // mais on conserve le contenu Markdown tel quel (titres inclus).
-        const cleanTemplate = this.localCache.systemPromptTemplate
-            .replace(/{{#each.*?}}[\s\S]*?{{\/each}}/g, '')
-            .replace(/{{.*?}}/g, '')
-            .trim();
-        if (cleanTemplate) {
-            identityXml += `\n${cleanTemplate}\n`;
-        }
-        identityXml += `</system_identity>\n`;
+        // La template contient déjà tout le XML d'identité, on ne nettoie plus rien.
+        let identityXml = `${this.localCache.systemPromptTemplate.trim()}\n`;
 
-        // 2. STRATE 2 : MOTEUR D'EXÉCUTION (Froid, règles système dures)
+        // 2. STRATE 2 : MOTEUR d'EXÉCUTION (Froid, règles système dures)
         let executionXml = `<execution_engine>\n`;
-        executionXml += `### 🛠️ OUTILS ET CAPACITÉS\nTu disposes d'outils natifs (fonctions) que tu peux appeler.\nIMPORTANT : Si l'utilisateur te demande quelles sont tes capacités, tes fonctions, ou si tu as un outil spécifique, **APPELLE IMMÉDIATEMENT l'outil \`get_my_capabilities\`**.\n`;
-        executionXml += `\n### 📂 ENVIRONNEMENT D'EXÉCUTION (SANDBOX)\nTu es un agent confiné dans un environnement sécurisé.\n- **Espace de Travail** : \`${permissionManager.sandboxDir}\`\n- **Mémoire Persistante** : \`${join(process.cwd(), 'storage_hm')}\`\nUtilise uniquement ces répertoires pour les fichiers.\n`;
+        executionXml += `### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the \`get_my_capabilities\` tool**.\n`;
+        executionXml += `\n### 📂 EXECUTION ENVIRONMENT (SANDBOX)\nYou are an agent confined within a secure environment.\n- **Workspace**: \`${permissionManager.sandboxDir}\`\n- **Persistent Memory**: \`${permissionManager.storageDir}\`\nUse only these directories for files.\n`;
         
-        executionXml += `\n### ⚡ DIRECTIVES D'EXÉCUTION (MANDATORY)\n`;
-        executionXml += `- **Requête actionnable → agis MAINTENANT dans ce tour.** N'annonce jamais une action si tu peux l'exécuter directement.\n`;
-        executionXml += `- **Continue jusqu'à être terminé ou bloqué.** Ne réponds pas avec un plan ou une promesse quand un outil peut avancer la tâche.\n`;
-        executionXml += `- **Résultat d'outil faible ou vide → varie la requête** avant de conclure à un échec.\n`;
-        executionXml += `- **Faits mutables (git, process, api) nécessitent des vérifications live** via outils.\n`;
-        executionXml += `- **Tâche longue (>30s) → utilise \`code_execution\` avec \`HIVE.sleepAndWake(delayMs, prompt)\`** pour libérer la boucle LLM. Ne bloque jamais.\n`;
+        executionXml += `\n### ⚡ EXECUTION DIRECTIVES (MANDATORY)\n`;
+        executionXml += `- **Actionable request → act NOW in this turn.** Never announce an action if you can execute it directly.\n`;
+        executionXml += `- **Continue until finished or blocked.** Do not reply with a plan or promise when a tool can advance the task.\n`;
+        executionXml += `- **Weak or empty tool result → vary the query** before concluding failure.\n`;
+        executionXml += `- **Mutable facts (git, process, api) require live checks** via tools.\n`;
+        executionXml += `- **Long task (>30s) → use \`code_execution\` with \`HIVE.sleepAndWake(delayMs, prompt)\`** to free the LLM loop. Never block.\n`;
         
-        executionXml += `\n### 🤫 TOKEN DE SILENCE\nQuand tu as appelé HIVE.sleepAndWake() ou n'as RIEN à dire à l'utilisateur, réponds UNIQUEMENT avec : \`SILENT_HM\`\nCe doit être ton SEUL texte.\n`;
+        executionXml += `\n### 💻 DIRAC CODING PROTOCOL (Refactoring & Code)\n`;
+        executionXml += `1. **AST-Native First**: Only use \`read_file\` on a large file as a LAST resort. ALWAYS prefer \`get_file_skeleton\` to understand the structure, then \`get_function\` to target precise code. It is 90% faster.\n`;
+        executionXml += `2. **Hash-Anchored Edits**: Lines of code returned by AST tools and \`read_file\` are prefixed by a unique anchor (e.g., \`AppleBanana§    def process():\`).\n`;
+        executionXml += `3. **Surgical Editing**: To modify code, use \`edit_file\` providing the **exact anchor** (\`AppleBanana\`) or the full line with the anchor in \`anchor\`. This is highly precise and resilient to line shifts.\n`;
+        executionXml += `4. **Multi-File Batching**: Group ALL your file edits in a single \`edit_file\` call via the \`files\` parameter. Do not make separate calls.\n`;
+
+        executionXml += `\n### 🤫 SILENCE TOKEN\nWhen you have called HIVE.sleepAndWake() or have NOTHING to say to the user, reply ONLY with: \`__HIVE_SILENT_7f3a__\`\nThis must be your ONLY text.\n`;
         executionXml += `</execution_engine>\n`;
 
         // 3. STRATE 3 : CONSCIENCE (Chaud, généré et modifié dynamiquement)
@@ -379,8 +384,8 @@ export class TieredContextLoader {
         baseConsciousnessXml += `  <datetime>${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} ${now.toLocaleTimeString('fr-FR')}</datetime>\n`;
         
         const socialContext = group ? 
-            `Lieu: Groupe "${group.name}"\nInterlocuteur: ${userSnapshot.name}\nStatut: ${authority.isSuperUser ? '👑 SuperUser' : (authority.isGlobalAdmin ? '⭐ Admin' : 'Membre')}` :
-            `Interlocuteur: ${userSnapshot.name}\nStatut: ${authority.isSuperUser ? '👑 SuperUser' : 'Standard'}`;
+            `Location: Group "${group.name}"\nInterlocutor: ${userSnapshot.name}\nStatus: ${authority.isSuperUser ? '👑 SuperUser' : (authority.isGlobalAdmin ? '⭐ Admin' : 'Member')}` :
+            `Interlocutor: ${userSnapshot.name}\nStatus: ${authority.isSuperUser ? '👑 SuperUser' : 'Standard'}`;
             
         baseConsciousnessXml += `  <social_context>\n${socialContext}\n  </social_context>\n`;
 
@@ -410,23 +415,41 @@ export class TieredContextLoader {
     _buildFullContext(hot: any, warm: any, cold: any, message: any) {
         let { identityXml, executionXml, baseConsciousnessXml } = warm.systemPromptBase;
 
+        // Helper function to sanitize user input to prevent XML prompt injection
+        const sanitizeXml = (str: string) => {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;');
+        };
+
         // Enrichissement progressif du vecteur de conscience
         if (cold.facts) {
-            baseConsciousnessXml += `  <factual_memory>\n${cold.facts}\n  </factual_memory>\n`;
+            baseConsciousnessXml += `  <factual_memory>\n${sanitizeXml(cold.facts)}\n  </factual_memory>\n`;
         }
 
         if (cold.rag) {
-            baseConsciousnessXml += `  <relevant_memories>\n${cold.rag}\n  </relevant_memories>\n`;
+            baseConsciousnessXml += `  <relevant_memories>\n${sanitizeXml(cold.rag)}\n  </relevant_memories>\n`;
         }
 
         if (cold.lessons) {
-            baseConsciousnessXml += `  <learned_lessons>\n${cold.lessons}\n  </learned_lessons>\n`;
+            baseConsciousnessXml += `  <learned_lessons>\n${sanitizeXml(cold.lessons)}\n  </learned_lessons>\n`;
         }
 
         if (cold.consciousness?.emotionalState) {
             const { mood, annoyance } = cold.consciousness.emotionalState;
             baseConsciousnessXml += `  <emotional_vector>\n    <mood>${mood}</mood>\n    <stress_level>${annoyance}</stress_level>\n  </emotional_vector>\n`;
         }
+
+        // [NOUVEAU] Workspace / Epistemic Memory (Zero-Trust)
+        if (cold.workspaceKeys && cold.workspaceKeys.length > 0) {
+            const keysList = cold.workspaceKeys.map((k: any) => k.key).join(', ');
+            baseConsciousnessXml += `  <available_workspace_documents>\n    ${sanitizeXml(keysList)}\n  </available_workspace_documents>\n`;
+            baseConsciousnessXml += `  <workspace_instruction>You have access to these documents. Use \`workspace_read\` to check their content if necessary to accomplish your task.</workspace_instruction>\n`;
+        }
+
+        // [BROWSER] Browser Availability
+        baseConsciousnessXml += `  <browser_agent_status>\n    <available>${cold.browserAvailable}</available>\n  </browser_agent_status>\n`;
 
         // [NOUVEAU] Fix #5 : Inner Monologue (reprise du dernier <think>)
         let lastThought = '';
@@ -461,7 +484,7 @@ export class TieredContextLoader {
                     enrichedAuthority.level = Math.max(enrichedAuthority.level, 50); // Level 50 = Moderator
                     enrichedAuthority.botHasControl = true;
                     // L'IA prend conscience de son pouvoir modérateur
-                    baseConsciousnessXml += `  <stance_towards_user>Tu as les droits d'administration sur ce groupe. Hostilité ou bannissement permis en cas d'abus.</stance_towards_user>\n`;
+                    baseConsciousnessXml += `  <stance_towards_user>You have administration rights in this group. Hostility or banning allowed in case of abuse.</stance_towards_user>\n`;
                 }
             }
         }

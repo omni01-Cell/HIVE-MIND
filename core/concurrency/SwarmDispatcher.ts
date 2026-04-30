@@ -74,10 +74,15 @@ class SwarmDispatcher {
      * Vérifie si le message est prioritaire (FastPath)
      */
     isFastPath(message: any) {
-        if (!message || !message.content) return false;
+        if (!message) return false;
+        // WHY: WhatsApp normalized messages use `text`, not `content`.
+        // `content` is the OpenAI message format — never existed on raw messages.
+        // Check both for cross-transport compatibility.
+        const msgText = message.text || message.content;
+        if (!msgText || typeof msgText !== 'string') return false;
         // Commandes systèmes légères
         const fastRegex = /^!(ping|menu|help|stop|info)/i;
-        return typeof message.content === 'string' && fastRegex.test(message.content);
+        return fastRegex.test(msgText);
     }
 
     /**

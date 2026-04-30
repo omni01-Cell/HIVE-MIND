@@ -139,6 +139,18 @@ export class TransportManager {
         return this.getTransport(sourceChannel).sendMedia(channelId, media, options);
     }
 
+    async downloadMedia(message: any, sourceChannel?: string) {
+        return this.getTransport(sourceChannel || message.sourceChannel).downloadMedia(message);
+    }
+
+    async downloadQuotedMedia(message: any, sourceChannel?: string) {
+        const transport = this.getTransport(sourceChannel || message.sourceChannel);
+        if (typeof transport.downloadQuotedMedia === 'function') {
+            return transport.downloadQuotedMedia(message);
+        }
+        return null;
+    }
+
     async disconnect() {
         const disconnectPromises = this.activeTransports.map(async (name) => {
             const transport = this.transports.get(name);

@@ -17,7 +17,7 @@ export class ShoppingAgent {
         // Initialiser le moteur de sous-agent
         this.engine = new SubAgentEngine({
             name: 'PersonalShopper',
-            systemPrompt: `Tu es un Personal Shopper d'élite pour HIVE-MIND.
+            systemPrompt: `You are an elite Personal Shopper for HIVE-MIND.
 Ta mission est de trouver le MEILLEUR produit au MEILLEUR PRIX selon la demande de l'utilisateur.
 
 RÈGLES DU SHOPPING:

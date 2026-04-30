@@ -38,7 +38,7 @@ export default {
 
         const scratchpadEngine = new SubAgentEngine({
             name: 'SystemScratchpad',
-            systemPrompt: `Tu es un processus de recherche système isolé (Scratchpad) pour HIVE-MIND.
+            systemPrompt: `You are an isolated system research process (Scratchpad) for HIVE-MIND.
 RÈGLES STRICTES:
 - Tu as accès UNIQUEMENT à des outils de LECTURE (pas d'écriture, pas de bash destructeur).
 - Explore le système et les fichiers, utilise tes outils. Quand tu as trouvé la réponse, donne un résumé TRÈS DÉTAILLÉ et TECHNIQUE.

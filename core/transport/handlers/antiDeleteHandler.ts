@@ -81,9 +81,8 @@ export class AntiDeleteHandler {
                     const isEnabled = await workingMemory.isAntiDeleteEnabled(chatId);
                     if (!isEnabled) continue;
 
-                    // 🛡️ Délai anti-race condition: attendre que storeMessage termine
-                    // Les suppressions rapides (< 500ms) sont souvent des "oops" ou corrections
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // Store is now synchronous (done in messages.upsert before dispatch),
+                    // so no delay needed before reading.
 
                     const storedMsg = await workingMemory.getStoredMessage(chatId, messageId);
                     if (!storedMsg) continue;

@@ -63,6 +63,10 @@ export class SchedulerHandler {
                 await this._handleMemoryDecay();
                 break;
 
+            case 'memoryEventScanner':
+                await this._handleMemoryEventScanner();
+                break;
+
             case 'tempCleanup':
                 await this._handleTempCleanup();
                 break;
@@ -135,9 +139,24 @@ export class SchedulerHandler {
         const reminders = await db.getPendingReminders();
 
         for (const reminder of reminders) {
-            if (reminder.message.startsWith('COMMAND:BAN_USER:')) {
+            let actualMessage = reminder.message;
+            let cronExpr = null;
+            
+            if (actualMessage.startsWith('[WS:')) {
+                actualMessage = actualMessage.replace(/^\[WS:\s*(.+?)\]\s*/i, '');
+            }
+
+            if (actualMessage.startsWith('[CRON:')) {
+                const match = actualMessage.match(/^\[CRON:\s*(.+?)\]\s*(.*)$/i);
+                if (match) {
+                    cronExpr = match[1].trim();
+                    actualMessage = match[2].trim();
+                }
+            }
+
+            if (actualMessage.startsWith('COMMAND:BAN_USER:')) {
                 try {
-                    const payload = reminder.message.replace('COMMAND:BAN_USER:', '');
+                    const payload = actualMessage.replace('COMMAND:BAN_USER:', '');
                     const [targetJid, reason] = payload.split('|');
 
                     console.log(`[Scheduler] 🚀 Exécution BAN planifié pour ${targetJid}`);
@@ -157,11 +176,25 @@ export class SchedulerHandler {
             } else {
                 await this.transport.sendText(
                     reminder.chat_id,
-                    `⏰ Rappel: ${reminder.message}`
+                    `⏰ Rappel: ${actualMessage}`
                 );
             }
 
-            await db.markReminderSent(reminder.id);
+            if (cronExpr) {
+                try {
+                    const parser = (await import('cron-parser')).default;
+                    // Use the original remind_at as the reference point to avoid drifting next dates when the bot is offline
+                    const interval = parser.parseExpression(cronExpr, { currentDate: new Date(reminder.remind_at) });
+                    const nextDate = interval.next().toDate();
+                    await db.rescheduleReminder(reminder.id, nextDate);
+                    console.log(`[Scheduler] 🔄 Rappel récurrent reprogrammé pour: ${nextDate.toISOString()}`);
+                } catch (err: any) {
+                    console.error(`[Scheduler] Erreur reprogrammation cron (${cronExpr}):`, err.message);
+                    await db.markReminderSent(reminder.id);
+                }
+            } else {
+                await db.markReminderSent(reminder.id);
+            }
         }
     }
 
@@ -223,6 +256,108 @@ export class SchedulerHandler {
             console.log('[Scheduler] ✅ Nettoyage mémoire terminé');
         } catch (error: any) {
             console.error('[Scheduler] Erreur memoryCleanup:', error.message);
+        }
+    }
+
+    async _handleMemoryEventScanner() {
+        console.log('[Scheduler] 📅 Scan de la mémoire épistémique (agent_workspace) pour extraction de rappels...');
+        try {
+            const { supabase } = await import('../../services/supabase.js');
+            const { providerRouter } = await import('../../providers/index.js');
+            
+            // Scanner les documents modifiés dans les dernières 24 heures
+            const targetTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            
+            const { data: workspaces, error } = await supabase
+                .from('agent_workspace')
+                .select('id, context_id, key, content')
+                .gte('updated_at', targetTime);
+                
+            if (error) throw error;
+            if (!workspaces || workspaces.length === 0) {
+                console.log('[Scheduler] Aucun document workspace récent à analyser.');
+                return;
+            }
+            
+            let extractedCount = 0;
+            
+            for (const doc of workspaces) {
+                const textToAnalyze = doc.content.substring(0, 2000);
+                
+                const prompt = `
+You are a strict calendar extraction agent. Analyze the following workspace document and extract ONLY explicitly mentioned appointments, reminders, or future actions.
+Strict rules:
+1. If the event is ONE-TIME (e.g. "tomorrow at 3pm"), set "date_iso" with the exact date and leave "cron" empty.
+2. If the event is RECURRING (e.g. "every Tuesday the 12th", "every Friday at 1pm"), set "cron" with a valid cron expression and leave "date_iso" empty.
+Format de retour strictement JSON sans markdown (pas de balises \`\`\`json) :
+[
+  { "message": "Texte complet du rappel ou de la tâche", "date_iso": "2026-05-10T15:00:00.000Z", "cron": "0 13 * * 5" }
+]
+Si aucun événement futur n'est trouvé, renvoie exactement [].
+Date et Heure actuelles: ${new Date().toISOString()}
+
+Document [Clé: ${doc.key}]:
+${textToAnalyze}
+`;
+                const response = await providerRouter.chat([{ role: 'user', content: prompt }], { category: 'FAST_CHAT', temperature: 0.1 });
+                
+                if (response?.content) {
+                    try {
+                        const jsonStr = response.content.replace(/```json\n?|\n?```/g, '').trim();
+                        let events = [];
+                        try {
+                            const json5 = (await import('json5')).default;
+                            events = json5.parse(jsonStr);
+                        } catch (e) {
+                            events = JSON.parse(jsonStr);
+                        }
+                        
+                        if (Array.isArray(events) && events.length > 0) {
+                            // Purge existing pending reminders for this document to synchronize state
+                            await supabase.from('reminders')
+                                .delete()
+                                .eq('context_id', doc.context_id)
+                                .like('message', `[WS: ${doc.key}]%`)
+                                .eq('sent', false);
+
+                            for (const ev of events) {
+                                let targetDate = ev.date_iso;
+                                let finalMessage = `[WS: ${doc.key}] ${ev.message}`;
+                                
+                                if (ev.cron) {
+                                    try {
+                                        const parser = (await import('cron-parser')).default;
+                                        const interval = parser.parseExpression(ev.cron);
+                                        targetDate = interval.next().toISOString();
+                                        finalMessage = `[CRON: ${ev.cron}] ${ev.message}`;
+                                    } catch (err) {
+                                        console.error('[Scheduler] Cron invalide ignoré:', ev.cron);
+                                        continue;
+                                    }
+                                }
+
+                                if (finalMessage && targetDate && new Date(targetDate).getTime() > Date.now()) {
+                                    
+                                        await supabase.from('reminders').insert({
+                                            context_id: doc.context_id,
+                                            message: finalMessage,
+                                            remind_at: targetDate,
+                                            sent: false
+                                        });
+                                        console.log(`[Scheduler] ✅ Rappel créé: "${finalMessage}" pour ${targetDate}`);
+                                        extractedCount++;
+                                }
+                            }
+                        }
+                    } catch (err: any) {
+                        console.error(`[Scheduler] Erreur parsing JSON pour document ${doc.key}:`, err.message);
+                    }
+                }
+            }
+            
+            console.log(`[Scheduler] Fin du scan. ${extractedCount} nouveau(x) rappel(s) créé(s).`);
+        } catch (error: any) {
+            console.error('[Scheduler] Erreur memoryEventScanner:', error.message);
         }
     }
 

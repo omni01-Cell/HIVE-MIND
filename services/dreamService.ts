@@ -21,7 +21,7 @@ export const dreamService = {
         console.log('[DreamService] 💤 Phase de rêve (Auto-Reflection)...');
 
         const currentLessons = this.getLessons();
-        const recentErrors = this.getRecentErrors();
+        const recentErrors = await this.getRecentErrors();
 
         const prompt = `<role>
 You are HIVE-MIND's self-reflection module running during low-activity periods.
@@ -139,11 +139,13 @@ ${response.content}`;
     /**
      * Récupère les erreurs récentes depuis l'AgentMemory
      */
-    getRecentErrors() {
-        // Implémentation simplifiée - récupérer les dernières erreurs
-        const errors = [];
-        // TODO: Implémenter la récupération depuis agentMemory
-        return errors;
+    async getRecentErrors() {
+        try {
+            const lessons = await agentMemory.getGlobalLessonsLearned(10);
+            return lessons.map((l: any) => `[${l.tool}] ${l.error}`);
+        } catch (e) {
+            return [];
+        }
     }
 };
 

@@ -87,28 +87,27 @@ HELPERS DÉFENSIFS (toujours disponibles):
 - isSuccess(response) — Vérifie succès
 - extractText(response) — Extrait du texte
 
-EXEMPLE:
-\`\`\`javascript
+EXEMPLE (ceci est la chaîne envoyée dans le paramètre "code" de l'outil) :
 const [meteo1, meteo2, meteo3] = await Promise.all([
   get_weather({ city: 'Paris' }),
   get_weather({ city: 'Lyon' }),
   get_weather({ city: 'Marseille' })
 ]);
 return { paris: meteo1, lyon: meteo2, marseille: meteo3 };
-\`\`\`
 
 RÈGLES:
 1. Appeler chaque outil avec UN SEUL objet: nomOutil({ param1: val, param2: val })
 2. TOUJOURS retourner le résultat final avec \`return\`
 3. Utiliser \`await\` pour chaque appel d'outil
 4. Utiliser \`Promise.all()\` pour les appels parallèles
+5. SILENCE ABSOLU: Ne JAMAIS montrer, imprimer, ou expliquer ce code JavaScript à l'utilisateur dans ton message texte. Le code doit être envoyé uniquement via l'appel d'outil.
 
 TÂCHES LONGUES (>30s) — API HIVE:
 L'objet global \`HIVE\` est disponible pour gérer les tâches qui dépassent le timeout LLM.
 - \`await HIVE.sleepAndWake(delayMs, "Prompt de réveil")\` — Libère la boucle LLM et programme un réveil automatique après \`delayMs\` ms. HIVE-MIND se réveillera et exécutera le prompt automatiquement.
 - \`await HIVE.waitForBackground(commandId, checkEveryMs, "Prompt")\` — Attend la fin d'une commande background et se réveille quand c'est terminé.
 QUAND UTILISER : scraping long, compilation, attente d'un webhook, surveillance d'un service.
-RÈGLE CRITIQUE : Après avoir appelé \`HIVE.sleepAndWake()\`, retourne UNIQUEMENT le résultat de sleepAndWake et réponds \`SILENT_HM\` dans ton message final.
+RÈGLE CRITIQUE : Après avoir appelé \`HIVE.sleepAndWake()\`, retourne UNIQUEMENT le résultat de sleepAndWake et réponds \`__HIVE_SILENT_7f3a__\` dans ton message final.
 
 EXEMPLE TÂCHE LONGUE:
 \`\`\`javascript
@@ -417,24 +416,23 @@ ${SANDBOX_HELPERS_SOURCE}
                 reject(new Error(`[PTC] Timeout: exécution dépassant ${this.config.timeoutMs}ms`));
             }, this.config.timeoutMs);
 
+            const cleanup = () => clearTimeout(timeoutId);
+
+            // Patch: attacher cleanup sur la résolution AVANT l'exécution de runInContext
+            const originalResolve = sandboxGlobals.__resolve as (v: unknown) => void;
+            const originalReject = sandboxGlobals.__reject as (e: unknown) => void;
+            sandboxGlobals.__resolve = (v: unknown) => { cleanup(); originalResolve(v); };
+            sandboxGlobals.__reject = (e: unknown) => { cleanup(); originalReject(e); };
+
             try {
                 script.runInContext(context, {
                     timeout: this.config.timeoutMs,
                 });
             } catch (err) {
-                clearTimeout(timeoutId);
+                cleanup();
                 reject(err);
                 return;
             }
-
-            // Le script est async, le resolve/reject se fera via les callbacks.
-            // On nettoie le timeout quand la promise se résout.
-            const cleanup = () => clearTimeout(timeoutId);
-            // Patch: attacher cleanup sur la résolution
-            const originalResolve = sandboxGlobals.__resolve as (v: unknown) => void;
-            const originalReject = sandboxGlobals.__reject as (e: unknown) => void;
-            sandboxGlobals.__resolve = (v: unknown) => { cleanup(); originalResolve(v); };
-            sandboxGlobals.__reject = (e: unknown) => { cleanup(); originalReject(e); };
         });
     }
 

@@ -78,11 +78,11 @@ Respond in JSON only:
                 };
             }
 
-            return { allowed: true, reason: null }; // Fallback permissif si l'IA échoue
+            return { allowed: false, reason: 'Moral compass evaluation failed - fail closed policy', risk_level: 'critical' };
 
         } catch (error: any) {
             console.error('[MoralCompass] Erreur evaluation:', error.message);
-            return { allowed: true, reason: null };
+            return { allowed: false, reason: 'Moral compass unavailable - fail closed policy', risk_level: 'critical' };
         }
     }
 };

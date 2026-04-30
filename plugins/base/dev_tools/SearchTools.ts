@@ -4,6 +4,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { permissionManager } from '../../../core/security/PermissionManager.js';
 import { fileState } from './FileState.js';
+import { hashLines } from '../../../services/anchor/index.js';
 
 const execAsync = promisify(exec);
 const MAX_FILES_TO_LIST = 1000;
@@ -162,9 +163,15 @@ export default {
                     const startIdx = Math.max(0, start_line - 1);
                     const endIdx = end_line ? Math.min(lines.length, end_line) : Math.min(lines.length, startIdx + MAX_READ_LINES);
 
+                    // [DIRAC] Hash-Anchored Lines: Each line gets a stable word-anchor
+                    // WHY: Anchors survive insertions/deletions, unlike line numbers.
+                    // The LLM uses these anchors to target edits with 100% precision.
+                    const hashedContent = hashLines(absolutePath, content);
+                    const hashedLines = hashedContent.split('\n');
+
                     let result = '';
                     for (let i = startIdx; i < endIdx; i++) {
-                        result += `${i + 1}: ${lines[i]}\n`;
+                        result += `${hashedLines[i]}\n`;
                     }
 
                     if (lines.length > endIdx) {

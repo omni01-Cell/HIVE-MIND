@@ -28,6 +28,7 @@ import { botIdentity } from '../../utils/botIdentity.js';
 import { resolveMentionsInText } from '../../utils/fuzzyMatcher.js';
 import { AudioHandler } from './handlers/audioHandler.js';
 import { AntiDeleteHandler } from './handlers/antiDeleteHandler.js';
+import { IdentityMap } from '../../services/state/IdentityMap.js';
 
 const BAILEYS_ERRORS = {
     CONNECTION_LOST: 'CONNECTION_LOST',
@@ -247,6 +248,18 @@ class BaileysTransport extends EventEmitter {
                     consciousness.setIdentity(self.sock.user);
                 }
 
+                // [LID HYDRATION] Warm the JID→LID reverse cache for the bot's own identity.
+                // WHY: Modern WhatsApp uses LID in @mentions (contextInfo.mentionedJid) and
+                // quoted message sender (contextInfo.participant). Without this, the bot
+                // cannot recognize itself in those fields.
+                const botJid = self.sock.user?.id;
+                const botLid = self.sock.user?.lid;
+                if (botJid && botLid) {
+                    IdentityMap.register(botJid, botLid).catch(() => {});
+                } else if (botJid) {
+                    IdentityMap.hydrateLidCache(botJid).catch(() => {});
+                }
+
                 // Mettre le bot "En ligne" pour montrer qu'il est réveillé
                 self.sock.sendPresenceUpdate('available');
 
@@ -347,15 +360,14 @@ class BaileysTransport extends EventEmitter {
                         }
                     }
 
-                    // 🛡️ ANTI-DELETE logic avec protection race condition
-                    // Ajouter un délai anti-suppression pour éviter les suppressions instantanées
-                    setTimeout(async () => {
-                        try {
-                            await this.antiDeleteHandler.storeMessage(normalizedMsg);
-                        } catch (err: any) {
-                            console.warn('[Baileys] Erreur AntiDelete store:', err.message);
-                        }
-                    }, 100); // 100ms de tolérance
+                    // 🛡️ ANTI-DELETE: Store message synchronously (no setTimeout race condition)
+                    // WHY: Old pattern used setTimeout(100ms) store + setTimeout(500ms) read = prayer-based engineering.
+                    // Now: store completes before dispatch, so handleUpdate always finds the message.
+                    try {
+                        await this.antiDeleteHandler.storeMessage(normalizedMsg);
+                    } catch (err: any) {
+                        console.warn('[Baileys] Erreur AntiDelete store:', err.message);
+                    }
 
                     // EMIT MESSAGE
                     if (normalizedMsg.text || normalizedMsg.useNativeAudio) {
@@ -611,8 +623,50 @@ class BaileysTransport extends EventEmitter {
     }
 
     async downloadMedia(message: any) {
-        console.warn('[Baileys] downloadMedia pas encore implémenté.');
-        return Buffer.from('');
+        if (!message || (!message.raw && !message.message)) {
+            throw new Error('Message object is invalid for media download');
+        }
+        const rawMessage = message.raw || message;
+        return await downloadMediaMessage(
+            rawMessage,
+            'buffer',
+            {},
+            {
+                logger: this.sock?.logger,
+                reuploadRequest: this.sock?.updateMediaMessage
+            }
+        );
+    }
+
+    async downloadQuotedMedia(message: any) {
+        if (!message || !message.quotedMsg || !message.raw) {
+            return null;
+        }
+        
+        const contextInfo = message.raw.message?.extendedTextMessage?.contextInfo ||
+                            message.raw.message?.imageMessage?.contextInfo ||
+                            message.raw.message?.videoMessage?.contextInfo ||
+                            message.raw.message?.documentMessage?.contextInfo;
+
+        const quotedMsgRaw = contextInfo?.quotedMessage;
+        const stanzaId = contextInfo?.stanzaId;
+
+        if (!quotedMsgRaw || !stanzaId) return null;
+
+        const fakeRawMessage = {
+            key: { ...message.raw.key, id: stanzaId },
+            message: quotedMsgRaw
+        };
+
+        return await downloadMediaMessage(
+            fakeRawMessage,
+            'buffer',
+            {},
+            {
+                logger: this.sock?.logger,
+                reuploadRequest: this.sock?.updateMediaMessage
+            }
+        );
     }
 
     async isAdmin(groupId: string, userId: string) {

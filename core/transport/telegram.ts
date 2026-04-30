@@ -51,10 +51,10 @@ export const telegramTransport = {
                 try {
                     const sender = await msg.getSender();
                     senderName = sender?.username || sender?.firstName || 'Unknown';
-                } catch (e) {}
-                
+                } catch (e) { }
+
                 const chatId = msg.peerId?.userId?.toString() || msg.peerId?.chatId?.toString() || msg.peerId?.channelId?.toString();
-                
+
                 const messageData = {
                     id: msg.id?.toString(),
                     chatId: chatId,
@@ -119,7 +119,7 @@ export const telegramTransport = {
     sendUniversalResponse: async (chatId: string, response: any, options: any = {}) => {
         let text = response.markdown || response.plainText;
         if (!text) return;
-        
+
         // Split text if it exceeds Telegram's 4096 character limit
         if (text.length > 4000) {
             const chunks = text.match(/[\s\S]{1,4000}/g) || [];

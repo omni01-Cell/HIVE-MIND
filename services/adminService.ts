@@ -26,14 +26,22 @@ export const adminService = {
     },
     
     async init() {
-        await this.refresh();
+        const initialRefresh = async () => {
+            const success = await this.refresh();
+            if (!success) {
+                console.log('[AdminService] Retry refresh in 5s...');
+                setTimeout(initialRefresh, 5000);
+            }
+        };
+        await initialRefresh();
+        
         setInterval(() => {
             this.refresh().catch(console.error);
         }, REFRESH_INTERVAL);
     },
 
     async refresh() {
-        if (!supabase) return;
+        if (!supabase) return false;
 
         try {
             const { data, error } = await supabase
@@ -42,14 +50,16 @@ export const adminService = {
 
             if (error) {
                 console.error('[AdminService] Erreur refresh:', error);
-                return;
+                return false;
             }
 
             adminCache.clear();
             data.forEach((a: any) => adminCache.set(a.user_id, a.role || 'moderator'));
             lastRefresh = Date.now();
+            return true;
         } catch (error: any) {
             console.error('[AdminService] Erreur refresh:', error.message);
+            return false;
         }
     },
 

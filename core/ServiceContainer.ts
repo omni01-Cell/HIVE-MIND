@@ -157,8 +157,13 @@ export class ServiceContainer {
         import('../services/dreamService.js').then(m => this.register('dream', m.dreamService));
         import('../services/moralCompass.js').then(m => this.register('moralCompass', m.moralCompass));
 
-        const { factsMemory } = await import('../services/memory.js');
+        const { factsMemory, workspaceMemory } = await import('../services/memory.js');
         this.register('facts', factsMemory);
+        this.register('workspace', workspaceMemory);
+
+        // [BROWSER] Browser Agent Service
+        const { browserService } = await import('../services/browser/BrowserService.js');
+        this.register('browser', browserService);
 
         // 8. Provider Router (singleton global — utilisé par ShoppingAgent, DeepResearch, JournalGenerator)
         const { providerRouter } = await import('../providers/index.js');

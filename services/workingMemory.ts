@@ -6,7 +6,15 @@ import { redis, ensureConnected, checkHealth as redisCheckHealth } from './redis
 
 export const workingMemory = {
     /**
-     * Ajoute un message au contexte éphémère
+     * Ajoute un message au contexte éphémère.
+     * 
+     * ⚠️ CONTRAT ARCHITECTURAL (Biais #2 Audit Expert) :
+     * Cette méthode ne DOIT JAMAIS être appelée manuellement par un plugin
+     * (ex: send_message, memory_store, etc). Le cycle de vie de la boucle ReAct 
+     * ajoute automatiquement la réponse finale de l'assistant à la fin de `_handleMessage`.
+     * Un appel forcé par un plugin créerait des doublons fantômes dans l'historique Redis,
+     * brisant le pattern strict 'Alternating User/Assistant' requis par la majorité des LLMs.
+     * 
      * @param {string} chatId 
      * @param {string} role 'user' | 'assistant'
      * @param {string} content 
@@ -45,13 +53,14 @@ export const workingMemory = {
      * @param {string} chatId 
      * @returns {Promise<Array>}
      */
-    async getContext(chatId: any) {
+    async getContext(chatId: any, limit: number = 15) {
         try {
             await ensureConnected();
             if (!redis.isOpen) return [];
 
             const key = `chat:${chatId}:context`;
-            const logs = await redis.lRange(key, 0, -1);
+            const start = limit ? -limit : 0;
+            const logs = await redis.lRange(key, start, -1);
 
             return logs.map((log: any) => JSON.parse(log));
         } catch (error: any) {

@@ -74,8 +74,8 @@ try {
         join(__dirname, '..', 'persona', 'prompts', 'refusal.md'), 'utf-8'
     );
 } catch {
-    systemPrompt = 'Tu es un assistant amical.';
-    refusalPrompt = 'Tu es {{name}}. Refuse poliment car: {{reason}}.';
+    systemPrompt = 'You are a friendly assistant.';
+    refusalPrompt = 'You are {{name}}. Politely refuse because: {{reason}}.';
 }
 
 /**
@@ -186,7 +186,8 @@ export class BotCore {
             const loadedPlugins = await pluginLoader.loadAll();
 
             // Sync check
-            const syncStatus = await pluginLoader.checkSyncStatus(container.get('supabase'));
+            const supabase = container.get('supabase');
+            const syncStatus = await pluginLoader.checkSyncStatus(supabase);
             let syncDetails = `${loadedPlugins?.size || 0} loaded`;
 
             if (syncStatus.deleted > 0 || syncStatus.new > 0 || syncStatus.modified > 0) {
@@ -195,10 +196,33 @@ export class BotCore {
                 if (syncStatus.modified > 0) parts.push(`~${syncStatus.modified} mod`);
                 if (syncStatus.deleted > 0) parts.push(`-${syncStatus.deleted} del`);
                 syncDetails += ` [${parts.join(', ')}]`;
+
+                // --- Auto-Sync pour indexer les nouveaux/modifiés ---
+                if (syncStatus.new > 0 || syncStatus.modified > 0) {
+                    try {
+                        const embeddings = container.get('embeddings');
+                        const tools = pluginLoader.getToolDefinitions();
+                        let indexed = 0;
+                        for (const tool of tools) {
+                            const toolName = tool.function?.name;
+                            if (!toolName) continue;
+                            const vector = await embeddings.embed(`${toolName}: ${tool.function?.description}`);
+                            if (vector) {
+                                const { error } = await supabase.from('bot_tools').upsert({
+                                    name: toolName, plugin_name: toolName.split('_')[0],
+                                    description: tool.function?.description, definition: tool, embedding: vector
+                                }, { onConflict: 'name' });
+                                if (!error) indexed++;
+                            }
+                        }
+                        syncDetails += ` (Synched: ${indexed})`;
+                    } catch (syncErr: any) {
+                        console.warn('[Core] Erreur auto-sync plugins:', syncErr.message);
+                    }
+                }
             }
 
             startupDisplay.success('plugins', syncDetails);
-
 
         } catch (e: any) {
             startupDisplay.error('plugins', e.message);
@@ -249,10 +273,10 @@ export class BotCore {
         startupDisplay.loading('transport');
         try {
             let activeTransports = process.env.ACTIVE_TRANSPORTS ? process.env.ACTIVE_TRANSPORTS.split(',') : ['whatsapp'];
-            
+
             // Environment Detection Logic
             const appEnv = process.env.APP_ENV || 'local';
-            
+
             if (appEnv === 'server') {
                 console.log('[Core] 🌐 Mode SERVEUR (Headless). CLI désactivée.');
                 activeTransports = activeTransports.filter(t => t !== 'cli' && t !== 'ink-cli');
@@ -385,41 +409,72 @@ export class BotCore {
         if (!message.isGroup) return true;
 
         // 2. Récupérer TOUS les identifiants du bot (JID téléphone + LID)
+        // WHY: sock.user can be temporarily undefined during WhatsApp reconnection.
+        // We cache the last known values to survive transient disconnections.
         const rawBotId = this.transport.sock?.user?.id;
         const botLid = this.transport.sock?.user?.lid;
-        const botPhoneId = extractNumericId(rawBotId);
-        const botLidId = extractNumericId(botLid);
+
+        // Cache on first successful read (survives reconnection windows)
+        if (rawBotId) (this as any)._cachedBotId = rawBotId;
+        if (botLid) (this as any)._cachedBotLid = botLid;
+
+        const effectiveBotId = rawBotId || (this as any)._cachedBotId;
+        const effectiveBotLid = botLid || (this as any)._cachedBotLid;
+
+        // WHY: Modern WhatsApp uses LID-based identifiers in mentionedJid and
+        // contextInfo.participant. sock.user.lid is often NOT populated by Baileys.
+        // We resolve the bot's LID from the userService identity map as a fallback,
+        // so that LID-based @mentions and quoted-message checks actually work.
+        let resolvedBotLid = effectiveBotLid;
+        if (!resolvedBotLid && effectiveBotId) {
+            try {
+                const userSvc = this.userService;
+                if (userSvc?.getLidForJid) {
+                    const lid = userSvc.getLidForJid(effectiveBotId);
+                    if (lid) {
+                        resolvedBotLid = lid;
+                        (this as any)._cachedBotLid = lid;
+                    }
+                }
+            } catch {
+                // Non-critical: if userService is unavailable, we continue with what we have
+            }
+        }
+
+        if (!effectiveBotId && !resolvedBotLid) {
+            console.warn('[Core] ⚠️ Bot identity unavailable (socket reconnecting?), falling back to name detection only');
+        }
+
+        const botPhoneId = extractNumericId(effectiveBotId);
+        const botLidId = extractNumericId(resolvedBotLid);
 
         const mentionedJids = (message as any).mentionedJids || [];
 
-        // DEBUG: Afficher les valeurs
-        console.log(`[DEBUG Mention] botPhoneId=${botPhoneId}, botLidId=${botLidId}, mentionedJids=${JSON.stringify(mentionedJids)}, text="${text.substring(0, 50)}"`);
-
         // 2a. Vérifier si le bot est mentionné via son numéro de téléphone OU son LID
         for (const jid of mentionedJids) {
-            if (jidMatch(jid, rawBotId) || jidMatch(jid, botLid)) {
-                console.log('[DEBUG] ✓ Détecté via mentionedJids (jidMatch)');
+            if (jidMatch(jid, effectiveBotId) || jidMatch(jid, resolvedBotLid)) {
+                console.log(`[DEBUG] ✓ Détecté via @mention (jid=${jid})`);
                 return true;
             }
         }
 
         // 2b. Fallback: JID visible dans le texte
         if (botPhoneId && text.includes(botPhoneId)) {
-            console.log('[DEBUG] ✓ Détecté via texte contenant phoneId');
             return true;
         }
         if (botLidId && text.includes(botLidId)) {
-            console.log('[DEBUG] ✓ Détecté via texte contenant LID');
             return true;
         }
 
         // 3. Réponse à un message du bot (Quoted)
+        // WHY: Uses effectiveBotId/resolvedBotLid (cached) instead of raw values
+        // to survive socket reconnection windows where sock.user is temporarily undefined.
         if (message.quotedMsg) {
             console.log(`[DEBUG QuotedMsg] sender=${message.quotedMsg.sender}, text="${message.quotedMsg.text?.substring(0, 30)}..."`);
         }
 
         if (message.quotedMsg?.sender) {
-            if (jidMatch(message.quotedMsg.sender, rawBotId) || jidMatch(message.quotedMsg.sender, botLid)) {
+            if (jidMatch(message.quotedMsg.sender, effectiveBotId) || jidMatch(message.quotedMsg.sender, resolvedBotLid)) {
                 console.log('[DEBUG] ✓ Détecté via quotedMsg (jidMatch)');
                 return true;
             }
@@ -886,6 +941,17 @@ export class BotCore {
             // 1. Charger le reste du contexte (COLD) - RAG, Faits, etc.
             const fullContext = await tieredContextLoader.load(chatId, message, 'AGENTIC');
 
+            // 🧠 MECHANICAL CONSCIOUSNESS GUARD (Biais Méta fix)
+            // WHY: The consciousness system is 100% prompt-based (rhetorical, not mechanical).
+            // In 95% of cases, the LLM follows instructions. For the 5% edge case where
+            // annoyance is extreme and the user has no admin rights, we add ONE hard guard:
+            // a rate-limit delay that prevents hasty reactive responses.
+            const consciousnessState = (fullContext as any).consciousness;
+            if (consciousnessState?.emotionalState?.annoyance > 90 && !(fullContext.authority?.isBotAdmin)) {
+                console.log(`[Consciousness] 🧠 Annoyance critique (${consciousnessState.emotionalState.annoyance}/100) — throttle mécanique activé`);
+                await new Promise(resolve => setTimeout(resolve, 3000)); // 3s forced cooldown
+            }
+
             // 2. Gestion Agrégation Contexte
             const systemPrompt = fullContext.systemPrompt;
             // On a besoin d'une variable locale standardisée pour l'AGENTIC path
@@ -895,29 +961,31 @@ export class BotCore {
 
             // 3. Fusion de l'historique
             if (fastPathHistory && fastPathHistory.length > 0) {
-                // Si on vient d'une escalade, on injecte ce qui s'est passé dans le FastPath
-                // Attention: fastPathHistory contient déjà le system prompt "light", on doit le retirer ou l'adapter
-                // fastPathHistory[0] est le system prompt.
+                // WHY: fastPathHistory = [System(light), ...Recents(3), UserQuery, AssistantThought, ToolCall, ToolResult, ...]
+                // fullContext.history = Recents(5) from AGENTIC loader (different size than FastPath's 3)
+                // Old code used index arithmetic that broke when sizes differed.
+                // New approach: content-based deduplication — only inject genuinely new steps.
                 console.log(`[Core] 🔗 Injection historique FastPath (${fastPathHistory.length} msgs)`);
 
-                // On ajoute les messages intermédiaires du FastPath (User -> Assistant -> Tool -> Assistant...)
-                // On skip le System prompt (index 0) et les 5 messages récents (déjà dans context)
-                // C'est un peu tricky. Simplification:
-                // On prend tout ce qui est NOUVEAU dans FastPath (après les messages récents)
-                // FastPath démarre avec [System, ...5 recents, UserQuery, ...]
-
-                // Pour simplifier, on reconstruit l'historique ReAct proprement:
-                // [System Full] + [Recent History] + [User Query] + [FastPath Thoughts/Tools]
-
-                // On ajoute l'historique récent (déjà fait par tieredContextLoader ?)
+                // 1. Build the canonical agentic base: [System Full] + [Recent History] + [User Query]
                 history.push(...fullContext.history);
                 history.push({ role: 'user', content: text });
 
-                // Et on ajoute les étapes intermédiaires du FastPath (Thought/Action du Tour 1)
-                // fastPathHistory contient: [System, ...Recents, User, Assistant(Call), ToolResult]
-                const newSteps = fastPathHistory.slice(1 + (fullContext.history.length) + 1); // Skip System + Recents + User
-                if (newSteps.length > 0) {
-                    history.push(...newSteps);
+                // 2. Collect content signatures of messages already in history (for dedup)
+                const existingSignatures = new Set(
+                    history.map((m: any) => `${m.role}::${(m.content || '').substring(0, 100)}`)
+                );
+
+                // 3. Extract only NEW steps from FastPath (assistant thoughts, tool calls, tool results)
+                // Skip system prompt (index 0), skip messages that match existing history
+                for (let fpIdx = 1; fpIdx < fastPathHistory.length; fpIdx++) {
+                    const fpMsg = fastPathHistory[fpIdx];
+                    const sig = `${fpMsg.role}::${(fpMsg.content || '').substring(0, 100)}`;
+
+                    // Only inject messages that are NOT already present (tool results, assistant thoughts)
+                    if (!existingSignatures.has(sig)) {
+                        history.push(fpMsg);
+                    }
                 }
 
             } else {
@@ -1044,14 +1112,34 @@ export class BotCore {
                             : { category: 'AGENTIC' })
                     });
                 } catch (chatErr: any) {
-                    // [FINOPS] Kill Switch : arrêt propre si budget dépassé
-                    if (chatErr.message?.includes('BUDGET_EXCEEDED')) {
-                        console.error('[FinOps] 🚨 Budget dépassé, arrêt de la boucle ReAct.');
-                        finalResponse = '⚠️ Le budget de cette session est épuisé. Je dois m\'arrêter ici pour éviter des coûts supplémentaires.';
+                    // [CIRCUIT BREAKER] Fallback résilient si la famille sélectionnée échoue mid-loop
+                    if (chatErr.message?.includes('BUDGET_EXCEEDED') && usedFamily) {
+                        console.warn(`[FinOps] ⚠️ Budget dépassé pour la famille ${usedFamily}. Fallback sur la catégorie AGENTIC (changement de voix/modèle possible).`);
+                        usedFamily = null; // Déverrouille la famille
+                        try {
+                            response = await providerRouter.chat(history, {
+                                tools: relevantTools,
+                                category: 'AGENTIC'
+                            });
+                        } catch (fallbackErr: any) {
+                            if (fallbackErr.message?.includes('BUDGET_EXCEEDED')) {
+                                console.error('[FinOps] 🚨 Budget global épuisé, arrêt de la boucle ReAct.');
+                                finalResponse = '⚠️ Le budget global de cette session est épuisé. Je m\'arrête ici.';
+                                keepThinking = false;
+                                break;
+                            }
+                            throw fallbackErr;
+                        }
+                    }
+                    // [FINOPS] Kill Switch : arrêt propre si budget dépassé et qu'on n'est pas locké
+                    else if (chatErr.message?.includes('BUDGET_EXCEEDED')) {
+                        console.error('[FinOps] 🚨 Budget global épuisé, arrêt de la boucle ReAct.');
+                        finalResponse = '⚠️ Le budget global de cette session est épuisé. Je m\'arrête ici.';
                         keepThinking = false;
                         break;
+                    } else {
+                        throw chatErr; // Re-throw les autres erreurs
                     }
-                    throw chatErr; // Re-throw les autres erreurs
                 }
 
                 // Sauvegarder la famille utilisée au premier tour
@@ -1102,9 +1190,30 @@ export class BotCore {
                     // 2. Exécuter les outils
                     const { getToolFeedback } = await import('../utils/messageSplitter.js');
 
-                    for (const toolCall of response.toolCalls) {
-                        const toolName = toolCall.function.name;
+                    // [DIRAC] Parallel Tool Execution — Read-only tools run concurrently
+                    // WHY: When the LLM calls 3 read_file + 1 get_file_skeleton in one turn,
+                    // sequential execution wastes ~3x the I/O time. Parallelizing read-only
+                    // tools saves 60-80% latency on multi-tool turns.
+                    const READ_ONLY_TOOLS = new Set([
+                        'read_file', 'list_directory', 'grep_search',
+                        'get_file_skeleton', 'get_function', 'find_symbol_references',
+                    ]);
 
+                    // Partition tool calls into parallel-safe (read-only) and sequential (mutating)
+                    const parallelBatch: typeof response.toolCalls = [];
+                    const sequentialQueue: typeof response.toolCalls = [];
+
+                    for (const tc of response.toolCalls) {
+                        if (READ_ONLY_TOOLS.has(tc.function.name)) {
+                            parallelBatch.push(tc);
+                        } else {
+                            sequentialQueue.push(tc);
+                        }
+                    }
+
+                    // Helper: execute a single tool call and push result to history
+                    const executeAndRecord = async (toolCall: any) => {
+                        const toolName = toolCall.function.name;
                         try {
                             let toolResult: any;
 
@@ -1228,73 +1337,44 @@ export class BotCore {
                                 ? (typeof toolResult.llmOutput === 'string' ? toolResult.llmOutput : JSON.stringify(toolResult.llmOutput))
                                 : JSON.stringify(toolResult); // Fallback pour les anciens plugins
 
-                            // 3. Ajouter le résultat à l'historique
-                            history.push({
-                                role: 'tool',
+                            // 3. Retourner le history entry (will be pushed after all parallel calls complete)
+                            return {
+                                role: 'tool' as const,
                                 tool_call_id: toolCall.id,
                                 name: toolName,
-                                content: llmContent
-                            });
-
-                            console.log(`[Agent] ✅ Résultat ${toolName} traité (Dual Render: ${!!(toolResult && toolResult.userOutput)})`);
-
-                            // 🛡️ OBSERVER: Vérifier la cohérence comportementale après chaque outil
-                            try {
-                                const { multiAgent } = await import('../services/agentic/MultiAgent.js');
-
-                                // Obtenir l'historique récent pour comparaison
-                                const recentActions = await this.agentMemory.getRecentActions(chatId, 5);
-
-                                const coherence: any = await multiAgent.observe({
-                                    tool: toolName,
-                                    params: JSON.parse(toolCall.function.arguments || '{}'),
-                                    result: toolResult
-                                }, recentActions);
-
-                                if (!coherence.coherent) {
-                                    console.warn(`[Observer] ⚠️ Incohérence détectée: ${coherence.warning} (${coherence.severity})`);
-
-                                    // Logger dans la DB pour analyse future
-                                    await db.from('action_scores').insert({
-                                        chat_id: chatId,
-                                        tool_name: toolName,
-                                        coherence_score: 0.2, // Score bas à cause de l'incohérence
-                                        warning: coherence.warning,
-                                        severity: coherence.severity,
-                                        metadata: { observer_detected: true }
-                                    });
-                                } else {
-                                    console.log(`[Observer] ✅ Cohérence vérifiée pour ${toolName}`);
-                                }
-
-                            } catch (observerError: any) {
-                                // Ne pas bloquer l'exécution si Observer échoue
-                                console.warn('[Observer] Erreur non-bloquante:', observerError.message);
-
-                                // Monitoring: tracker les erreurs Observer
-                                if ((this as any).container?.has('metrics')) {
-                                    const metrics = (this as any).container.get('metrics');
-                                    metrics.increment('observer_errors', {
-                                        tool: toolName,
-                                        error_type: observerError.name
-                                    });
-                                }
-                            }
-
-                            // UX Agentique: Petit feedback visuel si c'est long
-                            if (iterations > 1) {
-                                await this.transport.setPresence(chatId, 'composing');
-                            }
+                                content: llmContent,
+                            };
 
                         } catch (unexpectedErr: any) {
                             console.error(`[Agent] ❌ Erreur fatale boucle ReAct:`, unexpectedErr);
-                            // Fallback ultime
-                            history.push({
-                                role: 'tool',
+                            return {
+                                role: 'tool' as const,
                                 tool_call_id: toolCall.id,
                                 name: toolName,
-                                content: JSON.stringify({ success: false, error: true, message: `Fatal Loop Error: ${unexpectedErr.message}` })
-                            });
+                                content: JSON.stringify({ success: false, error: true, message: `Fatal Loop Error: ${unexpectedErr.message}` }),
+                            };
+                        }
+                    };
+
+                    // ── Execute parallel batch (read-only) ──
+                    if (parallelBatch.length > 0) {
+                        console.log(`[Agent] ⚡ Exécution parallèle de ${parallelBatch.length} outil(s) read-only`);
+                        const parallelResults = await Promise.all(parallelBatch.map(executeAndRecord));
+                        for (const result of parallelResults) {
+                            history.push(result);
+                            console.log(`[Agent] ✅ Résultat ${result.name} traité (parallel)`);
+                        }
+                    }
+
+                    // ── Execute sequential queue (mutating) ──
+                    for (const toolCall of sequentialQueue) {
+                        const result = await executeAndRecord(toolCall);
+                        history.push(result);
+                        console.log(`[Agent] ✅ Résultat ${result.name} traité (sequential, Dual Render: checked)`);
+
+                        // UX Agentique: Petit feedback visuel si c'est long
+                        if (iterations > 1) {
+                            await this.transport.setPresence(chatId, 'composing');
                         }
                     }
 
@@ -1308,7 +1388,7 @@ export class BotCore {
                     // [CoT] Détection pensée-seulement : si le contenu est uniquement des tags <thought>,
                     // forcer une itération supplémentaire pour obtenir une vraie réponse.
                     const contentStr = response.content || '';
-                    const thoughtOnlyCheck = contentStr.replace(/<(think|thought|thinking)>[\s\S]*?<\/\1>/gi, '').trim();
+                    const thoughtOnlyCheck = contentStr.replace(/<(think|thought|thinking)>([\s\S]*?)(?:<\/\1>|$)/gi, '').trim();
 
                     if (!thoughtOnlyCheck && contentStr.length > 0 && iterations < MAX_ITERATIONS) {
                         console.log('[CoT] ⚠️ Réponse contenant uniquement des pensées. Relance pour obtenir une réponse utilisateur.');
@@ -1336,8 +1416,10 @@ export class BotCore {
 
             // [AGENTIC] Fallback si l'IA n'a rien répondu mais a bouclé
             if (!finalResponse && iterations > 0) {
-                finalResponse = "J'ai terminé ma réflexion, mais je n'ai pas trouvé de réponse textuelle appropriée.";
-                console.log('[Agent] ⚠️ Réponse vide après réflexion, application du fallback.');
+                // Si l'IA n'a plus rien à dire après avoir utilisé des outils (ex: react_to_message, SLEEP_SCHEDULED),
+                // on convertit cette absence de réponse en action silencieuse pour ne pas envoyer de message d'erreur.
+                finalResponse = '__HIVE_SILENT_7f3a__';
+                console.log('[Agent] 🏁 Réponse vide après exécution d\'outils, conversion en action silencieuse.');
             }
 
             // --- Post-Processing (Commandes Textuelles Fallback) ---
@@ -1416,10 +1498,10 @@ export class BotCore {
 
             // [AGENTIC] Nettoyage de la pensée interne (Invisible pour l'utilisateur)
             // Supporte <think>, <thought>, <thinking> (DeepSeek, Gemini, etc.)
-            const thoughtRegex = /<(think|thought|thinking)>[\s\S]*?<\/\1>/gi;
+            const thoughtRegex = /<(think|thought|thinking)>([\s\S]*?)(?:<\/\1>|$)/gi;
             const thoughts: string[] = [];
             let thoughtMatch: RegExpExecArray | null;
-            const extractRegex = /<(think|thought|thinking)>([\s\S]*?)<\/\1>/gi;
+            const extractRegex = /<(think|thought|thinking)>([\s\S]*?)(?:<\/\1>|$)/gi;
             while ((thoughtMatch = extractRegex.exec(finalResponse)) !== null) {
                 thoughts.push(thoughtMatch[2].trim());
             }
@@ -1459,13 +1541,13 @@ export class BotCore {
 
             if (!finalResponse) return;
 
-            // ── [SILENT TOKEN] Inspiré d'OpenClaw — Supprimer les messages "internes" ──
-            // WHY: Quand l'agent planifie une tâche en background via HIVE.sleepAndWake(),
-            // il répond SILENT_HM pour signaler qu'il n'a rien à dire à l'utilisateur.
-            // On intercepte ce token ici et on n'envoie RIEN sur le canal (WhatsApp/Discord).
-            const SILENT_TOKEN = 'SILENT_HM';
-            if (finalResponse.trim() === SILENT_TOKEN) {
-                console.log('[Core] 🤫 SILENT_HM intercepté — aucun message envoyé à l\'utilisateur.');
+            // ── [SILENT TOKEN] Supprimer les messages "internes" ──
+            // WHY: Token namespaced + hash suffix pour éviter les collisions accidentelles.
+            // Vérifie strict equality ET contains (si le LLM enrobe le token dans du texte).
+            const SILENT_TOKEN = '__HIVE_SILENT_7f3a__';
+            const trimmed = finalResponse.trim();
+            if (trimmed === SILENT_TOKEN || trimmed.includes(SILENT_TOKEN)) {
+                console.log('[Core] 🤫 SILENT token intercepté — aucun message envoyé à l\'utilisateur.');
                 // Stocker quand même en mémoire pour la cohérence de l'historique
                 await workingMemory.addMessage(chatId, 'assistant', '[ACTION_SILENCIEUSE]');
                 clearTimeout(feedbackTimeoutId ?? undefined);
@@ -1683,12 +1765,12 @@ export class BotCore {
         const summaryPrompt = [
             {
                 role: 'user',
-                content: `Tu es le gestionnaire de mémoire de HIVE-MIND.
-Voici l'historique d'une longue session de travail d'un agent IA.
-Fais un résumé TRÈS DENSE et TECHNIQUE de ce qui s'est passé.
-Concentre-toi UNIQUEMENT sur :
-1. L'objectif initial de l'utilisateur.
-2. Les fichiers modifiés ou lus, et les commandes exécutées.
+                content: `You are the memory manager of HIVE-MIND.
+Here is the history of a long working session of an AI agent.
+Make a VERY DENSE and TECHNICAL summary of what happened.
+Focus ONLY on:
+1. The user's initial objective.
+2. The modified or read files, and executed commands.
 3. Les erreurs rencontrées et les solutions trouvées.
 4. L'état actuel exact (ce qu'il reste à faire).
 
@@ -1707,11 +1789,15 @@ ${textToCompress}`
             const summary = response.content;
             console.log(`[ContextManager] ✅ Historique compressé (${currentSize} → résumé)`);
 
-            // Reconstruire : System → Faux rappel user → Résumé assistant → Derniers échanges
+            // WHY: On injecte le résumé dans le system prompt (pas dans l'historique)
+            // pour ne pas fabriquer de faux échanges que le LLM pourrait citer.
+            const enrichedSystemPrompt = {
+                ...systemPrompt,
+                content: `${systemPrompt.content}\n\n<session_memory_summary>\nRésumé condensé de la session en cours (contexte compressé automatiquement) :\n${summary}\n</session_memory_summary>`
+            };
+
             return [
-                systemPrompt,
-                { role: 'user', content: 'Nous avons travaillé sur une longue tâche. Rappelle-moi où nous en sommes pour continuer.' },
-                { role: 'assistant', content: `Voici le résumé condensé de notre progression :\n\n${summary}` },
+                enrichedSystemPrompt,
                 ...lastInteraction
             ];
         } catch (e: any) {
@@ -1793,6 +1879,17 @@ ${textToCompress}`
 
                     // On ne change PAS le status DB ici pour garder la persistance "active" 
                     // tant que la tâche n'est pas finie ou annulée.
+
+                    // WHY: Rehydrating state is not enough. The bot will wait silently for user input.
+                    // We must synthesize an internal message to trigger the AI loop with the correct context.
+                    this._handleMessage({
+                        chatId: action.chatId,
+                        sender: 'system_recovery',
+                        senderName: 'SYSTEM',
+                        isGroup: action.chatId.endsWith('@g.us'),
+                        text: `[SYSTEM_RESUME] Tâche interrompue restaurée. Objectif initial: "${action.params?.goal || action.goal}". Reprends l'exécution de ce plan là où il s'est arrêté. Ne demande pas de permission, exécute la prochaine étape.`,
+                        sourceChannel: 'system'
+                    } as any).catch(e => console.error('[Core] ❌ Erreur reprise automatique ReAct:', e));
                 }
             } else {
                 console.log('[Core] ✅ Aucune tâche interrompue.');
@@ -1967,7 +2064,7 @@ ${textToCompress}`
         const response = await providerRouter.chat([
             {
                 role: 'system',
-                content: `Tu es ${persona.name}. Formule une réponse naturelle basée sur ce résultat: ${result}. Sois concis.`
+                content: `You are ${persona.name}. Formulate a natural response based on this result: ${result}. Be concise.`
             },
             { role: 'user', content: originalMessage }
         ], {
@@ -1989,8 +2086,11 @@ ${textToCompress}`
      * Délai naturel pour simuler la frappe
      */
     async _naturalDelay(ms: number = 1500) {
-        const delay = 1000 + Math.random() * 1500;
-        await new Promise(r => setTimeout(r, delay));
+        // WHY: Use the caller's requested delay as base, add ±30% jitter for natural feel.
+        // Old code ignored `ms` entirely and always used 1000-2500ms.
+        const jitter = ms * 0.3;
+        const delay = ms + (Math.random() * jitter * 2 - jitter); // ms ± 30%
+        await new Promise(r => setTimeout(r, Math.max(100, delay)));
     }
 
     /**
@@ -2268,7 +2368,7 @@ ${textToCompress}`
         const response = await providerRouter.chat([
             {
                 role: 'system',
-                content: `Tu es ${persona.name}. Interviens de façon naturelle sur ce sujet qui t'intéresse. Sois bref et apporte de la valeur.`
+                content: `You are ${persona.name}. Intervene naturally on this topic that interests you. Be brief and bring value.`
             },
             { role: 'user', content: text }
         ]);

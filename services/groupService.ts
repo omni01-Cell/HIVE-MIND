@@ -200,8 +200,8 @@ export const groupService = {
             }
 
             // CHECK 2: Vérifier si le groupe existe VRAIMENT dans la DB
-            if (this.supabase) {
-                const { count, error } = await this.supabase
+            if (supabase) {
+                const { count, error } = await supabase
                     .from('groups')
                     .select('jid', { count: 'exact', head: true })
                     .eq('jid', groupJid);

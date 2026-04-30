@@ -25,7 +25,39 @@ import { extractNumericId } from '../../utils/jidHelper.js';
  * Service de mapping d'identité WhatsApp
  * Gère la correspondance entre LID (device) et JID (téléphone)
  */
+// WHY: In-memory reverse cache (JID → LID) for synchronous hot-path access.
+// _isBotMentioned is called on every group message and cannot afford async Redis lookups.
+const jidToLidCache = new Map<string, string>();
+
 export const IdentityMap = {
+    /**
+     * Synchronous reverse lookup: given a phone JID, returns the known LID (if any).
+     * WHY: Modern WhatsApp puts the LID (not the phone JID) in contextInfo.mentionedJid
+     * and contextInfo.participant. The bot needs to compare its own LID against those.
+     * Returns null if no mapping is known.
+     */
+    getLidForJid(jid: string | null | undefined): string | null {
+        if (!jid) return null;
+        const cleaned = jid.replace(/:.*@/, '@');
+        return jidToLidCache.get(cleaned) || null;
+    },
+
+    /**
+     * Async hydration: loads a JID→LID mapping from Redis into the in-memory cache.
+     * Call once at startup for the bot's own JID to ensure getLidForJid works
+     * synchronously from the very first message.
+     */
+    async hydrateLidCache(jid: string): Promise<void> {
+        if (!jid || !redis) return;
+        const cleaned = jid.replace(/:.*@/, '@');
+        if (jidToLidCache.has(cleaned)) return; // Already hydrated
+        const numericId = extractNumericId(jid);
+        const reverseKey = `map:jid2lid:${numericId}`;
+        const lid = await redis.get(reverseKey);
+        if (lid) {
+            jidToLidCache.set(cleaned, lid);
+        }
+    },
     /**
      * Résout un identifiant vers le JID canonique (clé primaire DB)
      * 
@@ -108,8 +140,14 @@ export const IdentityMap = {
 
         if (!phoneJid || !deviceLid) return;
 
+        // Forward mapping: LID → JID (existing)
         const lidKey = `map:lid:${extractNumericId(deviceLid)}`;
         await redis?.set(lidKey, phoneJid);
+
+        // Reverse mapping: JID → LID (new — for bot self-identification in @mentions)
+        const reverseKey = `map:jid2lid:${extractNumericId(phoneJid)}`;
+        await redis?.set(reverseKey, deviceLid, { EX: 86400 * 30 });
+        jidToLidCache.set(phoneJid.replace(/:.*@/, '@'), deviceLid);
 
         if (supabase) {
             try {

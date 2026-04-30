@@ -47,14 +47,28 @@ export class SemanticMemory {
         return;
       }
 
-      // 1. Vectorization
+      // 1. Deduplication: Prevent storing exact duplicates (solves retry/reconnection duplication)
+      const { data: existing } = await this.supabase
+        .from('memories')
+        .select('id')
+        .eq('context_id', resolved.context_id)
+        .eq('content', content)
+        .eq('role', role)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        this.logger?.debug('memory', `Memory already exists for ${chatId}, skipping duplicate.`);
+        return;
+      }
+
+      // 2. Vectorization
       const vector = await this.embeddings.embed(content);
       if (!vector) {
         this.logger?.warn('[Memory] Vectorization failed, memory not stored.');
         return;
       }
 
-      // 2. Database Storage
+      // 3. Database Storage
       const { error } = await this.supabase
         .from('memories')
         .insert({

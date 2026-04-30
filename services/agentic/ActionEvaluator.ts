@@ -147,6 +147,9 @@ Score:`;
      */
     async _detectFeedback(chatId: any, actionTimestamp: any) {
         try {
+            // Attend la fenêtre de feedback pour laisser le temps à l'utilisateur de réagir
+            await new Promise(resolve => setTimeout(resolve, this.feedbackWindow));
+
             const { data: messages } = await supabase
                 .from('memories')
                 .select('content, created_at')

@@ -8,8 +8,10 @@
 import BashTool from './BashTool.js';
 import FileEditTool from './FileEditTool.js';
 import SearchTools from './SearchTools.js';
+import ASTTools from './ASTTools.js';
 import SystemScratchpadTool from './SystemScratchpadTool.js';
 import SpawnSubAgentTool from './SpawnSubAgentTool.js';
+import BrowserTools from './BrowserTools.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MATCHERS TEXTUELS — Commandes admin rapides (sans LLM)
@@ -37,34 +39,32 @@ const AGGREGATED_TOOL_DEFINITIONS = [
     ...BashTool.toolDefinitions,
     ...FileEditTool.toolDefinitions,
     ...SearchTools.toolDefinitions,
+    ...ASTTools.toolDefinitions,
     ...SystemScratchpadTool.toolDefinitions,
     ...SpawnSubAgentTool.toolDefinitions,
+    ...BrowserTools.toolDefinitions,
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MAP outil → sous-module (routing O(1))
 // ──────────────────────────────────────────────────────────────────────────────
-const TOOL_ROUTER: Record<string, typeof BashTool | typeof FileEditTool | typeof SearchTools | typeof SystemScratchpadTool | typeof SpawnSubAgentTool> = {};
+const TOOL_ROUTER: Record<string, any> = {};
 
-for (const toolDef of BashTool.toolDefinitions) {
-    const toolName = toolDef.function?.name;
-    if (toolName) TOOL_ROUTER[toolName] = BashTool;
-}
-for (const toolDef of FileEditTool.toolDefinitions) {
-    const toolName = toolDef.function?.name;
-    if (toolName) TOOL_ROUTER[toolName] = FileEditTool;
-}
-for (const toolDef of SearchTools.toolDefinitions) {
-    const toolName = toolDef.function?.name;
-    if (toolName) TOOL_ROUTER[toolName] = SearchTools;
-}
-for (const toolDef of SystemScratchpadTool.toolDefinitions) {
-    const toolName = toolDef.function?.name;
-    if (toolName) TOOL_ROUTER[toolName] = SystemScratchpadTool;
-}
-for (const toolDef of SpawnSubAgentTool.toolDefinitions) {
-    const toolName = toolDef.function?.name;
-    if (toolName) TOOL_ROUTER[toolName] = SpawnSubAgentTool;
+const tools = [
+    BashTool, 
+    FileEditTool, 
+    SearchTools, 
+    ASTTools, 
+    SystemScratchpadTool, 
+    SpawnSubAgentTool,
+    BrowserTools
+];
+
+for (const toolModule of tools) {
+    for (const toolDef of toolModule.toolDefinitions) {
+        const toolName = toolDef.function?.name;
+        if (toolName) TOOL_ROUTER[toolName] = toolModule;
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

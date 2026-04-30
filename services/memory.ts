@@ -10,13 +10,13 @@ let container: any = null;
 // Fonction pour obtenir l'instance singleton
 async function getEmbeddingsService() {
     if (embeddings) return embeddings;
-    
+
     try {
         if (!container) {
             const { container: serviceContainer } = await import('../core/ServiceContainer.js');
             container = serviceContainer;
         }
-        
+
         if (container.has('embeddings')) {
             embeddings = container.get('embeddings');
             console.log('[Memory] ✅ EmbeddingsService chargé depuis container (singleton)');
@@ -26,7 +26,7 @@ async function getEmbeddingsService() {
     } catch (e: any) {
         console.error('[Memory] Erreur chargement EmbeddingsService depuis container:', e.message);
     }
-    
+
     return embeddings;
 }
 
@@ -76,10 +76,21 @@ export const semanticMemory = {
             storedAt: new Date().toISOString()
         };
 
+        let contextId = chatId;
+        try {
+            const { db } = await import('./supabase.js');
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (resolved) {
+                contextId = resolved.context_id;
+            }
+        } catch (e: any) {
+            console.warn('[Memory] Résolution context_id échouée:', e.message);
+        }
+
         const { error } = await supabase
             .from('memories')
             .insert({
-                chat_id: chatId,
+                context_id: contextId,
                 content: content.substring(0, 2000),
                 role,
                 embedding: vector,
@@ -446,4 +457,164 @@ export const factsMemory = {
     }
 };
 
-export default { semanticMemory, factsMemory };
+/**
+ * Service de Workspace Agentique (Epistemic Memory)
+ */
+export const workspaceMemory = {
+    async write(chatId: any, key: any, content: any, tags: any[] = []) {
+        if (!supabase) return false;
+
+        let contextId = chatId;
+        try {
+            const { db } = await import('./supabase.js');
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (resolved) contextId = resolved.context_id;
+        } catch (e: any) {
+            console.warn('[Workspace] Résolution context_id échouée:', e.message);
+        }
+
+        const embeddings = await getEmbeddingsService();
+        let vector = null;
+        if (embeddings) {
+            vector = await embeddings.embed(content, 'RETRIEVAL_DOCUMENT');
+        }
+
+        const { error } = await supabase
+            .from('agent_workspace')
+            .upsert({
+                context_id: contextId,
+                key,
+                content,
+                tags,
+                embedding: vector,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'context_id,key' });
+
+        if (error) {
+            console.error('[Workspace] Erreur write:', error.message);
+            return false;
+        }
+        return true;
+    },
+
+    async read(chatId: any, key: any) {
+        if (!supabase) return null;
+
+        let contextId = chatId;
+        try {
+            const { db } = await import('./supabase.js');
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (resolved) contextId = resolved.context_id;
+        } catch (e: any) { }
+
+        const { data, error } = await supabase
+            .from('agent_workspace')
+            .select('id, content, tags, access_count, variance')
+            .eq('context_id', contextId)
+            .eq('key', key)
+            .single();
+
+        if (error || !data) return null;
+        // Incrémente access_count (dynamiques de Langevin)
+        try {
+            await supabase.rpc('increment_workspace_access', { match_id: data.id });
+        } catch (e) {
+            // Fallback manuel si la RPC n'existe pas
+            await supabase.from('agent_workspace')
+                .update({ access_count: data.access_count + 1, last_accessed: new Date().toISOString() })
+                .eq('context_id', contextId).eq('key', key);
+        }
+
+        return data;
+    },
+
+    async search(chatId: any, query: any, tags: any[] = []) {
+        if (!supabase) return [];
+
+        let contextId = chatId;
+        try {
+            const { db } = await import('./supabase.js');
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (resolved) contextId = resolved.context_id;
+        } catch (e: any) { }
+
+        const embeddings = await getEmbeddingsService();
+        if (!embeddings) return [];
+
+        const vector = await embeddings.embed(query, 'RETRIEVAL_QUERY');
+        if (!vector) return [];
+
+        let { data, error } = await supabase.rpc('match_workspace', {
+            query_embedding: vector,
+            match_threshold: 0.6,
+            match_count: 5,
+            match_context_id: contextId
+        });
+
+        if (error) {
+            console.error('[Workspace] Erreur search:', error.message);
+            return [];
+        }
+
+        // Filtrage optionnel par tag
+        if (tags && tags.length > 0 && data) {
+            data = data.filter((item: any) => tags.some(tag => item.tags?.includes(tag)));
+        }
+
+        return data || [];
+    },
+
+    async delete(chatId: any, key: any) {
+        if (!supabase) return false;
+
+        let contextId = chatId;
+        try {
+            const { db } = await import('./supabase.js');
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (resolved) contextId = resolved.context_id;
+        } catch (e: any) { }
+
+        const { error } = await supabase
+            .from('agent_workspace')
+            .delete()
+            .eq('context_id', contextId)
+            .eq('key', key);
+
+        if (error) {
+            console.error('[Workspace] Erreur delete:', error.message);
+            return false;
+        }
+
+        // Cleanup associated reminders to prevent orphaned triggers
+        await supabase
+            .from('reminders')
+            .delete()
+            .eq('context_id', contextId)
+            .like('message', `[WS: ${key}]%`)
+            .eq('sent', false);
+
+        return true;
+    },
+
+    async getKeys(chatId: any) {
+        if (!supabase) return [];
+
+        let contextId = chatId;
+        try {
+            const { db } = await import('./supabase.js');
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            if (resolved) contextId = resolved.context_id;
+        } catch (e: any) { }
+
+        const { data, error } = await supabase
+            .from('agent_workspace')
+            .select('key, tags, updated_at')
+            .eq('context_id', contextId)
+            .order('updated_at', { ascending: false });
+
+        if (error) return [];
+        return data || [];
+    }
+};
+
+export default { semanticMemory, factsMemory, workspaceMemory };

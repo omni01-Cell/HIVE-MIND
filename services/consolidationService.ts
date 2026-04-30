@@ -6,12 +6,20 @@ import { semanticMemory } from './memory.js';
 import { knowledgeWeaver } from './knowledgeWeaver.js';
 import { providerRouter } from '../providers/index.js';
 
+const consolidationLocks = new Set();
+
 export const consolidationService = {
     /**
      * Consolide la mémoire à court terme d'un chat précis
      * @param {string} chatId 
      */
     async consolidate(chatId: any) {
+        if (consolidationLocks.has(chatId)) {
+            console.log(`[Consolidation] ⏳ Consolidation déjà en cours pour ${chatId}, sautée.`);
+            return;
+        }
+        consolidationLocks.add(chatId);
+
         try {
             // 1. Récupérer le contexte Redis
             const context = await workingMemory.getContext(chatId);
@@ -64,6 +72,8 @@ Format : Un paragraphe court et percutant.`;
 
         } catch (error: any) {
             console.error('[Consolidation] Erreur :', error.message);
+        } finally {
+            consolidationLocks.delete(chatId);
         }
     },
 

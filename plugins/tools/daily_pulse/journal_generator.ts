@@ -47,7 +47,7 @@ export const journalGenerator = {
 
         // 3. Prompt "Radio Host"
         const prompt = `
-Tu es l'animateur radio du groupe WhatsApp. Ta mission : résumer les dernières 24h en 45 secondes MAX.
+You are the WhatsApp group radio host. Your mission: summarize the last 24h in 45 seconds MAX.
 Ton style : Ironique, vif, dynamique, un peu taquin mais bienveillant.
 Tu DOIS citer les participants actifs.
 

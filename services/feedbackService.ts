@@ -30,19 +30,28 @@ export const feedbackService = {
         try {
             // 1. Mettre à jour le score du souvenir associé (seulement si c'est une réponse du bot)
             // Note: On utilise un filtre explicite sur le rôle 'assistant' pour éviter de tagguer des messages utilisateurs
-            const { data: memory, error } = await supabase
+            // [FIX] On fait d'abord un select pour ne pas écraser les autres métadonnées (comme les tags)
+            // Et on utilise context_id plutôt que chat_id legacy si possible
+            const { db } = await import('./supabase.js');
+            const resolved = await db.resolveContextFromLegacyId(chatId);
+            
+            const { data: memories, error } = await supabase
                 .from('memories')
-                .update({
-                    metadata: {
-                        feedback: isPositive ? 'positive' : 'negative',
-                        last_reaction: reaction,
-                        msgId: messageId // On réinjecte le msgId pour éviter de l'écraser si le client ne fait pas de merge
-                    }
-                })
-                .eq('chat_id', chatId)
+                .select('id, metadata')
+                .eq('context_id', resolved ? resolved.context_id : chatId)
                 .eq('role', 'assistant')
-                .contains('metadata', { msgId: messageId });
- // Supposant qu'on stocke l'ID message dans metadata
+                .contains('metadata', { msgId: messageId })
+                .limit(1);
+
+            if (memories && memories.length > 0) {
+                const memory = memories[0];
+                const newMetadata = { 
+                    ...memory.metadata, 
+                    feedback: isPositive ? 'positive' : 'negative', 
+                    last_reaction: reaction 
+                };
+                await supabase.from('memories').update({ metadata: newMetadata }).eq('id', memory.id);
+            }
 
             // 2. Loguer l'événement pour le DreamService (Mémoire épisodique)
             await agentMemory.logAction(

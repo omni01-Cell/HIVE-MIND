@@ -97,6 +97,15 @@ export const userService = {
         await IdentityMap.register(jid, lid);
     },
 
+    /**
+     * Synchronous reverse lookup: JID → LID.
+     * WHY: _isBotMentioned needs to compare the bot's JID against LID-based
+     * @mentions that modern WhatsApp sends. Must be synchronous for hot-path.
+     */
+    getLidForJid(jid: string | null | undefined): string | null {
+        return IdentityMap.getLidForJid(jid);
+    },
+
     async resolveLid(identifier: any) {
         return await IdentityMap.resolve(identifier);
     },

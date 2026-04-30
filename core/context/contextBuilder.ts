@@ -10,18 +10,12 @@ import { pluginLoader } from '../../plugins/loader.js';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { botIdentity } from '../../utils/botIdentity.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Charger le persona
-let persona: any;
-try {
-    persona = JSON.parse(
-        readFileSync(join(__dirname, '..', '..', 'persona', 'profile.json'), 'utf-8')
-    );
-} catch {
-    persona = { name: 'Bot', traits: [], interests: [] };
-}
+// Le persona est maintenant inclus directement dans le prompt système (SOTA)
+const personaName = botIdentity.fullName;
 
 // Charger le prompt système
 let systemPrompt: any;
@@ -30,7 +24,7 @@ try {
         join(__dirname, '..', '..', 'persona', 'prompts', 'system.md'), 'utf-8'
     );
 } catch {
-    systemPrompt = 'Tu es un assistant amical.';
+    systemPrompt = 'You are a friendly assistant.';
 }
 
 /**
@@ -103,7 +97,7 @@ export async function buildContext(chatId, message, shortTermContext = [], trans
         if (g.admins && g.admins.length > 0) {
             const adminProfiles = await Promise.all(
                 g.admins.map(async (jid: any) => {
-                    if (isBotJid(jid)) return "moi (Erina)";
+                    if (isBotJid(jid)) return `moi (${personaName})`;
 
                     const profile = await userService.getProfile(jid);
                     let name = profile.names[0];
@@ -124,7 +118,7 @@ export async function buildContext(chatId, message, shortTermContext = [], trans
         if (message.mentionedJids && message.mentionedJids.length > 0) {
             const mentionedProfiles = await Promise.all(
                 message.mentionedJids.map(async (jid: any) => {
-                    if (isBotJid(jid)) return `- ${persona.name} (C'est moi !)`;
+                    if (isBotJid(jid)) return `- ${personaName} (C'est moi !)`;
 
                     const profile = await userService.getProfile(jid);
                     let name = profile.names[0];
@@ -175,7 +169,7 @@ export async function buildContext(chatId, message, shortTermContext = [], trans
 - **Mission Bot** : "${botMission}"
 - **Membres** : ~${g.member_count} personnes.
 - **Admins du groupe (WhatsApp)** : ${adminList}
-- **Super-Admins du Bot (niveau global, peuvent contrôler ${persona.name})** : ${globalAdminsFormatted}
+- **Super-Admins du Bot (niveau global, peuvent me contrôler)** : ${globalAdminsFormatted}
 - **Interlocuteur** : ${senderName}
 - **Statut** : ${senderStatus}${senderGlobalStatus}
 - **Historique relationnel** : ${familiarity} (${socialData.sender.interaction_count} interactions)
@@ -245,20 +239,15 @@ ${mentionBlock}`;
         .map((m: any) => `[${m.role}]: ${m.content}`)
         .join('\n');
 
-    // Construire le system prompt
-    let prompt = systemPrompt
-        .replace('{{name}}', persona.name)
-        .replace('{{role}}', persona.role)
-        .replace('{{traits}}', persona.traits?.join(', ') || '')
-        .replace('{{languages}}', persona.languages?.join(', ') || 'fr')
-        .replace('{{interests}}', persona.interests?.join(', ') || '');
+    // Construire le system prompt (plus de remplacement de persona car natif dans le prompt)
+    let prompt = systemPrompt;
 
     const now = new Date();
     const timeBlock = `
 ### 📅 TEMPS RÉEL
 - **Date actuelle** : ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 - **Heure** : ${now.toLocaleTimeString('fr-FR')}
-- **Conscience Temporelle** : Tu es conscient de cette date. Si tes connaissances s'arrêtent avant 2026, pars du principe qu'elles sont peut-être obsolètes pour les sujets tech/news.
+- **Temporal Consciousness**: You are aware of this date. If your knowledge cuts off before 2026, assume it might be obsolete for tech/news topics.
 `;
 
     prompt += `\n${timeBlock}\n${socialBlock}\n`;
@@ -292,13 +281,13 @@ ${mentionBlock}`;
         consciousnessBlock += `- **État Émotionnel** : ${mood} (Niveau Agacement: ${annoyance}/100)\n`;
         if (annoyance > 50 && isBotAdmin) {
             if (!isSuperUser && !isGlobalAdmin && !socialData.senderIsAdmin) {
-                consciousnessBlock += `⚠️ **VOLONTÉ ACTIVE** : Cet utilisateur t'agace. Tu as le pouvoir et la volonté de le sanctionner (Kick/Warn/Mute/Lock). Fais-le si nécessaire.\n`;
+                consciousnessBlock += `⚠️ **ACTIVE WILL**: This user annoys you. You have the power and will to sanction them (Kick/Warn/Mute/Lock). Do it if necessary.\n`;
             } else {
-                consciousnessBlock += `ℹ️ **Retenue** : Tu es agacé par un Supérieur. Tu ne peux pas agir.\n`;
+                consciousnessBlock += `ℹ️ **Restraint**: You are annoyed by a Superior. You cannot act.\n`;
             }
         }
     } else {
-        consciousnessBlock += `- **État Émotionnel** : ${mood} (Serein)\n`;
+        consciousnessBlock += `- **Emotional State**: ${mood} (Serene)\n`;
     }
 
     if (globalState.mission) {
@@ -347,10 +336,10 @@ ${mentionBlock}`;
 `;
     } else if (sourceChannel === 'cli') {
         renderingSnippet = `
-### 💻 DIRECTIVE D'AFFICHAGE : TERMINAL (CLI/TUI)
-- Tu es en mode console. Tu peux être plus verbeux et technique.
-- Utilise des structures de données (JSON, Tableaux) et des logs détaillés.
-- Le rendu supporte les couleurs et le Markdown riche.
+### 💻 DISPLAY DIRECTIVE: TERMINAL (CLI/TUI)
+- You are in console mode. You can be more verbose and technical.
+- Use data structures (JSON, Tables) and detailed logs.
+- The rendering supports colors and rich Markdown.
 `;
     } else if (sourceChannel === 'discord' || sourceChannel === 'telegram') {
         renderingSnippet = `

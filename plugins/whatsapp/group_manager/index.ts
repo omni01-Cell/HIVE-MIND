@@ -24,7 +24,7 @@ export default {
         {
             // Pattern BAN: [ban:@xxx], ban @xxx, **ban**, etc.
             pattern: /\bban\b/i,
-            handler: 'gm_ban_user',
+            handler: 'whatsapp_ban_user',
             description: 'Bannir un utilisateur mentionné',
             extractArgs: (match, message, text) => {
                 // On a besoin des mentions du message original
@@ -45,7 +45,7 @@ export default {
         {
             // Pattern TAGALL: tagall, tag all, [tagall], tag:all
             pattern: /\[?tag[:\s_-]*all\]?/i,
-            handler: 'gm_tagall',
+            handler: 'whatsapp_tagall',
             description: 'Taguer tous les membres du groupe',
             extractArgs: (match, message, text) => {
                 // Extraire la raison après "tagall"
@@ -56,7 +56,7 @@ export default {
         {
             // Pattern ADD: [add:123456789]
             pattern: /\[add[:\s]+(\d+)\]/i,
-            handler: 'gm_add_user',
+            handler: 'whatsapp_add_user',
             description: 'Ajouter un utilisateur par numéro de téléphone',
             extractArgs: (match: any) => {
                 return { phone_number: match[1] };
@@ -69,7 +69,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_filter_add',
+                name: 'whatsapp_filter_add',
                 description: 'Ajoute un filtre de mot-clé au groupe. ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -95,7 +95,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_filter_list',
+                name: 'whatsapp_filter_list',
                 description: 'Liste les filtres actifs du groupe.',
                 parameters: { type: 'object', properties: {} }
             }
@@ -103,7 +103,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_filter_remove',
+                name: 'whatsapp_filter_remove',
                 description: 'Supprime un filtre par son numéro. ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -117,7 +117,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_whitelist_add',
+                name: 'whatsapp_whitelist_add',
                 description: 'Ajoute un utilisateur à la whitelist (exempté du filtrage). ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -131,7 +131,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_config',
+                name: 'whatsapp_config',
                 description: 'Configure les paramètres du groupe (warnings, auto-ban). ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -153,7 +153,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_warnings_reset',
+                name: 'whatsapp_warnings_reset',
                 description: 'Réinitialise les warnings d\'un utilisateur. ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -168,7 +168,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_tagall',
+                name: 'whatsapp_tagall',
                 description: 'Mentionne tous les membres du groupe. BOT ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -179,7 +179,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_ban_user',
+                name: 'whatsapp_ban_user',
                 description: 'Bannit un utilisateur. ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -194,7 +194,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_add_user',
+                name: 'whatsapp_add_user',
                 description: 'Génère un lien d\'invitation pour ajouter un membre (Contournement limitation WhatsApp).',
                 parameters: { type: 'object', properties: {} }
             }
@@ -202,7 +202,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_mute_user',
+                name: 'whatsapp_mute_user',
                 description: 'Mute temporairement un utilisateur (le bot ignorera ses messages pendant X minutes). ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -218,7 +218,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_mission',
+                name: 'whatsapp_mission',
                 description: 'Affiche la mission du bot dans ce groupe.',
                 parameters: { type: 'object', properties: {} }
             }
@@ -226,7 +226,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_setmission',
+                name: 'whatsapp_setmission',
                 description: 'Définit la mission du bot dans ce groupe. ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -241,15 +241,15 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_mygroups',
-                description: 'Liste tous les groupes où tu es admin.',
+                name: 'whatsapp_mygroups',
+                description: 'List all groups where you are admin.',
                 parameters: { type: 'object', properties: {} }
             }
         },
         {
             type: 'function',
             function: {
-                name: 'gm_groupstats',
+                name: 'whatsapp_groupstats',
                 description: 'Affiche les statistiques du groupe actuel.',
                 parameters: { type: 'object', properties: {} }
             }
@@ -258,7 +258,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_unmute_user',
+                name: 'whatsapp_unmute_user',
                 description: 'Retire le mute d\'un utilisateur. ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -272,7 +272,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_promote',
+                name: 'whatsapp_promote',
                 description: 'Promeut un membre au rang d\'administrateur du groupe. BOT ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -286,7 +286,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_demote',
+                name: 'whatsapp_demote',
                 description: 'Retire les droits administrateur d\'un membre. BOT ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -300,7 +300,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_groupinfo',
+                name: 'whatsapp_groupinfo',
                 description: 'Affiche les informations détaillées du groupe (admins, membres, description).',
                 parameters: { type: 'object', properties: {} }
             }
@@ -309,7 +309,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_kick_user',
+                name: 'whatsapp_kick_user',
                 description: 'Expulse un utilisateur (Kick simple sans ban DB). ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -324,7 +324,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_warn_user',
+                name: 'whatsapp_warn_user',
                 description: 'Donne un avertissement officiel à un utilisateur. (Auto-ban au 3ème). ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -339,7 +339,7 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'gm_lock_group',
+                name: 'whatsapp_lock_group',
                 description: 'Verrouille/Déverrouille le groupe (Seuls les admins peuvent parler). ADMIN REQUIS.',
                 parameters: {
                     type: 'object',
@@ -366,9 +366,9 @@ export default {
         // Vérifier que l'utilisateur est admin
         const isAdmin = await transport.isAdmin(chatId, sender);
         // Exception: tagall peut être utilisé par le bot s'il est admin, mais ici on exige que l'user soit admin
-        if (!isAdmin && toolName !== 'gm_filter_list') {
+        if (!isAdmin && toolName !== 'whatsapp_filter_list') {
             // Cas Spécial "Ghost Tag" : Si un non-admin essaie, on réagit juste avec ❌
-            if (toolName === 'gm_tagall') {
+            if (toolName === 'whatsapp_tagall') {
                 await transport.sendReaction(chatId, message.raw.key, '❌');
                 return { success: false, message: 'REFUSÉ: TagAll réservé aux admins.', silent: true };
             }
@@ -377,73 +377,73 @@ export default {
 
         // Dispatcher selon la commande
         switch (toolName) {
-            case 'gm_filter_add':
+            case 'whatsapp_filter_add':
                 return await this._addFilter(chatId, args, sender);
 
-            case 'gm_filter_list':
+            case 'whatsapp_filter_list':
                 return await this._listFilters(chatId);
 
-            case 'gm_filter_remove':
+            case 'whatsapp_filter_remove':
                 return await this._removeFilter(chatId, args.filter_id);
 
-            case 'gm_whitelist_add':
+            case 'whatsapp_whitelist_add':
                 return await this._addWhitelist(chatId, args, sender, message);
 
-            case 'gm_config':
+            case 'whatsapp_config':
                 return await this._configure(chatId, args);
 
-            case 'gm_warnings_reset':
+            case 'whatsapp_warnings_reset':
                 return await this._resetWarnings(chatId, args, message);
 
             // --- NOUVELLES COMMANDES (Fusion Moderation) ---
-            case 'gm_tagall':
+            case 'whatsapp_tagall':
                 await transport.tagAll(chatId, args.reason);
                 return { success: true, message: '📢 Tout le monde a été tagué.' };
 
-            case 'gm_ban_user':
+            case 'whatsapp_ban_user':
                 return await this._banUser(chatId, args, message, transport);
 
-            case 'gm_add_user':
+            case 'whatsapp_add_user':
                 return await this._generateInvite(chatId, transport);
 
-            case 'gm_mute_user':
+            case 'whatsapp_mute_user':
                 return await this._muteUser(chatId, args, message);
 
 
             // --- INTÉGRATION groupService (Phase 2) ---
-            case 'gm_mission':
+            case 'whatsapp_mission':
                 return await this._getMission(chatId);
 
-            case 'gm_setmission':
+            case 'whatsapp_setmission':
                 return await this._setMission(chatId, args, sender);
 
-            case 'gm_mygroups':
+            case 'whatsapp_mygroups':
                 return await this._listMyGroups(sender);
 
-            case 'gm_groupstats':
+            case 'whatsapp_groupstats':
                 return await this._getGroupStats(chatId);
 
             // --- COMMANDES MANQUANTES (Ajoutées) ---
-            case 'gm_unmute_user':
+            case 'whatsapp_unmute_user':
                 return await this._unmuteUser(chatId, args, message);
 
-            case 'gm_promote':
+            case 'whatsapp_promote':
                 return await this._promoteUser(chatId, args, message, transport);
 
-            case 'gm_demote':
+            case 'whatsapp_demote':
                 return await this._demoteUser(chatId, args, message, transport);
 
-            case 'gm_groupinfo':
+            case 'whatsapp_groupinfo':
                 return await this._getGroupInfo(chatId, transport);
 
             // --- ARSENAL SENTINELLE ---
-            case 'gm_kick_user':
+            case 'whatsapp_kick_user':
                 return await this._kickUser(chatId, args, message, transport);
 
-            case 'gm_warn_user':
+            case 'whatsapp_warn_user':
                 return await this._warnUser(chatId, args, message);
 
-            case 'gm_lock_group':
+            case 'whatsapp_lock_group':
                 return await this._lockGroup(chatId, args, transport);
 
             default:
@@ -828,16 +828,16 @@ export default {
                 const keyword = keywordPart.replace(/["']/g, '');
                 const rule = rulePart?.replace(/r[eè]gle:?\s*/i, '').replace(/["']/g, '');
                 
-                return { name: 'gm_filter_add', args: { keyword, rule } };
+                return { name: 'whatsapp_filter_add', args: { keyword, rule } };
             }
-            if (subCmd === 'list') return { name: 'gm_filter_list', args: {} };
+            if (subCmd === 'list') return { name: 'whatsapp_filter_list', args: {} };
         }
 
         // .task config ...
         if (cmd === 'config') {
             if (subCmd === 'warnings') {
                 const value = parseInt(parts[3]);
-                return { name: 'gm_config', args: { action: 'set_warnings', value: isNaN(value) ? 3 : value } };
+                return { name: 'whatsapp_config', args: { action: 'set_warnings', value: isNaN(value) ? 3 : value } };
             }
         }
 
@@ -845,20 +845,20 @@ export default {
         if (cmd === 'enable' || cmd === 'disable') {
             const isEnable = cmd === 'enable';
             if (subCmd === 'auto_ban') {
-                return { name: 'gm_config', args: { action: isEnable ? 'auto_ban_on' : 'auto_ban_off' } };
+                return { name: 'whatsapp_config', args: { action: isEnable ? 'auto_ban_on' : 'auto_ban_off' } };
             }
             if (!subCmd) {
-                return { name: 'gm_config', args: { action: isEnable ? 'enable' : 'disable' } };
+                return { name: 'whatsapp_config', args: { action: isEnable ? 'enable' : 'disable' } };
             }
         }
 
         // .task whitelist ...
-        if (cmd === 'whitelist') return { name: 'gm_whitelist_add', args: {} };
+        if (cmd === 'whitelist') return { name: 'whatsapp_whitelist_add', args: {} };
 
         // .task ban @user [raison]
         if (cmd === 'ban') {
             return {
-                name: 'gm_ban_user',
+                name: 'whatsapp_ban_user',
                 args: {
                     user_jid: null,
                     reason: parts.slice(3).join(' ') || 'Commande .task'
@@ -871,7 +871,7 @@ export default {
             const possibleDuration = parseInt(parts[parts.length - 1]);
             const hasDuration = !isNaN(possibleDuration) && parts.length > 3;
             return {
-                name: 'gm_mute_user',
+                name: 'whatsapp_mute_user',
                 args: {
                     user_jid: null,
                     duration: hasDuration ? possibleDuration : 30
@@ -880,10 +880,10 @@ export default {
         }
 
         // .task unmute @user
-        if (cmd === 'unmute') return { name: 'gm_unmute_user', args: { user_jid: null } };
+        if (cmd === 'unmute') return { name: 'whatsapp_unmute_user', args: { user_jid: null } };
 
         // .task tagall [raison]
-        if (cmd === 'tagall') return { name: 'gm_tagall', args: { reason: parts.slice(2).join(' ') } };
+        if (cmd === 'tagall') return { name: 'whatsapp_tagall', args: { reason: parts.slice(2).join(' ') } };
 
         return null;
     },
@@ -982,13 +982,13 @@ export default {
         // 1. Demander à l'IA d'extraire les actions
         // On utilise le provider configuré pour l'intelligence (Kimi ou Gemini)
 
-        const systemPrompt = `Tu es un assistant d'administration WhatsApp. Ta tâche est d'analyser une "Mission" donnée par un administrateur et de détecter s'il y a des actions IMMÉDIATES à exécuter.
+        const systemPrompt = `You are a WhatsApp administration assistant. Your task is to analyze a "Mission" given by an administrator and detect if there are IMMEDIATE actions to execute.
         
         OUTILS DISPONIBLES :
-        - gm_ban_user(user_jid): Bannir un utilisateur (JID complet requis ou @Tag)
-        - gm_mute_user(user_jid, duration): Mute un utilisateur
-        - gm_filter_add(keyword, severity): Ajouter un filtre anti-spam
-        - gm_groupstats(): Voir les stats
+        - whatsapp_ban_user(user_jid): Bannir un utilisateur (JID complet requis ou @Tag)
+        - whatsapp_mute_user(user_jid, duration): Mute un utilisateur
+        - whatsapp_filter_add(keyword, severity): Ajouter un filtre anti-spam
+        - whatsapp_groupstats(): Voir les stats
         
         Si la mission contient des ordres clairs (ex: "Ban @12345", "Ajoute un filtre 'casino'"), génère un JSON structuré.
         Si la mission est juste descriptive (ex: "Accueillir les gens"), retourne JSON vide.
@@ -996,7 +996,7 @@ export default {
         FORMAT DE RÉPONSE ATTENDU (JSON PUR):
         {
           "actions": [
-            { "tool": "gm_ban_user", "args": { "user_jid": "123456@s.whatsapp.net" } }
+            { "tool": "whatsapp_ban_user", "args": { "user_jid": "123456@s.whatsapp.net" } }
           ]
         }
         
@@ -1025,8 +1025,8 @@ export default {
                 console.log(`[GroupManager] ${plan.actions.length} actions détectées`);
 
                 for (const action of plan.actions) {
-                    // Sécurité : on limite aux outils 'gm_'
-                    if (!action.tool.startsWith('gm_')) continue;
+                    // Sécurité : on limite aux outils 'whatsapp_'
+                    if (!action.tool.startsWith('whatsapp_')) continue;
 
                     results.push(`Exécution : ${action.tool}...`);
 
@@ -1081,7 +1081,7 @@ export default {
 
             return {
                 success: true,
-                message: `👑 **Groupes où tu es admin (${groups.length}):**\n\n${list}`
+                message: `👑 **Groups where you are admin (${groups.length}):**\n\n${list}`
             };
         } catch (error: any) {
             return { success: false, message: `Erreur: ${error.message}` };

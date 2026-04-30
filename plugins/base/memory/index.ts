@@ -2,7 +2,7 @@
 // Plugin de mémorisation de faits persistants (Option C)
 // Permet à l'IA de mémoriser, rappeler et lister des informations sur les utilisateurs
 
-import { factsMemory } from '../../../services/memory.js';
+import { factsMemory, workspaceMemory } from '../../../services/memory.js';
 
 export default {
     name: 'memory',
@@ -78,6 +78,65 @@ export default {
                     required: ['key']
                 }
             }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'workspace_write',
+                description: 'Sauvegarde ou met à jour un document dans ton espace de travail actif (Epistemic Memory). Utilise-le pour planifier, résumer ou maintenir un état persistant.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        key: { type: 'string', description: 'Identifiant unique du document (ex: "plan_migration", "user_profile")' },
+                        content: { type: 'string', description: 'Le contenu complet du document (texte ou JSON)' },
+                        tags: { type: 'array', items: { type: 'string' }, description: 'Tags pour filtrage optionnel (ex: ["plan", "urgent"])' }
+                    },
+                    required: ['key', 'content']
+                }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'workspace_read',
+                description: 'Lit le contenu complet d\'un document spécifique depuis ton espace de travail actif.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        key: { type: 'string', description: 'Identifiant unique du document à lire' }
+                    },
+                    required: ['key']
+                }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'workspace_search',
+                description: 'Recherche sémantiquement dans tous tes documents de travail (Epistemic Memory) pour trouver des concepts similaires.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'La question ou le concept à rechercher' },
+                        tags: { type: 'array', items: { type: 'string' }, description: 'Filtrer par tags spécifiques (optionnel)' }
+                    },
+                    required: ['query']
+                }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'workspace_delete',
+                description: 'Supprime un document obsolète de ton espace de travail.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        key: { type: 'string', description: 'Identifiant unique du document à supprimer' }
+                    },
+                    required: ['key']
+                }
+            }
         }
     ],
 
@@ -106,6 +165,18 @@ export default {
 
             case 'forget_fact':
                 return await this._forgetFact(factsChatId, args.key);
+
+            case 'workspace_write':
+                return await this._workspaceWrite(factsChatId, args.key, args.content, args.tags);
+
+            case 'workspace_read':
+                return await this._workspaceRead(factsChatId, args.key);
+
+            case 'workspace_search':
+                return await this._workspaceSearch(factsChatId, args.query, args.tags);
+
+            case 'workspace_delete':
+                return await this._workspaceDelete(factsChatId, args.key);
 
             default:
                 return { success: false, message: `Outil inconnu: ${toolName}` };
@@ -223,6 +294,67 @@ export default {
                 success: false,
                 message: `Erreur d'oubli: ${error.message}`
             };
+        }
+    },
+
+    /**
+     * Workspace Write
+     */
+    async _workspaceWrite(chatId: any, key: any, content: any, tags: any) {
+        try {
+            const success = await workspaceMemory.write(chatId, key, content, tags || []);
+            if (success) {
+                return { success: true, message: `WORKSPACE_WRITTEN: Document "${key}" sauvegardé avec succès.` };
+            }
+            return { success: false, message: `Erreur lors de la sauvegarde du document "${key}".` };
+        } catch (error: any) {
+            return { success: false, message: `Erreur interne: ${error.message}` };
+        }
+    },
+
+    /**
+     * Workspace Read
+     */
+    async _workspaceRead(chatId: any, key: any) {
+        try {
+            const doc = await workspaceMemory.read(chatId, key);
+            if (doc) {
+                return { success: true, message: `WORKSPACE_DOC [${key}]:\n${doc.content}\n\nTags: ${(doc.tags || []).join(', ')}` };
+            }
+            return { success: false, message: `WORKSPACE_NOT_FOUND: Le document "${key}" n'existe pas.` };
+        } catch (error: any) {
+            return { success: false, message: `Erreur interne: ${error.message}` };
+        }
+    },
+
+    /**
+     * Workspace Search
+     */
+    async _workspaceSearch(chatId: any, query: any, tags: any) {
+        try {
+            const results = await workspaceMemory.search(chatId, query, tags || []);
+            if (results && results.length > 0) {
+                const formatted = results.map((r: any) => `- [${r.key}] (Score: ${Math.round(r.similarity*100)}%): ${r.content.substring(0, 200)}...`).join('\n');
+                return { success: true, message: `WORKSPACE_SEARCH_RESULTS:\n${formatted}` };
+            }
+            return { success: true, message: `WORKSPACE_NO_MATCH: Aucun document trouvé pour "${query}".` };
+        } catch (error: any) {
+            return { success: false, message: `Erreur interne: ${error.message}` };
+        }
+    },
+
+    /**
+     * Workspace Delete
+     */
+    async _workspaceDelete(chatId: any, key: any) {
+        try {
+            const success = await workspaceMemory.delete(chatId, key);
+            if (success) {
+                return { success: true, message: `WORKSPACE_DELETED: Document "${key}" supprimé.` };
+            }
+            return { success: false, message: `Erreur lors de la suppression de "${key}".` };
+        } catch (error: any) {
+            return { success: false, message: `Erreur interne: ${error.message}` };
         }
     }
 };

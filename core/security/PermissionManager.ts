@@ -51,6 +51,7 @@ interface PendingRequest {
 export class PermissionManager {
     private originalCwd: string;
     public sandboxDir: string;
+    public storageDir: string;
     private allowedDirectories: Set<string> = new Set();
     private sessionPermissions: Set<string> = new Set();
 
@@ -81,12 +82,19 @@ export class PermissionManager {
             ? resolve(process.env.SANDBOX_DIR) 
             : resolve(this.originalCwd, 'Sandbox1');
             
+        this.storageDir = process.env.STORAGE_DIR
+            ? resolve(process.env.STORAGE_DIR)
+            : resolve(this.originalCwd, 'storage_hm');
+
         if (!fs.existsSync(this.sandboxDir)) {
             fs.mkdirSync(this.sandboxDir, { recursive: true });
         }
+        if (!fs.existsSync(this.storageDir)) {
+            fs.mkdirSync(this.storageDir, { recursive: true });
+        }
         
         this.allowedDirectories.add(this.sandboxDir);
-        this.allowedDirectories.add(resolve(this.originalCwd, 'storage_hm'));
+        this.allowedDirectories.add(this.storageDir);
     }
 
     // =========================================================================
@@ -113,7 +121,7 @@ export class PermissionManager {
      */
     private getAuthorizedDirectoriesHint(): string {
         const dirs = [...this.allowedDirectories].join('\n  - ');
-        return `\n[SANDBOX HINT] Tu as accès en lecture/écriture UNIQUEMENT aux répertoires suivants :\n  - ${dirs}\n  → storage_hm/ : ton espace de stockage persistant (fichiers, données, notes).\n  → Sandbox1/    : ton espace d'exécution de code et de scripts temporaires.\nRetente l'action en ciblant l'un de ces répertoires.`;
+        return `\n[SANDBOX HINT] Tu as accès en lecture/écriture UNIQUEMENT aux répertoires suivants :\n  - ${dirs}\n  → ${this.storageDir} : ton espace de stockage persistant (fichiers, données, notes).\n  → ${this.sandboxDir} : ton espace d'exécution de code et de scripts temporaires.\nRetente l'action en ciblant l'un de ces répertoires.`;
     }
 
     validateBashCommand(command: string, currentCwd: string = this.originalCwd): { result: boolean; requiresPermission: boolean; reason?: string } {
@@ -351,7 +359,12 @@ export class PermissionManager {
         } catch (error) {
             console.error(`[Permission] ❌ Impossible d'envoyer la demande In-Band:`, error);
             this._cleanup(requestId, numericId);
-            pending.resolve({ granted: false });
+            // WHY: If the request fails (network error, socket disconnected), we MUST provide feedback
+            // to the LLM so it knows why its action was denied, rather than a silent failure.
+            pending.resolve({ 
+                granted: false, 
+                feedback: "Impossible de joindre l'administrateur (erreur réseau/connexion). L'action a été bloquée par sécurité. Veuillez réessayer plus tard." 
+            });
         }
     }
 

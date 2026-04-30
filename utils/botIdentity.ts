@@ -29,23 +29,33 @@ export class BotIdentity {
   private _textVariants: string[] = [];
   private _vocalVariants: string[] = [];
 
-  constructor() {}
+  constructor() { }
 
   /**
-   * Charge le profil depuis profile.json
+   * Extrait le nom dynamiquement depuis system.md
    */
   private _loadProfile(): BotProfile {
     if (this._profile) return this._profile;
 
+    let botName = 'HIVE-MIND'; // Fallback
     try {
-      const profilePath = join(__dirname, '..', 'persona', 'profile.json');
-      this._profile = JSON.parse(readFileSync(profilePath, 'utf-8'));
-    } catch (error: any) {
-      console.warn('[BotIdentity] Erreur lecture profile.json:', error.message);
-      this._profile = { name: 'Bot' };
+      const promptPath = join(__dirname, '..', 'persona', 'prompts', 'system.md');
+      const promptContent = readFileSync(promptPath, 'utf-8');
+
+      // Extraction dynamique via la balise XML <name>
+      const nameMatch = promptContent.match(/<name>([\s\S]*?)<\/name>/);
+      if (nameMatch && nameMatch[1]) {
+        botName = nameMatch[1].trim();
+      }
+    } catch (e) {
+      console.warn('[BotIdentity] Erreur lecture system.md pour extraire le nom:', e);
     }
 
-    return this._profile!;
+    this._profile = {
+      name: botName
+    };
+
+    return this._profile;
   }
 
   /**

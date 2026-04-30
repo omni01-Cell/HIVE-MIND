@@ -183,7 +183,7 @@ Parameters: ${JSON.stringify(execution.params).substring(0, 200)}
 
 <recent_history>
 Last 5 actions:
-${history.slice(-5).map((h: any) => `- ${h.tool}: ${h.result_summary || 'N/A'} (${h.success ? 'success' : 'fail'})`).join('\\n')}
+${history.slice(-5).map((h: any) => `- ${h.tool_name || h.tool}: ${h.result_summary || h.error_message || 'N/A'} (${(h.status === 'success' || h.success) ? 'success' : 'fail'})`).join('\n')}
 </recent_history>
 
 <detection_criteria>

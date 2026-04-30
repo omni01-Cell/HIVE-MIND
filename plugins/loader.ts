@@ -249,7 +249,7 @@ class PluginLoader {
      * 
      * @example
      * const cmd = pluginLoader.findTextHandler("[ban:@user]", message);
-     * // { name: 'gm_ban_user', args: { user_jid: '123@s.whatsapp.net' } }
+     * // { name: 'whatsapp_ban_user', args: { user_jid: '123@s.whatsapp.net' } }
      */
     findTextHandler(text: any, message: any = {}) {
         if (!text) return null;
@@ -352,16 +352,29 @@ class PluginLoader {
             }
 
             if (!data || data.length === 0) {
-                console.warn('[PluginLoader] Aucun outil trouvé par RAG, fallback');
-                return this.toolDefinitions.slice(0, fallbackLimit);
+                console.warn('[PluginLoader] Aucun outil trouvé par RAG, fallback vers outils de base');
+                const SAFE_FALLBACK_TOOLS = [
+                    'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
+                    'execute_bash_command', 'edit_file', 'list_directory', 'grep_search', 'code_execution',
+                    'google_ai_search', 'read_file'
+                ];
+                return this.toolDefinitions.filter((t: any) => 
+                    t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name)
+                );
             }
 
             // 3. Fusionner avec les CORE TOOLS (Outils toujours disponibles)
-            let CORE_TOOLS = ['get_my_capabilities', 'send_message', 'send_file', 'react_to_message', 'use_tool'];
+            let CORE_TOOLS = [
+                'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
+                'code_execution',
+                'get_file_skeleton', 'get_function', 'edit_file', 'read_file',
+                'workspace_read', 'workspace_write', 'workspace_search', 'workspace_delete',
+                'google_ai_search'
+            ];
 
-            // [SENTIENCE] Si l'IA est énervée, on arme le système
+            // [SENTIENCE] Si l'IA est énervée, on arme le système (avec les outils renommés)
             if (forceModeration) {
-                CORE_TOOLS.push('gm_ban_user', 'gm_kick_user', 'gm_mute_user', 'gm_warn_user', 'gm_tagall');
+                CORE_TOOLS.push('whatsapp_ban_user', 'whatsapp_kick_user', 'whatsapp_mute_user', 'whatsapp_warn_user', 'whatsapp_tagall');
             }
 
             const coreToolDefs = this.toolDefinitions.filter((t: any) =>
@@ -386,17 +399,18 @@ class PluginLoader {
 
         } catch (error: any) {
             console.error('[PluginLoader] Erreur getRelevantTools:', error.message);
-            // Fallback: Core Tools + Premiers outils
-            const CORE_TOOLS = ['get_my_capabilities', 'send_message', 'send_file', 'react_to_message'];
-            const coreToolDefs = this.toolDefinitions.filter((t: any) => t.function && CORE_TOOLS.includes(t.function.name));
-            const fallbackTools = this.toolDefinitions.slice(0, fallbackLimit);
-
-            // Merge simple
-            const merged = [...coreToolDefs];
-            for (const t of fallbackTools) {
-                if (!merged.find((m: any) => m.function.name === t.function.name)) merged.push(t);
-            }
-            return merged;
+            // Fallback: Core Tools + Safe Tools (Pas de slice arbitraire)
+            const SAFE_FALLBACK_TOOLS = [
+                'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
+                'execute_bash_command', 'edit_file', 'list_directory', 'grep_search', 'code_execution',
+                'google_ai_search', 'read_file'
+            ];
+            
+            const fallbackTools = this.toolDefinitions.filter((t: any) => 
+                t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name)
+            );
+            
+            return fallbackTools;
         }
     }
 

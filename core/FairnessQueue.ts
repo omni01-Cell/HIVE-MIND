@@ -51,57 +51,47 @@ export class FairnessQueue {
     dequeue() {
         if (this.chatIds.length === 0) return null;
 
-        // Snapshot du tableau pour éviter les problèmes de modification pendant itération
-        const chatIdsSnapshot = [...this.chatIds];
-        let startIndex = this.currentIndex;
-        
-        // Parcourir tous les chats à partir de l'index courant
-        for (let i = 0; i < chatIdsSnapshot.length; i++) {
-            // Calculer l'index circulaire
-            const actualIndex = (startIndex + i) % chatIdsSnapshot.length;
-            const chatId = chatIdsSnapshot[actualIndex];
-            
-            // Vérifier si ce chat existe encore (pourrait avoir été supprimé)
-            if (!this.chatIds.includes(chatId)) {
-                continue; // Skip si déjà supprimé
+        // WHY: Old code used a snapshot for iteration but currentIndex pointed into the LIVE array.
+        // After splice removed a chatId, currentIndex referenced a different chatId → skip bug.
+        // New approach: iterate on live array with correct index adjustment after splice.
+        const totalChats = this.chatIds.length;
+
+        for (let i = 0; i < totalChats; i++) {
+            // Wrap around if currentIndex exceeds array bounds (can happen after splice)
+            if (this.currentIndex >= this.chatIds.length) {
+                this.currentIndex = 0;
             }
-            
+            if (this.chatIds.length === 0) return null;
+
+            const chatId = this.chatIds[this.currentIndex];
             const queue = this.queues.get(chatId);
-            
+
             if (queue && queue.length > 0) {
-                // Récupérer l'événement
                 const event = queue.shift();
-                
-                // Nettoyer si la file est maintenant vide
+
                 if (queue.length === 0) {
+                    // Chat queue empty → remove from rotation
                     this.queues.delete(chatId);
-                    const idx = this.chatIds.indexOf(chatId);
-                    if (idx !== -1) {
-                        this.chatIds.splice(idx, 1);
-                    }
-                    
-                    // Ajuster currentIndex si nécessaire
-                    if (this.currentIndex >= this.chatIds.length && this.chatIds.length > 0) {
+                    this.chatIds.splice(this.currentIndex, 1);
+                    // DON'T increment currentIndex: the next chatId slid into this position
+                    if (this.chatIds.length > 0 && this.currentIndex >= this.chatIds.length) {
                         this.currentIndex = 0;
                     }
                 } else {
-                    // Avancer pour la prochaine fois
+                    // Chat still has messages → advance to next chat for fairness
                     this.advance();
                 }
-                
+
                 return event;
-            } else if (queue && queue.length === 0) {
-                // File vide détectée (cas edge) - nettoyer
-                this.queues.delete(chatId);
-                const idx = this.chatIds.indexOf(chatId);
-                if (idx !== -1) {
-                    this.chatIds.splice(idx, 1);
-                }
-                
-                // Ajuster currentIndex
-                if (this.currentIndex >= this.chatIds.length && this.chatIds.length > 0) {
+            } else {
+                // Empty queue edge case — clean up and try next
+                if (queue) this.queues.delete(chatId);
+                this.chatIds.splice(this.currentIndex, 1);
+                // Same logic: don't increment, next chatId slid into position
+                if (this.chatIds.length > 0 && this.currentIndex >= this.chatIds.length) {
                     this.currentIndex = 0;
                 }
+                // Don't increment i-iteration counter since we're now looking at a new chatId at same index
             }
         }
 

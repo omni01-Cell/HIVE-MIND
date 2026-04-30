@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS public.relationships CASCADE;
 DROP TABLE IF EXISTS public.entities CASCADE;
 DROP TABLE IF EXISTS public.facts CASCADE;
 DROP TABLE IF EXISTS public.memories CASCADE;
+DROP TABLE IF EXISTS public.agent_workspace CASCADE;
 DROP TABLE IF EXISTS public.user_warnings CASCADE;
 DROP TABLE IF EXISTS public.group_whitelist CASCADE;
 DROP TABLE IF EXISTS public.group_member_history CASCADE;
@@ -174,6 +175,22 @@ CREATE TABLE IF NOT EXISTS public.memories (
   CONSTRAINT memories_pkey PRIMARY KEY (id)
 );
 
+CREATE TABLE IF NOT EXISTS public.agent_workspace (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  context_id uuid NOT NULL,
+  key character varying(255) NOT NULL,
+  content text NOT NULL,
+  tags text[] DEFAULT '{}'::text[],
+  embedding vector(1024),
+  variance double precision DEFAULT 1.0,
+  access_count integer DEFAULT 0,
+  last_accessed timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT agent_workspace_pkey PRIMARY KEY (id),
+  CONSTRAINT agent_workspace_context_key_unique UNIQUE (context_id, key)
+);
+
 CREATE TABLE IF NOT EXISTS public.facts (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   context_id uuid NOT NULL,
@@ -307,6 +324,55 @@ BEGIN
     AND 1 - (memories.embedding <=> query_embedding) > match_threshold
   ORDER BY memories.embedding <=> query_embedding
   LIMIT match_count;
+END;
+$$;
+
+-- Function to match workspace using pgvector and Fisher variance approximation
+CREATE OR REPLACE FUNCTION match_workspace (
+  query_embedding vector(1024),
+  match_threshold float,
+  match_count int,
+  match_context_id uuid
+)
+RETURNS TABLE (
+  id uuid,
+  key character varying(255),
+  content text,
+  tags text[],
+  similarity float,
+  variance double precision
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    agent_workspace.id,
+    agent_workspace.key,
+    agent_workspace.content,
+    agent_workspace.tags,
+    1 - (agent_workspace.embedding <=> query_embedding) AS similarity,
+    agent_workspace.variance
+  FROM agent_workspace
+  WHERE agent_workspace.context_id = match_context_id
+    AND 1 - (agent_workspace.embedding <=> query_embedding) > match_threshold
+  ORDER BY agent_workspace.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+-- Function to increment access_count for Langevin dynamics
+CREATE OR REPLACE FUNCTION increment_workspace_access (
+  match_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE agent_workspace
+  SET access_count = access_count + 1,
+      last_accessed = now()
+  WHERE id = match_id;
 END;
 $$;
 

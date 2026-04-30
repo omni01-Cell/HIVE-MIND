@@ -370,14 +370,19 @@ ${stepsText}
 
       if (error) throw error;
 
-      return (data as any[]).map((row: any) => ({
-        id: row.id,
-        chatId: row.context_id,
-        type: row.tool_name,
+      const actions = [];
+      for (const row of (data as any[])) {
+        const legacyId = await db.resolveLegacyIdFromContext(row.context_id);
+        actions.push({
+          id: row.id,
+          chatId: legacyId || row.context_id,
+          type: row.tool_name,
         params: typeof row.params === 'string' ? JSON.parse(row.params) : row.params,
         steps: typeof row.steps === 'string' ? JSON.parse(row.steps) : (row.steps || []),
-        createdAt: new Date(row.created_at).getTime()
-      }));
+          createdAt: new Date(row.created_at).getTime()
+        });
+      }
+      return actions;
     } catch (error: any) {
       console.error('[ActionMemory] getResumableActions error:', error.message);
       return [];
@@ -395,9 +400,12 @@ ${stepsText}
 
       if (error || !data) throw new Error('Action not found in Supabase');
 
+      const legacyId = await db.resolveLegacyIdFromContext(data.context_id);
+      const resolvedChatId = legacyId || data.context_id;
+
       const actionData: any = {
         id: data.id.toString(),
-        chatId: data.context_id,
+        chatId: resolvedChatId,
         type: data.tool_name,
         goal: typeof data.params === 'string' ? JSON.parse(data.params).goal : data.params.goal,
         context: typeof data.params === 'string' ? JSON.parse(data.params).context : JSON.stringify(data.params.context || {}),
@@ -408,7 +416,7 @@ ${stepsText}
         expiresAt: (Date.now() + (this.defaultTTL * 1000)).toString()
       };
 
-      const key = `${this.keyPrefix}${chatId}`;
+      const key = `${this.keyPrefix}${resolvedChatId}`;
       await redis.hSet(key, actionData);
       await redis.expire(key, this.defaultTTL);
 
