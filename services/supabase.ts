@@ -89,10 +89,10 @@ export const db = {
             return null; 
         }
 
-        // 3. Créer le lien d'identité
+        // 3. Créer le lien d'identité (UPSERT pour éviter race condition)
         const { error: errId } = await supabase
             .from('user_identities')
-            .insert({ user_id: newUser.id, platform, platform_user_id: platformUserId });
+            .upsert({ user_id: newUser.id, platform, platform_user_id: platformUserId }, { onConflict: 'platform,platform_user_id' });
 
         if (errId) { 
             console.error('[DB] Erreur création user_identity:', errId); 
@@ -117,9 +117,14 @@ export const db = {
 
         if (group) return group.id;
 
+        // [UPSERT] Utiliser upsert pour éviter les erreurs 23505 (duplicate key) en cas d'appels concurrents
         const { data: newGroup, error } = await supabase
             .from('groups')
-            .insert({ platform, platform_group_id: platformGroupId, name: name || platformGroupId })
+            .upsert({ 
+                platform, 
+                platform_group_id: platformGroupId, 
+                name: name || platformGroupId 
+            }, { onConflict: 'platform,platform_group_id' })
             .select()
             .single();
 

@@ -27,10 +27,15 @@ export default {
                         parts.push({ text: m.content });
                     }
 
+                    // [FIX] Gérer explicitement le bloc "thought" pour les modèles Thinking
+                    if (m.thought) {
+                        parts.push({ thought: m.thought });
+                    }
+
                     // 2. Ensuite les appels de fonction
                     if (m.tool_calls && m.tool_calls.length > 0) {
                         m.tool_calls.forEach((tc: any) => {
-                            const part = {
+                            const part: any = {
                                 functionCall: {
                                     name: tc.function.name,
                                     args: JSON.parse(tc.function.arguments)
@@ -38,11 +43,9 @@ export default {
                             };
 
                             // Réinjecter le thought_signature
-                            // [FIX] Envoyer sous les deux formats pour être sûr (Camel et Snake)
-                            // L'erreur mentionnait spécifiquement "thought_signature"
                             if (tc.thought_signature) {
-                                part.thoughtSignature = tc.thought_signature; // Standard SDK
-                                part['thought_signature'] = tc.thought_signature; // Raw REST fallback
+                                part.thoughtSignature = tc.thought_signature;
+                                part.thought_signature = tc.thought_signature;
                             }
                             parts.push(part);
                         });
@@ -166,6 +169,9 @@ export default {
             .join('\n')
             .trim();
 
+        // [FIX] Extraire le bloc "thought" s'il existe (Gemini 2.0 Thinking)
+        const thoughtContent = parts.find((p: any) => p.thought)?.thought;
+
         // 2. Chercher les appels de fonction
         const functionCallPart = parts.find((p: any) => p.functionCall);
 
@@ -192,6 +198,7 @@ export default {
 
         return {
             content: textContent || null,
+            thought: thoughtContent || null,
             toolCalls,
             finishReason: candidate.finishReason,
             usage: data.usageMetadata

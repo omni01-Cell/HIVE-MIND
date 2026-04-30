@@ -277,8 +277,8 @@ export class BotCore {
             // Environment Detection Logic
             const appEnv = process.env.APP_ENV || 'local';
 
-            if (appEnv === 'server') {
-                console.log('[Core] 🌐 Mode SERVEUR (Headless). CLI désactivée.');
+            if (appEnv === 'server' || !process.stdin.isTTY) {
+                console.log(`[Core] 🌐 Mode ${appEnv === 'server' ? 'SERVEUR' : 'NON-TTY'} (Headless). CLI désactivée.`);
                 activeTransports = activeTransports.filter(t => t !== 'cli' && t !== 'ink-cli');
             } else if (appEnv === 'local' && !activeTransports.includes('ink-cli')) {
                 console.log('[Core] 💻 Mode LOCAL. Activation de la CLI (Ink).');

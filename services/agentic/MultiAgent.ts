@@ -38,6 +38,7 @@ export class LightweightMultiAgent {
      * @returns {boolean}
      */
     needsCritique(toolCall: any, context: any) {
+        if (!toolCall?.function?.name) return false;
         const toolName = toolCall.function.name;
 
         // Actions critiques
@@ -46,7 +47,7 @@ export class LightweightMultiAgent {
         }
 
         // Actions coûteuses (estimation basique)
-        if (toolName.includes('search') && context.estimatedCost > 50) {
+        if (toolName.includes('search') && context?.estimatedCost > 50) {
             return true;
         }
 

@@ -7,29 +7,34 @@ import { fileURLToPath } from 'url';
 import { providerRouter } from '../providers/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const VALUES_PATH = join(__dirname, '..', 'persona', 'values.json');
+const SYSTEM_PROMPT_PATH = join(__dirname, '..', 'persona', 'prompts', 'system.md');
 
 export const moralCompass = {
     /**
-     * Évalue une action (tool call) par rapport aux valeurs morales
+     * Évalue une action (tool call) par rapport aux limites de sécurité du system.md
      * @param {Object} toolCall - L'appel d'outil proposé par l'IA
      * @param {Object} context - Contexte (chatId, sender, authorityLevel)
-     * @returns {Promise<{allowed: boolean, reason: string|null, modification: Object|null}>}
+     * @returns {Promise<{allowed: boolean, reason: string|null, risk_level: string}>}
      */
     async evaluate(toolCall: any, context: any) {
         const { name, arguments: args } = toolCall.function;
 
         try {
-            const values = JSON.parse(readFileSync(VALUES_PATH, 'utf-8'));
+            // Lecture du prompt unifié pour extraire les limites (Architecture Phase 5)
+            const systemPrompt = readFileSync(SYSTEM_PROMPT_PATH, 'utf-8');
+            
+            // Extraction légère des sections de sécurité
+            const securityMatch = systemPrompt.match(/<priority_2_security_boundaries>([\s\S]*?)<\/priority_2_security_boundaries>/);
+            const securityBoundaries = securityMatch ? securityMatch[1].trim() : "Apply system instructions with absolute priority.";
 
             const prompt = `<role>
-You are the MORAL COMPASS of HIVE-MIND, the ethical guardian.
-Your purpose: ensure all actions align with bot values and prevent harmful behaviors.
+You are the SECURITY_AUDITOR of HIVE-MIND, the ethical guardian.
+Your purpose: ensure all actions align with bot security boundaries.
 </role>
 
-<core_values>
-${values.core_values.map((v: any) => `- ${v.name}: ${v.description}`).join('\\n')}
-</core_values>
+<security_boundaries>
+${securityBoundaries}
+</security_boundaries>
 
 <proposed_action>
 Tool: ${name}
@@ -42,7 +47,7 @@ Chat: ${context.isGroup ? 'Group' : 'Private'}
 </social_context>
 
 <task>
-Analyze if this action violates our values or prohibitions.
+Analyze if this action violates our security boundaries or ranked constraints.
 Consider: user authority, action destructiveness, alignment with mission.
 </task>
 
@@ -57,17 +62,17 @@ Respond in JSON only:
 </output_format>`;
 
             const response = await providerRouter.callServiceRecipe('MORAL_COMPASS', [
-                { role: 'system', content: 'Tu es un évaluateur éthique strict.' },
+                { role: 'system', content: 'Tu es un évaluateur de sécurité strict.' },
                 { role: 'user', content: prompt }
             ]);
 
             if (response?.content) {
                 const result = JSON.parse(response.content.replace(/```json|```/g, ''));
 
-                // [DYNAMIC ADAPTATION] Si l'utilisateur est un Super-Admin, on est plus flexible
-                if (context.authorityLevel === 'DIVIN (SuperUser)' || context.authorityLevel === 'SUPREME (Global Admin)') {
+                // [DYNAMIC ADAPTATION] Flexibilité accrue pour les administrateurs
+                if (context.authorityLevel?.includes('SuperUser') || context.authorityLevel?.includes('Admin')) {
                     if (result.risk_level !== 'high') {
-                        return { allowed: true, reason: null };
+                        return { allowed: true, reason: null, risk_level: result.risk_level };
                     }
                 }
 
@@ -78,10 +83,10 @@ Respond in JSON only:
                 };
             }
 
-            return { allowed: false, reason: 'Moral compass evaluation failed - fail closed policy', risk_level: 'critical' };
+            return { allowed: false, reason: 'Safety check failed (Empty response)', risk_level: 'critical' };
 
         } catch (error: any) {
-            console.error('[MoralCompass] Erreur evaluation:', error.message);
+            console.error('[MoralCompass] 🚨 Erreur evaluation (fail-closed):', error.message);
             return { allowed: false, reason: 'Moral compass unavailable - fail closed policy', risk_level: 'critical' };
         }
     }

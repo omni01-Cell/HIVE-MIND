@@ -472,11 +472,14 @@ Plan:`;
 
             // Exécuter l'étape
             try {
+                // [BUG #9 FIX] Sécurité si tool est manquant
+                const toolName = step.tool || 'unknown_tool';
+                
                 // Construire le toolCall format
                 const toolCall = {
                     id: `step_${step.id}`,
                     function: {
-                        name: step.tool,
+                        name: toolName,
                         arguments: JSON.stringify(step.params || {})
                     }
                 };

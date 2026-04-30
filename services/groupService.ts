@@ -139,11 +139,13 @@ export const groupService = {
                 }
 
                 await supabase.from('groups').upsert({
+                    platform: 'whatsapp',
+                    platform_group_id: groupJid,
                     jid: groupJid,
                     name: waMetadata.subject || '',
                     founder_jid: validFounderJid || null, // NULL si pas résolu, pour respecter la FK
                     created_at: waMetadata.creation ? new Date(waMetadata.creation * 1000).toISOString() : new Date().toISOString()
-                }, { onConflict: 'jid' });
+                }, { onConflict: 'platform,platform_group_id' });
 
                 // NOUVEAU: Synchronisation des admins
                 await this.syncAdminsToSupabase(groupJid, admins);
