@@ -103,14 +103,18 @@ export class TransportManager {
 
     /**
      * Récupère un transport spécifique (pour l'envoi ciblé)
-     * Par défaut, renvoie le premier transport actif
+     * Par défaut, renvoie le premier transport actif, ou 'whatsapp' en fallback.
      */
     getTransport(name?: string): any {
-        if (!name && this.activeTransports.length > 0) {
-            return this.transports.get(this.activeTransports[0]);
+        if (!name) {
+            if (this.activeTransports.length > 0) {
+                return this.transports.get(this.activeTransports[0]);
+            }
+            // Fallback pour les tests ou l'accès précoce
+            return this.transports.get('whatsapp');
         }
         
-        const transport = this.transports.get(name || '');
+        const transport = this.transports.get(name);
         if (!transport) {
             throw new Error(`[TransportManager] Transport non trouvé ou inactif: ${name}`);
         }
@@ -137,7 +141,7 @@ export class TransportManager {
                 transport.sock = value;
             }
         } catch {
-            // Ignore if no transport available to receive the socket
+            // Should not happen with the fallback in getTransport
         }
     }
 
@@ -193,7 +197,7 @@ export class TransportManager {
     async disconnect() {
         const disconnectPromises = this.activeTransports.map(async (name) => {
             const transport = this.transports.get(name);
-            if (transport) {
+            if (transport && typeof transport.disconnect === 'function') {
                 await transport.disconnect();
             }
         });

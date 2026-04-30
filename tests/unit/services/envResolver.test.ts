@@ -1,5 +1,5 @@
 // tests/unit/services/envResolver.test.ts
-import { describe, it, beforeEach, expect } from '@jest/globals';
+import { describe, it, beforeEach, expect, jest } from '@jest/globals';
 import { envResolver } from '../../../services/envResolver.js';
 
 describe('EnvResolver unit tests', () => {
@@ -36,7 +36,9 @@ describe('EnvResolver unit tests', () => {
 
   it('should return null and log warning if variable is not found', () => {
     // We expect a null return and a warning in console
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     expect(envResolver.resolve('VOTRE_MISSING_VAR')).toBeNull();
+    warnSpy.mockRestore();
   });
 
   it('should use explicit varName if provided', () => {

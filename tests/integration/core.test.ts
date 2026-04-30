@@ -1,6 +1,6 @@
 // tests/integration/core.test.ts
 // Integration — BotCore + nouveaux MODs (1, 3, 4, 6, 7, 8)
-import { describe, it, beforeEach, jest, expect } from '@jest/globals';
+import { describe, it, beforeEach, afterAll, jest, expect } from '@jest/globals';
 
 process.env.SUPABASE_URL = 'http://localhost:54321';
 process.env.SUPABASE_KEY = 'dummy';
@@ -20,10 +20,18 @@ jest.unstable_mockModule('../../services/supabase.js', () => ({
 jest.unstable_mockModule('../../core/transport/baileys.js', () => ({
     baileysTransport: {
         connect: jest.fn(async () => {}),
+        disconnect: jest.fn(async () => {}),
         onMessage: jest.fn(),
         onGroupEvent: jest.fn(),
         setContainer: jest.fn(),
         sendText: jest.fn(async () => ({})),
+        sendUniversalResponse: jest.fn(async () => ({})),
+        sendMedia: jest.fn(async () => ({})),
+        sendSticker: jest.fn(async () => ({})),
+        getGroupMetadata: jest.fn(async () => ({})),
+        downloadMedia: jest.fn(async () => Buffer.from('')),
+        isAdmin: jest.fn(async () => false),
+        sendReaction: jest.fn(async () => true),
         setPresence: jest.fn(async () => {}),
         sock: mockSock
     }
@@ -113,6 +121,12 @@ describe('BotCore Integration (Phase 4 MODs)', () => {
         bot = new BotCore();
         bot.isReady = true;
         bot.transport.sock = mockSock;
+    });
+
+    afterAll(async () => {
+        if (bot && bot.transport) {
+            await bot.transport.disconnect();
+        }
     });
 
     // ── Original tests (preserved) ──

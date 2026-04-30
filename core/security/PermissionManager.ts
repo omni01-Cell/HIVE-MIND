@@ -95,6 +95,7 @@ export class PermissionManager {
         
         this.allowedDirectories.add(this.sandboxDir);
         this.allowedDirectories.add(this.storageDir);
+        this.allowedDirectories.add(this.originalCwd);
     }
 
     // =========================================================================
@@ -389,7 +390,7 @@ export class PermissionManager {
 
         // Trouver la requête In-Band la plus ancienne
         const firstKey = this.pendingRequests.keys().next().value;
-        if (!firstKey) return false;
+        if (firstKey === undefined) return false;
         const pending = this.pendingRequests.get(firstKey);
         if (!pending) return false;
 

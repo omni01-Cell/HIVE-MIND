@@ -1,5 +1,5 @@
 // tests/e2e/bot.e2e.test.ts
-import { describe, it, beforeAll, jest, expect } from '@jest/globals';
+import { describe, it, beforeAll, afterAll, jest, expect } from '@jest/globals';
 
 process.env.SUPABASE_URL = 'http://localhost:54321';
 process.env.SUPABASE_KEY = 'dummy';
@@ -56,6 +56,9 @@ const { container } = await import('../../core/ServiceContainer.js');
 const { orchestrator } = await import('../../core/orchestrator.js');
 const { eventBus, BotEvents } = await import('../../core/events.js');
 const { permissionManager } = await import('../../core/security/PermissionManager.js');
+const { scheduler } = await import('../../scheduler/index.js');
+const { hiveWakeSystem } = await import('../../services/ptc/WakeSystem.js');
+const { disconnect: disconnectRedis } = await import('../../services/redisClient.js');
 
 describe('Bot E2E Flow (Phase 4 MODs)', () => {
     beforeAll(async () => {
@@ -109,6 +112,19 @@ describe('Bot E2E Flow (Phase 4 MODs)', () => {
         jest.spyOn(orchestrator, 'enqueue').mockImplementation(() => {});
 
         await botCore.init();
+    });
+
+    afterAll(async () => {
+        if (botCore && botCore.transport) {
+            await botCore.transport.disconnect();
+        }
+        if (scheduler) {
+            scheduler.stopAll();
+        }
+        if (hiveWakeSystem) {
+            hiveWakeSystem.stop();
+        }
+        await disconnectRedis();
     });
 
     // ── Original E2E tests (preserved) ──
