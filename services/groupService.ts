@@ -237,6 +237,23 @@ export const groupService = {
     },
 
     /**
+     * Récupère la config/settings d'un groupe (Proxy vers Supabase)
+     * @param {string} groupJid 
+     * @returns {Promise<Object>}
+     */
+    async getGroupSettings(groupJid: any) {
+        if (!supabase) return {};
+        try {
+            // Utilise getGroupConfig de supabase.ts qui gère déjà le mapping
+            const config = await supabase.getGroupConfig(groupJid);
+            return config || {};
+        } catch (error: any) {
+            console.error('[GroupService] getGroupSettings error:', error.message);
+            return {};
+        }
+    },
+
+    /**
      * Récupère le contexte complet pour le prompt système
      * @param {string} chatJid - JID du chat (groupe ou privé)
      * @param {string} senderJid - JID de l'expéditeur

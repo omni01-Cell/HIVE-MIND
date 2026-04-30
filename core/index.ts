@@ -2132,7 +2132,7 @@ ${textToCompress}`
                 if (error?.code === '23503' || error?.message?.includes('foreign key constraint')) {
                     console.log('[GroupEvent] 🔄 Groupe inconnu en DB, synchronisation d\'urgence...');
                     try {
-                        const metadata = await this.transport.sock.groupMetadata(groupId);
+                        const metadata = await this.transport.getGroupMetadata(groupId);
                         await groupService.updateGroup(groupId, metadata);
 
                         // Retry l'insertion
@@ -2156,7 +2156,7 @@ ${textToCompress}`
                 const founder = await db.getGroupFounder(groupId);
                 if (!founder) {
                     // Récupérer les métadonnées du groupe pour identifier le créateur
-                    const metadata = await this.transport.sock.groupMetadata(groupId);
+                    const metadata = await this.transport.getGroupMetadata(groupId);
                     const creatorJid = metadata.owner || metadata.subjectOwner;
 
                     if (creatorJid) {

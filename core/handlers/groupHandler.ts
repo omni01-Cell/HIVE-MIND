@@ -80,7 +80,7 @@ export class GroupHandler {
             if (error?.code === '23503' || error?.message?.includes('foreign key constraint')) {
                 console.log('[GroupEvent] 🔄 Groupe inconnu en DB, synchronisation d\'urgence...');
                 try {
-                    const metadata = await this.transport.sock.groupMetadata(groupId);
+                    const metadata = await this.transport.getGroupMetadata(groupId);
                     await groupService.updateGroup(groupId, metadata);
                     await db.recordMemberEvent(groupId, participant, action);
                     console.log('[GroupEvent] ✓ Synchronisation et tracking réussis');
@@ -100,7 +100,7 @@ export class GroupHandler {
         try {
             const founder = await db.getGroupFounder(groupId);
             if (!founder) {
-                const metadata = await this.transport.sock.groupMetadata(groupId);
+                const metadata = await this.transport.getGroupMetadata(groupId);
                 const creatorJid = metadata.owner || metadata.subjectOwner;
 
                 if (creatorJid) {

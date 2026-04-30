@@ -117,6 +117,45 @@ export class TransportManager {
         return transport;
     }
 
+    /**
+     * Getter de compatibilité pour accéder au socket du transport par défaut (ex: Baileys)
+     * WHY: BotCore et de nombreux handlers accèdent directement à .sock sur l'instance de transport.
+     */
+    get sock() {
+        try {
+            const transport = this.getTransport();
+            return transport ? transport.sock : null;
+        } catch {
+            return null;
+        }
+    }
+
+    set sock(value: any) {
+        try {
+            const transport = this.getTransport();
+            if (transport) {
+                transport.sock = value;
+            }
+        } catch {
+            // Ignore if no transport available to receive the socket
+        }
+    }
+
+    /**
+     * Proxy pour récupérer les métadonnées d'un groupe
+     */
+    async getGroupMetadata(groupId: string, sourceChannel?: string) {
+        const transport = this.getTransport(sourceChannel);
+        if (typeof transport.getGroupMetadata === 'function') {
+            return await transport.getGroupMetadata(groupId);
+        }
+        // Fallback si direct sock access is preferred by some transports
+        if (transport.sock?.groupMetadata) {
+            return await transport.sock.groupMetadata(groupId);
+        }
+        throw new Error(`[TransportManager] getGroupMetadata non supporté par le transport ${sourceChannel || 'par défaut'}`);
+    }
+
     // --- Proxy methods for default/target transport ---
 
     async sendText(channelId: string, text: string, options: any = {}, sourceChannel?: string) {
