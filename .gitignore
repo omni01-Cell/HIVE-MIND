@@ -11,6 +11,7 @@ auth_info/
 # Generated files
 logs/
 temp/
+coverage/
 *.log
 .hive-mind.pid
 
