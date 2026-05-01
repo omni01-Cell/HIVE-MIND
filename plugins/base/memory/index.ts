@@ -2,7 +2,8 @@
 // Plugin de mémorisation de faits persistants (Option C)
 // Permet à l'IA de mémoriser, rappeler et lister des informations sur les utilisateurs
 
-import { factsMemory, workspaceMemory } from '../../../services/memory.js';
+import { factsMemory, workspaceMemory, semanticMemory } from '../../../services/memory.js';
+import { workingMemory } from '../../../services/workingMemory.js';
 
 export default {
     name: 'memory',
@@ -137,6 +138,35 @@ export default {
                     required: ['key']
                 }
             }
+        },
+        // === V3 DYNAMIC CONTEXT TOOLS ===
+        {
+            type: 'function',
+            function: {
+                name: 'update_scratchpad',
+                description: 'Overwrites your L1 working memory (GCC Scratchpad visible in your prompt at every turn). Use for short-term state tracking between turns: ongoing task status, waiting conditions, key decisions. For long-term documents, use workspace_write instead. Max 500 chars.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        text: { type: 'string', description: 'New scratchpad content. This REPLACES the current content entirely.' }
+                    },
+                    required: ['text']
+                }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'search_long_term_memory',
+                description: 'Searches the RAG vector database for past conversations, stored knowledge, and deep context. Use this when the user refers to past events NOT present in your L1 dynamic context (Passport, Scratchpad, Action History). This is a Pull-based retrieval — only call when needed.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'Semantic search query describing what you are looking for' }
+                    },
+                    required: ['query']
+                }
+            }
         }
     ],
 
@@ -177,6 +207,12 @@ export default {
 
             case 'workspace_delete':
                 return await this._workspaceDelete(factsChatId, args.key);
+
+            case 'update_scratchpad':
+                return await this._updateScratchpad(chatId, args.text);
+
+            case 'search_long_term_memory':
+                return await this._searchLongTermMemory(chatId, args.query);
 
             default:
                 return { success: false, message: `Outil inconnu: ${toolName}` };
@@ -355,6 +391,62 @@ export default {
             return { success: false, message: `Erreur lors de la suppression de "${key}".` };
         } catch (error: any) {
             return { success: false, message: `Erreur interne: ${error.message}` };
+        }
+    },
+
+    // === V3 DYNAMIC CONTEXT TOOLS ===
+
+    /**
+     * Updates the L1 Redis scratchpad (GCC). Content will appear in the
+     * agent's <scratchpad> block at the next turn.
+     */
+    async _updateScratchpad(chatId: any, text: any) {
+        try {
+            if (!text || typeof text !== 'string') {
+                return { success: false, message: 'SCRATCHPAD_ERROR: text parameter is required (string).' };
+            }
+
+            await workingMemory.setScratchpad(chatId, text);
+
+            return {
+                success: true,
+                message: `SCRATCHPAD_UPDATED: Your working memory has been updated (${Math.min(text.length, 500)} chars). It will be visible in your <scratchpad> at the next turn.`
+            };
+        } catch (error: any) {
+            return { success: false, message: `SCRATCHPAD_ERROR: ${error.message}` };
+        }
+    },
+
+    /**
+     * Pull-based RAG search. The agent calls this when it needs deep context
+     * that is NOT present in its L1 hot cache.
+     */
+    async _searchLongTermMemory(chatId: any, query: any) {
+        try {
+            if (!query || typeof query !== 'string') {
+                return { success: false, message: 'LTM_ERROR: query parameter is required (string).' };
+            }
+
+            const results = await semanticMemory.recall(chatId, query, 5);
+
+            if (!results || results.length === 0) {
+                return {
+                    success: true,
+                    message: 'LTM_NO_RESULTS: No relevant memories found for this query.'
+                };
+            }
+
+            const formatted = results.map((r: any, i: number) => {
+                const content = r.formattedContent || r.content;
+                return `${i + 1}. [${r.role || 'unknown'}] ${content.substring(0, 300)}`;
+            }).join('\n');
+
+            return {
+                success: true,
+                message: `LTM_RESULTS (${results.length} memories):\n${formatted}`
+            };
+        } catch (error: any) {
+            return { success: false, message: `LTM_ERROR: ${error.message}` };
         }
     }
 };

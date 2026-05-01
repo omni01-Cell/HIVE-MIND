@@ -127,6 +127,27 @@ export const StateManager = {
     },
 
     /**
+     * Met à jour les préférences de l'utilisateur (Langue, TZ)
+     */
+    async updatePreferences(identifier: any, preferences: { language?: string, timezone?: string }) {
+        const jid = await IdentityMap.resolve(identifier);
+        const resolved = await db.resolveContextFromLegacyId(jid);
+        if (!resolved || resolved.type !== 'user') return;
+        
+        const uuid = resolved.context_id;
+        const cacheKey = `user:${uuid}:data`;
+
+        if (!redis?.isOpen) return;
+
+        const pipeline = redis.multi();
+        if (preferences.language) pipeline.hSet(cacheKey, 'language', preferences.language);
+        if (preferences.timezone) pipeline.hSet(cacheKey, 'timezone', preferences.timezone);
+        
+        pipeline.sAdd(SYNC_QUEUE_KEY, uuid);
+        await pipeline.exec();
+    },
+
+    /**
      * Worker de synchronisation (à appeler périodiquement)
      * Vide la queue Redis vers Supabase
      */
@@ -154,6 +175,8 @@ export const StateManager = {
                     id: uuids[i],
                     username: data.last_pushname || 'Inconnu', // Legacy logic
                     interaction_count: parseInt(data.interaction_count || 0),
+                    language: data.language || null,
+                    timezone: data.timezone || null,
                     updated_at: new Date().toISOString()
                 });
             }

@@ -1,8 +1,18 @@
 // @ts-nocheck
-// core/context/TieredContextLoader.js
+// core/context/TieredContextLoader.ts
 // ============================================================================
-// TIERED CONTEXT LOADER - Chargement contexte à 3 niveaux (HOT/WARM/COLD)
-// Objectif: Réduire la latence de chargement de contexte de ~2000ms à ~250ms
+// UNIFIED CONTEXT LOADER — V3 Dynamic Context Engineering
+//
+// ARCHITECTURE: Single unified load() replaces the old FAST/AGENTIC split.
+// Every message gets the same "Bureau de Travail" (Workspace Prompt):
+//   1. CORE RULES     (~150 tokens, static from system.md template)
+//   2. USER PASSPORT   (~50 tokens, L1 Redis hot cache)
+//   3. SCRATCHPAD/GCC  (~150 tokens, L1 Redis hot cache)
+//   4. ACTION HISTORY  (~200 tokens, L1 Redis compressed traces)
+//   5. CHAT HISTORY    (~300 tokens, L1 Redis last 5 messages)
+//
+// RAG, Facts, and Workspace are NOT pushed into the prompt.
+// The agent PULLS them via tools: search_long_term_memory, workspace_read.
 // ============================================================================
 
 import { container } from '../ServiceContainer.js';
@@ -14,22 +24,21 @@ import { permissionManager } from '../security/PermissionManager.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// System prompt minimal pour le FastPath
-let minimalSystemPrompt = '';
+// Load the V3 system prompt template (contains {{PLACEHOLDERS}})
+let systemPromptTemplate = '';
 try {
-    minimalSystemPrompt = readFileSync(
+    systemPromptTemplate = readFileSync(
         join(__dirname, '..', '..', 'persona', 'prompts', 'system.md'), 'utf-8'
     );
 } catch {
-    minimalSystemPrompt = 'You are a friendly assistant.';
+    systemPromptTemplate = 'You are HIVE-MIND V3, an autonomous AI agent.';
 }
 
 /**
- * Loader de contexte tiered pour optimiser la latence
- * 
- * NIVEAU 1 (HOT): ~50ms - Toujours chargé, données ultra-rapides
- * NIVEAU 2 (WARM): ~200ms - Données cachées avec TTL
- * NIVEAU 3 (COLD): ~800ms+ - Données lourdes, seulement pour AgenticPath
+ * Unified Context Loader — V3 Dynamic Context Engineering
+ *
+ * Single entry point: load(chatId, message) → UnifiedContext
+ * No more FAST/AGENTIC distinction. Every message gets the full Bureau de Travail.
  */
 export class TieredContextLoader {
     workingMemory: any;
@@ -37,40 +46,31 @@ export class TieredContextLoader {
     groupService: any;
     adminService: any;
     factsMemory: any;
-    workspaceMemory: any;
-    consciousness: any;
-    memory: any;
     browser: any;
     localCache: any;
     authorityCache: any;
     AUTHORITY_CACHE_TTL: any;
 
     constructor() {
-        // Services injectés via container
         this.workingMemory = null;
         this.userService = null;
         this.groupService = null;
         this.adminService = null;
         this.factsMemory = null;
-        this.workspaceMemory = null;
-        this.consciousness = null;
-        this.memory = null;
         this.browser = null;
 
-        // Cache local en mémoire (ultra-rapide)
         this.localCache = {
-            botIdentity: { name: botIdentity.fullName }, // minimal keep for fastpath if used elsewhere
-            systemPromptTemplate: minimalSystemPrompt
+            botIdentity: { name: botIdentity.fullName },
+            systemPromptTemplate
         };
 
-        // Cache des autorités (évite les appels répétés à adminService)
         this.authorityCache = new Map();
         this.AUTHORITY_CACHE_TTL = 600000; // 10 minutes
     }
 
     /**
-     * Initialise les services depuis le container
-     * À appeler une fois au démarrage
+     * Initialise les services depuis le container.
+     * À appeler une fois au démarrage.
      */
     init() {
         try {
@@ -78,172 +78,157 @@ export class TieredContextLoader {
             this.userService = container.get('userService');
             this.groupService = container.get('groupService');
             this.adminService = container.get('adminService');
-            this.factsMemory = container.get('facts'); // Correct key is 'facts'
-            this.workspaceMemory = container.get('workspace');
-            this.consciousness = container.get('consciousness');
-            this.memory = container.get('memory');
+            this.factsMemory = container.get('facts');
             this.browser = container.get('browser');
 
-            console.log(`[TieredContext] ✅ Init Success. WM: ${!!this.workingMemory}, Browser: ${!!this.browser}`);
+            console.log(`[TieredContext] ✅ V3 Unified Init. WM: ${!!this.workingMemory}, Browser: ${!!this.browser}`);
         } catch (e: any) {
             console.error('[TieredContext] ❌ Init Failed:', e.message);
         }
     }
 
     /**
-     * NIVEAU 1: HOT - Données ultra-rapides (~50ms)
-     * Redis only + cache local
+     * UNIFIED LOAD — Single entry point for all messages.
+     *
+     * Assembles the "Bureau de Travail" from L1 Redis hot cache:
+     * 1. User Passport  (identity, always present)
+     * 2. Scratchpad/GCC (volatile working memory)
+     * 3. Action History  (compressed tool traces)
+     * 4. Chat History    (last 5 messages)
+     * 5. Authority       (permissions for security)
+     *
+     * The system prompt template is hydrated with these blocks.
+     *
+     * @param {string} chatId
+     * @param {Object} message - { sender, text, sourceChannel, ... }
+     * @returns {Promise<UnifiedContext>}
      */
-    async loadHot(chatId: any) {
+    async load(chatId: any, message: any) {
         const startTime = Date.now();
+        const isGroup = chatId?.endsWith('@g.us');
 
-        // Safety Check
+        // Safety check
         if (!this.workingMemory) {
             console.warn('[TieredContext] ⚠️ WorkingMemory missing, attempting re-init...');
             this.init();
             if (!this.workingMemory) {
-                console.error('[TieredContext] 🛑 CRITICAL: WorkingMemory still missing after re-init.');
-                // Fallback fictif pour éviter crash
-                return { recentMessages: [], chatMode: 'normal', botIdentity: this.localCache.botIdentity, timestamp: new Date() };
+                console.error('[TieredContext] 🛑 CRITICAL: WorkingMemory still missing.');
+                return this._buildFallbackContext(chatId, message);
             }
         }
 
-        // Parallélisation des appels Redis
-        const [recentMessages, chatMode] = await Promise.all([
-            this.workingMemory.getContext(chatId, 5), // 5 derniers messages
-            this.workingMemory.getChatMode?.(chatId) || 'normal'
-        ]);
-
-        const hotData = {
-            recentMessages: recentMessages || [],
-            chatMode,
-            botIdentity: this.localCache.botIdentity,
-            timestamp: new Date()
-        };
-
-        console.log(`[TieredContext] HOT chargé en ${Date.now() - startTime}ms`);
-        return hotData;
-    }
-
-    /**
-     * NIVEAU 2: WARM - Données cachées (~200ms)
-     * Profil utilisateur + autorité avec cache TTL
-     */
-    async loadWarm(chatId: any, sender: any, isGroup: any = false) {
-        const startTime = Date.now();
-
-        // Vérifier le cache d'autorité local
-        const cachedAuthority = this._getCachedAuthority(sender);
-
-        // Parallélisation
-        const [userSnapshot, authority, groupBasics] = await Promise.all([
-            this._getCachedUserProfile(sender),
-            cachedAuthority || this._loadAndCacheAuthority(sender, chatId),
-            isGroup ? this._getGroupBasics(chatId) : null
-        ]);
-
-        const warmData = {
+        // ── L1 HOT CACHE — All parallel, ~50ms total ──
+        const [
+            recentMessages,
+            passport,
+            scratchpad,
+            actionHistory,
             userSnapshot,
             authority,
-            group: groupBasics,
-            systemPromptBase: this._buildMinimalPrompt(userSnapshot, authority, groupBasics)
-        };
-
-        console.log(`[TieredContext] WARM chargé en ${Date.now() - startTime}ms`);
-        return warmData;
-    }
-
-    /**
-     * NIVEAU 3: COLD - Données lourdes (~800ms+)
-     * Seulement pour AgenticPath
-     */
-    async loadCold(chatId: any, message: any) {
-        const startTime = Date.now();
-
-        // PARALLÉLISATION TOTALE de tous les appels lourds
-        const [facts, ragResults, groupMembers, consciousnessState, lessons, workspaceKeys, browserAvailable] = await Promise.all([
-            this._loadFacts(message.sender),
-            this._loadRAG(chatId, message.text),
-            this._loadGroupMembers(chatId),
-            this._loadConsciousness(chatId, message.sender),
-            this._loadLessons(),
-            this._loadWorkspaceKeys(chatId),
-            this.browser ? this.browser.isAvailable() : Promise.resolve(false)
+            groupBasics
+        ] = await Promise.all([
+            this.workingMemory.getContext(chatId, 5),
+            this._getOrBuildPassport(message.sender),
+            this.workingMemory.getScratchpad(chatId),
+            this.workingMemory.getActionHistory(chatId),
+            this._getCachedUserProfile(message.sender),
+            this._getAuthority(message.sender, chatId),
+            isGroup ? this._getGroupBasics(chatId) : Promise.resolve(null)
         ]);
 
-        const coldData = {
-            facts,
-            rag: ragResults,
-            groupMembers,
-            consciousness: consciousnessState,
-            lessons,
-            workspaceKeys,
-            browserAvailable
+        // ── HYDRATE SYSTEM PROMPT TEMPLATE ──
+        const systemPrompt = this._hydrateTemplate({
+            channel: message.sourceChannel || 'whatsapp',
+            passport: this.workingMemory.formatPassport(passport),
+            scratchpad: scratchpad || '(Empty. Use update_scratchpad to write here.)',
+            actionHistory: this.workingMemory.formatActionHistory(actionHistory),
+            userSnapshot,
+            authority,
+            groupBasics,
+        });
+
+        const context = {
+            systemPrompt,
+            recentMessages: recentMessages || [],
+            history: (recentMessages || []).map((m: any) => ({
+                role: m.role,
+                content: m.content
+            })),
+            authority,
+            userSnapshot,
+            groupBasics,
+            mode: 'UNIFIED' // No more FAST/AGENTIC distinction
         };
 
-        console.log(`[TieredContext] COLD chargé en ${Date.now() - startTime}ms`);
-        return coldData;
-    }
-
-    /**
-     * Méthode principale: Charge le contexte selon le mode
-     * @param {string} chatId 
-     * @param {Object} message 
-     * @param {'FAST'|'AGENTIC'} mode 
-     */
-    async load(chatId: any, message: any, mode: any = 'FAST') {
-        const startTime = Date.now();
-        const isGroup = chatId?.endsWith('@g.us');
-
-        // HOT est toujours chargé
-        const hot = await this.loadHot(chatId);
-
-        // WARM est chargé pour les deux modes
-        const warm = await this.loadWarm(chatId, message.sender, isGroup);
-
-        if (mode === 'FAST') {
-            // FastPath: Contexte léger uniquement
-            const context = this._buildFastContext(hot, warm, message);
-            console.log(`[TieredContext] ⚡ FAST context complet en ${Date.now() - startTime}ms`);
-            return context;
-        }
-
-        // AgenticPath: Charger COLD en plus
-        const cold = await this.loadCold(chatId, message);
-        const context = this._buildFullContext(hot, warm, cold, message);
-
-        console.log(`[TieredContext] 🧠 FULL context complet en ${Date.now() - startTime}ms`);
+        console.log(`[TieredContext] ⚡ Unified context loaded in ${Date.now() - startTime}ms`);
         return context;
     }
 
     // ========================================================================
-    // MÉTHODES PRIVÉES - Helpers de chargement
+    // PRIVATE — L1 Data Retrieval
     // ========================================================================
 
-    async _getCachedUserProfile(sender: any) {
+    /**
+     * Gets passport from Redis L1 cache, or builds it on miss.
+     */
+    async _getOrBuildPassport(sender: any) {
+        let passport = await this.workingMemory.getPassport(sender);
+        if (passport) return passport;
+
+        // Cache miss → build from userService + factsMemory
         try {
-            // Le userService a déjà un cache Redis interne
             const profile = await this.userService.getProfile(sender);
-            return {
-                jid: sender,
-                name: profile.names?.[0] || 'Inconnu',
-                interactionCount: profile.interaction_count || 0,
-                lastSeen: profile.last_seen
+            const name = profile?.names?.[0] || 'Unknown';
+
+            // Extract top 4 facts for the passport
+            let topFacts: string[] = [];
+            try {
+                const allFacts = await this.factsMemory.getAll(sender);
+                const entries = Object.entries(allFacts);
+                topFacts = entries
+                    .slice(0, 4)
+                    .map(([key, value]) => `${key}: ${value}`);
+            } catch {
+                // Facts unavailable — non-blocking
+            }
+
+            passport = {
+                name,
+                lang: profile?.language || 'auto',
+                tz: profile?.timezone || 'auto',
+                topFacts
             };
+
+            // Cache in Redis L1 (1h TTL)
+            await this.workingMemory.setPassport(sender, passport);
+            return passport;
         } catch (e: any) {
-            return { jid: sender, name: 'Inconnu', interactionCount: 0 };
+            console.warn('[TieredContext] Passport build failed:', e.message);
+            return { name: 'Unknown', lang: 'auto', tz: 'auto', topFacts: [] };
         }
     }
 
-    _getCachedAuthority(sender: any) {
+    async _getCachedUserProfile(sender: any) {
+        try {
+            const profile = await this.userService.getProfile(sender);
+            return {
+                jid: sender,
+                name: profile.names?.[0] || 'Unknown',
+                interactionCount: profile.interaction_count || 0,
+                lastSeen: profile.last_seen
+            };
+        } catch {
+            return { jid: sender, name: 'Unknown', interactionCount: 0 };
+        }
+    }
+
+    async _getAuthority(sender: any, chatId: any) {
+        // Check local cache first
         const cached = this.authorityCache.get(sender);
         if (cached && (Date.now() - cached.timestamp) < this.AUTHORITY_CACHE_TTL) {
             return cached.data;
         }
-        return null;
-    }
 
-    async _loadAndCacheAuthority(sender: any, chatId: any) {
         try {
             const [isSuperUser, isGlobalAdmin] = await Promise.all([
                 this.adminService.isSuperUser(sender),
@@ -253,26 +238,24 @@ export class TieredContextLoader {
             const authority = {
                 isSuperUser,
                 isGlobalAdmin,
-                isGroupAdmin: false, // Sera enrichi par groupService si nécessaire
+                isGroupAdmin: false,
                 isBotAdmin: false,
                 level: isSuperUser ? 100 : (isGlobalAdmin ? 80 : 0)
             };
 
-            // Mettre en cache
             this.authorityCache.set(sender, {
                 data: authority,
                 timestamp: Date.now()
             });
 
             return authority;
-        } catch (e: any) {
+        } catch {
             return { isSuperUser: false, isGlobalAdmin: false, isGroupAdmin: false, isBotAdmin: false, level: 0 };
         }
     }
 
     async _getGroupBasics(chatId: any) {
         try {
-            // Récupérer seulement les infos essentielles du groupe
             const groupContext = await this.groupService.getContext(chatId, null, null);
             if (groupContext?.group) {
                 return {
@@ -283,227 +266,109 @@ export class TieredContextLoader {
                 };
             }
             return null;
-        } catch (e: any) {
+        } catch {
             return null;
         }
     }
 
-    async _loadFacts(sender: any) {
-        try {
-            return await this.factsMemory.format(sender);
-        } catch (e: any) {
-            console.warn('[TieredContext] Erreur chargement faits:', e.message);
-            return '';
-        }
-    }
-
-    async _loadRAG(chatId: any, text: any) {
-        try {
-            const relevantMemories = await this.memory.recall(chatId, text, 3);
-            if (relevantMemories?.length > 0) {
-                return relevantMemories.map((m: any) => `- ${m.content}`).join('\n');
-            }
-            return '';
-        } catch (e: any) {
-            console.warn('[TieredContext] Erreur RAG:', e.message);
-            return '';
-        }
-    }
-
-    async _loadGroupMembers(chatId: any) {
-        try {
-            if (!chatId?.endsWith('@g.us')) return [];
-            return await this.groupService.getGroupMembers(chatId);
-        } catch (e: any) {
-            return [];
-        }
-    }
-
-    async _loadConsciousness(chatId: any, sender: any) {
-        try {
-            return await this.consciousness.getGlobalState(chatId, sender);
-        } catch (e: any) {
-            return { emotionalState: { mood: 'neutre', annoyance: 0 } };
-        }
-    }
-
-    async _loadLessons() {
-        try {
-            const { dreamService } = await import('../../services/dreamService.js');
-            return dreamService.getLessons?.() || '';
-        } catch (e: any) {
-            return '';
-        }
-    }
-
-    async _loadWorkspaceKeys(chatId: any) {
-        try {
-            if (!this.workspaceMemory) return [];
-            const keys = await this.workspaceMemory.getKeys(chatId);
-            return keys || [];
-        } catch (e: any) {
-            console.warn('[TieredContext] Erreur chargement workspace keys:', e.message);
-            return [];
-        }
-    }
-
     // ========================================================================
-    // MÉTHODES PRIVÉES - Builders de contexte
+    // PRIVATE — Template Hydration
     // ========================================================================
 
-    _buildMinimalPrompt(userSnapshot: any, authority: any, group: any = null) {
-        // 1. STRATE 1 : NOYAU D'IDENTITÉ (Froid, très cachable)
-        // La template contient déjà tout le XML d'identité, on ne nettoie plus rien.
-        let identityXml = `${this.localCache.systemPromptTemplate.trim()}\n`;
-
-        // 2. STRATE 2 : MOTEUR d'EXÉCUTION (Froid, règles système dures)
-        let executionXml = `<execution_engine>\n`;
-        executionXml += `### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the \`get_my_capabilities\` tool**.\n`;
-        executionXml += `\n### 📂 EXECUTION ENVIRONMENT (SANDBOX)\nYou are an agent confined within a secure environment.\n- **Workspace**: \`${permissionManager.sandboxDir}\`\n- **Persistent Memory**: \`${permissionManager.storageDir}\`\nUse only these directories for files.\n`;
-        
-        executionXml += `\n### ⚡ EXECUTION DIRECTIVES (MANDATORY)\n`;
-        executionXml += `- **Actionable request → act NOW in this turn.** Never announce an action if you can execute it directly.\n`;
-        executionXml += `- **Continue until finished or blocked.** Do not reply with a plan or promise when a tool can advance the task.\n`;
-        executionXml += `- **Weak or empty tool result → vary the query** before concluding failure.\n`;
-        executionXml += `- **Mutable facts (git, process, api) require live checks** via tools.\n`;
-        executionXml += `- **Long task (>30s) → use \`code_execution\` with \`HIVE.sleepAndWake(delayMs, prompt)\`** to free the LLM loop. Never block.\n`;
-        
-        executionXml += `\n### 💻 DIRAC CODING PROTOCOL (Refactoring & Code)\n`;
-        executionXml += `1. **AST-Native First**: Only use \`read_file\` on a large file as a LAST resort. ALWAYS prefer \`get_file_skeleton\` to understand the structure, then \`get_function\` to target precise code. It is 90% faster.\n`;
-        executionXml += `2. **Hash-Anchored Edits**: Lines of code returned by AST tools and \`read_file\` are prefixed by a unique anchor (e.g., \`AppleBanana§    def process():\`).\n`;
-        executionXml += `3. **Surgical Editing**: To modify code, use \`edit_file\` providing the **exact anchor** (\`AppleBanana\`) or the full line with the anchor in \`anchor\`. This is highly precise and resilient to line shifts.\n`;
-        executionXml += `4. **Multi-File Batching**: Group ALL your file edits in a single \`edit_file\` call via the \`files\` parameter. Do not make separate calls.\n`;
-
-        executionXml += `\n### 🤫 SILENCE TOKEN\nWhen you have called HIVE.sleepAndWake() or have NOTHING to say to the user, reply ONLY with: \`__HIVE_SILENT_7f3a__\`\nThis must be your ONLY text.\n`;
-        executionXml += `</execution_engine>\n`;
-
-        // 3. STRATE 3 : CONSCIENCE (Chaud, généré et modifié dynamiquement)
+    /**
+     * Hydrates the system.md template by replacing {{PLACEHOLDERS}} and
+     * appending the execution engine block.
+     */
+    _hydrateTemplate(data: {
+        channel: string;
+        passport: string;
+        scratchpad: string;
+        actionHistory: string;
+        userSnapshot: any;
+        authority: any;
+        groupBasics: any;
+    }): string {
         const now = new Date();
-        let baseConsciousnessXml = `<current_consciousness_state>\n`;
-        baseConsciousnessXml += `  <timestamp>${now.getTime()}</timestamp>\n`;
-        baseConsciousnessXml += `  <datetime>${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} ${now.toLocaleTimeString('fr-FR')}</datetime>\n`;
-        
-        const socialContext = group ? 
-            `Location: Group "${group.name}"\nInterlocutor: ${userSnapshot.name}\nStatus: ${authority.isSuperUser ? '👑 SuperUser' : (authority.isGlobalAdmin ? '⭐ Admin' : 'Member')}` :
-            `Interlocutor: ${userSnapshot.name}\nStatus: ${authority.isSuperUser ? '👑 SuperUser' : 'Standard'}`;
-            
-        baseConsciousnessXml += `  <social_context>\n${socialContext}\n  </social_context>\n`;
 
-        // On retourne l'objet destructuré pour permettre à _buildFast et _buildFull de fermer la balise
-        return { identityXml, executionXml, baseConsciousnessXml };
+        let prompt = this.localCache.systemPromptTemplate;
+
+        // 1. Replace dynamic context placeholders
+        prompt = prompt.replace('{{CURRENT_CHANNEL}}', data.channel);
+        prompt = prompt.replace('{{CURRENT_TIMESTAMP}}', now.toISOString());
+        prompt = prompt.replace('{{USER_PASSPORT}}', data.passport);
+        prompt = prompt.replace('{{SCRATCHPAD}}', data.scratchpad);
+        prompt = prompt.replace('{{ACTION_HISTORY}}', data.actionHistory);
+
+        // 2. Append execution engine (injected after the template)
+        const executionBlock = this._buildExecutionBlock(data);
+
+        // 3. Append social context
+        const socialBlock = this._buildSocialContext(data);
+
+        return `${prompt}\n${socialBlock}\n${executionBlock}`;
     }
 
-    _buildFastContext(hot: any, warm: any, message: any) {
-        const { identityXml, executionXml, baseConsciousnessXml } = warm.systemPromptBase;
-        
-        // Assemblage final FastPath
-        const systemPrompt = `${identityXml}\n${baseConsciousnessXml}</current_consciousness_state>\n\n${executionXml}`;
+    /**
+     * Builds the execution engine block (sandbox paths, tool directives, etc.)
+     */
+    _buildExecutionBlock(data: any): string {
+        let block = `<execution_engine>\n`;
 
-        return {
-            systemPrompt,
-            recentMessages: hot.recentMessages,
-            history: hot.recentMessages.map((m: any) => ({
-                role: m.role,
-                content: m.content
-            })),
-            authority: warm.authority,
-            userSnapshot: warm.userSnapshot,
-            mode: 'FAST'
-        };
+        block += `### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the \`get_my_capabilities\` tool**.\n`;
+
+        block += `\n### 📂 EXECUTION ENVIRONMENT (SANDBOX)\nYou are an agent confined within a secure environment.\n- **Workspace**: \`${permissionManager.sandboxDir}\`\n- **Persistent Memory**: \`${permissionManager.storageDir}\`\nUse only these directories for files.\n`;
+
+        block += `\n### ⚡ EXECUTION DIRECTIVES (MANDATORY)\n`;
+        block += `- **Actionable request → act NOW in this turn.** Never announce an action if you can execute it directly.\n`;
+        block += `- **Continue until finished or blocked.** Do not reply with a plan or promise when a tool can advance the task.\n`;
+        block += `- **Weak or empty tool result → vary the query** before concluding failure.\n`;
+        block += `- **Mutable facts (git, process, api) require live checks** via tools.\n`;
+        block += `- **Long task (>30s) → use \`code_execution\` with \`HIVE.sleepAndWake(delayMs, prompt)\`** to free the LLM loop. Never block.\n`;
+
+        block += `\n### 💻 DIRAC CODING PROTOCOL (Refactoring & Code)\n`;
+        block += `1. **AST-Native First**: Only use \`read_file\` on a large file as a LAST resort. ALWAYS prefer \`get_file_skeleton\` to understand the structure, then \`get_function\` to target precise code. It is 90% faster.\n`;
+        block += `2. **Hash-Anchored Edits**: Lines of code returned by AST tools and \`read_file\` are prefixed by a unique anchor (e.g., \`AppleBanana§    def process():\`).\n`;
+        block += `3. **Surgical Editing**: To modify code, use \`edit_file\` providing the **exact anchor** (\`AppleBanana\`) or the full line with the anchor in \`anchor\`. This is highly precise and resilient to line shifts.\n`;
+        block += `4. **Multi-File Batching**: Group ALL your file edits in a single \`edit_file\` call via the \`files\` parameter. Do not make separate calls.\n`;
+
+        block += `\n### 🤫 SILENCE TOKEN\nWhen you have called HIVE.sleepAndWake() or have NOTHING to say to the user, reply ONLY with: \`__HIVE_SILENT_7f3a__\`\nThis must be your ONLY text.\n`;
+        block += `</execution_engine>\n`;
+
+        return block;
     }
 
-    _buildFullContext(hot: any, warm: any, cold: any, message: any) {
-        let { identityXml, executionXml, baseConsciousnessXml } = warm.systemPromptBase;
+    /**
+     * Builds a compact social context block.
+     */
+    _buildSocialContext(data: any): string {
+        const now = new Date();
+        let block = `<current_consciousness_state>\n`;
+        block += `  <timestamp>${now.getTime()}</timestamp>\n`;
+        block += `  <datetime>${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} ${now.toLocaleTimeString('fr-FR')}</datetime>\n`;
 
-        // Helper function to sanitize user input to prevent XML prompt injection
-        const sanitizeXml = (str: string) => {
-            if (!str) return '';
-            return str.replace(/&/g, '&amp;')
-                      .replace(/</g, '&lt;')
-                      .replace(/>/g, '&gt;');
-        };
-
-        // Enrichissement progressif du vecteur de conscience
-        if (cold.facts) {
-            baseConsciousnessXml += `  <factual_memory>\n${sanitizeXml(cold.facts)}\n  </factual_memory>\n`;
+        if (data.groupBasics) {
+            const g = data.groupBasics;
+            block += `  <social_context>\nLocation: Group "${g.name}"\nInterlocutor: ${data.userSnapshot.name}\nStatus: ${data.authority.isSuperUser ? '👑 SuperUser' : (data.authority.isGlobalAdmin ? '⭐ Admin' : 'Member')}\n  </social_context>\n`;
+        } else {
+            block += `  <social_context>\nInterlocutor: ${data.userSnapshot.name}\nStatus: ${data.authority.isSuperUser ? '👑 SuperUser' : 'Standard'}\n  </social_context>\n`;
         }
 
-        if (cold.rag) {
-            baseConsciousnessXml += `  <relevant_memories>\n${sanitizeXml(cold.rag)}\n  </relevant_memories>\n`;
-        }
+        block += `</current_consciousness_state>\n`;
+        return block;
+    }
 
-        if (cold.lessons) {
-            baseConsciousnessXml += `  <learned_lessons>\n${sanitizeXml(cold.lessons)}\n  </learned_lessons>\n`;
-        }
-
-        if (cold.consciousness?.emotionalState) {
-            const { mood, annoyance } = cold.consciousness.emotionalState;
-            baseConsciousnessXml += `  <emotional_vector>\n    <mood>${mood}</mood>\n    <stress_level>${annoyance}</stress_level>\n  </emotional_vector>\n`;
-        }
-
-        // [NOUVEAU] Workspace / Epistemic Memory (Zero-Trust)
-        if (cold.workspaceKeys && cold.workspaceKeys.length > 0) {
-            const keysList = cold.workspaceKeys.map((k: any) => k.key).join(', ');
-            baseConsciousnessXml += `  <available_workspace_documents>\n    ${sanitizeXml(keysList)}\n  </available_workspace_documents>\n`;
-            baseConsciousnessXml += `  <workspace_instruction>You have access to these documents. Use \`workspace_read\` to check their content if necessary to accomplish your task.</workspace_instruction>\n`;
-        }
-
-        // [BROWSER] Browser Availability
-        baseConsciousnessXml += `  <browser_agent_status>\n    <available>${cold.browserAvailable}</available>\n  </browser_agent_status>\n`;
-
-        // [NOUVEAU] Fix #5 : Inner Monologue (reprise du dernier <think>)
-        let lastThought = '';
-        if (hot.recentMessages && Array.isArray(hot.recentMessages)) {
-            // Parcourir de la fin vers le début pour trouver le dernier message de l'assistant
-            for (let i = hot.recentMessages.length - 1; i >= 0; i--) {
-                const msg = hot.recentMessages[i];
-                if (msg.role === 'assistant' && msg.content) {
-                    const match = msg.content.match(/<think>([\s\S]*?)<\/think>/);
-                    if (match && match[1]) {
-                        lastThought = match[1].trim();
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if (lastThought) {
-            baseConsciousnessXml += `  <inner_monologue>\n    <![CDATA[\n${lastThought}\n    ]]>\n  </inner_monologue>\n`;
-        }
-
-        const enrichedAuthority = { ...warm.authority };
-        if (cold.groupMembers?.length > 0) {
-            const botJid = container.get('transport')?.sock?.user?.id;
-            if (botJid) {
-                const botMember = cold.groupMembers.find((m: any) =>
-                    m.jid?.includes(botJid.split(':')[0]?.split('@')[0])
-                );
-                enrichedAuthority.isBotAdmin = botMember?.isAdmin || false;
-
-                if (enrichedAuthority.isBotAdmin) {
-                    enrichedAuthority.level = Math.max(enrichedAuthority.level, 50); // Level 50 = Moderator
-                    enrichedAuthority.botHasControl = true;
-                    // L'IA prend conscience de son pouvoir modérateur
-                    baseConsciousnessXml += `  <stance_towards_user>You have administration rights in this group. Hostility or banning allowed in case of abuse.</stance_towards_user>\n`;
-                }
-            }
-        }
-
-        // Assemblage final AgenticPath
-        const systemPrompt = `${identityXml}\n${baseConsciousnessXml}</current_consciousness_state>\n\n${executionXml}`;
-
+    /**
+     * Fallback context when WorkingMemory is completely unavailable.
+     */
+    _buildFallbackContext(chatId: any, message: any) {
         return {
-            systemPrompt,
-            recentMessages: hot.recentMessages,
-            history: hot.recentMessages.map((m: any) => ({
-                role: m.role,
-                content: m.content
-            })),
-            authority: enrichedAuthority,
-            userSnapshot: warm.userSnapshot,
-            groupMembers: cold.groupMembers,
-            consciousness: cold.consciousness,
-            mode: 'AGENTIC'
+            systemPrompt: this.localCache.systemPromptTemplate,
+            recentMessages: [],
+            history: [],
+            authority: { isSuperUser: false, isGlobalAdmin: false, isGroupAdmin: false, isBotAdmin: false, level: 0 },
+            userSnapshot: { jid: message.sender, name: 'Unknown', interactionCount: 0 },
+            groupBasics: null,
+            mode: 'UNIFIED'
         };
     }
 

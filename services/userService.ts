@@ -83,7 +83,9 @@ export const userService = {
                 jid: user.jid,
                 names: [user.last_pushname || user.username].filter(Boolean),
                 interaction_count: user.interaction_count || 0,
-                last_seen: user.last_seen
+                last_seen: user.last_seen,
+                language: user.language,
+                timezone: user.timezone
             };
         } catch (e: any) {
             console.error('[UserService] Error fetching profile:', e.message);
@@ -91,6 +93,10 @@ export const userService = {
             const fallbackId = identifier ? identifier.split(':')[0] : 'unknown';
             return { jid: fallbackId, names: ['Inconnu'], interaction_count: 0 };
         }
+    },
+
+    async updatePreferences(identifier: any, preferences: { language?: string, timezone?: string }) {
+        await StateManager.updatePreferences(identifier, preferences);
     },
 
     async registerLid(jid: any, lid: any) {

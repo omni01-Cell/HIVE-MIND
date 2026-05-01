@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   username text,
   interaction_count bigint DEFAULT 0,
+  language varchar(10),
+  timezone varchar(50),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   hash character varying,

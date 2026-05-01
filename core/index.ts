@@ -40,12 +40,8 @@ try {
 
 // Refactoring: Import des handlers modulaires
 import { SchedulerHandler, GroupHandler } from './handlers/index.js';
-import { buildContext } from './context/contextBuilder.js';
-
-// [THINK-FAST] Imports du nouveau système de réponse rapide
-import { classifyLocally, isConfident } from '../services/ai/ReflexClassifier.js';
+// [V3] Unified Context Engineering
 import { tieredContextLoader } from './context/TieredContextLoader.js';
-import FastPathHandler from './handlers/FastPathHandler.js';
 import { permissionManager } from './security/PermissionManager.js';
 
 // DTC Phase 1: Les admins globaux sont maintenant dans Supabase via adminService
@@ -729,8 +725,8 @@ export class BotCore {
                     const geminiLive = container.get('geminiLiveProvider');
                     const hiveCfg = container.get('config');
 
-                    // Construire le contexte via le loader canonique (FAST = léger, suffisant pour l'audio)
-                    const context: any = await tieredContextLoader.load(chatId, message, 'FAST');
+                    // Construire le contexte via le loader unifié V3
+                    const context: any = await tieredContextLoader.load(chatId, message);
 
                     // Tools sélection
                     // On charge les outils génériques car on a pas encore le texte
@@ -886,114 +882,25 @@ export class BotCore {
                 }
             }
 
-            // [THINK-FAST-PROGRESSIVE] classification locale ultra-rapide
-            // Security First: Seules les actions critiques forcent le mode Agentic immédiat.
-            const classification = classifyLocally(text, { hasImage: !!message.image }); // Passer le contexte image si dispo
-
-            // Variable pour garder trace de l'historique si on vient du FastPath
-            let fastPathHistory: any = null;
-            let skipAgentic = false;
-
-            // ⚡ FAST PATH (Défaut pour 95% des cas)
-            if (classification.mode === 'FAST') {
-                console.log(`[Core] ⚡ Fast Mode activé (${classification.reason})`);
-
-                // 1. Charger contexte léger (HOT/WARM)
-                const lightContext = await tieredContextLoader.load(chatId, message, 'FAST');
-                const fastHandler = new FastPathHandler(this.transport);
-
-                // 2. Exécuter FastPath avec mini-boucle (Max 2 étapes)
-                const fastResult = await fastHandler.handle(message, lightContext);
-
-                if (fastResult.type === 'RESPONSE' && fastResult.content) {
-                    // ✅ SUCCÈS RAPIDE
-                    console.log(`[Core] ✅ FastPath succès (${(fastResult as any).latency}ms)`);
-
-                    // Envoi réponse universelle
-                    await this.transport.sendUniversalResponse(chatId, { markdown: fastResult.content }, replyOptions, message.sourceChannel);
-
-                    // Mise à jour mémoire court terme
-                    await workingMemory.addMessage(chatId, 'assistant', fastResult.content);
-
-                    // Nettoyage et fin
-                    await this.transport.setPresence(chatId, 'paused');
-                    return; // ON S'ARRÊTE LÀ
-                }
-
-                if (fastResult.type === 'ESCALATE') {
-                    // ⚠️ ESCALAGE NÉCESSAIRE (Complexité > 2 étapes)
-                    console.log(`[Core] ⚠️ Escalade demandée par FastPath (${(fastResult as any).reason}) -> Handover vers Agentic`);
-
-                    // On garde l'historique pour l'injecter dans la boucle ReAct
-                    fastPathHistory = fastResult.partialHistory;
-                }
-            } else {
-                console.log(`[Core] 🧠 Agentic Mode forcé (${classification.reason})`);
-            }
-
             // ==================================================================================
-            // 🧠 AGENTIC PATH (Mode Réflexion Profonde)
-            // Arrivée ici si:
-            // 1. ReflexClassifier a dit "AGENTIC" (Critique/Admin)
-            // 2. FastPath a échoué ou demandé une escalade (Handover)
+            // 🧠 V3 UNIFIED PATH — Dynamic Context Engineering
+            // No more FAST/AGENTIC split. Every message gets the same Bureau de Travail
+            // and enters the ReAct loop. The agent PULLs deep context via tools if needed.
             // ==================================================================================
 
-            // 1. Charger le reste du contexte (COLD) - RAG, Faits, etc.
-            const fullContext = await tieredContextLoader.load(chatId, message, 'AGENTIC');
+            // 1. Load unified context (L1 Hot Cache — Passport + Scratchpad + ActionHistory + Chat)
+            const fullContext = await tieredContextLoader.load(chatId, message);
 
-            // 🧠 MECHANICAL CONSCIOUSNESS GUARD (Biais Méta fix)
-            // WHY: The consciousness system is 100% prompt-based (rhetorical, not mechanical).
-            // In 95% of cases, the LLM follows instructions. For the 5% edge case where
-            // annoyance is extreme and the user has no admin rights, we add ONE hard guard:
-            // a rate-limit delay that prevents hasty reactive responses.
-            const consciousnessState = (fullContext as any).consciousness;
-            if (consciousnessState?.emotionalState?.annoyance > 90 && !(fullContext.authority?.isBotAdmin)) {
-                console.log(`[Consciousness] 🧠 Annoyance critique (${consciousnessState.emotionalState.annoyance}/100) — throttle mécanique activé`);
-                await new Promise(resolve => setTimeout(resolve, 3000)); // 3s forced cooldown
-            }
-
-            // 2. Gestion Agrégation Contexte
+            // 2. Build LLM history
             const systemPrompt = fullContext.systemPrompt;
-            // On a besoin d'une variable locale standardisée pour l'AGENTIC path
-            let history = []; // [FIX] Initialiser la variable history
+            let history = [];
 
             history.push({ role: 'system', content: systemPrompt });
+            history.push(...fullContext.history);
+            history.push({ role: 'user', content: userContent });
 
-            // 3. Fusion de l'historique
-            if (fastPathHistory && fastPathHistory.length > 0) {
-                // WHY: fastPathHistory = [System(light), ...Recents(3), UserQuery, AssistantThought, ToolCall, ToolResult, ...]
-                // fullContext.history = Recents(5) from AGENTIC loader (different size than FastPath's 3)
-                // Old code used index arithmetic that broke when sizes differed.
-                // New approach: content-based deduplication — only inject genuinely new steps.
-                console.log(`[Core] 🔗 Injection historique FastPath (${fastPathHistory.length} msgs)`);
-
-                // 1. Build the canonical agentic base: [System Full] + [Recent History] + [User Query]
-                history.push(...fullContext.history);
-                history.push({ role: 'user', content: text });
-
-                // 2. Collect content signatures of messages already in history (for dedup)
-                const existingSignatures = new Set(
-                    history.map((m: any) => `${m.role}::${(m.content || '').substring(0, 100)}`)
-                );
-
-                // 3. Extract only NEW steps from FastPath (assistant thoughts, tool calls, tool results)
-                // Skip system prompt (index 0), skip messages that match existing history
-                for (let fpIdx = 1; fpIdx < fastPathHistory.length; fpIdx++) {
-                    const fpMsg = fastPathHistory[fpIdx];
-                    const sig = `${fpMsg.role}::${(fpMsg.content || '').substring(0, 100)}`;
-
-                    // Only inject messages that are NOT already present (tool results, assistant thoughts)
-                    if (!existingSignatures.has(sig)) {
-                        history.push(fpMsg);
-                    }
-                }
-
-            } else {
-                // Cas standard (Direct Agentic)
-                history.push(...fullContext.history);
-                history.push({ role: 'user', content: text });
-            }
-
+            // 3. Collector for action trace (saved to Redis L1 after response)
+            const toolsUsedThisTurn: Array<{name: string, args_summary: string, result_summary: string}> = [];
 
             let finalResponse: any = null;
             let keepThinking = true;
@@ -1337,6 +1244,13 @@ export class BotCore {
                                 ? (typeof toolResult.llmOutput === 'string' ? toolResult.llmOutput : JSON.stringify(toolResult.llmOutput))
                                 : JSON.stringify(toolResult); // Fallback pour les anciens plugins
 
+                            // [V3] Collect tool trace for action history
+                            toolsUsedThisTurn.push({
+                                name: toolName,
+                                args_summary: (toolCall.function.arguments || '').substring(0, 80),
+                                result_summary: (typeof llmContent === 'string' ? llmContent : '').substring(0, 100)
+                            });
+
                             // 3. Retourner le history entry (will be pushed after all parallel calls complete)
                             return {
                                 role: 'tool' as const,
@@ -1586,6 +1500,13 @@ export class BotCore {
 
             // 4. Stockage réponse (Redis + Supabase)
             await workingMemory.addMessage(chatId, 'assistant', finalResponse);
+
+            // [V3] Save compressed action trace to Redis L1 for next turn's <action_history>
+            await workingMemory.addActionTrace(chatId, {
+                user_query: (typeof text === 'string' ? text : '(multimodal)').substring(0, 100),
+                tools_used: toolsUsedThisTurn,
+                response_preview: finalResponse.substring(0, 100)
+            });
 
             if (isStorable(finalResponse, 'assistant')) {
                 const memory = container.get('memory');

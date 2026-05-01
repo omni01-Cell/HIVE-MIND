@@ -628,7 +628,6 @@ export const workingMemory = {
             for (const key of keys) {
                 const timestamp = await redis.get(key);
                 if (timestamp && parseInt(timestamp) > cutoff) {
-                    // Extraire le groupId de la clé
                     const groupId = key.replace('group:', '').replace(':lastActivity', '');
                     activeGroups.push(groupId);
                 }
@@ -639,6 +638,175 @@ export const workingMemory = {
             console.error('[WorkingMemory] getActiveGroups error:', error.message);
             return [];
         }
+    },
+
+    // ========== USER PASSPORT (L1 Hot Cache — Phase 2) ==========
+    // WHY: Mini identity card loaded into the prompt at EVERY message.
+    // Resolves the "goldfish amnesia" where FastPath had no user identity.
+
+    /**
+     * Retrieves the user passport from Redis L1.
+     * If miss, returns null (caller should build + set).
+     * @param {string} sender - User JID
+     * @returns {Promise<{name: string, lang: string, tz: string, topFacts: string[]} | null>}
+     */
+    async getPassport(sender: any) {
+        try {
+            await ensureConnected();
+            if (!redis.isOpen) return null;
+
+            const key = `passport:${sender}`;
+            const raw = await redis.get(key);
+            return raw ? JSON.parse(raw) : null;
+        } catch (error: any) {
+            console.error('[WorkingMemory] getPassport error:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * Stores the user passport in Redis L1.
+     * @param {string} sender - User JID
+     * @param {Object} passport - { name, lang, tz, topFacts }
+     */
+    async setPassport(sender: any, passport: any) {
+        try {
+            await ensureConnected();
+            if (!redis.isOpen) return;
+
+            const key = `passport:${sender}`;
+            await redis.set(key, JSON.stringify(passport), { EX: 3600 }); // 1h TTL, refreshed per interaction
+        } catch (error: any) {
+            console.error('[WorkingMemory] setPassport error:', error.message);
+        }
+    },
+
+    /**
+     * Formats a passport object into the compact string injected into <user_passport>.
+     * @param {Object} passport
+     * @returns {string} e.g. "Name: Jean | Language: FR | TZ: Europe/Paris | Likes Python, football"
+     */
+    formatPassport(passport: any): string {
+        if (!passport) return '(Unknown user)';
+
+        const parts = [];
+        if (passport.name) parts.push(`Name: ${passport.name}`);
+        if (passport.lang) parts.push(`Language: ${passport.lang}`);
+        if (passport.tz) parts.push(`TZ: ${passport.tz}`);
+        if (passport.topFacts && passport.topFacts.length > 0) {
+            parts.push(passport.topFacts.join(', '));
+        }
+
+        return parts.join(' | ') || '(No data)';
+    },
+
+    // ========== SCRATCHPAD / GCC (L1 Hot Cache — Phase 3) ==========
+    // WHY: Volatile working memory visible in the prompt at every turn.
+    // The agent can write here to preserve state across turns without
+    // polluting the Workspace (L2) which is for long-term documents.
+
+    /**
+     * Gets the scratchpad content for a chat.
+     * @param {string} chatId
+     * @returns {Promise<string>}
+     */
+    async getScratchpad(chatId: any): Promise<string> {
+        try {
+            await ensureConnected();
+            if (!redis.isOpen) return '';
+
+            const key = `scratchpad:${chatId}`;
+            return (await redis.get(key)) || '';
+        } catch (error: any) {
+            console.error('[WorkingMemory] getScratchpad error:', error.message);
+            return '';
+        }
+    },
+
+    /**
+     * Sets the scratchpad content for a chat. Max 500 chars enforced.
+     * @param {string} chatId
+     * @param {string} text
+     */
+    async setScratchpad(chatId: any, text: any) {
+        try {
+            await ensureConnected();
+            if (!redis.isOpen) return;
+
+            const key = `scratchpad:${chatId}`;
+            const truncated = typeof text === 'string' ? text.substring(0, 500) : '';
+            await redis.set(key, truncated, { EX: 86400 }); // 24h TTL
+        } catch (error: any) {
+            console.error('[WorkingMemory] setScratchpad error:', error.message);
+        }
+    },
+
+    // ========== ACTION HISTORY (L1 Hot Cache — Phase 4) ==========
+    // WHY: Compressed trace of tool executions from the last 3 turns.
+    // Resolves "technical amnesia" where the agent forgot which tools
+    // it already used and re-executed them needlessly.
+
+    /**
+     * Adds a compressed action trace for the current turn.
+     * Format: { turn, user_query, tools_used: [{name, args_summary, result_summary}], response_preview }
+     * @param {string} chatId
+     * @param {Object} trace
+     */
+    async addActionTrace(chatId: any, trace: any) {
+        try {
+            await ensureConnected();
+            if (!redis.isOpen) return;
+
+            const key = `action_history:${chatId}`;
+            const entry = JSON.stringify({
+                ...trace,
+                timestamp: Date.now()
+            });
+
+            await redis.rPush(key, entry);
+            // Keep only last 6 entries (3 turns × ~2 tool calls avg)
+            await redis.lTrim(key, -6, -1);
+            await redis.expire(key, 900); // 15min TTL (same as chat context)
+        } catch (error: any) {
+            console.error('[WorkingMemory] addActionTrace error:', error.message);
+        }
+    },
+
+    /**
+     * Gets the compressed action history for a chat.
+     * @param {string} chatId
+     * @param {number} limit
+     * @returns {Promise<Array>}
+     */
+    async getActionHistory(chatId: any, limit: number = 6): Promise<any[]> {
+        try {
+            await ensureConnected();
+            if (!redis.isOpen) return [];
+
+            const key = `action_history:${chatId}`;
+            const entries = await redis.lRange(key, -limit, -1);
+            return entries.map((e: any) => JSON.parse(e));
+        } catch (error: any) {
+            console.error('[WorkingMemory] getActionHistory error:', error.message);
+            return [];
+        }
+    },
+
+    /**
+     * Formats action history into the compact string injected into <action_history>.
+     * @param {Array} history
+     * @returns {string}
+     */
+    formatActionHistory(history: any[]): string {
+        if (!history || history.length === 0) return '(No recent actions)';
+
+        return history.map((h: any) => {
+            const toolsList = (h.tools_used || [])
+                .map((t: any) => `${t.name}(${t.args_summary || ''}) → ${t.result_summary || 'OK'}`)
+                .join('; ');
+
+            return `[Turn] User: "${h.user_query || '?'}" → ${toolsList || 'No tools'} → Agent: "${h.response_preview || '...'}"`;
+        }).join('\n');
     }
 };
 
