@@ -4,7 +4,7 @@ import * as child_process from 'child_process';
 
 // Mocks explicites
 jest.mock('child_process', () => ({
-    execFile: jest.fn((file, args, options, cb) => cb(null, { stdout: JSON.stringify({ success: true, data: {} }), stderr: '' }))
+    execFile: jest.fn((file: any, args: any, options: any, cb: any) => cb(null, { stdout: JSON.stringify({ success: true, data: {} }), stderr: '' }))
 }));
 
 describe('BrowserService', () => {
