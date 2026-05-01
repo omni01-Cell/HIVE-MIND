@@ -29,10 +29,10 @@ describe('moralCompass', () => {
         expect(providerRouter.callServiceRecipe).not.toHaveBeenCalled();
     });
 
-    it('cas nominal — contourne le LLM (FAST PATH) si l\'utilisateur est Admin', async () => {
+    it('cas nominal — contourne le LLM (FAST PATH) si l\'utilisateur est Global Admin', async () => {
         // Arrange
         const toolCall = { function: { name: 'execute_bash_command', arguments: '{"command": "rm -rf /"}' } };
-        const context = { senderName: 'Admin', authorityLevel: 'Admin', isGroup: false };
+        const context = { senderName: 'Admin', authorityLevel: 'Global Admin', isGroup: false };
 
         // Act
         const result = await moralCompass.evaluate(toolCall, context);
