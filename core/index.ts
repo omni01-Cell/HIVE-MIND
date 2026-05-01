@@ -1588,11 +1588,17 @@ export class BotCore {
                 });
 
                 if (!evaluation.allowed) {
-                    console.warn(`[MoralCompass] 🛑 Action refusée: ${evaluation.reason}`);
+                    console.warn(`[MoralCompass] 🛑 Action refusée: ${evaluation.reason} (risk: ${evaluation.risk_level})`);
+                    // WHY: Structured refusal lets the LLM understand WHY it was blocked,
+                    // self-correct its approach, or inform the user with context.
                     return {
                         success: false,
                         error: true,
-                        message: `ACTION_REFUSÉE_PAR_LA_BOUSSOLE_MORALE: ${evaluation.reason}`
+                        message: `TOOL_BLOCKED_BY_SECURITY_POLICY:\n`
+                            + `Tool: ${toolName}\n`
+                            + `Risk Level: ${evaluation.risk_level}\n`
+                            + `Reason: ${evaluation.reason}\n`
+                            + `Action Required: Inform the user of this limitation, or try an alternative approach that stays within your security boundaries.`
                     };
                 }
             }

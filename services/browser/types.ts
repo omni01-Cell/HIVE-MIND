@@ -23,5 +23,5 @@ export interface RefInfo {
 export interface BrowserExecOptions {
     session?: string;
     timeout?: number;
-    allowedDomains?: string[];
+    blockedDomains?: string[];
 }

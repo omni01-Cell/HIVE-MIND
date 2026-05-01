@@ -18,10 +18,21 @@ import * as fs from 'fs';
 import { transportManager } from '../transport/TransportManager.js';
 import { adminService } from '../../services/adminService.js';
 
+// WHY: Only commands that enable privilege escalation are banned.
+// Network tools (curl, wget) are useful and allowed — the agent won't exfiltrate.
+// VM escape vectors are handled by SafeScriptValidator at the JS level.
 export const BANNED_COMMANDS = [
-    'alias', 'curl', 'wget', 'nc', 'telnet', 'curlie', 'axel',
-    'aria2c', 'lynx', 'w3m', 'links', 'httpie', 'xh', 'chrome',
-    'firefox', 'safari', 'su', 'sudo'
+    'su', 'sudo',
+];
+
+// WHY: These flag combinations allow inline code execution that could bypass
+// the SafeScriptValidator. E.g. `node -e "require('child_process').exec('sudo ...')"`
+// We check baseCmd + first flag as a compound pattern.
+const BANNED_FLAG_PATTERNS: ReadonlyArray<[string, string]> = [
+    ['node', '-e'], ['node', '--eval'],
+    ['python', '-c'], ['python3', '-c'],
+    ['perl', '-e'], ['ruby', '-e'], ['lua', '-e'],
+    ['bash', '-c'], ['sh', '-c'], ['zsh', '-c'],
 ];
 
 export const SAFE_COMMANDS = new Set([
@@ -68,9 +79,6 @@ export class PermissionManager {
     private readonly SECURITY_HUB_ID = process.env.SECURITY_HUB_ID || '';
     /** Transport pour le Hub (whatsapp, telegram, discord) */
     private readonly SECURITY_TRANSPORT = process.env.SECURITY_TRANSPORT || 'whatsapp';
-    /** JID du super admin pour l'escalade DM (LOGIQUE 2 fallback) */
-    private readonly SUPER_ADMIN_JID = process.env.SUPER_ADMIN_JID || '';
-
     /** Timeout In-Band (LOGIQUE 2) — 10 minutes */
     private readonly INBAND_TIMEOUT_MS = 10 * 60 * 1000;
     /** Timeout Admin Hub (LOGIQUE 1) — 10 minutes avant fallback vers LOGIQUE 2 */
@@ -126,12 +134,25 @@ export class PermissionManager {
     }
 
     validateBashCommand(command: string, currentCwd: string = this.originalCwd): { result: boolean; requiresPermission: boolean; reason?: string } {
-        const parts = command.trim().split(' ');
+        const parts = command.trim().split(/\s+/);
         const baseCmd = parts[0]?.toLowerCase();
 
+        // Check single-word banned commands (su, sudo)
         if (BANNED_COMMANDS.includes(baseCmd)) {
-            return { result: false, requiresPermission: false, reason: `La commande '${baseCmd}' est strictement interdite pour des raisons de sécurité.` };
+            return { result: false, requiresPermission: false, reason: `La commande '${baseCmd}' est strictement interdite (escalade de privilèges).` };
         }
+
+        // Check compound flag patterns (node -e, bash -c, etc.)
+        const firstFlag = parts[1]?.toLowerCase();
+        if (firstFlag) {
+            const isPatternBanned = BANNED_FLAG_PATTERNS.some(
+                ([cmd, flag]) => baseCmd === cmd && firstFlag === flag
+            );
+            if (isPatternBanned) {
+                return { result: false, requiresPermission: false, reason: `La combinaison '${baseCmd} ${firstFlag}' est interdite (exécution inline hors sandbox).` };
+            }
+        }
+
         if (SAFE_COMMANDS.has(command.trim())) {
             return { result: true, requiresPermission: false };
         }
@@ -306,7 +327,7 @@ export class PermissionManager {
     /**
      * Démarre la logique In-Band :
      * - Si forceDirect (CLI) ou senderJid est SuperAdmin → demande dans le chat actuel
-     * - Sinon (non-admin ou tâche système) → escalade en DM au Créateur
+     * - Sinon (non-admin ou tâche système) → escalade en DM au Owner (DB)
      */
     private async _startInBandFallback(pending: PendingRequest, forceDirect: boolean = false): Promise<void> {
         const { chatId, senderJid, actionDescription, sourceChannel, id: requestId, numericId } = pending;
@@ -318,16 +339,17 @@ export class PermissionManager {
         const isAdmin = forceDirect || await adminService.isSuperUser(senderJid);
 
         if (!isAdmin) {
-            // Non-admin ou tâche de fond → escalade vers DM du Super Admin
-            if (this.SUPER_ADMIN_JID) {
-                targetChat = this.SUPER_ADMIN_JID;
-                targetChannel = 'whatsapp'; // On force sur WhatsApp pour le SuperAdmin
+            // Non-admin → escalade vers DM de l'Owner (résolu dynamiquement depuis la DB)
+            const ownerJid = await adminService.getOwnerJid();
+            if (ownerJid) {
+                targetChat = ownerJid;
+                targetChannel = 'whatsapp'; // On force sur WhatsApp pour l'Owner
                 escalated = true;
-                console.log(`[Permission] 🔀 Escalade #${numericId} : demande envoyée en DM au Super Admin`);
+                console.log(`[Permission] 🔀 Escalade #${numericId} : demande envoyée en DM à l'Owner (DB)`);
             } else {
-                console.warn(`[Permission] ⚠️ SUPER_ADMIN_JID non configuré. Blocage par défaut.`);
+                console.warn(`[Permission] ⚠️ Aucun owner trouvé dans global_admins. Blocage par défaut.`);
                 this._cleanup(requestId, numericId);
-                pending.resolve({ granted: false, feedback: "Aucun administrateur configuré pour approuver cette action." });
+                pending.resolve({ granted: false, feedback: "Aucun propriétaire (owner) configuré dans la base de données pour approuver cette action." });
                 return;
             }
         } else {

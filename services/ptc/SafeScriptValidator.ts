@@ -88,6 +88,7 @@ export function validateCode(
         ...JS_BUILTINS,
         ...SANDBOX_HELPERS,
         ...availableTools,
+        'HIVE',
     ]);
 
     // 1. Parse AST

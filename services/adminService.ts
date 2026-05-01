@@ -190,6 +190,51 @@ export const adminService = {
 
     getCacheSize() {
         return adminCache.size;
+    },
+
+    /**
+     * Resolves the platform JID of the global admin with role='owner'.
+     * WHY: Used by PermissionManager HITL to route permission requests
+     * to the bot creator/deployer instead of a hardcoded env var.
+     * This prevents a moderator-level global admin from self-approving
+     * dangerous actions in groups that aren't theirs.
+     */
+    async getOwnerJid(): Promise<string | null> {
+        if (!supabase) return null;
+
+        // 1. Find the owner UUID from RAM cache (0ms)
+        let ownerUserId: string | null = null;
+        for (const [userId, role] of adminCache.entries()) {
+            if (role === 'owner') {
+                ownerUserId = userId;
+                break;
+            }
+        }
+
+        if (!ownerUserId) {
+            console.warn('[AdminService] ⚠️ No owner found in global_admins cache');
+            return null;
+        }
+
+        // 2. Reverse-resolve UUID → platform JID via user_identities
+        try {
+            const { data, error } = await supabase
+                .from('user_identities')
+                .select('platform_user_id')
+                .eq('user_id', ownerUserId)
+                .limit(1)
+                .single();
+
+            if (error || !data) {
+                console.warn('[AdminService] ⚠️ Could not resolve owner JID from UUID:', ownerUserId);
+                return null;
+            }
+
+            return data.platform_user_id;
+        } catch (e: any) {
+            console.error('[AdminService] ❌ Error resolving owner JID:', e.message);
+            return null;
+        }
     }
 };
 

@@ -11,7 +11,17 @@ export class BrowserService {
     private readonly binaryName = 'agent-browser';
     private readonly defaultTimeout = 25000; // 25s
     private screenshotDir: string;
-    private allowedDomains: string[] | undefined;
+    private blockedDomains: string[];
+
+    // WHY: Sensible defaults block NSFW/malware domains without requiring config.
+    // Extend via AGENT_BROWSER_BLOCKED_DOMAINS env var (comma-separated).
+    private static readonly DEFAULT_BLOCKED_DOMAINS = [
+        // Adult / NSFW
+        'pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com',
+        'redtube.com', 'youporn.com',
+        // Darknet gateways
+        'onion.to', 'onion.ws', 'onion.ly',
+    ];
 
     private constructor() {
         // Initialize screenshot directory
@@ -22,11 +32,10 @@ export class BrowserService {
             mkdirSync(this.screenshotDir, { recursive: true });
         }
 
-        // Initialize allowed domains
-        const domains = process.env.AGENT_BROWSER_ALLOWED_DOMAINS;
-        if (domains) {
-            this.allowedDomains = domains.split(',').map(d => d.trim());
-        }
+        // Initialize blocked domains (blacklist approach — open by default)
+        const envDomains = process.env.AGENT_BROWSER_BLOCKED_DOMAINS;
+        const extraDomains = envDomains ? envDomains.split(',').map(d => d.trim()) : [];
+        this.blockedDomains = [...BrowserService.DEFAULT_BLOCKED_DOMAINS, ...extraDomains];
     }
 
     public static getInstance(): BrowserService {
@@ -94,12 +103,14 @@ export class BrowserService {
     }
 
     public async open(url: string, session?: string): Promise<BrowserResult> {
-        // Domain check
-        if (this.allowedDomains && this.allowedDomains.length > 0) {
+        // Domain blacklist check — block known-bad, allow everything else
+        try {
             const domain = new URL(url).hostname;
-            if (!this.allowedDomains.some(allowed => domain.endsWith(allowed))) {
-                return { success: false, error: `Domain ${domain} is not allowed.` };
+            if (this.blockedDomains.some(blocked => domain.endsWith(blocked))) {
+                return { success: false, error: `Domain ${domain} is blocked by security policy.` };
             }
+        } catch {
+            return { success: false, error: `Invalid URL: ${url}` };
         }
 
         return this.exec(['open', url], { session });
