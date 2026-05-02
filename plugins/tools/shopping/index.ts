@@ -1,8 +1,6 @@
-import { ShoppingAgent } from './shopping_agent.js';
-
 export default {
     name: 'shopping',
-    description: 'Assistant Shopping Intelligent (Comparateur, Specs, Prix).',
+    description: 'Intelligent Shopping Assistant (Comparison, Specs, Prices).',
     version: '1.0.0',
     enabled: true,
 
@@ -11,13 +9,13 @@ export default {
             type: 'function',
             function: {
                 name: 'find_product',
-                description: 'Cherche des produits à acheter en ligne. À utiliser pour des demandes comme "Je veux acheter...", "Trouve un prix pour...", "Quel est le meilleur...".',
+                description: 'Search for products to buy online. Use for requests like "I want to buy...", "Find a price for...", "What is the best...".',
                 parameters: {
                     type: 'object',
                     properties: {
                         request: {
                             type: 'string',
-                            description: 'La demande complète de l\'utilisateur (produit, budget, contraintes).'
+                            description: 'Full user request (product, budget, constraints).'
                         }
                     },
                     required: ['request']
@@ -27,24 +25,34 @@ export default {
     ],
 
     async execute(args: any, context: any, toolName: any) {
-        const { chatId, sender, transport } = context;
+        const { chatId, sender, transport } = context || {};
+
+        if (!chatId || !transport) {
+            return { success: false, message: 'CONTEXT_ERROR: Missing required context.' };
+        }
 
         if (toolName === 'find_product') {
             const { request } = args;
 
-            // 1. Démarrer
-            await transport.sendText(chatId, `🛍️ **Mode Shopping Activé**\nRecherche en cours pour : "${request}"...`);
+            // 1. Start
+            await transport.sendText(chatId, `🛍️ **Shopping Mode Activated**\nSearching for: "${request}"...`);
             await transport.setPresence(chatId, 'composing');
 
-            // 2. Lancer l'agent
-            const agent = new ShoppingAgent(sender, chatId);
-            const result = await agent.start(request);
+            // 2. Launch agent via dynamic import
+            try {
+                const { ShoppingAgent } = await import('./shopping_agent.js');
+                const agent = new ShoppingAgent(sender, chatId);
+                const result = await agent.start(request);
 
-            return {
-                success: true,
-                message: result
-            };
+                return {
+                    success: true,
+                    message: result
+                };
+            } catch (error: any) {
+                console.error('[ShoppingPlugin] Error:', error);
+                return { success: false, message: `Shopping search failed: ${error.message}` };
+            }
         }
-        return { success: false, message: "Outil inconnu" };
+        return { success: false, message: "Unknown tool" };
     }
 };

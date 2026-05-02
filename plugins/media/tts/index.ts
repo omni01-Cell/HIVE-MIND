@@ -1,10 +1,10 @@
 // @ts-nocheck
 // plugins/tts/index.js
-// Plugin Text-to-Speech - Utilise le VoiceProvider unifié
+// Text-to-Speech Plugin - Uses unified VoiceProvider
 
 export default {
     name: 'text_to_speech',
-    description: 'Convertit du texte en audio avec choix de voix.',
+    description: 'Converts text to audio with choice of voice.',
     version: '2.0.0',
     enabled: true,
 
@@ -12,21 +12,21 @@ export default {
         type: 'function',
         function: {
             name: 'text_to_speech',
-            description: 'Convertir du texte en audio vocal. Supporte plusieurs voix (Gemini: Aoede, Charon, Kore, etc.).',
+            description: 'Convert text to vocal audio. Supports multiple voices (Gemini: Aoede, Charon, Kore, etc.).',
             parameters: {
                 type: 'object',
                 properties: {
                     text: {
                         type: 'string',
-                        description: 'Le texte à convertir en audio'
+                        description: 'The text to convert to audio'
                     },
                     language: {
                         type: 'string',
-                        description: 'Code langue (fr, en, es, de, etc.). Par défaut: fr'
+                        description: 'Language code (en, fr, es, de, etc.). Default: en'
                     },
                     voice: {
                         type: 'string',
-                        description: 'Nom de la voix Gemini à utiliser (Aoede, Charon, Kore, Fenrir, etc.). Si non spécifié, utilise la voix Erina par défaut.'
+                        description: 'Name of the Gemini voice to use (Aoede, Charon, Kore, Fenrir, etc.). If not specified, uses the default Erina voice.'
                     }
                 },
                 required: ['text']
@@ -34,11 +34,15 @@ export default {
         }
     },
 
-    async execute(args: any, context: any) {
-        const { transport, chatId, message, container } = context;
-        let { text, language = 'fr', voice } = args;
+    async execute(args: any, context: any, toolName?: string) {
+        const { transport, chatId, message, container } = context || {};
+        let { text, language = 'en', voice } = args;
 
-        // Si pas de texte, essayer le message cité
+        if (!transport || !chatId) {
+            return { success: false, message: 'Transport or chatId missing from context' };
+        }
+
+        // If no text, try quoted message
         if (!text && message.quotedMsg?.text) {
             text = message.quotedMsg.text;
         }
@@ -46,38 +50,38 @@ export default {
         if (!text) {
             return {
                 success: false,
-                message: 'Dis-moi ce que tu veux que je prononce !'
+                message: 'Tell me what you want me to say!'
             };
         }
 
-        // Limite la longueur du texte
+        // Limit text length
         if (text.length > 1000) {
             text = text.substring(0, 1000);
         }
 
         try {
-            // Récupérer le VoiceProvider depuis le container ou fallback
+            // Retrieve VoiceProvider from container or fallback
             let voiceProvider = container?.get('voiceProvider');
 
             if (!voiceProvider) {
-                console.warn('[TTS Plugin] VoiceProvider manquant dans le contexte, tentative import direct...');
+                console.warn('[TTS Plugin] VoiceProvider missing from context, attempting direct import...');
                 try {
                     const { VoiceProvider } = await import('../../../services/voice/voiceProvider.js');
                     const { config: appConfig } = await import('../../../config/index.js');
                     const { quotaManager: qm } = await import('../../../services/quotaManager.js');
                     voiceProvider = new VoiceProvider(appConfig.voice, qm);
                 } catch (e: any) {
-                    console.error('[TTS Plugin] Echec import fallback:', e.message);
+                    console.error('[TTS Plugin] Fallback import failed:', e.message);
                 }
             }
 
             if (!voiceProvider) {
-                throw new Error('VoiceProvider non disponible (Service introuvable)');
+                throw new Error('VoiceProvider not available (Service not found)');
             }
 
             let result: any;
 
-            // Si une voix spécifique est demandée, utiliser Gemini
+            // If a specific voice is requested, use Gemini
             if (voice) {
                 result = await voiceProvider.textToSpeechWithVoice(text, voice);
             } else {
@@ -87,15 +91,15 @@ export default {
             if (!result || !result.audioBuffer) {
                 return {
                     success: false,
-                    message: 'Aucun provider TTS disponible actuellement 😔'
+                    message: 'No TTS provider available at the moment 😔'
                 };
             }
 
-            // Envoyer comme note vocale (PTT) via sendVoiceNote
-            // Cela affiche correctement comme un vocal WhatsApp
+            // Send as voice note (PTT) via sendVoiceNote
+            // This correctly displays as a WhatsApp voice message
             if (result.filePath) {
                 await transport.sendVoiceNote(chatId, result.filePath, {
-                    duration: Math.min(text.length * 50, 3000) // Simulation durée
+                    duration: Math.min(text.length * 50, 3000) // Simulated duration
                 });
             } else {
                 await transport.sendVoiceNote(chatId, result.audioBuffer, {
@@ -103,17 +107,17 @@ export default {
                 });
             }
 
-            const providerInfo = voice ? `voix ${voice}` : `provider ${result.provider}`;
+            const providerInfo = voice ? `voice ${voice}` : `provider ${result.provider}`;
             return {
                 success: true,
-                message: `Audio envoyé ! 🔊 (${providerInfo})`
+                message: `Audio sent! 🔊 (${providerInfo})`
             };
 
         } catch (error: any) {
-            console.error('[TTS Plugin] Erreur:', error);
+            console.error('[TTS Plugin] Error:', error);
             return {
                 success: false,
-                message: `Erreur TTS: ${error.message}`
+                message: `TTS Error: ${error.message}`
             };
         }
     }

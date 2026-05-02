@@ -1,9 +1,8 @@
 // @ts-nocheck
-import { container } from '../../../core/ServiceContainer.js';
 
 export default {
     name: 'crawlfire_web',
-    description: 'Plugin de crawling et scraping avancé via Firecrawl (v2). Permet de transformer des sites web en Markdown propre pour les LLM.',
+    description: 'Advanced crawling and scraping plugin via Firecrawl (v2). Transforms websites into clean Markdown for LLMs.',
     version: '1.0.0',
     enabled: true,
 
@@ -12,11 +11,11 @@ export default {
             type: 'function',
             function: {
                 name: 'firecrawl_scrape',
-                description: 'Scrape une URL unique pour obtenir son contenu en Markdown propre (max 25k caractères). Idéal pour lire un article, une documentation spécifique ou le contenu complet d\'une page web.',
+                description: 'Scrapes a single URL to obtain its content in clean Markdown (max 25k chars). Ideal for reading an article, specific documentation, or the full content of a web page.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        url: { type: 'string', description: 'L\'URL exacte à scraper' }
+                        url: { type: 'string', description: 'The exact URL to scrape' }
                     },
                     required: ['url']
                 }
@@ -26,12 +25,12 @@ export default {
             type: 'function',
             function: {
                 name: 'firecrawl_crawl',
-                description: 'Crawl un site web complet à partir d\'une URL de base pour extraire en masse le contenu de toutes ses sous-pages liées (concaténé jusqu\'à 30k caractères). Très utile pour "ingurgiter" tout un centre d\'aide ou un petit site web.',
+                description: 'Crawls an entire website from a base URL to bulk extract content from all linked sub-pages (concatenated up to 30k chars). Very useful for "ingesting" an entire help center or a small website.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        url: { type: 'string', description: 'URL de base du site à crawler' },
-                        limit: { type: 'integer', description: 'Nombre max de sous-pages à crawler (défaut 10)' }
+                        url: { type: 'string', description: 'Base URL of the site to crawl' },
+                        limit: { type: 'integer', description: 'Max number of sub-pages to crawl (default 10)' }
                     },
                     required: ['url']
                 }
@@ -41,11 +40,11 @@ export default {
             type: 'function',
             function: {
                 name: 'firecrawl_map',
-                description: 'Obtient le plan structurel d\'un site web sous forme de liste des URLs existantes (limité aux 100 premiers liens). Utile si tu cherches une page précise (ex: contact, tarifs) mais que tu ne connais pas son URL exacte.',
+                description: 'Obtains the structural plan of a website as a list of existing URLs (limited to the first 100 links). Useful if you are looking for a specific page (e.g., contact, pricing) but don\'t know its exact URL.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        url: { type: 'string', description: 'URL de base du site à mapper' }
+                        url: { type: 'string', description: 'Base URL of the site to map' }
                     },
                     required: ['url']
                 }
@@ -55,12 +54,12 @@ export default {
             type: 'function',
             function: {
                 name: 'firecrawl_search',
-                description: 'Recherche votre requête sur le web (type moteur de recherche) et scrape automatiquement les meilleurs résultats sous forme de Markdown. Le meilleur outil pour s\'informer sur l\'actualité récente ou un sujet général.',
+                description: 'Searches your query on the web (search engine style) and automatically scrapes top results as Markdown. Best tool for getting up to speed on recent news or a general topic.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        query: { type: 'string', description: 'La requête de recherche sur Internet (ex: "Actualités IA 2026")' },
-                        limit: { type: 'integer', description: 'Nombre de résultats web à scraper (défaut 3)' }
+                        query: { type: 'string', description: 'Web search query (e.g., "AI news 2026")' },
+                        limit: { type: 'integer', description: 'Number of web results to scrape (default 3)' }
                     },
                     required: ['query']
                 }
@@ -70,12 +69,12 @@ export default {
             type: 'function',
             function: {
                 name: 'firecrawl_extract',
-                description: 'Scrape une ou plusieurs URLs et en extrait intelligemment uniquement les données précises demandées dans le `prompt`, renvoyées sous un format structuré (JSON).',
+                description: 'Scrapes one or more URLs and intelligently extracts only the precise data requested in the `prompt`, returned in a structured format (JSON).',
                 parameters: {
                     type: 'object',
                     properties: {
-                        urls: { type: 'array', items: { type: 'string' }, description: 'Liste des URLs sources (supporte les wildcards comme /*)' },
-                        prompt: { type: 'string', description: 'Description claire et explicite des données exactes que tu veux extraire (ex: "Extrait le prix, la surface et la ville")' }
+                        urls: { type: 'array', items: { type: 'string' }, description: 'List of source URLs (supports wildcards like /*)' },
+                        prompt: { type: 'string', description: 'Clear and explicit description of exact data to extract (e.g., "Extract price, area, and city")' }
                     },
                     required: ['urls', 'prompt']
                 }
@@ -84,7 +83,14 @@ export default {
     ],
 
     async execute(args: any, context: any, toolName: any) {
-        const { transport, chatId } = context;
+        const { transport, chatId } = context || {};
+
+        if (!transport || !chatId) {
+            return { success: false, message: 'Transport or chatId missing from context' };
+        }
+
+        // Lazy load container to avoid top-level side effects
+        const { container } = await import('../../../core/ServiceContainer.js');
 
         let apiKey = process.env.FIRECRAWL_API_KEY;
         try {
@@ -100,7 +106,7 @@ export default {
         }
 
         if (!apiKey || apiKey.startsWith('YOUR_') || apiKey === 'fc-YOUR-API-KEY' || apiKey === 'fc-YOUR-API-KEY-HERE') {
-            return { success: false, message: "⚠️ Clé API Firecrawl non configurée. Veuillez configurer FIRECRAWL_API_KEY dans vos variables d'environnement." };
+            return { success: false, message: "⚠️ Firecrawl API key not configured. Please set FIRECRAWL_API_KEY in your environment variables." };
         }
 
         const baseUrl = "https://api.firecrawl.dev/v2";
@@ -122,11 +128,11 @@ export default {
                 case 'firecrawl_extract':
                     return await this.handleExtract(args.urls, args.prompt, headers, baseUrl, transport, chatId);
                 default:
-                    return { success: false, message: `Outil Firecrawl inconnu: ${toolName}` };
+                    return { success: false, message: `Unknown Firecrawl tool: ${toolName}` };
             }
         } catch (error: any) {
             console.error(`[CrawlFire] Error in ${toolName}:`, error.message);
-            return { success: false, message: `❌ Erreur Firecrawl: ${error.message}` };
+            return { success: false, message: `❌ Firecrawl error: ${error.message}` };
         }
     },
 
@@ -134,7 +140,7 @@ export default {
         const res = await fetch(url, options);
         const contentType = res.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
-            throw new Error(`Erreur API: réponse non-JSON (Status ${res.status}). Service potentiellement indisponible.`);
+            throw new Error(`API error: non-JSON response (Status ${res.status}). Service potentially unavailable.`);
         }
         return await res.json();
     },
@@ -146,30 +152,28 @@ export default {
             headers,
             body: JSON.stringify({ url, formats: ["markdown"] })
         });
-        if (!json.success) throw new Error(json.error || "Échec du scraping");
+        if (!json.success) throw new Error(json.error || "Scraping failed");
         
         const markdown = json.data.markdown || "";
-        const truncated = markdown.length > 25000 ? markdown.substring(0, 25000) + "\n\n[...Contenu tronqué car trop long...]" : markdown;
+        const truncated = markdown.length > 25000 ? markdown.substring(0, 25000) + "\n\n[...Content truncated due to length...]" : markdown;
         
         return {
             success: true,
-            // L'IA reçoit le texte brut de 25 000 caractères
             llmOutput: truncated,
-            // L'Humain reçoit une notification propre immédiate
-            userOutput: `🌐 *Lecture de la page Web terminée*\n📍 ${url}\n_Je suis en train d'analyser le contenu..._ 🧠`
+            userOutput: `🌐 *Web page reading finished*\n📍 ${url}\n_Analyzing content..._ 🧠`
         };
     },
 
     async handleCrawl(url: any, limit: any, headers: any, baseUrl: any, transport: any, chatId: any) {
         console.log(`[CrawlFire] 🕸️ Crawling: ${url} (limit: ${limit})`);
-        if (transport) await transport.sendText(chatId, `🕸️ Début du crawl sur ${url}...`);
+        if (transport) await transport.sendText(chatId, `🕸️ Starting crawl on ${url}...`);
 
         const startJson = await this.apiFetch(`${baseUrl}/crawl`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ url, limit })
         });
-        if (!startJson.success) throw new Error(startJson.error || "Échec du démarrage du crawl");
+        if (!startJson.success) throw new Error(startJson.error || "Crawl start failed");
 
         const jobId = startJson.id;
         return await this.pollJob(jobId, 'crawl', headers, baseUrl, transport, chatId);
@@ -182,7 +186,7 @@ export default {
             headers,
             body: JSON.stringify({ url })
         });
-        if (!json.success) throw new Error(json.error || "Échec du mapping");
+        if (!json.success) throw new Error(json.error || "Mapping failed");
         
         const maxLinks = 100;
         const total = json.links?.length || 0;
@@ -191,10 +195,10 @@ export default {
             linksDisp = linksDisp.slice(0, maxLinks);
         }
         
-        const linksTxt = linksDisp.map((l: any) => `- ${l.url} (${l.title || 'sans titre'})`).join('\n');
-        let msg = `🗺️ Plan du site ${url} (${total} liens trouvés) :\n\n${linksTxt}`;
+        const linksTxt = linksDisp.map((l: any) => `- ${l.url} (${l.title || 'untitled'})`).join('\n');
+        let msg = `🗺️ Sitemap for ${url} (${total} links found):\n\n${linksTxt}`;
         if (total > maxLinks) {
-            msg += `\n\n[... ${total - maxLinks} autres liens non affichés car la liste est trop longue ...]`;
+            msg += `\n\n[... ${total - maxLinks} more links not shown due to length ...]`;
         }
         return { success: true, message: msg };
     },
@@ -206,29 +210,29 @@ export default {
             headers,
             body: JSON.stringify({ query, limit, scrapeOptions: { formats: ["markdown"] } })
         });
-        if (!json.success) throw new Error(json.error || "Échec de la recherche");
+        if (!json.success) throw new Error(json.error || "Search failed");
 
         const results = json.data.map((d: any) => {
-            let md = d.markdown || 'Pas de contenu markdown';
+            let md = d.markdown || 'No markdown content';
             if (md.length > 5000) md = md.substring(0, 5000) + "...";
             return `### ${d.title}\nURL: ${d.url}\n\n${md}\n---`;
         }).join('\n\n');
-        return { success: true, message: `🔍 Résultats Firecrawl pour "${query}" :\n\n${results}` };
+        return { success: true, message: `🔍 Firecrawl results for "${query}":\n\n${results}` };
     },
 
     async handleExtract(urls: any, prompt: any, headers: any, baseUrl: any, transport: any, chatId: any) {
         console.log(`[CrawlFire] 🧪 Extracting from ${urls?.length} URLs`);
-        if (transport) await transport.sendText(chatId, `🧪 Extraction de données structurées en cours...`);
+        if (transport) await transport.sendText(chatId, `🧪 Extracting structured data...`);
 
         const json = await this.apiFetch(`${baseUrl}/extract`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ urls, prompt })
         });
-        if (!json.success) throw new Error(json.error || "Échec de l'extraction");
+        if (!json.success) throw new Error(json.error || "Extraction failed");
 
         if (json.data && json.status === 'completed') {
-            return { success: true, message: `🧪 Données extraites :\n\n\`\`\`json\n${JSON.stringify(json.data, null, 2)}\n\`\`\`` };
+            return { success: true, message: `🧪 Extracted data:\n\n\`\`\`json\n${JSON.stringify(json.data, null, 2)}\n\`\`\`` };
         }
 
         return await this.pollJob(json.id, 'extract', headers, baseUrl, transport, chatId);
@@ -242,7 +246,7 @@ export default {
             attempts++;
             await new Promise(r => setTimeout(r, 10000));
 
-            console.log(`[CrawlFire] ⏳ Polling ${type} job ${jobId} (attente ${attempts})`);
+            console.log(`[CrawlFire] ⏳ Polling ${type} job ${jobId} (attempt ${attempts})`);
             const json = await this.apiFetch(`${baseUrl}/${type}/${jobId}`, { headers });
 
             if (json.status === 'completed') {
@@ -250,11 +254,11 @@ export default {
                     const count = json.data?.length || 0;
                     let combinedMarkdown = json.data?.map((d: any) => `#### ${d.metadata?.title || d.metadata?.sourceURL}\n${d.markdown || ''}`).join('\n\n---\n\n') || '';
                     if (combinedMarkdown.length > 30000) {
-                        combinedMarkdown = combinedMarkdown.substring(0, 30000) + "\n\n[...Contenu tronqué car trop long...]";
+                        combinedMarkdown = combinedMarkdown.substring(0, 30000) + "\n\n[...Content truncated due to length...]";
                     }
-                    return { success: true, message: `✅ Crawl terminé (${count} pages trouvées).\n\n${combinedMarkdown}\n\n[ID de job: ${jobId}]` };
+                    return { success: true, message: `✅ Crawl finished (${count} pages found).\n\n${combinedMarkdown}\n\n[Job ID: ${jobId}]` };
                 } else {
-                    return { success: true, message: `✅ Extraction terminée :\n\n\`\`\`json\n${JSON.stringify(json.data, null, 2)}\n\`\`\`` };
+                    return { success: true, message: `✅ Extraction finished:\n\n\`\`\`json\n${JSON.stringify(json.data, null, 2)}\n\`\`\`` };
                 }
             }
 
@@ -263,10 +267,10 @@ export default {
             }
 
             if (attempts % 6 === 0 && transport) {
-                await transport.sendText(chatId, `⏳ Toujours en cours (${type})...`);
+                await transport.sendText(chatId, `⏳ Still in progress (${type})...`);
             }
         }
 
-        return { success: false, message: `⌛ L'opération ${type} prend trop de temps. Job ID: ${jobId}` };
+        return { success: false, message: `⌛ Operation ${type} is taking too long. Job ID: ${jobId}` };
     }
 };

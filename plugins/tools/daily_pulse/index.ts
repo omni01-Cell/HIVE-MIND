@@ -1,8 +1,6 @@
-import { journalGenerator } from './journal_generator.js';
-
 export default {
     name: 'daily_pulse',
-    description: 'Génère un journal audio (Daily Pulse) résumant l\'activité du groupe.',
+    description: 'Generates an audio news brief (Daily Pulse) summarizing group activity.',
     version: '1.1.0',
     enabled: true,
 
@@ -11,7 +9,7 @@ export default {
             type: 'function',
             function: {
                 name: 'generate_daily_pulse',
-                description: 'Génère un résumé audio narratif (Podcast/Journal) de l\'activité récente du groupe. À utiliser quand l\'utilisateur demande : "Quoi de neuf ?", "Résumé de la journée ?", "Lance le Daily Pulse", ou "Fais le journal".',
+                description: 'Generates a narrative audio summary (Podcast/Journal) of recent group activity. Use when the user asks: "What\'s new?", "Summary of the day?", "Start the Daily Pulse", or "Make the news brief".',
                 parameters: {
                     type: 'object',
                     properties: {},
@@ -22,43 +20,48 @@ export default {
     ],
 
     async execute(args: any, context: any, toolName: any) {
-        const { chatId, transport } = context;
+        const { chatId, transport } = context || {};
+
+        if (!chatId || !transport) {
+            return { success: false, message: 'CONTEXT_ERROR: Missing required context.' };
+        }
 
         if (toolName === 'generate_daily_pulse') {
-            await transport.sendText(chatId, `🎙️ **The Daily Pulse**\nAnalyse des logs en cours... Réglage des micros...`);
+            await transport.sendText(chatId, `🎙️ **The Daily Pulse**\nAnalyzing logs... Tuning microphones...`);
 
             try {
-                // 1. Générer le script
+                // 1. Generate the script via dynamic import
+                const { journalGenerator } = await import('./journal_generator.js');
                 const script = await journalGenerator.generateDailyScript(chatId);
 
                 if (!script) {
-                    return { success: false, message: "Pas assez d'activité pour un Daily Pulse aujourd'hui. 😴" };
+                    return { success: false, message: "Not enough activity for a Daily Pulse today. 😴" };
                 }
 
-                // 2. Production Audio via Gemini Live
-                console.log('[DailyPulse] 🎙️ Production audio en cours...');
+                // 2. Audio Production via Gemini Live
+                console.log('[DailyPulse] 🎙️ Audio production in progress...');
                 const audioPath = await journalGenerator.produceAudio(script);
 
                 if (audioPath) {
-                    // 3. Envoyer comme note vocale PTT
+                    // 3. Send as PTT voice note
                     await transport.sendVoiceNote(chatId, audioPath, {
                         caption: '📻 The Daily Pulse'
                     });
 
-                    console.log('[DailyPulse] ✅ Audio envoyé avec succès');
-                    return { success: true, message: "Daily Pulse audio envoyé ! 🎙️" };
+                    console.log('[DailyPulse] ✅ Audio sent successfully');
+                    return { success: true, message: "Daily Pulse audio sent! 🎙️" };
                 } else {
-                    // Fallback: envoyer le script en texte si audio échoue
+                    // Fallback: send script as text if audio fails
                     console.warn('[DailyPulse] ⚠️ Audio failed, fallback to text');
-                    await transport.sendText(chatId, `📻 **Script Radio du Jour :**\n\n${script}\n\n*(Audio non disponible cette fois)*`);
-                    return { success: true, message: "Daily Pulse généré (Mode Texte - Audio indisponible)" };
+                    await transport.sendText(chatId, `📻 **Radio Script of the Day:**\n\n${script}\n\n*(Audio not available this time)*`);
+                    return { success: true, message: "Daily Pulse generated (Text Mode - Audio unavailable)" };
                 }
 
             } catch (error: any) {
                 console.error('[DailyPulse] Error:', error);
-                return { success: false, message: "Erreur lors de la production du Daily Pulse." };
+                return { success: false, message: "Error during Daily Pulse production." };
             }
         }
-        return { success: false, message: "Outil inconnu" };
+        return { success: false, message: "Unknown tool" };
     }
 };

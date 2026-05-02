@@ -1,43 +1,39 @@
-// @ts-nocheck
-// plugins/goals/index.js
-// Plugin pour la gestion des objectifs autonomes
-
-import { goalsService } from '../../../services/goalsService.js';
+// Plugin for managing autonomous goals
 
 export default {
     name: 'goals',
     description: 'Autonomous goal management',
     version: '1.0.0',
 
-    tools: [
+    toolDefinitions: [
         {
             type: 'function',
             function: {
                 name: 'create_goal',
-                description: 'Crée un objectif autonome pour une action future (recherche, rappel, tâche planifiée). Utile pour se rappeler de faire quelque chose plus tard.',
+                description: 'Creates an autonomous goal for a future action (research, reminder, scheduled task). Useful for remembering to do something later.',
                 parameters: {
                     type: 'object',
                     properties: {
                         title: {
                             type: 'string',
-                            description: 'Titre court et descriptif de l\'objectif'
+                            description: 'Short and descriptive title of the goal'
                         },
                         description: {
                             type: 'string',
-                            description: 'Description détaillée de ce qui doit être fait'
+                            description: 'Detailed description of what needs to be done'
                         },
                         executeIn: {
                             type: 'string',
-                            description: 'Pour un rappel temporel: Quand exécuter cet objectif. Exemples: "2h", "1d", "tomorrow". Ignoré si waitForUser/Keyword est défini.',
+                            description: 'For a time-based reminder: When to execute this goal. Examples: "2h", "1d", "tomorrow". Ignored if waitForUser/Keyword is defined.',
                             default: '1h'
                         },
                         waitForUser: {
                             type: 'string',
-                            description: 'Optionnel: Attendre un message de cet utilisateur spécifique (Nom ou JID) avant de déclencher l\'objectif.'
+                            description: 'Optional: Wait for a message from this specific user (Name or JID) before triggering the goal.'
                         },
                         waitForKeyword: {
                             type: 'string',
-                            description: 'Optionnel: Attendre un message contenant ce mot-clé avant de déclencher l\'objectif.'
+                            description: 'Optional: Wait for a message containing this keyword before triggering the goal.'
                         }
                     },
                     required: ['title', 'description']
@@ -48,13 +44,13 @@ export default {
             type: 'function',
             function: {
                 name: 'list_goals',
-                description: 'Liste les objectifs autonomes actifs pour ce chat.',
+                description: 'Lists active autonomous goals for this chat.',
                 parameters: {
                     type: 'object',
                     properties: {
                         status: {
                             type: 'string',
-                            description: 'Filtrer par statut (pending, in_progress, completed)',
+                            description: 'Filter by status (pending, in_progress, completed)',
                             enum: ['pending', 'in_progress', 'completed', 'all']
                         }
                     }
@@ -65,17 +61,17 @@ export default {
             type: 'function',
             function: {
                 name: 'complete_goal',
-                description: 'Marque un objectif autonome comme terminé. À utiliser IMPÉRATIVEMENT à la fin de l\'exécution d\'un goal.',
+                description: 'Marks an autonomous goal as completed. MUST be used at the end of a goal execution.',
                 parameters: {
                     type: 'object',
                     properties: {
                         goalId: {
                             type: 'string',
-                            description: 'ID de l\'objectif complété'
+                            description: 'ID of the completed goal'
                         },
                         result: {
                             type: 'string',
-                            description: 'Résultat de l\'action (optionnel)'
+                            description: 'Action result (optional)'
                         }
                     },
                     required: ['goalId']
@@ -86,13 +82,13 @@ export default {
             type: 'function',
             function: {
                 name: 'cancel_goal',
-                description: 'Annule un objectif autonome.',
+                description: 'Cancels an autonomous goal.',
                 parameters: {
                     type: 'object',
                     properties: {
                         goalId: {
                             type: 'string',
-                            description: 'ID de l\'objectif à annuler'
+                            description: 'ID of the goal to cancel'
                         }
                     },
                     required: ['goalId']
@@ -101,17 +97,25 @@ export default {
         }
     ],
 
-    async execute(toolName: any, args: any, context: any) {
-    const { chatId } = context;
+    async execute(args: any, context: any, toolName: string) {
+        // Defensive destructuring of context
+        const { chatId } = context || {};
 
-    switch (toolName) {
+        if (!chatId) {
+            return { success: false, message: 'CONTEXT_ERROR: chatId is required.' };
+        }
+
+        // Lazy load goalsService to avoid top-level side effects
+        const { goalsService } = await import('../../../services/goalsService.js');
+
+        switch (toolName) {
         case 'create_goal': {
             const { title, description, executeIn = '1h', waitForUser, waitForKeyword } = args;
 
-            // Déterminer le type de trigger
+            // Determine trigger type
             let triggerType = 'TIME';
             let triggerEvent: any = null;
-            let triggerCondition = {};
+            let triggerCondition: any = {};
             let executeAt: any = null;
 
             if (waitForUser || waitForKeyword) {
@@ -121,17 +125,14 @@ export default {
                 if (waitForUser) triggerCondition.from_user = waitForUser;
                 if (waitForKeyword) triggerCondition.contains = waitForKeyword;
 
-                // Pas de date pour les événements, ou une date limite lointaine (à gérer plus tard)
-                // Pour l'instant on met null ou `now` ? Le service attend une date pour le insert.
-                // Si on regarde le schema, execute_at peut être null ?
-                // SUPPOSITION: On met une date lointaine (2099) pour ne pas déclencher le Time Scheduler
+                // Set a far date (2099) for events to avoid Time Scheduler triggering
                 executeAt = new Date('2099-12-31T23:59:59Z');
             } else {
                 // Time based
                 executeAt = goalsService.parseDuration(executeIn);
             }
 
-            // Créer l'objectif
+            // Create the goal
             const goal = await goalsService.createGoal({
                 title,
                 description,
@@ -145,14 +146,14 @@ export default {
 
             let validMsg = '';
             if (triggerType === 'EVENT') {
-                validMsg = `Exécution à l'événement: ${waitForUser ? `De "${waitForUser}"` : ''} ${waitForKeyword ? `Contenant "${waitForKeyword}"` : ''}`;
+                validMsg = `Execution on event: ${waitForUser ? `From "${waitForUser}"` : ''} ${waitForKeyword ? `Containing "${waitForKeyword}"` : ''}`;
             } else {
-                validMsg = `Exécution prévue: ${executeAt.toLocaleString('fr-FR')}`;
+                validMsg = `Scheduled execution: ${executeAt.toLocaleString('en-US')}`;
             }
 
             return {
                 success: true,
-                message: `✅ Objectif créé: "${title}"\n${validMsg}\nID: ${goal.id}`
+                message: `✅ Goal created: "${title}"\n${validMsg}\nID: ${goal.id}`
             };
         }
 
@@ -167,17 +168,17 @@ export default {
             if (filtered.length === 0) {
                 return {
                     success: true,
-                    message: 'Aucun objectif trouvé.'
+                    message: 'No goals found.'
                 };
             }
 
             const list = filtered.map((g: any) =>
-                `- [${g.status}] ${g.title}\n  Exécution: ${new Date(g.execute_at).toLocaleString('fr-FR')}\n  ID: ${g.id}`
+                `- [${g.status}] ${g.title}\n  Execution: ${new Date(g.execute_at).toLocaleString('en-US')}\n  ID: ${g.id}`
             ).join('\n\n');
 
             return {
                 success: true,
-                message: `📋 Objectifs (${filtered.length}):\n\n${list}`
+                message: `📋 Goals (${filtered.length}):\n\n${list}`
             };
         }
 
@@ -187,7 +188,7 @@ export default {
 
             return {
                 success: true,
-                message: `✅ Objectif ${goalId} marqué comme COMPLÉTÉ.`
+                message: `✅ Goal ${goalId} marked as COMPLETED.`
             };
         }
 
@@ -197,14 +198,14 @@ export default {
 
             return {
                 success: true,
-                message: `❌ Objectif ${goalId} annulé.`
+                message: `❌ Goal ${goalId} cancelled.`
             };
         }
 
         default:
             return {
                 success: false,
-                message: 'Outil inconnu.'
+                message: 'Unknown tool.'
             };
     }
 }

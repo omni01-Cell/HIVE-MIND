@@ -28,7 +28,7 @@ const execAsync = promisify(exec);
 
 export default {
     name: 'dev_tools_ast',
-    description: 'Outils AST pour intelligence structurelle du code (skeleton, extraction de fonction, références).',
+    description: 'AST tools for structural code intelligence (skeleton, function extraction, references).',
     version: '1.0.0',
     enabled: true,
 
@@ -37,14 +37,14 @@ export default {
             type: 'function',
             function: {
                 name: 'get_file_skeleton',
-                description: `Extrait la structure d'un fichier source (signatures de fonctions, classes, méthodes, interfaces) SANS les corps d'implémentation. Retourne un squelette compact ~80-95% plus petit que le fichier complet. Utilise cet outil AVANT read_file pour comprendre la structure d'un fichier. Supporte: TypeScript, JavaScript, Python.`,
+                description: `Extracts the structure of a source file (function signatures, classes, methods, interfaces) WITHOUT implementation bodies. Returns a compact skeleton ~80-95% smaller than the full file. Use this tool BEFORE read_file to understand a file's structure. Supports: TypeScript, JavaScript, Python.`,
                 parameters: {
                     type: 'object',
                     properties: {
                         paths: {
                             type: 'array',
                             items: { type: 'string' },
-                            description: 'Tableau de chemins de fichiers (relatifs ou absolus).'
+                            description: 'Array of file paths (relative or absolute).'
                         }
                     },
                     required: ['paths']
@@ -55,17 +55,17 @@ export default {
             type: 'function',
             function: {
                 name: 'get_function',
-                description: `Extrait le code complet d'une fonction ou méthode spécifique par son nom. Supporte la notation "Classe.methode" pour les méthodes de classe. Retourne UNIQUEMENT le code de la fonction ciblée avec ses ancres hash-stables. ~90% plus efficace que read_file pour une cible précise.`,
+                description: `Extracts the complete code of a specific function or method by its name. Supports "Class.method" notation for class methods. Returns ONLY the targeted function's code with its hash-stable anchors. ~90% more efficient than read_file for a specific target.`,
                 parameters: {
                     type: 'object',
                     properties: {
                         file_path: {
                             type: 'string',
-                            description: 'Chemin du fichier source.'
+                            description: 'Source file path.'
                         },
                         function_name: {
                             type: 'string',
-                            description: 'Nom de la fonction/méthode. Utiliser "Classe.methode" pour les méthodes de classe.'
+                            description: 'Name of the function/method. Use "Class.method" for class methods.'
                         }
                     },
                     required: ['file_path', 'function_name']
@@ -76,23 +76,23 @@ export default {
             type: 'function',
             function: {
                 name: 'find_symbol_references',
-                description: `Trouve toutes les références AST d'un symbole (fonction, classe, variable) dans un ensemble de fichiers. Plus précis que grep car utilise l'AST (pas de faux positifs dans les commentaires ou les strings). Retourne les définitions et/ou les utilisations.`,
+                description: `Finds all AST references of a symbol (function, class, variable) across a set of files. More accurate than grep as it uses AST (no false positives in comments or strings). Returns definitions and/or usages.`,
                 parameters: {
                     type: 'object',
                     properties: {
                         symbol_name: {
                             type: 'string',
-                            description: 'Nom du symbole à chercher.'
+                            description: 'Name of the symbol to search for.'
                         },
                         search_paths: {
                             type: 'array',
                             items: { type: 'string' },
-                            description: 'Fichiers ou répertoires dans lesquels chercher.'
+                            description: 'Files or directories to search in.'
                         },
                         find_type: {
                             type: 'string',
                             enum: ['definition', 'reference', 'both'],
-                            description: 'Type de résultats: "definition" (déclarations), "reference" (utilisations), ou "both" (tout). Défaut: "both".'
+                            description: 'Result type: "definition" (declarations), "reference" (usages), or "both" (all). Default: "both".'
                         }
                     },
                     required: ['symbol_name', 'search_paths']
@@ -110,7 +110,7 @@ export default {
                 case 'get_file_skeleton': {
                     const paths: string[] = args.paths || [];
                     if (paths.length === 0) {
-                        return { success: false, message: 'Paramètre "paths" requis (tableau de chemins de fichiers).' };
+                        return { success: false, message: 'Parameter "paths" required (array of file paths).' };
                     }
 
                     const results: string[] = [];
@@ -121,13 +121,13 @@ export default {
                             : path.resolve(permissionManager.sandboxDir, filePath);
 
                         if (!fs.existsSync(absolutePath)) {
-                            results.push(`--- ${filePath} ---\nErreur: Fichier inexistant.`);
+                            results.push(`--- ${filePath} ---\nError: File does not exist.`);
                             continue;
                         }
 
                         const ext = path.extname(absolutePath).toLowerCase().slice(1);
                         if (!LANGUAGE_MAP[ext]) {
-                            results.push(`--- ${filePath} ---\nLangue non supportée: .${ext}. Supportés: ${Object.keys(LANGUAGE_MAP).join(', ')}`);
+                            results.push(`--- ${filePath} ---\nUnsupported language: .${ext}. Supported: ${Object.keys(LANGUAGE_MAP).join(', ')}`);
                             continue;
                         }
 
@@ -136,10 +136,10 @@ export default {
                             if (skeleton) {
                                 results.push(`--- ${filePath} ---\n${skeleton}`);
                             } else {
-                                results.push(`--- ${filePath} ---\nAucune définition trouvée.`);
+                                results.push(`--- ${filePath} ---\nNo definitions found.`);
                             }
                         } catch (error: any) {
-                            results.push(`--- ${filePath} ---\nErreur AST: ${error.message}`);
+                            results.push(`--- ${filePath} ---\nAST Error: ${error.message}`);
                         }
                     }
 
@@ -152,7 +152,7 @@ export default {
                 case 'get_function': {
                     const { file_path, function_name } = args;
                     if (!file_path || !function_name) {
-                        return { success: false, message: 'Paramètres "file_path" et "function_name" requis.' };
+                        return { success: false, message: 'Parameters "file_path" and "function_name" required.' };
                     }
 
                     const absolutePath = path.isAbsolute(file_path) 
@@ -160,14 +160,14 @@ export default {
                         : path.resolve(permissionManager.sandboxDir, file_path);
 
                     if (!fs.existsSync(absolutePath)) {
-                        return { success: false, message: `Fichier inexistant: ${file_path}` };
+                        return { success: false, message: `File does not exist: ${file_path}` };
                     }
 
                     const ext = path.extname(absolutePath).toLowerCase().slice(1);
                     if (!LANGUAGE_MAP[ext]) {
                         return { 
                             success: false, 
-                            message: `Langue non supportée: .${ext}. Supportés: ${Object.keys(LANGUAGE_MAP).join(', ')}` 
+                            message: `Unsupported language: .${ext}. Supported: ${Object.keys(LANGUAGE_MAP).join(', ')}` 
                         };
                     }
 
@@ -176,7 +176,7 @@ export default {
                         if (!result) {
                             return {
                                 success: false,
-                                message: `Fonction "${function_name}" introuvable dans ${file_path}. Utilisez get_file_skeleton pour voir les symboles disponibles.`
+                                message: `Function "${function_name}" not found in ${file_path}. Use get_file_skeleton to see available symbols.`
                             };
                         }
 
@@ -190,17 +190,17 @@ export default {
 
                         return {
                             success: true,
-                            message: `Fonction "${function_name}" (lignes ${result.startLine + 1}-${result.endLine + 1}):\n${relevantLines.join('\n')}`
+                            message: `Function "${function_name}" (lines ${result.startLine + 1}-${result.endLine + 1}):\n${relevantLines.join('\n')}`
                         };
                     } catch (error: any) {
-                        return { success: false, message: `Erreur AST: ${error.message}` };
+                        return { success: false, message: `AST Error: ${error.message}` };
                     }
                 }
 
                 case 'find_symbol_references': {
                     const { symbol_name, search_paths, find_type = 'both' } = args;
                     if (!symbol_name || !search_paths?.length) {
-                        return { success: false, message: 'Paramètres "symbol_name" et "search_paths" requis.' };
+                        return { success: false, message: 'Parameters "symbol_name" and "search_paths" required.' };
                     }
 
                     // Expand directories to file lists
@@ -236,7 +236,7 @@ export default {
                     }
 
                     if (filePaths.length === 0) {
-                        return { success: false, message: 'Aucun fichier supporté trouvé dans les chemins spécifiés.' };
+                        return { success: false, message: 'No supported files found in specified paths.' };
                     }
 
                     try {
@@ -245,7 +245,7 @@ export default {
                         if (references.length === 0) {
                             return {
                                 success: true,
-                                message: `Aucune ${find_type === 'definition' ? 'définition' : find_type === 'reference' ? 'référence' : 'occurrence'} trouvée pour "${symbol_name}" dans ${filePaths.length} fichier(s).`
+                                message: `No ${find_type === 'definition' ? 'definition' : find_type === 'reference' ? 'reference' : 'occurrence'} found for "${symbol_name}" in ${filePaths.length} file(s).`
                             };
                         }
 
@@ -257,7 +257,7 @@ export default {
                             byFile.set(ref.filePath, existing);
                         }
 
-                        let output = `Symbole "${symbol_name}" — ${references.length} occurrence(s) dans ${byFile.size} fichier(s):\n\n`;
+                        let output = `Symbol "${symbol_name}" — ${references.length} occurrence(s) in ${byFile.size} file(s):\n\n`;
                         for (const [filePath, refs] of byFile) {
                             const relPath = path.relative(permissionManager.sandboxDir, filePath);
                             output += `--- ${relPath} ---\n`;
@@ -270,7 +270,7 @@ export default {
 
                         return { success: true, message: output.trim() };
                     } catch (error: any) {
-                        return { success: false, message: `Erreur AST: ${error.message}` };
+                        return { success: false, message: `AST Error: ${error.message}` };
                     }
                 }
 
@@ -278,7 +278,7 @@ export default {
                     return null;
             }
         } catch (error: any) {
-            return { success: false, message: `Erreur dans ${toolName}: ${error.message}` };
+            return { success: false, message: `Error in ${toolName}: ${error.message}` };
         }
     }
 };

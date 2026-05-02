@@ -1,37 +1,35 @@
 // @ts-nocheck
 // plugins/group_manager/index.js
-// Plugin Group Manager - Point d'entrée et commandes admin
+// Group Manager Plugin - Entry point and admin commands
 
 import { filterDB, whitelistDB, warningsDB, configDB } from './database.js';
 import { filterProcessor } from './processor.js';
-import { providerRouter } from '../../../providers/index.js';
-import { workingMemory } from '../../../services/workingMemory.js';
 import { extractNumericId, jidMatch, formatForDisplay } from '../../../utils/jidHelper.js';
 
 export default {
     name: 'group_manager',
-    description: 'Gestion avancée des groupes : filtrage, warnings, bans automatiques.',
+    description: 'Advanced group management: filtering, warnings, auto-bans.',
     version: '1.0.0',
     enabled: true,
 
-    // Expose le processeur pour l'intégration dans le core
+    // Expose processor for core integration
     processor: filterProcessor,
 
     // ========================================================================
-    // TEXT MATCHERS : Patterns regex pour fallback textuel (découplage core)
+    // TEXT MATCHERS: Regex patterns for textual fallback (core decoupling)
     // ========================================================================
     textMatchers: [
         {
             // Pattern BAN: [ban:@xxx], ban @xxx, **ban**, etc.
             pattern: /\bban\b/i,
             handler: 'whatsapp_ban_user',
-            description: 'Bannir un utilisateur mentionné',
+            description: 'Ban a mentioned user',
             extractArgs: (match, message, text) => {
-                // On a besoin des mentions du message original
+                // We need mentions from the original message
                 const mentionedJids = message.mentionedJids || [];
                 if (mentionedJids.length === 0) return null;
 
-                // Filtrer les JIDs qui ne sont pas le bot
+                // Filter JIDs that are not the bot
                 const botId = message.botJid?.split(':')[0]?.split('@')[0];
                 const targetJids = mentionedJids.filter((jid: any) => {
                     const id = jid.split('@')[0];
@@ -46,9 +44,9 @@ export default {
             // Pattern TAGALL: tagall, tag all, [tagall], tag:all
             pattern: /\[?tag[:\s_-]*all\]?/i,
             handler: 'whatsapp_tagall',
-            description: 'Taguer tous les membres du groupe',
+            description: 'Tag all group members',
             extractArgs: (match, message, text) => {
-                // Extraire la raison après "tagall"
+                // Extract reason after "tagall"
                 const reasonMatch = text.match(/tag[:\s_-]*all[:\s]+(.+)/i);
                 return { reason: reasonMatch?.[1]?.trim() || '' };
             }
@@ -57,58 +55,41 @@ export default {
             // Pattern ADD: [add:123456789]
             pattern: /\[add[:\s]+(\d+)\]/i,
             handler: 'whatsapp_add_user',
-            description: 'Ajouter un utilisateur par numéro de téléphone',
+            description: 'Add a user by phone number',
             extractArgs: (match: any) => {
                 return { phone_number: match[1] };
             }
         }
     ],
 
-    // Définitions des outils pour l'IA
+    // Tool definitions for the AI
     toolDefinitions: [
         {
             type: 'function',
             function: {
                 name: 'whatsapp_filter_add',
-                description: 'Ajoute un filtre de mot-clé au groupe. ADMIN REQUIS.',
+                description: 'Adds a forbidden keyword or regex to the group filter. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        keyword: {
-                            type: 'string',
-                            description: 'Le mot-clé à filtrer'
-                        },
-                        rule: {
-                            type: 'string',
-                            description: 'Règle de contexte (ex: "ban si sérieux, ok si humour")'
-                        },
-                        severity: {
-                            type: 'string',
-                            enum: ['warn', 'ban', 'kick', 'mute'],
-                            description: 'Sévérité par défaut'
-                        }
+                        keyword: { type: 'string', description: 'Forbidden keyword' },
+                        severity: { type: 'string', enum: ['warn', 'kick', 'ban', 'mute'], description: 'Action to take' },
+                        regex_variants: { type: 'array', items: { type: 'string' }, description: 'Regex variants (optional)' },
+                        context_rule: { type: 'string', description: 'Context rule for LLM analysis (optional)' }
                     },
-                    required: ['keyword']
+                    required: ['keyword', 'severity']
                 }
             }
         },
         {
             type: 'function',
             function: {
-                name: 'whatsapp_filter_list',
-                description: 'Liste les filtres actifs du groupe.',
-                parameters: { type: 'object', properties: {} }
-            }
-        },
-        {
-            type: 'function',
-            function: {
                 name: 'whatsapp_filter_remove',
-                description: 'Supprime un filtre par son numéro. ADMIN REQUIS.',
+                description: 'Removes a filter by ID. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        filter_id: { type: 'integer', description: 'ID du filtre' }
+                        filter_id: { type: 'string', description: 'UUID of the filter to remove' }
                     },
                     required: ['filter_id']
                 }
@@ -117,12 +98,20 @@ export default {
         {
             type: 'function',
             function: {
+                name: 'whatsapp_filter_list',
+                description: 'Lists all active filters for this group.',
+                parameters: { type: 'object', properties: {} }
+            }
+        },
+        {
+            type: 'function',
+            function: {
                 name: 'whatsapp_whitelist_add',
-                description: 'Ajoute un utilisateur à la whitelist (exempté du filtrage). ADMIN REQUIS.',
+                description: 'Whitelists a user to bypass filters. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur' }
+                        user_jid: { type: 'string', description: 'JID of the user to whitelist' }
                     },
                     required: ['user_jid']
                 }
@@ -132,21 +121,14 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_config',
-                description: 'Configure les paramètres du groupe (warnings, auto-ban). ADMIN REQUIS.',
+                description: 'Configures group management settings. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        action: {
-                            type: 'string',
-                            enum: ['enable', 'disable', 'set_warnings', 'auto_ban_on', 'auto_ban_off'],
-                            description: 'Action de configuration'
-                        },
-                        value: {
-                            type: 'integer',
-                            description: 'Valeur (pour set_warnings)'
-                        }
-                    },
-                    required: ['action']
+                        is_filtering_active: { type: 'boolean', description: 'Enable/disable filtering' },
+                        warning_limit: { type: 'integer', description: 'Max warnings before ban' },
+                        auto_ban: { type: 'boolean', description: 'Auto-ban when limit reached' }
+                    }
                 }
             }
         },
@@ -154,25 +136,24 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_warnings_reset',
-                description: 'Réinitialise les warnings d\'un utilisateur. ADMIN REQUIS.',
+                description: 'Resets warnings for a user. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur' }
+                        user_jid: { type: 'string', description: 'User JID' }
                     },
                     required: ['user_jid']
                 }
             }
         },
-        // --- Merge de MODERATION ---
         {
             type: 'function',
             function: {
                 name: 'whatsapp_tagall',
-                description: 'Mentionne tous les membres du groupe. BOT ADMIN REQUIS.',
+                description: 'Mentions everyone in the group. BOT ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
-                    properties: { reason: { type: 'string', description: 'Raison (annonce, etc.)' } }
+                    properties: { reason: { type: 'string', description: 'Reason for tagging everyone' } }
                 }
             }
         },
@@ -180,12 +161,12 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_ban_user',
-                description: 'Bannit un utilisateur. ADMIN REQUIS.',
+                description: 'Bans a user. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur' },
-                        reason: { type: 'string', description: 'Raison' }
+                        user_jid: { type: 'string', description: 'User JID' },
+                        reason: { type: 'string', description: 'Reason for the ban' }
                     },
                     required: ['user_jid']
                 }
@@ -195,7 +176,7 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_add_user',
-                description: 'Génère un lien d\'invitation pour ajouter un membre (Contournement limitation WhatsApp).',
+                description: 'Generates an invitation link to add a member.',
                 parameters: { type: 'object', properties: {} }
             }
         },
@@ -203,67 +184,26 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_mute_user',
-                description: 'Mute temporairement un utilisateur (le bot ignorera ses messages pendant X minutes). ADMIN REQUIS.',
+                description: 'Temporarily mutes a user. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur à mute' },
-                        duration: { type: 'integer', description: 'Durée en minutes (défaut: 30)' }
+                        user_jid: { type: 'string', description: 'JID of user to mute' },
+                        duration: { type: 'integer', description: 'Duration in minutes' }
                     },
                     required: ['user_jid']
                 }
             }
         },
-        // --- INTÉGRATION groupService (Phase 2) ---
-        {
-            type: 'function',
-            function: {
-                name: 'whatsapp_mission',
-                description: 'Affiche la mission du bot dans ce groupe.',
-                parameters: { type: 'object', properties: {} }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'whatsapp_setmission',
-                description: 'Définit la mission du bot dans ce groupe. ADMIN REQUIS.',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        title: { type: 'string', description: 'Titre de la mission (ex: Gestion communauté)' },
-                        description: { type: 'string', description: 'Description détaillée de la mission du bot' }
-                    },
-                    required: ['title', 'description']
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'whatsapp_mygroups',
-                description: 'List all groups where you are admin.',
-                parameters: { type: 'object', properties: {} }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'whatsapp_groupstats',
-                description: 'Affiche les statistiques du groupe actuel.',
-                parameters: { type: 'object', properties: {} }
-            }
-        },
-        // --- COMMANDES MANQUANTES (Ajoutées) ---
         {
             type: 'function',
             function: {
                 name: 'whatsapp_unmute_user',
-                description: 'Retire le mute d\'un utilisateur. ADMIN REQUIS.',
+                description: 'Unmutes a user. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur à unmute' }
+                        user_jid: { type: 'string', description: 'JID of user to unmute' }
                     },
                     required: ['user_jid']
                 }
@@ -273,11 +213,11 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_promote',
-                description: 'Promeut un membre au rang d\'administrateur du groupe. BOT ADMIN REQUIS.',
+                description: 'Promotes a member to group admin. BOT ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID du membre à promouvoir' }
+                        user_jid: { type: 'string', description: 'JID of member to promote' }
                     },
                     required: ['user_jid']
                 }
@@ -287,11 +227,11 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_demote',
-                description: 'Retire les droits administrateur d\'un membre. BOT ADMIN REQUIS.',
+                description: 'Demotes a group admin. BOT ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'admin à rétrograder' }
+                        user_jid: { type: 'string', description: 'JID of admin to demote' }
                     },
                     required: ['user_jid']
                 }
@@ -300,22 +240,13 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'whatsapp_groupinfo',
-                description: 'Affiche les informations détaillées du groupe (admins, membres, description).',
-                parameters: { type: 'object', properties: {} }
-            }
-        },
-        // --- ARSENAL SENTINELLE (Nouveaux Outils) ---
-        {
-            type: 'function',
-            function: {
                 name: 'whatsapp_kick_user',
-                description: 'Expulse un utilisateur (Kick simple sans ban DB). ADMIN REQUIS.',
+                description: 'Kicks a user. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur' },
-                        reason: { type: 'string', description: 'Raison de l\'expulsion' }
+                        user_jid: { type: 'string', description: 'User JID' },
+                        reason: { type: 'string', description: 'Reason for kick' }
                     },
                     required: ['user_jid']
                 }
@@ -325,12 +256,12 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_warn_user',
-                description: 'Donne un avertissement officiel à un utilisateur. (Auto-ban au 3ème). ADMIN REQUIS.',
+                description: 'Gives an official warning to a user. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur' },
-                        reason: { type: 'string', description: 'Raison du warn' }
+                        user_jid: { type: 'string', description: 'User JID' },
+                        reason: { type: 'string', description: 'Reason for warning' }
                     },
                     required: ['user_jid']
                 }
@@ -340,11 +271,11 @@ export default {
             type: 'function',
             function: {
                 name: 'whatsapp_lock_group',
-                description: 'Verrouille/Déverrouille le groupe (Seuls les admins peuvent parler). ADMIN REQUIS.',
+                description: 'Locks/Unlocks the group. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        action: { type: 'string', enum: ['lock', 'unlock'], description: 'lock = fermer, unlock = ouvrir' }
+                        action: { type: 'string', enum: ['lock', 'unlock'], description: 'Action' }
                     },
                     required: ['action']
                 }
@@ -353,29 +284,24 @@ export default {
     ],
 
     /**
-     * Exécute une commande du Group Manager
+     * Executes a Group Manager command
      */
     async execute(args: any, context: any, toolName: any) {
-        const { transport, message, chatId, sender } = context;
+        const { transport, message, chatId, sender } = context || {};
 
-        // Vérifier qu'on est dans un groupe
+        if (!transport || !message || !chatId || !sender) {
+            return { success: false, error: 'CONTEXT_ERROR: Missing required context.' };
+        }
+
         if (!message.isGroup) {
-            return { success: false, message: 'REFUSÉ: Commande réservée aux groupes.' };
+            return { success: false, error: 'DENIED: Command reserved for groups.' };
         }
 
-        // Vérifier que l'utilisateur est admin
         const isAdmin = await transport.isAdmin(chatId, sender);
-        // Exception: tagall peut être utilisé par le bot s'il est admin, mais ici on exige que l'user soit admin
         if (!isAdmin && toolName !== 'whatsapp_filter_list') {
-            // Cas Spécial "Ghost Tag" : Si un non-admin essaie, on réagit juste avec ❌
-            if (toolName === 'whatsapp_tagall') {
-                await transport.sendReaction(chatId, message.raw.key, '❌');
-                return { success: false, message: 'REFUSÉ: TagAll réservé aux admins.', silent: true };
-            }
-            return { success: false, message: 'REFUSÉ: Seuls les admins peuvent utiliser ce module.' };
+            return { success: false, error: 'DENIED: Only admins can use this module.' };
         }
 
-        // Dispatcher selon la commande
         switch (toolName) {
             case 'whatsapp_filter_add':
                 return await this._addFilter(chatId, args, sender);
@@ -395,13 +321,38 @@ export default {
             case 'whatsapp_warnings_reset':
                 return await this._resetWarnings(chatId, args, message);
 
-            // --- NOUVELLES COMMANDES (Fusion Moderation) ---
             case 'whatsapp_tagall':
                 await transport.tagAll(chatId, args.reason);
-                return { success: true, message: '📢 Tout le monde a été tagué.' };
+                return { success: true, message: '📢 Everyone has been tagged.' };
 
             case 'whatsapp_ban_user':
-                return await this._banUser(chatId, args, message, transport);
+                await transport.banUser(chatId, args.user_jid, args.reason);
+                return { success: true, message: `🚫 User ${args.user_jid} has been banned.` };
+
+            case 'whatsapp_kick_user':
+                await transport.kickUser(chatId, args.user_jid, args.reason);
+                return { success: true, message: `👢 User ${args.user_jid} has been kicked.` };
+
+            case 'whatsapp_promote':
+                await transport.promoteUser(chatId, args.user_jid);
+                return { success: true, message: `⭐ User ${args.user_jid} has been promoted to admin.` };
+
+            case 'whatsapp_demote':
+                await transport.demoteUser(chatId, args.user_jid);
+                return { success: true, message: `👤 User ${args.user_jid} is no longer an admin.` };
+
+            case 'whatsapp_lock_group':
+                await transport.lockGroup(chatId, args.action === 'lock');
+                return { success: true, message: `🔒 Group is now ${args.action === 'lock' ? 'locked' : 'unlocked'}.` };
+
+            case 'whatsapp_warn_user':
+                const warningResult = await filterProcessor._executeAction(
+                    transport, chatId, args.user_jid, 
+                    { keyword: 'Manual warn', severity: 'warn', id: 'manual' }, 
+                    { shouldAct: true, reason: args.reason || 'Admin manual warning' },
+                    await configDB.get(chatId)
+                );
+                return { success: true, message: `⚠️ Warning given to ${args.user_jid}.` };
 
             case 'whatsapp_add_user':
                 return await this._generateInvite(chatId, transport);
@@ -409,13 +360,14 @@ export default {
             case 'whatsapp_mute_user':
                 return await this._muteUser(chatId, args, message);
 
+            case 'whatsapp_unmute_user':
+                return await this._unmuteUser(chatId, args, message);
 
-            // --- INTÉGRATION groupService (Phase 2) ---
             case 'whatsapp_mission':
                 return await this._getMission(chatId);
 
             case 'whatsapp_setmission':
-                return await this._setMission(chatId, args, sender);
+                return await this._setMission(chatId, args, sender, context);
 
             case 'whatsapp_mygroups':
                 return await this._listMyGroups(sender);
@@ -423,31 +375,11 @@ export default {
             case 'whatsapp_groupstats':
                 return await this._getGroupStats(chatId);
 
-            // --- COMMANDES MANQUANTES (Ajoutées) ---
-            case 'whatsapp_unmute_user':
-                return await this._unmuteUser(chatId, args, message);
-
-            case 'whatsapp_promote':
-                return await this._promoteUser(chatId, args, message, transport);
-
-            case 'whatsapp_demote':
-                return await this._demoteUser(chatId, args, message, transport);
-
             case 'whatsapp_groupinfo':
                 return await this._getGroupInfo(chatId, transport);
 
-            // --- ARSENAL SENTINELLE ---
-            case 'whatsapp_kick_user':
-                return await this._kickUser(chatId, args, message, transport);
-
-            case 'whatsapp_warn_user':
-                return await this._warnUser(chatId, args, message);
-
-            case 'whatsapp_lock_group':
-                return await this._lockGroup(chatId, args, transport);
-
             default:
-                return { success: false, message: `Commande inconnue: ${toolName}` };
+                return { success: false, message: `Unknown command: ${toolName}` };
         }
     },
 
@@ -475,12 +407,12 @@ export default {
 
             return {
                 success: true,
-                message: `✅ Filtre ajouté: "${args.keyword}" (${args.severity || 'warn'})\n` +
-                    `Règle: ${args.rule || 'défaut'}\n` +
-                    `Variantes générées: ${variants.length}`
+                message: `✅ Filter added: "${args.keyword}" (${args.severity || 'warn'})\n` +
+                    `Rule: ${args.rule || 'default'}\n` +
+                    `Variants generated: ${variants.length}`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error adding filter: ${error.message}` };
         }
     },
 
@@ -493,23 +425,23 @@ export default {
             const config = await configDB.get(groupJid);
 
             if (!filters.length) {
-                return { success: true, message: '📋 Aucun filtre configuré.' };
+                return { success: true, message: '📋 No filters configured.' };
             }
 
             const list = filters.map((f: any, i: any) =>
-                `${i + 1}. **${f.keyword}** [${f.severity}]\n   └ ${f.context_rule || 'Règle par défaut'}`
+                `${i + 1}. **${f.keyword}** [${f.severity}]\n   └ ${f.context_rule || 'Default rule'}`
             ).join('\n');
 
-            const status = config?.is_filtering_active ? '🟢 ACTIF' : '🔴 INACTIF';
+            const status = config?.is_filtering_active ? '🟢 ACTIVE' : '🔴 INACTIVE';
 
             return {
                 success: true,
-                message: `📋 **Filtres du groupe** ${status}\n\n${list}\n\n` +
-                    `⚠️ Limite warnings: ${config?.warning_limit || 3}\n` +
-                    `🔨 Auto-ban: ${config?.auto_ban ? 'Oui' : 'Non'}`
+                message: `📋 **Group Filters** ${status}\n\n${list}\n\n` +
+                    `⚠️ Warning limit: ${config?.warning_limit || 3}\n` +
+                    `🔨 Auto-ban: ${config?.auto_ban ? 'Yes' : 'No'}`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error listing filters: ${error.message}` };
         }
     },
 
@@ -520,9 +452,9 @@ export default {
         try {
             await filterDB.removeFilter(filterId);
             filterProcessor.invalidateCache(groupJid);
-            return { success: true, message: `✅ Filtre #${filterId} supprimé.` };
+            return { success: true, message: `✅ Filter #${filterId} removed.` };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error removing filter: ${error.message}` };
         }
     },
 
@@ -541,11 +473,11 @@ export default {
 
         try {
             await whitelistDB.add(groupJid, targetJid, sender);
-            // Récupérer le nom depuis le message ou fallback sur JID
+            // Get username from message or fallback to JID
             const username = this._getUsername(message.raw, targetJid) || targetJid.split('@')[0];
-            return { success: true, message: `✅ @${username} ajouté à la whitelist.` };
+            return { success: true, message: `✅ @${username} added to whitelist.` };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error adding to whitelist: ${error.message}` };
         }
     },
 
@@ -797,6 +729,7 @@ export default {
         const duration = args.duration || 30; // 30 minutes par défaut
 
         try {
+            const { workingMemory } = await import('../../../services/workingMemory.js');
             await workingMemory.muteUser(chatId, targetJid, duration);
             const username = this._getUsername(message.raw, targetJid) || targetJid.split('@')[0];
             return {
@@ -890,28 +823,28 @@ export default {
 
 
     /**
-     * Récupère le nom d'utilisateur depuis un message
+     * Gets username from a message
      */
     _getUsername(rawMessage: any, targetJid: any) {
-        // Essayer de récupérer le nom depuis le pushName des mentions
+        // Try to get name from pushName in mentions
         const contextInfo = rawMessage?.message?.extendedTextMessage?.contextInfo;
         if (contextInfo?.mentionedJid?.includes(targetJid)) {
-            // WhatsApp ne stocke pas directement les noms dans mentionedJid
-            // On utilise le pushName si c'est le sender
+            // WhatsApp doesn't store names directly in mentionedJid
+            // We use pushName if it's the sender
             if (rawMessage.participant === targetJid || rawMessage.key?.participant === targetJid) {
                 return rawMessage.pushName;
             }
         }
-        // Fallback: retourner null pour utiliser le JID
+        // Fallback: return null to use JID
         return null;
     },
 
     // ============================================================
-    // INTÉGRATION groupService (Phase 2) - Nouvelles méthodes
+    // groupService INTEGRATION (Phase 2) - New methods
     // ============================================================
 
     /**
-     * Affiche la mission du bot dans ce groupe
+     * Displays the bot mission in this group
      */
     async _getMission(groupJid: any) {
         try {
@@ -921,41 +854,40 @@ export default {
             if (missionData && missionData.description) {
                 return {
                     success: true,
-                    message: `🎯 **Mission du bot:**\n\n📌 **${missionData.title || 'Sans titre'}**\n📝 ${missionData.description}\n\n👤 *Défini par: @${missionData.author ? missionData.author.split('@')[0] : 'Inconnu'}*`
+                    message: `🎯 **Bot Mission:**\n\n📌 **${missionData.title || 'Untitled'}**\n📝 ${missionData.description}\n\n👤 *Defined by: @${missionData.author ? missionData.author.split('@')[0] : 'Unknown'}*`
                 };
             } else {
                 return {
                     success: true,
-                    message: '📋 Aucune mission définie pour ce groupe.\nUtilisez `définir ma mission` pour en créer une.'
+                    message: '📋 No mission defined for this group.'
                 };
             }
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Définit la mission du bot dans ce groupe
+     * Sets the bot mission in this group
      */
-    async _setMission(chatId: any, args: any, sender: any) {
+    async _setMission(chatId: any, args: any, sender: any, context: any) {
         if (!args.description?.trim()) {
-            return { success: false, message: '❌ Veuillez spécifier une description.' };
+            return { success: false, message: '❌ Please specify a description.' };
         }
 
         try {
             const { groupService } = await import('../../../services/groupService.js');
-            // Mettre à jour via le service
+            // Update via service
             await groupService.setBotMission(chatId, args.title, args.description, sender);
 
             const authorName = sender.split('@')[0];
-            let message = `✅ **Mission mise à jour !**\n\n> Titre : ${args.title}\n> Auteur : @${authorName}\n> Desc : ${args.description}`;
+            let message = `✅ **Mission updated!**\n\n> Title: ${args.title}\n> Author: @${authorName}\n> Description: ${args.description}`;
 
-            // --- ANALYSE ACTIONNABLE (Mission Actionable) ---
-            // On lance l'analyse en arrière-plan (ou on attend, ici on attend pour le feedback)
+            // --- ACTIONABLE ANALYSIS ---
             try {
                 const analysisResult = await this._analyzeAndExecuteMission(chatId, args.description, context);
                 if (analysisResult && analysisResult.length > 0) {
-                    message += `\n\n🚀 **Actions déclenchées :**\n${analysisResult.map((r: any) => `- ${r}`).join('\n')}`;
+                    message += `\n\n🚀 **Actions triggered:**\n${analysisResult.map((r: any) => `- ${r}`).join('\n')}`;
                 }
             } catch (anaError: any) {
                 console.error('[GroupManager] Mission Analysis Error:', anaError);
@@ -966,34 +898,34 @@ export default {
                 message: message
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error setting mission: ${error.message}` };
         }
     },
 
     /**
-     * Analyse le texte de la mission et exécute les actions immédiates
+     * Analyzes mission text and executes immediate actions
      * @param {string} chatId 
      * @param {string} missionText 
      * @param {Object} context 
      */
     async _analyzeAndExecuteMission(chatId: any, missionText: any, context: any) {
-        console.log(`[GroupManager] Analyse de la mission: "${missionText}"`);
+        console.log(`[GroupManager] Mission analysis: "${missionText}"`);
 
-        // 1. Demander à l'IA d'extraire les actions
-        // On utilise le provider configuré pour l'intelligence (Kimi ou Gemini)
+        // 1. Ask AI to extract actions
+        // We use the provider configured for intelligence (Gemini)
 
         const systemPrompt = `You are a WhatsApp administration assistant. Your task is to analyze a "Mission" given by an administrator and detect if there are IMMEDIATE actions to execute.
         
-        OUTILS DISPONIBLES :
-        - whatsapp_ban_user(user_jid): Bannir un utilisateur (JID complet requis ou @Tag)
-        - whatsapp_mute_user(user_jid, duration): Mute un utilisateur
-        - whatsapp_filter_add(keyword, severity): Ajouter un filtre anti-spam
-        - whatsapp_groupstats(): Voir les stats
+        AVAILABLE TOOLS:
+        - whatsapp_ban_user(user_jid): Ban a user (Full JID required or @Tag)
+        - whatsapp_mute_user(user_jid, duration): Mute a user
+        - whatsapp_filter_add(keyword, severity): Add a spam filter
+        - whatsapp_groupstats(): View stats
         
-        Si la mission contient des ordres clairs (ex: "Ban @12345", "Ajoute un filtre 'casino'"), génère un JSON structuré.
-        Si la mission est juste descriptive (ex: "Accueillir les gens"), retourne JSON vide.
+        If the mission contains clear orders (e.g.: "Ban @12345", "Add filter 'casino'"), generate a structured JSON.
+        If the mission is just descriptive (e.g.: "Welcome people"), return empty JSON.
         
-        FORMAT DE RÉPONSE ATTENDU (JSON PUR):
+        EXPECTED RESPONSE FORMAT (PURE JSON):
         {
           "actions": [
             { "tool": "whatsapp_ban_user", "args": { "user_jid": "123456@s.whatsapp.net" } }
@@ -1001,41 +933,42 @@ export default {
         }
         
         IMPORTANT:
-        - Convertis les mentions ex: "@123" -> tente de deviner ou demande brut. L'utilisateur a le contexte.
-        - Si tu ne peux pas résoudre un @Tag, ignore l'action.
+        - Convert mentions e.g.: "@123" -> attempt to guess or request raw. The user has context.
+        - If you cannot resolve a @Tag, ignore the action.
         `;
 
         try {
-            // providerRouter est déjà importé en haut du fichier
+            // providerRouter is dynamically imported to avoid side-effects
+            const { providerRouter } = await import('../../../providers/index.js');
             const response = await providerRouter.chat([
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `Mission: ${missionText}` }
             ], {
-                temperature: 0, // Zéro créativité, pur logique
-                jsonMode: true // Force JSON si supporté, sinon le prompt le demande
+                temperature: 0, // Zero creativity, pure logic
+                jsonMode: true // Force JSON if supported, otherwise the prompt asks for it
             });
 
-            // Nettoyage Markdown JSON éventuel
+            // Potential JSON Markdown cleanup
             let cleanJson = response.content.replace(/```json/g, '').replace(/```/g, '').trim();
             const plan = JSON.parse(cleanJson);
 
             const results = [];
 
             if (plan.actions && Array.isArray(plan.actions)) {
-                console.log(`[GroupManager] ${plan.actions.length} actions détectées`);
+                console.log(`[GroupManager] ${plan.actions.length} actions detected`);
 
                 for (const action of plan.actions) {
-                    // Sécurité : on limite aux outils 'whatsapp_'
+                    // Security: limit to 'whatsapp_' tools
                     if (!action.tool.startsWith('whatsapp_')) continue;
 
-                    results.push(`Exécution : ${action.tool}...`);
+                    results.push(`Executing: ${action.tool}...`);
 
-                    // Exécuter via la méthode execute locale
-                    // Attention: il faut que les args soient corrects
+                    // Execute via local execute method
+                    // Ensure args are correct
                     const res = await this.execute(action.args, context, action.tool);
 
                     if (res.success) {
-                        results.push(`✓ ${action.tool}: Succès`);
+                        results.push(`✓ ${action.tool}: Success`);
                     } else {
                         results.push(`✗ ${action.tool}: ${res.message}`);
                     }
@@ -1045,13 +978,13 @@ export default {
             return results;
 
         } catch (error: any) {
-            console.error('[GroupManager] Erreur Analyse IA:', error);
+            console.error('[GroupManager] AI Analysis Error:', error);
             return [];
         }
     },
 
     /**
-     * Liste tous les groupes où l'utilisateur est admin
+     * Lists all groups where the user is an admin
      */
     async _listMyGroups(userJid: any) {
         try {
@@ -1061,11 +994,11 @@ export default {
             if (!groups || groups.length === 0) {
                 return {
                     success: true,
-                    message: '📋 Tu n\'es admin dans aucun groupe (selon mes données).'
+                    message: '📋 You are not an admin in any group (according to my data).'
                 };
             }
 
-            // Récupérer les noms des groupes depuis Supabase
+            // Get group names from Supabase
             const { supabase } = await import('../../../services/supabase.js');
             const { data: groupData } = await supabase
                 .from('groups')
@@ -1084,63 +1017,58 @@ export default {
                 message: `👑 **Groups where you are admin (${groups.length}):**\n\n${list}`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error listing groups: ${error.message}` };
         }
     },
 
     /**
-     * Affiche les statistiques du groupe
+     * Displays group statistics
      */
     async _getGroupStats(groupJid: any) {
         try {
             const { groupService } = await import('../../../services/groupService.js');
             const { supabase } = await import('../../../services/supabase.js');
 
-            // Compter les admins
+            // Count admins
             const adminCount = await groupService.countAdmins(groupJid);
 
-            // Récupérer les infos du groupe
-            const { data: group, error: groupError } = await supabase
-                .from('groups')
-                .select('name, bot_mission, founder_jid, created_at')
-                .eq('jid', groupJid)
-                .single();
+            // Fetch group info
 
             if (groupError) {
-                console.error('[GroupStats] Erreur récupération groupe:', groupError.message);
+                console.error('[GroupStats] Error fetching group:', groupError.message);
             }
 
-            // Compter les warnings actifs
+            // Count active warnings
             const { count: warningCount } = await supabase
                 .from('user_warnings')
                 .select('*', { count: 'exact', head: true })
                 .eq('group_jid', groupJid);
 
-            // Compter les filtres
+            // Count filters
             const { count: filterCount } = await supabase
                 .from('group_filters')
                 .select('*', { count: 'exact', head: true })
                 .eq('group_jid', groupJid);
 
-            // Auteur de la mission (stocké dans admins[0])
+            // Mission author (stored in founder_jid)
             const missionAuthor = group?.founder_jid;
 
             const stats = [
-                `📊 **Statistiques du groupe**`,
+                `📊 **Group Statistics**`,
                 ``,
                 `👥 Admins (Bot): ${adminCount}`,
-                `⚠️ Warnings actifs: ${warningCount || 0}`,
-                `🔍 Filtres configurés: ${filterCount || 0}`,
+                `⚠️ Active Warnings: ${warningCount || 0}`,
+                `🔍 Configured Filters: ${filterCount || 0}`,
                 ``,
-                `📝 **Mission & Objectifs**`,
-                `> Titre: ${group?.name || 'N/A'}`,
-                `> Auteur: ${missionAuthor ? '@' + missionAuthor.split('@')[0] : 'Inconnu'}`,
-                `> Desc: ${group?.bot_mission ? (group.bot_mission.length > 50 ? group.bot_mission.substring(0, 47) + '...' : group.bot_mission) : 'Non définie'}`
+                `📝 **Mission & Goals**`,
+                `> Title: ${group?.name || 'N/A'}`,
+                `> Author: ${missionAuthor ? '@' + missionAuthor.split('@')[0] : 'Unknown'}`,
+                `> Desc: ${group?.bot_mission ? (group.bot_mission.length > 50 ? group.bot_mission.substring(0, 47) + '...' : group.bot_mission) : 'Not defined'}`
             ];
 
             if (group?.created_at) {
-                const date = new Date(group.created_at).toLocaleDateString('fr-FR');
-                stats.push(`📅 Créé le: ${date}`);
+                const date = new Date(group.created_at).toLocaleDateString('en-US');
+                stats.push(`📅 Created on: ${date}`);
             }
 
             return {
@@ -1148,16 +1076,16 @@ export default {
                 message: stats.join('\n')
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error fetching stats: ${error.message}` };
         }
     },
 
     // =================================================================
-    // COMMANDES MANQUANTES (Implémentations)
+    // MISSING COMMANDS (Implementations)
     // =================================================================
 
     /**
-     * Retire le mute d'un utilisateur
+     * Unmutes a user
      */
     async _unmuteUser(groupJid: any, args: any, message: any) {
         try {
@@ -1172,29 +1100,29 @@ export default {
             }
 
             if (!targetJid) {
-                return { success: false, message: '❌ Aucun utilisateur spécifié.' };
+                return { success: false, message: '❌ No user specified.' };
             }
 
             const muteKey = `mute:${groupJid}:${targetJid}`;
 
             if (!redisClient.isReady) {
-                return { success: false, message: '❌ Redis non disponible.' };
+                return { success: false, message: '❌ Redis not available.' };
             }
 
             const exists = await redisClient.exists(muteKey);
             if (!exists) {
-                return { success: true, message: `🔊 ${targetJid.split('@')[0]} n'était pas mute (ou le mute a expiré).` };
+                return { success: true, message: `🔊 ${targetJid.split('@')[0]} was not muted (or mute expired).` };
             }
 
             await redisClient.del(muteKey);
-            return { success: true, message: `🔊 ${targetJid.split('@')[0]} peut de nouveau parler.` };
+            return { success: true, message: `🔊 ${targetJid.split('@')[0]} can speak again.` };
         } catch (error: any) {
-            return { success: false, message: `Erreur unmute: ${error.message}` };
+            return { success: false, message: `Unmute error: ${error.message}` };
         }
     },
 
     /**
-     * Promeut un membre au rang d'administrateur
+     * Promotes a member to administrator
      */
     async _promoteUser(groupJid: any, args: any, message: any, transport: any) {
         try {
@@ -1207,19 +1135,19 @@ export default {
             }
 
             if (!targetJid) {
-                return { success: false, message: '❌ Aucun utilisateur spécifié.' };
+                return { success: false, message: '❌ No user specified.' };
             }
 
             await transport.sock.groupParticipantsUpdate(groupJid, [targetJid], 'promote');
-            return { success: true, message: `👑 @${targetJid.split('@')[0]} est maintenant admin !` };
+            return { success: true, message: `👑 @${targetJid.split('@')[0]} is now an admin!` };
         } catch (error: any) {
-            console.error('[GroupManager] Erreur promote:', error);
-            return { success: false, message: `Erreur promotion: ${error.message}` };
+            console.error('[GroupManager] Promote error:', error);
+            return { success: false, message: `Promotion error: ${error.message}` };
         }
     },
 
     /**
-     * Retire les droits administrateur d'un membre
+     * Removes administrator rights from a member
      */
     async _demoteUser(groupJid: any, args: any, message: any, transport: any) {
         try {
@@ -1232,19 +1160,19 @@ export default {
             }
 
             if (!targetJid) {
-                return { success: false, message: '❌ Aucun utilisateur spécifié.' };
+                return { success: false, message: '❌ No user specified.' };
             }
 
             await transport.sock.groupParticipantsUpdate(groupJid, [targetJid], 'demote');
-            return { success: true, message: `📉 @${targetJid.split('@')[0]} n'est plus admin.` };
+            return { success: true, message: `📉 @${targetJid.split('@')[0]} is no longer an admin.` };
         } catch (error: any) {
-            console.error('[GroupManager] Erreur demote:', error);
-            return { success: false, message: `Erreur rétrogradation: ${error.message}` };
+            console.error('[GroupManager] Demote error:', error);
+            return { success: false, message: `Demotion error: ${error.message}` };
         }
     },
 
     /**
-     * Affiche les informations détaillées du groupe
+     * Displays detailed group information
      */
     async _getGroupInfo(groupJid: any, transport: any) {
         try {
@@ -1254,46 +1182,44 @@ export default {
             const memberCount = metadata.participants.length;
 
             const info = [
-                `📋 **Infos Groupe**`,
+                `📋 **Group Info**`,
                 ``,
-                `📛 Nom: ${metadata.subject}`,
-                `📝 Description: ${metadata.desc || 'Aucune'}`,
-                `👥 Membres: ${memberCount}`,
+                `📛 Name: ${metadata.subject}`,
+                `📝 Description: ${metadata.desc || 'None'}`,
+                `👥 Members: ${memberCount}`,
                 `👑 Admins (${admins.length}): ${admins.slice(0, 5).join(', ')}${admins.length > 5 ? '...' : ''}`,
                 `🔗 ID: ${groupJid}`
             ];
 
             if (metadata.creation) {
-                const createdDate = new Date(metadata.creation * 1000).toLocaleDateString('fr-FR');
-                info.push(`📅 Créé le: ${createdDate}`);
+                const createdDate = new Date(metadata.creation * 1000).toLocaleDateString('en-US');
+                info.push(`📅 Created on: ${createdDate}`);
             }
 
             return { success: true, message: info.join('\n') };
         } catch (error: any) {
-            console.error('[GroupManager] Erreur groupinfo:', error);
-            return { success: false, message: `Erreur récupération infos: ${error.message}` };
+            console.error('[GroupManager] GroupInfo error:', error);
+            return { success: false, message: `Error fetching info: ${error.message}` };
         }
     },
 
     /**
-     * Expulse un utilisateur (Kick simple)
+     * Kicks a user (Simple kick)
      */
     async _kickUser(chatId: any, args: any, message: any, transport: any) {
-        // Pour l'instant, Kick = Ban sans blacklist DB persistante (juste remove)
-        // On réutilise la logique de résolution de JID de _banUser
-        // Mais on change le message de retour
+        // For now, Kick = Ban without persistent DB blacklist (just remove)
         const result = await this._banUser(chatId, args, message, transport);
         if (result.success) {
             return {
                 success: true,
-                message: `👢 **KICK** : Utilisateur expulsé (Simple expulsion).\nRaison: ${args.reason || 'Aucune'}`
+                message: `👢 **KICK**: User kicked.\nReason: ${args.reason || 'None'}`
             };
         }
         return result;
     },
 
     /**
-     * Donne un avertissement
+     * Gives a warning
      */
     async _warnUser(chatId: any, args: any, message: any) {
         try {
@@ -1301,57 +1227,51 @@ export default {
             // Résolution basique si manquant
             if (!targetJid && message.quoted?.sender) targetJid = message.quoted.sender;
 
-            if (!targetJid) return { success: false, message: '❌ Cible introuvable.' };
+            if (!targetJid) return { success: false, message: '❌ Target not found.' };
 
             const { warningsDB, configDB } = await import('./database.js');
 
-            // 1. Ajouter le warning
-            const warnCount = await warningsDB.add(chatId, targetJid, args.reason || 'Comportement inadéquat', message.sender);
+            // 1. Add warning
+            const warnCount = await warningsDB.add(chatId, targetJid, args.reason || 'Inappropriate behavior', message.sender);
 
-            // 2. Vérifier la limite
+            // 2. Check limit
             const config = await configDB.get(chatId);
             const limit = config?.warning_limit || 3;
 
             let extraMsg = '';
 
-            // 3. Auto-Ban si limite atteinte
+            // 3. Auto-Ban if limit reached
             if (warnCount >= limit && config?.auto_ban) {
-                // Nécessite transport pour bannir
-                // On ne l'a pas ici directement sauf si on le passe. 
-                // Pour simplifier, on retourne un message spécial que l'IA peut lire, ou on notifie juste.
-                // Idéalement on devrait appeler this._banUser mais il nous faut 'transport'.
-                extraMsg = `\n🚫 **LIMITE ATTEINTE (${warnCount}/${limit})** : L'utilisateur devrait être banni (Auto-ban).`;
-                // Note: L'auto-ban réel est géré par le `processor.js` lors des filtres, ici c'est manuel.
-                // On laisse l'IA décider de bannir ensuite si elle veut.
+                extraMsg = `\n🚫 **LIMIT REACHED (${warnCount}/${limit})**: User should be banned (Auto-ban enabled).`;
             }
 
             return {
                 success: true,
-                message: `⚠️ **AVERTISSEMENT** pour @${targetJid.split('@')[0]}\nNombre: ${warnCount}/${limit}\nRaison: ${args.reason || 'N/A'}${extraMsg}`
+                message: `⚠️ **WARNING** for @${targetJid.split('@')[0]}\nCount: ${warnCount}/${limit}\nReason: ${args.reason || 'N/A'}${extraMsg}`
             };
 
         } catch (error: any) {
-            return { success: false, message: `Erreur warn: ${error.message}` };
+            return { success: false, message: `Warn error: ${error.message}` };
         }
     },
 
     /**
-     * Verrouille/Déverrouille le groupe
+     * Locks/Unlocks the group
      */
     async _lockGroup(chatId: any, args: any, transport: any) {
         try {
             const setting = args.action === 'lock' ? 'announcement' : 'not_announcement';
             await transport.updateGroupSetting(chatId, setting);
 
-            const state = args.action === 'lock' ? '🔒 VERROUILLÉ' : '🔓 DÉVERROUILLÉ';
-            const desc = args.action === 'lock' ? 'Seuls les admins peuvent parler.' : 'Tout le monde peut parler.';
+            const state = args.action === 'lock' ? '🔒 LOCKED' : '🔓 UNLOCKED';
+            const desc = args.action === 'lock' ? 'Only admins can speak.' : 'Everyone can speak.';
 
             return {
                 success: true,
-                message: `Groupe ${state}\n${desc}`
+                message: `Group ${state}\n${desc}`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur lock/unlock: ${error.message}` };
+            return { success: false, message: `Lock/unlock error: ${error.message}` };
         }
     }
 };

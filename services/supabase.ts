@@ -32,7 +32,7 @@ if (projKey && process.env[projKey]) projKey = process.env[projKey];
 if (!projUrl) projUrl = process.env.SUPABASE_URL;
 if (!projKey) projKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
-if (projUrl && projUrl !== 'https://VOTRE_PROJET.supabase.co') {
+if (projUrl && projUrl.startsWith('http') && projUrl !== 'https://VOTRE_PROJET.supabase.co') {
     // IMPORTANT : Utiliser service_role_key pour contourner Row Level Security
     supabase = createClient(projUrl, projKey);
 }

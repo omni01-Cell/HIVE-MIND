@@ -1,15 +1,14 @@
 // @ts-nocheck
 // plugins/group_manager/processor.js
-// Processeur hybride : Regex local → LLM contextuel (économique)
+// Hybrid Processor: Local Regex → Contextual LLM (cost-effective)
 
 import { filterDB, whitelistDB, warningsDB, configDB } from './database.js';
 import { moderationActions } from './actions.js';
-import { providerRouter } from '../../../providers/index.js';
 
 /**
- * Processeur de filtrage hybride
- * Niveau 0: Regex local (gratuit)
- * Niveau 1: LLM contextuel (si mot-clé détecté)
+ * Hybrid filtering processor
+ * Level 0: Local Regex (Free)
+ * Level 1: Contextual LLM (if keyword detected)
  */
 export class FilterProcessor {
     cache: any;
@@ -21,50 +20,50 @@ export class FilterProcessor {
     }
 
     /**
-     * Point d'entrée principal - analyse un message
-     * @returns {Object|null} Action à exécuter ou null si OK
+     * Main entry point - analyzes a message
+     * @returns {Object|null} Action to execute or null if OK
      */
     async process(message: any, transport: any) {
         const { chatId: groupJid, sender, text, isGroup } = message;
 
-        // Seulement pour les groupes
+        // Groups only
         if (!isGroup) return null;
 
-        // Récupérer la config du groupe
+        // Get group config
         const config = await configDB.get(groupJid);
 
-        // Si le filtrage n'est pas actif, on ignore
+        // If filtering is not active, ignore
         if (!config?.is_filtering_active) return null;
 
-        // Vérifier si l'utilisateur est whitelisté
+        // Check if user is whitelisted
         const isWhitelisted = await whitelistDB.isWhitelisted(groupJid, sender);
         if (isWhitelisted) {
-            console.log(`[Filter] ${sender} est whitelisté, ignoré`);
+            console.log(`[Filter] ${sender} is whitelisted, skipping`);
             return null;
         }
 
-        // Récupérer les filtres (avec cache)
+        // Get filters (with cache)
         const filters = await this._getFiltersWithCache(groupJid);
         if (!filters.length) return null;
 
-        // NIVEAU 0: Analyse Regex locale (gratuit)
+        // LEVEL 0: Local Regex Analysis (Free)
         const matchedFilter = this._regexMatch(text, filters);
 
         if (!matchedFilter) {
-            return null; // Pas de mot-clé suspect, on passe
+            return null; // No suspicious keyword, pass
         }
 
-        console.log(`[Filter] Mot-clé détecté: "${matchedFilter.keyword}" dans "${text.substring(0, 50)}..."`);
+        console.log(`[Filter] Keyword detected: "${matchedFilter.keyword}" in "${text.substring(0, 50)}..."`);
 
-        // NIVEAU 1: Analyse contextuelle par LLM (coûteux mais précis)
+        // LEVEL 1: Contextual Analysis via LLM (Precise but costly)
         const decision = await this._contextualAnalysis(text, matchedFilter);
 
         if (!decision.shouldAct) {
-            console.log(`[Filter] LLM: Pas d'action requise (${decision.reason})`);
+            console.log(`[Filter] LLM: No action required (${decision.reason})`);
             return null;
         }
 
-        // Exécuter l'action appropriée
+        // Execute appropriate action
         return await this._executeAction(
             transport,
             groupJid,
@@ -76,7 +75,7 @@ export class FilterProcessor {
     }
 
     /**
-     * Récupère les filtres avec cache
+     * Gets filters with cache
      */
     async _getFiltersWithCache(groupJid: any) {
         const cached = this.cache.get(groupJid);
@@ -90,25 +89,25 @@ export class FilterProcessor {
     }
 
     /**
-     * Invalide le cache d'un groupe
+     * Invalidates a group's cache
      */
     invalidateCache(groupJid: any) {
         this.cache.delete(groupJid);
     }
 
     /**
-     * NIVEAU 0: Match par Regex local (gratuit)
+     * LEVEL 0: Local Regex Match (Free)
      */
     _regexMatch(text: any, filters: any) {
         const textLower = text.toLowerCase();
 
         for (const filter of filters) {
-            // Vérifier le mot-clé principal
+            // Check main keyword
             if (textLower.includes(filter.keyword.toLowerCase())) {
                 return filter;
             }
 
-            // Vérifier les variantes regex
+            // Check regex variants
             if (filter.regex_variants?.length) {
                 for (const variant of filter.regex_variants) {
                     try {
@@ -117,7 +116,7 @@ export class FilterProcessor {
                             return filter;
                         }
                     } catch (e: any) {
-                        // Regex invalide, on ignore
+                        // Invalid regex, ignore
                     }
                 }
             }
@@ -127,68 +126,69 @@ export class FilterProcessor {
     }
 
     /**
-     * NIVEAU 1: Analyse contextuelle par LLM
+     * LEVEL 1: Contextual Analysis via LLM
      */
     async _contextualAnalysis(text: any, filter: any) {
         const prompt = `You are a WhatsApp group moderator. Analyze this message:
 
 MESSAGE: "${text}"
 
-MOT-CLÉ DÉTECTÉ: "${filter.keyword}"
-RÈGLE ADMIN: "${filter.context_rule || 'Interdire tout usage sérieux, tolérer l\'humour.'}"
-SÉVÉRITÉ PAR DÉFAUT: ${filter.severity}
+DETECTED KEYWORD: "${filter.keyword}"
+ADMIN RULE: "${filter.context_rule || 'Forbid any serious use, tolerate humor.'}"
+DEFAULT SEVERITY: ${filter.severity}
 
-QUESTION: Ce message viole-t-il la règle ? Réponds UNIQUEMENT en JSON:
+QUESTION: Does this message violate the rule? Answer ONLY in JSON:
 {
     "shouldAct": true/false,
-    "reason": "explication courte",
-    "severity": "warn" ou "ban" ou "ignore"
+    "reason": "short explanation",
+    "severity": "warn" or "ban" or "ignore"
 }`;
 
         try {
+            const { providerRouter } = await import('../../../providers/index.js');
             const response = await providerRouter.chat([
                 { role: 'user', content: prompt }
-            ], { temperature: 0.1 }); // Basse température pour cohérence
+            ], { temperature: 0.1 }); // Low temperature for consistency
 
-            // Parser le JSON de la réponse
+            // Parse JSON from response
             const jsonMatch = response.content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 return JSON.parse(jsonMatch[0]);
             }
 
-            // Fallback si pas de JSON valide
-            return { shouldAct: false, reason: 'Réponse IA non parseable' };
+            // Fallback if no valid JSON
+            return { shouldAct: false, reason: 'AI response not parseable' };
 
         } catch (error: any) {
-            console.error('[Filter] Erreur analyse contextuelle:', error);
-            // En cas d'erreur API, on applique la règle par défaut
+            console.error('[Filter] Contextual analysis error:', error);
+            // On API error, apply default rule
             return {
                 shouldAct: true,
-                reason: 'Fallback (erreur API)',
+                reason: 'Fallback (API error)',
                 severity: filter.severity
             };
         }
     }
 
     /**
-     * Exécute l'action de modération appropriée
+     * Executes the appropriate moderation action
      */
     async _executeAction(transport: any, groupJid: any, userJid: any, filter: any, decision: any, config: any) {
         const severity = decision.severity || filter.severity;
         const reason = `${filter.keyword}: ${decision.reason}`;
 
-        // Ajouter le warning dans la DB
+        // Add warning to DB
         await warningsDB.add(groupJid, userJid, reason, filter.id);
 
-        // Compter les warnings actuels
+        // Count current warnings
         const warningCount = await warningsDB.count(groupJid, userJid);
         const maxWarnings = config.warning_limit || 3;
 
         console.log(`[Filter] ${userJid} - Warning ${warningCount}/${maxWarnings} (${severity})`);
 
-        // Décider de l'action
+        // Decide action
         if (severity === 'ban' || (config.auto_ban && warningCount >= maxWarnings)) {
-            // Ban direct ou limite atteinte
+            // Direct ban or limit reached
             return await moderationActions.ban(transport, groupJid, userJid, reason);
         } else if (severity === 'kick') {
             return await moderationActions.kick(transport, groupJid, userJid, reason);
@@ -203,16 +203,17 @@ QUESTION: Ce message viole-t-il la règle ? Réponds UNIQUEMENT en JSON:
     }
 
     /**
-     * Génère des variantes de mots-clés via IA
-     * (Pour mise à jour périodique)
+     * Generates keyword variants via AI
+     * (For periodic updates)
      */
     async generateVariants(keyword: any) {
-        const prompt = `Génère des variantes et contournements possibles pour le mot interdit "${keyword}".
-Inclus: typos volontaires, leetspeak, espaces, caractères spéciaux.
-Réponds UNIQUEMENT avec un tableau JSON de regex patterns, exemple:
+        const prompt = `Generate possible variants and bypasses for the forbidden word "${keyword}".
+Include: intentional typos, leetspeak, spaces, special characters.
+Answer ONLY with a JSON array of regex patterns, example:
 ["h.?i.?t.?l.?e.?r", "h1tl3r", "adolf"]`;
 
         try {
+            const { providerRouter } = await import('../../../providers/index.js');
             const response = await providerRouter.chat([
                 { role: 'user', content: prompt }
             ], { temperature: 0.3 });
@@ -223,7 +224,7 @@ Réponds UNIQUEMENT avec un tableau JSON de regex patterns, exemple:
             }
             return [];
         } catch (error: any) {
-            console.error('[Filter] Erreur génération variantes:', error);
+            console.error('[Filter] Variant generation error:', error);
             return [];
         }
     }

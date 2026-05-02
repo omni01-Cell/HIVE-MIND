@@ -4,7 +4,7 @@ const MAX_SNAPSHOT_LENGTH = 50000;
 
 export default {
     name: 'dev_tools_browser',
-    description: 'Outils de navigation web SOTA (agent-browser). Permet de naviguer, cliquer, remplir des formulaires et extraire du contenu.',
+    description: 'SOTA web navigation tools (agent-browser). Allows navigating, clicking, filling forms, and extracting content.',
     version: '1.0.0',
     enabled: true,
 
@@ -13,11 +13,11 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_open',
-                description: 'Ouvre une URL dans le navigateur.',
+                description: 'Opens a URL in the browser.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        url: { type: 'string', description: 'L\'URL à ouvrir.' }
+                        url: { type: 'string', description: 'The URL to open.' }
                     },
                     required: ['url']
                 }
@@ -27,11 +27,11 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_snapshot',
-                description: 'Capture l\'arbre d\'accessibilité de la page actuelle avec des références (@e1, @e2...).',
+                description: 'Captures the accessibility tree of the current page with references (@e1, @e2...).',
                 parameters: {
                     type: 'object',
                     properties: {
-                        interactive_only: { type: 'boolean', description: 'Si vrai, ne retourne que les éléments interactifs.', default: true }
+                        interactive_only: { type: 'boolean', description: 'If true, only returns interactive elements.', default: true }
                     }
                 }
             }
@@ -40,11 +40,11 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_click',
-                description: 'Clique sur un élément via sa référence (@eN) ou un sélecteur CSS.',
+                description: 'Clicks an element via its reference (@eN) or a CSS selector.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        selector: { type: 'string', description: 'La référence (@e1) ou le sélecteur CSS.' }
+                        selector: { type: 'string', description: 'The reference (@e1) or CSS selector.' }
                     },
                     required: ['selector']
                 }
@@ -54,12 +54,12 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_fill',
-                description: 'Remplit un champ de formulaire après l\'avoir vidé.',
+                description: 'Fills a form field after clearing it.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        selector: { type: 'string', description: 'La référence (@e1) ou le sélecteur CSS.' },
-                        value: { type: 'string', description: 'La valeur à saisir.' }
+                        selector: { type: 'string', description: 'The reference (@e1) or CSS selector.' },
+                        value: { type: 'string', description: 'The value to enter.' }
                     },
                     required: ['selector', 'value']
                 }
@@ -69,12 +69,12 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_type',
-                description: 'Saisit du texte caractère par caractère (utile pour l\'autocomplétion).',
+                description: 'Types text character by character (useful for autocomplete).',
                 parameters: {
                     type: 'object',
                     properties: {
-                        selector: { type: 'string', description: 'La référence (@e1) ou le sélecteur CSS.' },
-                        text: { type: 'string', description: 'Le texte à saisir.' }
+                        selector: { type: 'string', description: 'The reference (@e1) or CSS selector.' },
+                        text: { type: 'string', description: 'The text to type.' }
                     },
                     required: ['selector', 'text']
                 }
@@ -84,11 +84,11 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_screenshot',
-                description: 'Capture une capture d\'écran de la page actuelle.',
+                description: 'Captures a screenshot of the current page.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        name: { type: 'string', description: 'Nom optionnel du fichier.' }
+                        name: { type: 'string', description: 'Optional filename.' }
                     }
                 }
             }
@@ -97,11 +97,11 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_get_text',
-                description: 'Extrait le texte d\'un élément.',
+                description: 'Extracts text from an element.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        selector: { type: 'string', description: 'La référence (@e1) ou le sélecteur CSS.' }
+                        selector: { type: 'string', description: 'The reference (@e1) or CSS selector.' }
                     },
                     required: ['selector']
                 }
@@ -111,11 +111,11 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_eval',
-                description: 'Exécute du JavaScript dans le contexte de la page.',
+                description: 'Executes JavaScript in the context of the page.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        javascript: { type: 'string', description: 'Le code JS à exécuter.' }
+                        javascript: { type: 'string', description: 'The JS code to execute.' }
                     },
                     required: ['javascript']
                 }
@@ -125,12 +125,12 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_scroll',
-                description: 'Fait défiler la page.',
+                description: 'Scrolls the page.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        direction: { type: 'string', enum: ['up', 'down', 'left', 'right'], description: 'Direction du défilement.' },
-                        pixels: { type: 'number', description: 'Nombre de pixels à défiler.' }
+                        direction: { type: 'string', enum: ['up', 'down', 'left', 'right'], description: 'Scroll direction.' },
+                        pixels: { type: 'number', description: 'Number of pixels to scroll.' }
                     },
                     required: ['direction']
                 }
@@ -140,14 +140,14 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_wait',
-                description: 'Attend qu\'un élément, du texte ou un pattern d\'URL apparaisse.',
+                description: 'Waits for an element, text, or URL pattern to appear.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        selector: { type: 'string', description: 'Sélecteur à attendre.' },
-                        text: { type: 'string', description: 'Texte à attendre.' },
-                        url: { type: 'string', description: 'URL à attendre.' },
-                        timeout: { type: 'number', description: 'Timeout en ms.' }
+                        selector: { type: 'string', description: 'Selector to wait for.' },
+                        text: { type: 'string', description: 'Text to wait for.' },
+                        url: { type: 'string', description: 'URL to wait for.' },
+                        timeout: { type: 'number', description: 'Timeout in ms.' }
                     }
                 }
             }
@@ -156,11 +156,11 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_press',
-                description: 'Appuie sur une touche du clavier.',
+                description: 'Presses a key on the keyboard.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        key: { type: 'string', description: 'La touche (Enter, Tab, Escape...).' }
+                        key: { type: 'string', description: 'The key (Enter, Tab, Escape...).' }
                     },
                     required: ['key']
                 }
@@ -170,7 +170,7 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_back',
-                description: 'Revient à la page précédente.',
+                description: 'Goes back to the previous page.',
                 parameters: { type: 'object', properties: {} }
             }
         },
@@ -178,7 +178,7 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_close',
-                description: 'Ferme la session de navigation actuelle.',
+                description: 'Closes the current browsing session.',
                 parameters: { type: 'object', properties: {} }
             }
         }
@@ -234,13 +234,13 @@ export default {
                     result = await browserService.close(session);
                     break;
                 default:
-                    return { success: false, message: `Outil browser inconnu: ${toolName}` };
+                    return { success: false, message: `Unknown browser tool: ${toolName}` };
             }
 
             if (!result.success) {
                 return {
                     success: false,
-                    llmOutput: `Erreur Browser (${toolName}): ${result.error}`,
+                    llmOutput: `Browser Error (${toolName}): ${result.error}`,
                     userOutput: `❌ *Browser Error* (${toolName}): ${result.error}`
                 };
             }
@@ -250,21 +250,21 @@ export default {
                 result.snapshot = result.snapshot.substring(0, MAX_SNAPSHOT_LENGTH) + '\n... [TRUNCATED]';
             }
 
-            // Pour screenshot, on envoie le fichier à l'utilisateur
+            // For screenshot, we send the file to the user
             if (toolName === 'browser_screenshot' && result.filePath && context.transport) {
-                await context.transport.sendMedia(chatId, result.filePath, { caption: 'Capture d\'écran' }, context.sourceChannel);
+                await context.transport.sendMedia(chatId, result.filePath, { caption: 'Screenshot' }, context.sourceChannel);
             }
 
             return {
                 success: true,
                 llmOutput: result,
-                userOutput: `🌐 *Browser* (${toolName}): ✅ Succès`
+                userOutput: `🌐 *Browser* (${toolName}): ✅ Success`
             };
 
         } catch (error: any) {
             return {
                 success: false,
-                llmOutput: `Erreur Browser fatale (${toolName}): ${error.message}`,
+                llmOutput: `Fatal Browser Error (${toolName}): ${error.message}`,
                 userOutput: `❌ *Browser Fatal Error* (${toolName}): ${error.message}`
             };
         }

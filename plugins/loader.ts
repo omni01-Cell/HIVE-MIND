@@ -1,6 +1,6 @@
 // @ts-nocheck
 // plugins/loader.js
-// Chargeur dynamique de plugins (système Brick-Like)
+// Dynamic plugin loader (Brick-Like system)
 
 import { readdir } from 'fs/promises';
 import { join, dirname } from 'path';
@@ -10,14 +10,14 @@ import { eventBus, BotEvents } from '../core/events.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Format standard que chaque plugin doit exposer
+ * Standard format that each plugin must expose
  * @typedef {Object} Plugin
- * @property {string} name - Nom unique du plugin
- * @property {string} description - Description pour l'IA
- * @property {string} version - Version du plugin
- * @property {boolean} enabled - Activé par défaut ?
- * @property {Object} toolDefinition - Définition OpenAI-compatible pour function calling
- * @property {Function} execute - Fonction d'exécution
+ * @property {string} name - Unique plugin name
+ * @property {string} description - Description for the AI
+ * @property {string} version - Plugin version
+ * @property {boolean} enabled - Enabled by default?
+ * @property {Object} toolDefinition - OpenAI-compatible definition for function calling
+ * @property {Function} execute - Execution function
  */
 
 class PluginLoader {
@@ -25,19 +25,20 @@ class PluginLoader {
     toolToPlugin: any;
     toolDefinitions: any;
     textMatchers: any;
+    _loadErrors: any[] = [];
 
     constructor() {
         this.plugins = new Map();
         this.toolToPlugin = new Map(); // Maps tool function names to plugin names
         this.toolDefinitions = [];
-        this.textMatchers = [];        // Agrégation des matchers textuels des plugins
+        this.textMatchers = [];        // Aggregation of plugin textual matchers
     }
 
     /**
-     * Charge tous les plugins depuis le dossier /plugins
+     * Loads all plugins from the /plugins directory
      */
     async loadAll() {
-        // Chargement silencieux pour ne pas casser la barre de progression
+        // Silent loading to not break progress bar
         const entries = await readdir(__dirname, { withFileTypes: true });
         const categories = entries.filter((e: any) => e.isDirectory());
         const loadErrors = [];
@@ -56,13 +57,13 @@ class PluginLoader {
             }
         }
 
-        // Les erreurs seront loguées après le complete() si nécessaire
+        // Errors will be logged after complete() if necessary
         this._loadErrors = loadErrors;
         return this.plugins;
     }
 
     /**
-     * Charge un plugin spécifique
+     * Loads a specific plugin
      * @param {string} pluginName 
      */
     async load(pluginName: any) {
@@ -72,10 +73,10 @@ class PluginLoader {
             const pluginModule = await import(pathToFileURL(pluginPath).href);
             const plugin = pluginModule.default || pluginModule;
 
-            // Validation du format
+            // Validation format
             this._validatePlugin(plugin, pluginName);
 
-            // 🛡️ Validation de la structure d'outil (Audit #19 Approach B)
+            // 🛡️ Validation of tool structure (Audit #19 Approach B)
             if (plugin.toolDefinition) {
                 this._validateToolDefinition(plugin.toolDefinition, pluginName);
             }
@@ -93,13 +94,13 @@ class PluginLoader {
 
             if (!plugin.enabled) {
 
-                // Plugin désactivé - silencieux
+                // Plugin disabled - silent
                 return;
             }
 
             this.plugins.set(plugin.name, plugin);
 
-            // Ajoute les définitions d'outils et mappe les noms de fonctions
+            // Add tool definitions and map function names
             if (plugin.toolDefinitions) {
                 for (const toolDef of plugin.toolDefinitions) {
                     this.toolDefinitions.push(toolDef);
@@ -116,14 +117,14 @@ class PluginLoader {
                 }
             }
 
-            // Enregistrer les matchers textuels (silencieux)
+            // Register textual matchers (silent)
             if (plugin.textMatchers && Array.isArray(plugin.textMatchers)) {
                 for (const matcher of plugin.textMatchers) {
                     this.textMatchers.push({
                         ...matcher,
                         pluginName: plugin.name
                     });
-                    // IMPORTANT: Mapper le nom du handler vers le plugin
+                    // IMPORTANT: Map handler name to plugin
                     const handlerName = matcher.name || matcher.handler;
                     if (handlerName) {
                         this.toolToPlugin.set(handlerName, plugin.name);
@@ -131,58 +132,58 @@ class PluginLoader {
                 }
             }
 
-            // Événement silencieux
+            // Silent event
             eventBus.publish(BotEvents.PLUGIN_LOADED, { name: plugin.name });
 
         } catch (error: any) {
             if (error.code !== 'ERR_MODULE_NOT_FOUND') {
                 throw error;
             }
-            // Plugin sans index.js - silencieux
+            // Plugin without index.js - silent
         }
     }
 
     /**
-     * Valide qu'un plugin a le bon format
+     * Validates that a plugin has the correct format
      */
     _validatePlugin(plugin: any, name: any) {
         const required = ['name', 'description', 'version', 'execute'];
         for (const prop of required) {
             if (!plugin[prop]) {
-                throw new Error(`Plugin ${name} manque la propriété: ${prop}`);
+                throw new Error(`Plugin ${name} is missing property: ${prop}`);
             }
         }
         if (typeof plugin.execute !== 'function') {
-            throw new Error(`Plugin ${name}: execute doit être une fonction`);
+            throw new Error(`Plugin ${name}: execute must be a function`);
         }
     }
 
     /**
-     * Valide la structure d'une définition d'outil (Audit #19)
+     * Validates tool definition structure (Audit #19)
      * @private
      */
     _validateToolDefinition(toolDef: any, pluginName: any) {
         if (!toolDef.function) {
-            throw new Error(`Plugin ${pluginName}: définition d'outil manque l'objet "function"`);
+            throw new Error(`Plugin ${pluginName}: tool definition is missing "function" object`);
         }
         
         const { name, description, parameters } = toolDef.function;
         
         if (!name || typeof name !== 'string') {
-            throw new Error(`Plugin ${pluginName}: nom de l'outil manquant ou invalide`);
+            throw new Error(`Plugin ${pluginName}: missing or invalid tool name`);
         }
         
         if (!description || typeof description !== 'string') {
-            throw new Error(`Plugin ${pluginName}: description de l'outil "${name}" manquante`);
+            throw new Error(`Plugin ${pluginName}: missing description for tool "${name}"`);
         }
         
         if (!parameters || typeof parameters !== 'object') {
-            throw new Error(`Plugin ${pluginName}: paramètres de l'outil "${name}" manquants`);
+            throw new Error(`Plugin ${pluginName}: missing parameters for tool "${name}"`);
         }
         
-        // Vérifier format parameters (JSON Schema standard)
+        // Check parameters format (Standard JSON Schema)
         if (parameters.type !== 'object' || !parameters.properties) {
-            console.warn(`[PluginLoader] ⚠️ Outil "${name}" (Plugin: ${pluginName}) utilise un format de paramètres non standard`);
+            console.warn(`[PluginLoader] ⚠️ Tool "${name}" (Plugin: ${pluginName}) uses non-standard parameters format`);
         }
         
         return true;
@@ -199,36 +200,36 @@ class PluginLoader {
     }
 
     /**
-     * Exécute un plugin avec Graceful Degradation
-     * @param {string} name - Nom du plugin
-     * @param {Object} args - Arguments pour le plugin
-     * @param {Object} context - Contexte d'exécution
+     * Executes a plugin with Graceful Degradation
+     * @param {string} toolName - Tool name
+     * @param {Object} args - Arguments for the plugin
+     * @param {Object} context - Execution context
      */
     async execute(toolName: any, args: any, context: any) {
-        // Résoudre le nom de l'outil vers le plugin parent
+        // Resolve tool name to parent plugin
         const pluginName = this.toolToPlugin.get(toolName) || toolName;
         const plugin = this.plugins.get(pluginName);
 
         if (!plugin) {
             return {
                 success: false,
-                message: `ERREUR_OUTIL: Plugin "${toolName}" non trouvé. Cet outil n'existe pas ou n'est pas chargé.`,
+                message: `TOOL_ERROR: Plugin "${toolName}" not found. This tool does not exist or is not loaded.`,
                 gracefulDegradation: true
             };
         }
 
         try {
-            // Passe le nom de l'outil au plugin pour les plugins multi-outils
+            // Pass tool name to plugin for multi-tool plugins
             const result = await plugin.execute(args, context, toolName);
             eventBus.publish(BotEvents.PLUGIN_EXECUTED, { name: toolName, args, result });
             return result;
         } catch (error: any) {
             eventBus.publish(BotEvents.PLUGIN_ERROR, { name: toolName, error });
-            console.error(`[PluginLoader] ⚠️ Erreur dans ${toolName}:`, error.message);
+            console.error(`[PluginLoader] ⚠️ Error in ${toolName}:`, error.message);
 
             return {
                 success: false,
-                message: `ERREUR_OUTIL: L'outil "${toolName}" a rencontré une erreur - ${error.message}. Tu peux informer l'utilisateur et continuer avec les autres demandes.`,
+                message: `TOOL_ERROR: Tool "${toolName}" encountered an error - ${error.message}. You can inform the user and continue with other requests.`,
                 error: error.message,
                 gracefulDegradation: true
             };
@@ -236,16 +237,16 @@ class PluginLoader {
     }
 
     // ========================================================================
-    // SYSTÈME DE TEXT MATCHERS (Découplage des commandes textuelles)
+    // TEXT MATCHERS SYSTEM (Textual command decoupling)
     // ========================================================================
 
     /**
-     * Cherche un handler textuel correspondant au texte donné
-     * Permet aux plugins de déclarer leurs propres patterns regex
+     * Searches for a textual handler matching given text
+     * Allows plugins to declare their own regex patterns
      * 
-     * @param {string} text - Le texte à analyser
-     * @param {Object} message - Le message WhatsApp complet (pour les mentions, etc.)
-     * @returns {{name: string, args: Object}|null} - Commande parsée ou null
+     * @param {string} text - Text to analyze
+     * @param {Object} message - Full WhatsApp message (for mentions, etc.)
+     * @returns {{name: string, args: Object}|null} - Parsed command or null
      * 
      * @example
      * const cmd = pluginLoader.findTextHandler("[ban:@user]", message);
@@ -258,24 +259,24 @@ class PluginLoader {
             try {
                 const match = text.match(matcher.pattern);
                 if (match) {
-                    // Utiliser extractArgs si défini, sinon retourner les groupes capturés
+                    // Use extractArgs if defined, otherwise return captured groups
                     const args = matcher.extractArgs
                         ? matcher.extractArgs(match, message, text)
                         : { captures: match.slice(1) };
 
-                    // Vérifier si les args sont valides (ex: user_jid doit exister)
+                    // Check if args are valid (e.g. user_jid must exist)
                     if (args === null || args === undefined) continue;
 
                     // Support both "name" and "handler" for backwards compatibility
                     const handlerName = matcher.name || matcher.handler;
-                    console.log(`[TextMatcher] ✓ Pattern trouvé: ${handlerName} (plugin: ${matcher.pluginName})`);
+                    console.log(`[TextMatcher] ✓ Pattern found: ${handlerName} (plugin: ${matcher.pluginName})`);
                     return {
                         name: handlerName,
                         args
                     };
                 }
             } catch (error: any) {
-                console.error(`[TextMatcher] Erreur dans matcher ${matcher.handler}:`, error.message);
+                console.error(`[TextMatcher] Error in matcher ${matcher.handler}:`, error.message);
             }
         }
 
@@ -283,7 +284,7 @@ class PluginLoader {
     }
 
     /**
-     * Retourne toutes les définitions d'outils pour l'IA
+     * Returns all tool definitions for the AI
      * @returns {Array}
      */
     getToolDefinitions() {
@@ -291,68 +292,68 @@ class PluginLoader {
     }
 
     // ========================================================================
-    // DYNAMIC TOOL SELECTION (RAG pour Outils - Phase 2)
+    // DYNAMIC TOOL SELECTION (RAG for Tools - Phase 2)
     // ========================================================================
 
     /**
-     * Retourne les outils les plus pertinents pour une requête donnée
-     * Utilise la recherche sémantique sur la table bot_tools
+     * Returns the most relevant tools for a given request
+     * Uses semantic search on bot_tools table
      * 
-     * @param {string} userMessage - Le message de l'utilisateur
-     * @param {number} limit - Nombre max d'outils à retourner (défaut: 5)
-     * @param {number} fallbackLimit - Si RAG échoue, combien d'outils envoyer (défaut: 10)
-     * @returns {Promise<Array>} - Définitions d'outils pertinents
+     * @param {string} userMessage - User message
+     * @param {number} limit - Max tools to return (default: 5)
+     * @param {number} fallbackLimit - If RAG fails, how many tools to send (default: 10)
+     * @returns {Promise<Array>} - Relevant tool definitions
      * 
      * @example
-     * const tools = await pluginLoader.getRelevantTools("bannis ce mec", 5);
-     * // Retourne les 5 outils les plus proches de "bannir"
+     * const tools = await pluginLoader.getRelevantTools("ban this guy", 5);
+     * // Returns the 5 tools closest to "ban"
      */
     async getRelevantTools(userMessage: any, limit: any = 5, fallbackLimit: any = 10, options: any = {}) {
         const { forceModeration } = options;
-        // Import dynamique pour éviter les dépendances circulaires
+        // Dynamic import to avoid circular dependencies
         const { supabase } = await import('../services/supabase.js');
         const { container } = await import('../core/ServiceContainer.js');
         
-        // Utiliser le singleton EmbeddingsService du container (évite duplication)
+        // Use EmbeddingsService singleton from container (avoids duplication)
         let embeddings: any = null;
         try {
             if (container.has('embeddings')) {
                 embeddings = container.get('embeddings');
-                console.log('[PluginLoader] ✅ EmbeddingsService chargé depuis container (singleton)');
+                console.log('[PluginLoader] ✅ EmbeddingsService loaded from container (singleton)');
             } else {
-                console.warn('[PluginLoader] EmbeddingsService non disponible dans container');
+                console.warn('[PluginLoader] EmbeddingsService not available in container');
             }
         } catch (e: any) {
-            console.warn('[PluginLoader] Erreur chargement EmbeddingsService depuis container:', e.message);
+            console.warn('[PluginLoader] Error loading EmbeddingsService from container:', e.message);
         }
 
         if (!supabase || !embeddings) {
-            console.warn('[PluginLoader] RAG indisponible, fallback vers tous les outils');
+            console.warn('[PluginLoader] RAG unavailable, fallback to all tools');
             return this.toolDefinitions.slice(0, fallbackLimit);
         }
 
         try {
-            // 1. Générer l'embedding de la requête utilisateur
+            // 1. Generate user request embedding
             const queryVector = await embeddings.embed(userMessage);
 
             if (!queryVector) {
-                console.warn('[PluginLoader] Échec embedding requête, fallback');
+                console.warn('[PluginLoader] Request embedding failed, fallback');
                 return this.toolDefinitions.slice(0, fallbackLimit);
             }
 
-            // 2. Rechercher les outils similaires dans bot_tools
+            // 2. Search for similar tools in bot_tools
             const { data, error } = await supabase.rpc('match_tools', {
                 query_embedding: queryVector,
                 match_count: limit
             });
 
             if (error) {
-                console.error('[PluginLoader] Erreur match_tools:', error.message);
+                console.error('[PluginLoader] match_tools error:', error.message);
                 return this.toolDefinitions.slice(0, fallbackLimit);
             }
 
             if (!data || data.length === 0) {
-                console.warn('[PluginLoader] Aucun outil trouvé par RAG, fallback vers outils de base');
+                console.warn('[PluginLoader] No tools found by RAG, fallback to base tools');
                 const SAFE_FALLBACK_TOOLS = [
                     'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
                     'execute_bash_command', 'edit_file', 'list_directory', 'grep_search', 'code_execution',
@@ -363,7 +364,7 @@ class PluginLoader {
                 );
             }
 
-            // 3. Fusionner avec les CORE TOOLS (Outils toujours disponibles)
+            // 3. Merge with CORE TOOLS (Always available tools)
             let CORE_TOOLS = [
                 'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
                 'code_execution',
@@ -372,7 +373,7 @@ class PluginLoader {
                 'google_ai_search'
             ];
 
-            // [SENTIENCE] Si l'IA est énervée, on arme le système (avec les outils renommés)
+            // [SENTIENCE] If AI is angry, arm the system (with renamed tools)
             if (forceModeration) {
                 CORE_TOOLS.push('whatsapp_ban_user', 'whatsapp_kick_user', 'whatsapp_mute_user', 'whatsapp_warn_user', 'whatsapp_tagall');
             }
@@ -381,24 +382,24 @@ class PluginLoader {
                 t.function && CORE_TOOLS.includes(t.function.name)
             );
 
-            // Mapper les outils RAG
+            // Map RAG tools
             let relevantTools = data.map((tool: any) => tool.definition);
 
-            // Ajouter les Core Tools s'ils ne sont pas déjà là
+            // Add Core Tools if not already there
             for (const coreTool of coreToolDefs) {
                 if (!relevantTools.find((t: any) => t.function.name === coreTool.function.name)) {
                     relevantTools.push(coreTool);
                 }
             }
 
-            console.log(`[PluginLoader] 🎯 ${relevantTools.length} outils sélectionnés (RAG + Core):`,
+            console.log(`[PluginLoader] 🎯 ${relevantTools.length} tools selected (RAG + Core):`,
                 relevantTools.map((t: any) => t.function.name).join(', ')
             );
 
             return relevantTools;
 
         } catch (error: any) {
-            console.error('[PluginLoader] Erreur getRelevantTools:', error.message);
+            console.error('[PluginLoader] getRelevantTools error:', error.message);
             // Fallback: Core Tools + Safe Tools (Pas de slice arbitraire)
             const SAFE_FALLBACK_TOOLS = [
                 'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
@@ -416,20 +417,20 @@ class PluginLoader {
 
 
     /**
-     * Liste tous les plugins chargés
+     * Lists all loaded plugins
      * @returns {Array<{name, description, version}>}
      */
     /**
-     * Vérifie l'état de synchronisation des outils avec Supabase
-     * Supprime les outils obsolètes et signale les changements
-     * @param {Object} supabase - Client Supabase
+     * Checks tool sync status with Supabase
+     * Removes obsolete tools and signals changes
+     * @param {Object} supabase - Supabase client
      * @returns {Promise<{deleted: number, new: number, modified: number}>}
      */
     async checkSyncStatus(supabase: any) {
         if (!supabase) return { deleted: 0, new: 0, modified: 0 };
 
         try {
-            // 1. Récupérer les outils actuels (chargés)
+            // 1. Get current tools (loaded)
             const loadedTools = this.getToolDefinitions();
             const loadedToolHashes = new Map();
 
@@ -441,7 +442,7 @@ class PluginLoader {
                 }
             }
 
-            // 2. Récupérer les outils en base
+            // 2. Get tools from database
             const { data: dbTools, error } = await supabase
                 .from('bot_tools')
                 .select('name, description');
@@ -453,7 +454,7 @@ class PluginLoader {
             let modified = 0;
 
             if (dbTools) {
-                // 3. Identifier et supprimer les obsolètes
+                // 3. Identify and delete obsolete tools
                 const dbToolNames = dbTools.map((t: any) => t.name);
                 const obsoleteTools = dbToolNames.filter((name: any) => !loadedToolHashes.has(name));
 
@@ -468,7 +469,7 @@ class PluginLoader {
                     }
                 }
 
-                // 4. Identifier les nouveaux et modifiés
+                // 4. Identify new and modified tools
                 for (const [name, hash] of loadedToolHashes.entries()) {
                     const dbTool = dbTools.find((t: any) => t.name === name);
                     if (!dbTool) {
@@ -491,7 +492,7 @@ class PluginLoader {
     }
 
     /**
-     * Génère un hash simple pour détecter les changements
+     * Generates a simple hash to detect changes
      */
     _generateToolHash(name: any, description: any) {
         return `${name}:${description.trim()}`;
@@ -506,13 +507,13 @@ class PluginLoader {
     }
 
     /**
-     * Recharge un plugin spécifique
+     * Reloads a specific plugin
      * @param {string} name 
      */
     async reload(name: any) {
         const plugin = this.plugins.get(name);
         if (plugin) {
-            // Retire l'ancienne définition
+            // Remove old definition
             this.toolDefinitions = this.toolDefinitions.filter(
                 t => t.function?.name !== name
             );

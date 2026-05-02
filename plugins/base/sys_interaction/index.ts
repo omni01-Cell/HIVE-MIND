@@ -1,22 +1,22 @@
 // plugins/sys_interaction/index.js
 export default {
     name: 'sys_interaction',
-    description: 'Gestion des interactions humaines avancées (Réactions, Sondages, Contacts)',
+    description: 'Management of advanced human interactions (Reactions, Polls, Contacts)',
     version: '1.1.0',
     enabled: true,
 
-    // Définitions multiples pour function calling
+    // Multiple definitions for function calling
     toolDefinitions: [
         {
             type: 'function',
             function: {
                 name: 'react_to_message',
-                description: 'Met une réaction (emoji) sur le message. À utiliser pour confirmer (👍), aimer (❤️) ou rire (😂) au lieu de répondre par du texte.',
+                description: 'Adds a reaction (emoji) to the message. Use to confirm (👍), like (❤️), or laugh (😂) instead of replying with text.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        emoji: { type: 'string', description: 'L\'emoji à utiliser (ex: 👍, ❤️, 😂)' },
-                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optionnel. Le réseau de destination. Par défaut, utilise le réseau courant.' }
+                        emoji: { type: 'string', description: 'The emoji to use (e.g., 👍, ❤️, 😂)' },
+                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional. The destination network. Defaults to the current network.' }
                     },
                     required: ['emoji']
                 }
@@ -26,19 +26,19 @@ export default {
             type: 'function',
             function: {
                 name: 'create_poll',
-                description: 'Crée un sondage natif. Si le réseau de destination ne supporte pas les sondages natifs, le transport adaptera le format.',
+                description: 'Creates a native poll. If the destination network does not support native polls, the transport will adapt the format.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        title: { type: 'string', description: 'La question ou le titre du sondage' },
+                        title: { type: 'string', description: 'The question or title of the poll' },
                         options: {
                             type: 'array',
                             items: { type: 'string' },
-                            description: 'Liste des choix possibles (ex: ["Lundi", "Mardi", "Jamais"])'
+                            description: 'List of possible choices (e.g., ["Monday", "Tuesday", "Never"])'
                         },
-                        allowMultipleAnswers: { type: 'boolean', description: 'Si vrai, les utilisateurs peuvent choisir plusieurs options (défaut: false)' },
-                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optionnel. Le réseau cible.' },
-                        target_chat_id: { type: 'string', description: 'Optionnel. L\'ID de la conversation cible.' }
+                        allowMultipleAnswers: { type: 'boolean', description: 'If true, users can choose multiple options (default: false)' },
+                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional. The target network.' },
+                        target_chat_id: { type: 'string', description: 'Optional. The target conversation ID.' }
                     },
                     required: ['title', 'options']
                 }
@@ -48,14 +48,14 @@ export default {
             type: 'function',
             function: {
                 name: 'send_contact',
-                description: 'Envoie une fiche contact (VCard). Si le réseau ne le supporte pas, il enverra du texte formaté.',
+                description: 'Sends a contact card (VCard). If the network does not support it, it will send formatted text.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        name: { type: 'string', description: 'Nom affiché du contact' },
-                        phone: { type: 'string', description: 'Numéro de téléphone complet (format international sans +)' },
-                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optionnel.' },
-                        target_chat_id: { type: 'string', description: 'Optionnel. ID de destination.' }
+                        name: { type: 'string', description: 'Displayed contact name' },
+                        phone: { type: 'string', description: 'Full phone number (international format without +)' },
+                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional.' },
+                        target_chat_id: { type: 'string', description: 'Optional. Destination ID.' }
                     },
                     required: ['name', 'phone']
                 }
@@ -65,13 +65,13 @@ export default {
             type: 'function',
             function: {
                 name: 'send_message',
-                description: 'Envoie un message. Peut être utilisé pour parler sur le réseau courant, OU pour envoyer un message sur un autre réseau à un autre utilisateur (omni-channel).',
+                description: 'Sends a message. Can be used to speak on the current network, OR to send a message to another network to another user (omni-channel).',
                 parameters: {
                     type: 'object',
                     properties: {
-                        text: { type: 'string', description: 'Le texte du message à envoyer.' },
-                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Le réseau de destination. Par défaut, le réseau actuel de la conversation.' },
-                        target_chat_id: { type: 'string', description: 'L\'ID du chat/utilisateur de destination. Indispensable si tu changes de target_channel.' }
+                        text: { type: 'string', description: 'The text of the message to send.' },
+                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'The destination network. Defaults to the current conversation network.' },
+                        target_chat_id: { type: 'string', description: 'The destination chat/user ID. Essential if you change the target_channel.' }
                     },
                     required: ['text']
                 }
@@ -81,14 +81,14 @@ export default {
             type: 'function',
             function: {
                 name: 'send_file',
-                description: 'Envoie un fichier (image, vidéo, document) sur le réseau cible. Universel (Discord, Telegram, WhatsApp).',
+                description: 'Sends a file (image, video, document) to the target network. Universal (Discord, Telegram, WhatsApp).',
                 parameters: {
                     type: 'object',
                     properties: {
-                        filePath: { type: 'string', description: 'Le chemin absolu ou l\'URL du fichier à envoyer.' },
-                        caption: { type: 'string', description: 'Texte optionnel accompagnant le fichier.' },
-                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optionnel. Le réseau de destination. Par défaut, le réseau actuel.' },
-                        target_chat_id: { type: 'string', description: 'Optionnel. L\'ID du chat/utilisateur de destination.' }
+                        filePath: { type: 'string', description: 'The absolute path or URL of the file to send.' },
+                        caption: { type: 'string', description: 'Optional text accompanying the file.' },
+                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional. The destination network. Defaults to current network.' },
+                        target_chat_id: { type: 'string', description: 'Optional. The destination chat/user ID.' }
                     },
                     required: ['filePath']
                 }
@@ -98,7 +98,7 @@ export default {
             type: 'function',
             function: {
                 name: 'get_my_capabilities',
-                description: 'Liste TOUTES les fonctionnalités, plugins et outils dont je dispose. À utiliser quand l\'utilisateur demande "Que sais-tu faire ?" ou "Liste tes fonctions", car ta mémoire courante peut être incomplète.',
+                description: 'Lists ALL features, plugins, and tools available to me. Use when the user asks "What can you do?" or "List your functions", as your current memory might be incomplete.',
                 parameters: {
                     type: 'object',
                     properties: {},
@@ -110,17 +110,17 @@ export default {
             type: 'function',
             function: {
                 name: 'use_tool',
-                description: 'Outil Méta-Exécutif. Permet d\'exécuter N\'IMPORTE QUEL outil de ta liste de capacités (récupérée via get_my_capabilities), même si cet outil n\'est pas actif dans ton contexte actuel. Utilise ceci pour contourner les limitations de mémoire.',
+                description: 'Meta-Executive tool. Allows executing ANY tool from your capabilities list (retrieved via get_my_capabilities), even if that tool is not active in your current context. Use this to bypass memory limitations.',
                 parameters: {
                     type: 'object',
                     properties: {
                         tool_name: {
                             type: 'string',
-                            description: 'Le nom exact de la fonction à exécuter (ex: "react_to_message", "search_wikipedia")'
+                            description: 'The exact name of the function to execute (e.g., "react_to_message", "search_wikipedia")'
                         },
                         args: {
                             type: 'object',
-                            description: 'Les arguments requis par l\'outil cible, au format JSON.'
+                            description: 'The arguments required by the target tool, in JSON format.'
                         }
                     },
                     required: ['tool_name', 'args']
@@ -130,15 +130,15 @@ export default {
     ],
 
     /**
-     * Exécution des outils
+     * Tool Execution
      */
     async execute(args: any, context: any, toolName: any) {
-        // Import dynamique pour éviter cycles
+        // Dynamic import to avoid cycles
         const { pluginLoader } = await import('../../loader.js');
-        const { transport, message, chatId } = context;
+        const { transport, message, chatId } = context || {};
 
         if (!transport) {
-            return { success: false, message: 'Transport non disponible' };
+            return { success: false, message: 'Transport not available' };
         }
 
         try {
@@ -147,8 +147,8 @@ export default {
                     const plugins = pluginLoader.list();
                     const tools = pluginLoader.getToolDefinitions();
 
-                    // Formatter proprement pour l'IA
-                    let summary = "Voici la liste exhaustive de mes capacités :\n\n";
+                    // Formatter properly for AI
+                    let summary = "Here is the exhaustive list of my capabilities:\n\n";
 
                     plugins.forEach((p: any) => {
                         summary += `📂 **Plugin: ${p.name}** (v${p.version})\n   Description: ${p.description}\n`;
@@ -168,11 +168,11 @@ export default {
                         summary += tools.map((t: any) => `- ${t.function.name}: ${t.function.description}`).join('\n');
                     }
 
-                    // [PTC] Ajouter manuellement le meta-tool dynamique code_execution
+                    // [PTC] Manually add dynamic code_execution meta-tool
                     const ptcEnabled = process.env.PTC_ENABLED !== 'false';
                     if (ptcEnabled) {
-                        summary += `\n📂 **Meta-Fonctionnalités (Système)**\n`;
-                        summary += `   - 🛠️ code_execution: Exécute du code JavaScript pour orchestrer PLUSIEURS appels d'outils en une seule fois (Programmatic Tool Calling).\n`;
+                        summary += `\n📂 **Meta-Features (System)**\n`;
+                        summary += `   - 🛠️ code_execution: Executes JavaScript code to orchestrate MULTIPLE tool calls at once (Programmatic Tool Calling).\n`;
                     }
 
                     return {
@@ -183,7 +183,7 @@ export default {
 
                 case 'react_to_message':
                     const emoji = args.emoji || args.reaction;
-                    if (!emoji || emoji.length > 5) return { success: false, message: 'Emoji invalide.' };
+                    if (!emoji || emoji.length > 5) return { success: false, message: 'Invalid emoji.' };
 
                     const targetKey = message.raw?.key; // Message actuel par défaut
                     if (targetKey) {
@@ -198,15 +198,15 @@ export default {
 
                         if (negativeEmojis.includes(emoji)) {
                             await consciousness.updateAnnoyance(chatId, message.sender, 15);
-                            console.log(`[Vibe] 😡 Réaction négative (${emoji}) -> Agacement +15`);
+                            console.log(`[Vibe] 😡 Negative reaction (${emoji}) -> Annoyance +15`);
                         } else if (positiveEmojis.includes(emoji)) {
                             await consciousness.updateAnnoyance(chatId, message.sender, -5);
-                            console.log(`[Vibe] ❤️ Réaction positive (${emoji}) -> Agacement -5`);
+                            console.log(`[Vibe] ❤️ Positive reaction (${emoji}) -> Annoyance -5`);
                         }
 
-                        return { success: true, message: `[ACTION] Réaction ${emoji} ajoutée sur ${targetChannel}.` };
+                        return { success: true, message: `[ACTION] Reaction ${emoji} added on ${targetChannel}.` };
                     }
-                    return { success: false, message: 'Pas de message cible.' };
+                    return { success: false, message: 'No target message.' };
 
                 case 'create_poll':
                     const { title, options, allowMultipleAnswers } = args;
@@ -215,7 +215,7 @@ export default {
                     const pollTargetChatId = args.target_chat_id || chatId;
 
                     await transport.sendPoll(pollTargetChatId, title, options, selectableCount, pollTargetChannel);
-                    return { success: true, message: `[ACTION] Sondage "${title}" créé sur ${pollTargetChannel} dans le chat ${pollTargetChatId}.` };
+                    return { success: true, message: `[ACTION] Poll "${title}" created on ${pollTargetChannel} in chat ${pollTargetChatId}.` };
 
                 case 'send_contact':
                     const { name, phone } = args;
@@ -225,42 +225,42 @@ export default {
                     const contactTargetChatId = args.target_chat_id || chatId;
 
                     await transport.sendContact(contactTargetChatId, name, cleanPhone, contactTargetChannel);
-                    return { success: true, message: `[ACTION] Contact ${name} (${cleanPhone}) envoyé sur ${contactTargetChannel}.` };
+                    return { success: true, message: `[ACTION] Contact ${name} (${cleanPhone}) sent on ${contactTargetChannel}.` };
 
                 case 'send_message':
                     const { text } = args;
-                    if (!text) return { success: false, message: 'Texte vide.' };
+                    if (!text) return { success: false, message: 'Empty text.' };
                     
                     const msgTargetChannel = args.target_channel || context.sourceChannel;
                     const msgTargetChatId = args.target_chat_id || chatId;
 
-                    // Envoi direct via le transport
-                    // Utiliser sendText pour bénéficier du formatage auto et splitting
+                    // Send directly via transport
+                    // Use sendText to benefit from auto formatting and splitting
                     await transport.sendText(msgTargetChatId, text, {}, msgTargetChannel);
-                    return { success: true, message: `[ACTION] Message envoyé sur ${msgTargetChannel} au chat ${msgTargetChatId}.` };
+                    return { success: true, message: `[ACTION] Message sent on ${msgTargetChannel} to chat ${msgTargetChatId}.` };
 
                 case 'send_file':
                 case 'send_files': {
                     const { filePath, caption } = args;
-                    if (!filePath) return { success: false, message: 'Chemin de fichier (filePath) requis.' };
+                    if (!filePath) return { success: false, message: 'File path (filePath) required.' };
 
                     const fileTargetChannel = args.target_channel || context.sourceChannel;
                     const fileTargetChatId = args.target_chat_id || chatId;
 
-                    // Support universel via sendMedia
-                    // Le transport adaptera l'envoi en fonction de ses propres capacités
+                    // Universal support via sendMedia
+                    // The transport will adapt the send based on its own capabilities
                     await transport.sendMedia(fileTargetChatId, filePath, { caption }, fileTargetChannel);
-                    return { success: true, message: `[ACTION] Fichier envoyé sur ${fileTargetChannel} au chat ${fileTargetChatId}.` };
+                    return { success: true, message: `[ACTION] File sent on ${fileTargetChannel} to chat ${fileTargetChatId}.` };
                 }
 
                 default:
-                    return { success: false, message: `Outil inconnu: ${toolName}` };
+                    return { success: false, message: `Unknown tool: ${toolName}` };
             }
         } catch (error: any) {
-            console.error(`[Interaction] Erreur ${toolName}:`, error);
+            console.error(`[Interaction] Error ${toolName}:`, error);
             return {
                 success: false,
-                message: `Erreur lors de l'exécution de ${toolName}: ${error.message}`,
+                message: `Error during execution of ${toolName}: ${error.message}`,
                 gracefulDegradation: true
             };
         }

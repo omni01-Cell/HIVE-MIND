@@ -79,10 +79,8 @@ const ensureConnected = async () => {
     await connectionPromise;
 };
 
-// Connexion au démarrage (sauf en test)
-if (process.env.NODE_ENV !== 'test') {
-    ensureConnected().catch(() => { });
-}
+// Connexion au démarrage supprimée pour éviter les side-effects.
+// Le client doit être connecté explicitement par l'application (via botCore.init ou container.init).
 
 /**
  * Vérifie l'état de santé de Redis

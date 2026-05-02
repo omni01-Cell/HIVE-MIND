@@ -6,7 +6,7 @@ const MAX_OUTPUT_LENGTH = 30000;
 
 export default {
     name: 'dev_tools_bash',
-    description: 'Exécution de commandes bash persistantes (CWD et Env conservés).',
+    description: 'Execution of persistent bash commands (CWD and Env preserved).',
     version: '2.0.0',
     enabled: true,
 
@@ -15,13 +15,13 @@ export default {
             type: 'function',
             function: {
                 name: 'execute_bash_command',
-                description: 'Exécute une commande bash sur la machine locale dans un shell persistant.',
+                description: 'Executes a bash command on the local machine in a persistent shell.',
                 parameters: {
                     type: 'object',
                     properties: {
                         command: {
                             type: 'string',
-                            description: 'La commande bash à exécuter.'
+                            description: 'The bash command to execute.'
                         }
                     },
                     required: ['command']
@@ -36,78 +36,78 @@ export default {
         const { command } = args;
         const { chatId, sourceChannel } = context;
 
-        // 1. Validation de sécurité (Sandbox)
-        // Note: Le PersistentShell suit son propre CWD, mais on vérifie la commande
-        const validation = permissionManager.validateBashCommand(command);
+        // 1. Security Validation (Sandbox)
+        // Note: PersistentShell tracks its own CWD, but we verify the command integrity.
+        const validation = permissionManager.validateBashCommand(command, persistentShell.getCwd());
 
         if (!validation.result && !validation.requiresPermission) {
             return {
                 success: false,
-                message: `[SECURITY BLOCK] Commande interdite : ${validation.reason}`
+                message: `[SECURITY BLOCK] Forbidden command: ${validation.reason}`
             };
         }
 
         if (validation.requiresPermission) {
             const permResult = await permissionManager.askPermission(
                 chatId, 
-                `Exécuter Bash (Hors Sandbox) : ${command}`, 
+                `Execute Bash (Non-Sandboxed): ${command}`, 
                 sourceChannel,
                 context.message?.sender || 'system'
             );
 
             if (!permResult.granted) {
-                // HITL Actif : si l'utilisateur a fourni un feedback correctif
+                // Active HITL: if the user provided corrective feedback
                 if (permResult.feedback) {
                     return {
                         success: false,
-                        message: `[ACTION REJECTED] L'utilisateur a REFUSÉ cette action et a fourni cette instruction corrective : "${permResult.feedback}". Modifie tes paramètres et réessaie.`
+                        message: `[ACTION REJECTED] The user REJECTED this action and provided this corrective instruction: "${permResult.feedback}". Modify your parameters and try again.`
                     };
                 }
                 return {
                     success: false,
-                    message: '[ACTION REJECTED] L\'utilisateur a refusé l\'exécution de cette commande.'
+                    message: '[ACTION REJECTED] The user refused the execution of this command.'
                 };
             }
         }
 
         // 2. Exécution dans le shell persistant
         try {
-            console.log(`[BashTool] 🐚 Exécution : ${command}`);
+            console.log(`[BashTool] 🐚 Executing: ${command}`);
 
-            // [ASYNC RENDERING] Notifier le début d'exécution
-            if (context.onProgress) context.onProgress(`Exécution de : ${command}`);
+            // [ASYNC RENDERING] Notify execution start
+            if (context.onProgress) context.onProgress(`Executing: ${command}`);
 
             const { stdout, exitCode } = await persistentShell.execute(command);
 
-            // [ASYNC RENDERING] Notifier la fin d'exécution
-            if (context.onProgress) context.onProgress(`Terminé (Code: ${exitCode})`);
+            // [ASYNC RENDERING] Notify execution end
+            if (context.onProgress) context.onProgress(`Finished (Code: ${exitCode})`);
 
-            // [CLAUDE CODE PATTERN] Troncature Head & Tail
+            // [CLAUDE CODE PATTERN] Head & Tail truncation
             let finalOutput = stdout;
             if (stdout.length > MAX_OUTPUT_LENGTH) {
                 const head = stdout.substring(0, MAX_OUTPUT_LENGTH / 2);
                 const tail = stdout.substring(stdout.length - MAX_OUTPUT_LENGTH / 2);
-                finalOutput = `${head}\n\n... [${stdout.length - MAX_OUTPUT_LENGTH} caractères tronqués] ...\n\n${tail}`;
+                finalOutput = `${head}\n\n... [${stdout.length - MAX_OUTPUT_LENGTH} characters truncated] ...\n\n${tail}`;
             }
 
             const isSuccess = exitCode === 0;
 
             return {
                 success: isSuccess,
-                // Ce que le LLM va lire (logs complets mais tronqués)
+                // What the LLM will read (complete but truncated logs)
                 llmOutput: {
-                    stdout: finalOutput || (isSuccess ? 'Aucune sortie (success)' : 'Aucune sortie (erreur)'),
+                    stdout: finalOutput || (isSuccess ? 'No output (success)' : 'No output (error)'),
                     exitCode: exitCode
                 },
-                // Ce que l'utilisateur WhatsApp / CLI va voir instantanément
-                userOutput: `🐚 *Exécution Bash* :\n\`\`\`bash\n${command}\n\`\`\`\nStatut: ${isSuccess ? '✅ Succès' : '❌ Échec (Code '+exitCode+')'}`
+                // What the WhatsApp / CLI user will see instantly
+                userOutput: `🐚 *Bash Execution*:\n\`\`\`bash\n${command}\n\`\`\`\nStatus: ${isSuccess ? '✅ Success' : '❌ Failed (Code '+exitCode+')'}`
             };
 
         } catch (error: any) {
             return {
                 success: false,
-                llmOutput: `Erreur d'exécution fatale : ${error.message}`,
-                userOutput: `❌ *Erreur Bash* lors de l'exécution de \`${command}\`\n_${error.message}_`
+                llmOutput: `Fatal execution error: ${error.message}`,
+                userOutput: `❌ *Bash Error* during execution of \`${command}\`\n_${error.message}_`
             };
         }
     }

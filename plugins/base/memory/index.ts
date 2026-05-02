@@ -1,33 +1,39 @@
 // plugins/memory/index.js
-// Plugin de mémorisation de faits persistants (Option C)
-// Permet à l'IA de mémoriser, rappeler et lister des informations sur les utilisateurs
+// Persistent fact memorization plugin (Option C)
+// Allows the AI to memorize, recall, and list information about users
 
-import { factsMemory, workspaceMemory, semanticMemory } from '../../../services/memory.js';
-import { workingMemory } from '../../../services/workingMemory.js';
+// Lazy loaded services helper
+const getServices = async () => {
+    const [{ factsMemory, workspaceMemory, semanticMemory }, { workingMemory }] = await Promise.all([
+        import('../../../services/memory.js'),
+        import('../../../services/workingMemory.js')
+    ]);
+    return { factsMemory, workspaceMemory, semanticMemory, workingMemory };
+};
 
 export default {
     name: 'memory',
-    description: 'Gestion de la mémoire persistante - mémoriser, rappeler et lister les faits sur les utilisateurs',
+    description: 'Persistent memory management - memorize, recall, and list facts about users',
     version: '1.0.0',
     enabled: true,
 
-    // Définitions multiples pour function calling
+    // Multiple definitions for function calling
     toolDefinitions: [
         {
             type: 'function',
             function: {
                 name: 'remember_fact',
-                description: 'Mémorise un fait important sur l\'utilisateur pour s\'en souvenir plus tard. Utilise cette fonction quand l\'utilisateur te demande de te rappeler quelque chose ou quand il partage une information personnelle importante.',
+                description: 'Memorizes an important fact about the user for future recall. Use this when the user asks you to remember something or shares significant personal info.',
                 parameters: {
                     type: 'object',
                     properties: {
                         key: {
                             type: 'string',
-                            description: 'Catégorie du fait (ex: "nom", "ville", "métier", "anniversaire", "préférence_musique", "animal_préféré")'
+                            description: 'Fact category (e.g., "name", "city", "job", "birthday", "music_preference")'
                         },
                         value: {
                             type: 'string',
-                            description: 'La valeur à mémoriser (ex: "Jean", "Paris", "Développeur", "15 mars")'
+                            description: 'The value to memorize (e.g., "John", "Paris", "Developer", "March 15")'
                         }
                     },
                     required: ['key', 'value']
@@ -38,13 +44,13 @@ export default {
             type: 'function',
             function: {
                 name: 'recall_fact',
-                description: 'Rappelle un fait spécifique mémorisé sur l\'utilisateur. Utilise cette fonction quand l\'utilisateur demande si tu te souviens de quelque chose.',
+                description: 'Recalls a specific memorized fact about the user. Use this when the user asks if you remember something.',
                 parameters: {
                     type: 'object',
                     properties: {
                         key: {
                             type: 'string',
-                            description: 'Catégorie du fait à rappeler (ex: "nom", "ville", "métier")'
+                            description: 'Fact category to recall (e.g., "name", "city", "job")'
                         }
                     },
                     required: ['key']
@@ -55,7 +61,7 @@ export default {
             type: 'function',
             function: {
                 name: 'list_facts',
-                description: 'Liste tous les faits connus sur l\'utilisateur. Utilise cette fonction quand l\'utilisateur demande ce que tu sais sur lui.',
+                description: 'Lists all known facts about the user. Use this when the user asks what you know about them.',
                 parameters: {
                     type: 'object',
                     properties: {},
@@ -67,13 +73,13 @@ export default {
             type: 'function',
             function: {
                 name: 'forget_fact',
-                description: 'Oublie un fait spécifique sur l\'utilisateur. Utilise cette fonction quand l\'utilisateur demande d\'oublier une information.',
+                description: 'Forgets a specific fact about the user. Use this when the user asks to forget or remove an information.',
                 parameters: {
                     type: 'object',
                     properties: {
                         key: {
                             type: 'string',
-                            description: 'Catégorie du fait à oublier'
+                            description: 'Fact category to forget'
                         }
                     },
                     required: ['key']
@@ -84,13 +90,13 @@ export default {
             type: 'function',
             function: {
                 name: 'workspace_write',
-                description: 'Sauvegarde ou met à jour un document dans ton espace de travail actif (Epistemic Memory). Utilise-le pour planifier, résumer ou maintenir un état persistant.',
+                description: 'Saves or updates a document in your active workspace (Epistemic Memory). Use for planning, summarizing, or maintaining persistent state.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        key: { type: 'string', description: 'Identifiant unique du document (ex: "plan_migration", "user_profile")' },
-                        content: { type: 'string', description: 'Le contenu complet du document (texte ou JSON)' },
-                        tags: { type: 'array', items: { type: 'string' }, description: 'Tags pour filtrage optionnel (ex: ["plan", "urgent"])' }
+                        key: { type: 'string', description: 'Unique identifier for the document (e.g., "migration_plan", "user_profile")' },
+                        content: { type: 'string', description: 'Complete content of the document (text or JSON)' },
+                        tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags for filtering (e.g., ["plan", "urgent"])' }
                     },
                     required: ['key', 'content']
                 }
@@ -100,11 +106,11 @@ export default {
             type: 'function',
             function: {
                 name: 'workspace_read',
-                description: 'Lit le contenu complet d\'un document spécifique depuis ton espace de travail actif.',
+                description: 'Reads the complete content of a specific document from your active workspace.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        key: { type: 'string', description: 'Identifiant unique du document à lire' }
+                        key: { type: 'string', description: 'Unique identifier of the document to read' }
                     },
                     required: ['key']
                 }
@@ -114,12 +120,12 @@ export default {
             type: 'function',
             function: {
                 name: 'workspace_search',
-                description: 'Recherche sémantiquement dans tous tes documents de travail (Epistemic Memory) pour trouver des concepts similaires.',
+                description: 'Semantically searches through all your workspace documents (Epistemic Memory) to find similar concepts.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        query: { type: 'string', description: 'La question ou le concept à rechercher' },
-                        tags: { type: 'array', items: { type: 'string' }, description: 'Filtrer par tags spécifiques (optionnel)' }
+                        query: { type: 'string', description: 'The question or concept to search for' },
+                        tags: { type: 'array', items: { type: 'string' }, description: 'Filter by specific tags (optional)' }
                     },
                     required: ['query']
                 }
@@ -129,11 +135,11 @@ export default {
             type: 'function',
             function: {
                 name: 'workspace_delete',
-                description: 'Supprime un document obsolète de ton espace de travail.',
+                description: 'Deletes an obsolete document from your workspace.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        key: { type: 'string', description: 'Identifiant unique du document à supprimer' }
+                        key: { type: 'string', description: 'Unique identifier of the document to delete' }
                     },
                     required: ['key']
                 }
@@ -171,16 +177,20 @@ export default {
     ],
 
     /**
-     * Exécute l'outil de mémoire
-     * @param {Object} args - Arguments de l'outil
-     * @param {Object} context - Contexte (transport, message, chatId, sender)
-     * @param {string} toolName - Nom de l'outil appelé
+     * Executes memory tool
+     * @param {Object} args - Tool arguments
+     * @param {Object} context - Context (transport, message, chatId, sender)
+     * @param {string} toolName - Called tool name
      */
     async execute(args: any, context: any, toolName: any) {
-        const { chatId, sender } = context;
+        // Defensive destructuring of context
+        const { chatId, sender } = context || {};
 
-        // Utiliser le JID de l'utilisateur comme identifiant de chat pour les faits personnels
-        // En groupe, on peut distinguer par sender, en privé c'est le même
+        if (!chatId) {
+            return { success: false, message: 'CONTEXT_ERROR: chatId is required for memory operations.' };
+        }
+
+        // Use sender or chatId for personal facts
         const factsChatId = sender || chatId;
 
         switch (toolName) {
@@ -215,73 +225,76 @@ export default {
                 return await this._searchLongTermMemory(chatId, args.query);
 
             default:
-                return { success: false, message: `Outil inconnu: ${toolName}` };
+                return { success: false, message: `Unknown tool: ${toolName}` };
         }
     },
 
     /**
-     * Mémorise un fait
+     * Memorizes a fact
      */
     async _rememberFact(chatId: any, key: any, value: any) {
         try {
-            // Normaliser la clé (minuscules, underscores)
+            const { factsMemory } = await getServices();
+            // Normalize the key (lowercase, underscores)
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
 
             await factsMemory.remember(chatId, normalizedKey, value);
 
             return {
                 success: true,
-                message: `FAIT_MÉMORISÉ: J'ai noté "${normalizedKey}" = "${value}". Je m'en souviendrai ! 📝`
+                message: `FACT_MEMORIZED: I've noted "${normalizedKey}" = "${value}". I will remember it! 📝`
             };
         } catch (error: any) {
-            console.error('[Memory Plugin] Erreur remember:', error);
+            console.error('[Memory Plugin] Error remember:', error);
             return {
                 success: false,
-                message: `Erreur de mémorisation: ${error.message}`
+                message: `Memorization error: ${error.message}`
             };
         }
     },
 
     /**
-     * Rappelle un fait
+     * Recalls a fact
      */
     async _recallFact(chatId: any, key: any) {
         try {
+            const { factsMemory } = await getServices();
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
             const value = await factsMemory.get(chatId, normalizedKey);
 
             if (value) {
                 return {
                     success: true,
-                    message: `FAIT_TROUVÉ: ${normalizedKey} = "${value}"`
+                    message: `FACT_FOUND: ${normalizedKey} = "${value}"`
                 };
             } else {
                 return {
                     success: false,
-                    message: `FAIT_INCONNU: Je n'ai aucune information sur "${key}" pour cet utilisateur.`
+                    message: `FACT_UNKNOWN: I have no information on "${key}" for this user.`
                 };
             }
         } catch (error: any) {
-            console.error('[Memory Plugin] Erreur recall:', error);
+            console.error('[Memory Plugin] Error recall:', error);
             return {
                 success: false,
-                message: `Erreur de rappel: ${error.message}`
+                message: `Recall error: ${error.message}`
             };
         }
     },
 
     /**
-     * Liste tous les faits
+     * Lists all facts
      */
     async _listFacts(chatId: any) {
         try {
+            const { factsMemory } = await getServices();
             const facts = await factsMemory.getAll(chatId);
             const entries = Object.entries(facts);
 
             if (entries.length === 0) {
                 return {
                     success: true,
-                    message: `AUCUN_FAIT: Je n'ai encore mémorisé aucune information sur cet utilisateur.`
+                    message: `NO_FACTS: I haven't memorized any information for this user yet.`
                 };
             }
 
@@ -291,22 +304,23 @@ export default {
 
             return {
                 success: true,
-                message: `FAITS_CONNUS (${entries.length}):\n${formatted}`
+                message: `KNOWN_FACTS (${entries.length}):\n${formatted}`
             };
         } catch (error: any) {
-            console.error('[Memory Plugin] Erreur list:', error);
+            console.error('[Memory Plugin] Error list:', error);
             return {
                 success: false,
-                message: `Erreur de listing: ${error.message}`
+                message: `Listing error: ${error.message}`
             };
         }
     },
 
     /**
-     * Oublie un fait
+     * Forgets a fact
      */
     async _forgetFact(chatId: any, key: any) {
         try {
+            const { factsMemory } = await getServices();
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
 
             // Vérifier si le fait existe
@@ -314,7 +328,7 @@ export default {
             if (!existing) {
                 return {
                     success: false,
-                    message: `FAIT_INEXISTANT: Je n'avais pas d'information sur "${key}" à oublier.`
+                    message: `FACT_NOT_FOUND: I had no information on "${key}" to forget.`
                 };
             }
 
@@ -322,13 +336,13 @@ export default {
 
             return {
                 success: true,
-                message: `FAIT_OUBLIÉ: J'ai oublié "${normalizedKey}". Cette information a été supprimée. 🗑️`
+                message: `FACT_FORGOTTEN: I've forgotten "${normalizedKey}". This information has been removed. 🗑️`
             };
         } catch (error: any) {
-            console.error('[Memory Plugin] Erreur forget:', error);
+            console.error('[Memory Plugin] Error forget:', error);
             return {
                 success: false,
-                message: `Erreur d'oubli: ${error.message}`
+                message: `Forget error: ${error.message}`
             };
         }
     },
@@ -338,13 +352,14 @@ export default {
      */
     async _workspaceWrite(chatId: any, key: any, content: any, tags: any) {
         try {
+            const { workspaceMemory } = await getServices();
             const success = await workspaceMemory.write(chatId, key, content, tags || []);
             if (success) {
-                return { success: true, message: `WORKSPACE_WRITTEN: Document "${key}" sauvegardé avec succès.` };
+                return { success: true, message: `WORKSPACE_WRITTEN: Document "${key}" saved successfully.` };
             }
-            return { success: false, message: `Erreur lors de la sauvegarde du document "${key}".` };
+            return { success: false, message: `Error saving document "${key}".` };
         } catch (error: any) {
-            return { success: false, message: `Erreur interne: ${error.message}` };
+            return { success: false, message: `Internal error: ${error.message}` };
         }
     },
 
@@ -353,13 +368,14 @@ export default {
      */
     async _workspaceRead(chatId: any, key: any) {
         try {
+            const { workspaceMemory } = await getServices();
             const doc = await workspaceMemory.read(chatId, key);
             if (doc) {
                 return { success: true, message: `WORKSPACE_DOC [${key}]:\n${doc.content}\n\nTags: ${(doc.tags || []).join(', ')}` };
             }
-            return { success: false, message: `WORKSPACE_NOT_FOUND: Le document "${key}" n'existe pas.` };
+            return { success: false, message: `WORKSPACE_NOT_FOUND: Document "${key}" does not exist.` };
         } catch (error: any) {
-            return { success: false, message: `Erreur interne: ${error.message}` };
+            return { success: false, message: `Internal error: ${error.message}` };
         }
     },
 
@@ -368,14 +384,15 @@ export default {
      */
     async _workspaceSearch(chatId: any, query: any, tags: any) {
         try {
+            const { workspaceMemory } = await getServices();
             const results = await workspaceMemory.search(chatId, query, tags || []);
             if (results && results.length > 0) {
                 const formatted = results.map((r: any) => `- [${r.key}] (Score: ${Math.round(r.similarity*100)}%): ${r.content.substring(0, 200)}...`).join('\n');
                 return { success: true, message: `WORKSPACE_SEARCH_RESULTS:\n${formatted}` };
             }
-            return { success: true, message: `WORKSPACE_NO_MATCH: Aucun document trouvé pour "${query}".` };
+            return { success: true, message: `WORKSPACE_NO_MATCH: No documents found for "${query}".` };
         } catch (error: any) {
-            return { success: false, message: `Erreur interne: ${error.message}` };
+            return { success: false, message: `Internal error: ${error.message}` };
         }
     },
 
@@ -384,13 +401,14 @@ export default {
      */
     async _workspaceDelete(chatId: any, key: any) {
         try {
+            const { workspaceMemory } = await getServices();
             const success = await workspaceMemory.delete(chatId, key);
             if (success) {
-                return { success: true, message: `WORKSPACE_DELETED: Document "${key}" supprimé.` };
+                return { success: true, message: `WORKSPACE_DELETED: Document "${key}" deleted.` };
             }
-            return { success: false, message: `Erreur lors de la suppression de "${key}".` };
+            return { success: false, message: `Error deleting "${key}".` };
         } catch (error: any) {
-            return { success: false, message: `Erreur interne: ${error.message}` };
+            return { success: false, message: `Internal error: ${error.message}` };
         }
     },
 
@@ -402,6 +420,7 @@ export default {
      */
     async _updateScratchpad(chatId: any, text: any) {
         try {
+            const { workingMemory } = await getServices();
             if (!text || typeof text !== 'string') {
                 return { success: false, message: 'SCRATCHPAD_ERROR: text parameter is required (string).' };
             }
@@ -423,6 +442,7 @@ export default {
      */
     async _searchLongTermMemory(chatId: any, query: any) {
         try {
+            const { semanticMemory } = await getServices();
             if (!query || typeof query !== 'string') {
                 return { success: false, message: 'LTM_ERROR: query parameter is required (string).' };
             }

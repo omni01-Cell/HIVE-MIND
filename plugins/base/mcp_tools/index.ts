@@ -1,5 +1,3 @@
-import mcpClient from '../../../services/mcpClient.js';
-
 export default {
     name: 'mcp_tools',
     description: 'Provide tools dynamically loaded from connected MCP Servers.',
@@ -12,6 +10,7 @@ export default {
     async init() {
         console.log('[MCP Plugin] Fetching tools from connected servers...');
         try {
+            const { default: mcpClient } = await import('../../../services/mcpClient.js');
             const tools = await mcpClient.getTools();
             this.toolDefinitions = tools;
             console.log(`[MCP Plugin] Loaded ${tools.length} MCP tools.`);
@@ -20,6 +19,8 @@ export default {
         }
     },
     async execute(args: any, context: any, toolName: string) {
+        const { transport, chatId } = context || {};
+        
         // toolName format: mcp__SERVERNAME__TOOLNAME
         const parts = toolName.split('__');
         if (parts.length === 3 && parts[0] === 'mcp') {
@@ -27,6 +28,7 @@ export default {
             const mcpToolName = parts[2];
             
             console.log(`[MCP Plugin] Executing ${mcpToolName} on server ${serverName}`);
+            const { default: mcpClient } = await import('../../../services/mcpClient.js');
             const result = await mcpClient.callTool(serverName, mcpToolName, args);
             
             return {

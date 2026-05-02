@@ -20,13 +20,13 @@ const TEXT_MATCHERS = [
     {
         pattern: /^\.shutdown$/i,
         handler: 'shutdown_bot',
-        description: 'Arrête le processus du bot',
+        description: 'Stops the bot process',
         extractArgs: () => ({})
     },
     {
         pattern: /^\.devcontact$/i,
         handler: 'send_dev_contact',
-        description: 'Envoie la fiche contact du développeur',
+        description: 'Sends the developer contact card',
         extractArgs: () => ({})
     }
 ];
@@ -72,53 +72,52 @@ for (const toolModule of tools) {
 // ──────────────────────────────────────────────────────────────────────────────
 export default {
     name: 'dev_tools',
-    description: 'Outils de développement agent : exécution bash sécurisée (sandbox YOLO), édition de fichiers par remplacement exact, lecture/recherche (LS, Grep, ReadFile), et commandes système admin.',
+    description: 'Agent development tools: secure bash execution (YOLO sandbox), exact replacement file editing, reading/searching (LS, Grep, ReadFile), and system admin commands.',
     version: '2.0.0',
     enabled: true,
 
     // Matchers textuels pour commandes admin rapides
     textMatchers: TEXT_MATCHERS,
 
-    // Définitions d'outils agrégées (visibles par le LLM)
+    // Aggregated tool definitions (visible by the LLM)
     toolDefinitions: AGGREGATED_TOOL_DEFINITIONS,
 
     /**
-     * Point d'entrée unique pour toutes les exécutions.
-     * Délègue vers le bon sous-module selon toolName.
-     *
-     * @param args       - Arguments parsés du LLM
-     * @param context    - Contexte (transport, chatId, sender, sourceChannel…)
-     * @param toolName   - Nom de l'outil à exécuter
+     * Tool Execution
+     * @param args       - Arguments provided by the LLM
+     * @param context    - Context (transport, chatId, sender, sourceChannel, etc.)
+     * @param toolName   - Name of the tool to execute
      */
     async execute(args: any, context: any, toolName: string) {
-        // ── Commandes admin textuelles ──────────────────────────────────────
-        if (toolName === 'shutdown_bot') {
-            console.log('🛑 Arrêt demandé via commande .shutdown');
-            const { transport, chatId } = context;
-            if (transport) {
-                await transport.sendText(chatId, '🛑 Arrêt du système en cours...');
-                // setPresence est la méthode standard du TransportManager
+         // Defensive destructuring of context
+         const { transport, chatId } = context || {};
+
+         // ── Textual admin commands ──────────────────────────────────────
+         if (toolName === 'shutdown_bot') {
+             console.log('🛑 Shutdown requested via .shutdown command');
+             if (transport) {
+                await transport.sendText(chatId, '🛑 System shutting down...');
+                // setPresence is the standard method from TransportManager
                 await transport.setPresence(chatId, 'unavailable').catch(() => {});
             }
             setTimeout(() => process.exit(0), 1000);
-            return { success: true, message: 'Bot éteint' };
+            return { success: true, message: 'Bot shut down' };
         }
 
         if (toolName === 'send_dev_contact') {
-            const { transport, chatId } = context;
             if (transport) {
                 await transport.sendContact(chatId, 'Christ-Léandre', '2250150618253');
-                return { success: true, message: 'Contact envoyé' };
+                return { success: true, message: 'Contact sent' };
             }
-            return { success: false, message: 'Transport indisponible' };
+            return { success: false, message: 'Transport unavailable' };
         }
 
-        // ── Routing vers sous-module agent ──────────────────────────────────
+        // ── Routing to agent sub-module ──────────────────────────────────
         const subModule = TOOL_ROUTER[toolName];
         if (!subModule) {
             return {
                 success: false,
-                message: `[dev_tools] Outil inconnu : "${toolName}". Outils disponibles : ${Object.keys(TOOL_ROUTER).join(', ')}`
+                message: `[dev_tools] Unknown tool: "${toolName}". Available tools: ${Object.keys(TOOL_ROUTER).join(', ')}`
             };
         }
 

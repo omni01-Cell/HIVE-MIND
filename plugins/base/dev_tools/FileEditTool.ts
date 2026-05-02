@@ -6,7 +6,7 @@ import { AnchorStateManager, extractId, ANCHOR_DELIMITER, hashLines } from '../.
 
 export default {
     name: 'dev_tools_file_edit',
-    description: 'Outil d\'édition de fichiers par remplacement exact ou par ancres hash-stables.',
+    description: 'File editing tool via exact replacement or hash-stable anchors.',
     version: '2.0.0',
     enabled: true,
 
@@ -15,67 +15,67 @@ export default {
             type: 'function',
             function: {
                 name: 'edit_file',
-                description: `Modifie un ou plusieurs fichiers via des ancres hash-stables (recommandé) ou par remplacement exact (fallback).
+                description: `Modifies one or more files via hash-stable anchors (recommended) or by exact replacement (fallback).
 
-MODE PRINCIPAL (Ancres Hash) — Utilise les ancres retournées par read_file :
-- edit_type: "replace" (remplace de anchor à end_anchor inclus), "insert_after", "insert_before"
-- anchor: La ligne complète avec son ancre (ex: "AppleBanana§    def process(data):")
-- end_anchor: Requis pour "replace" uniquement
-- text: Le nouveau contenu (sans ancres, avec indentation)
+PRIMARY MODE (Hash Anchors) — Use anchors returned by read_file:
+- edit_type: "replace" (replaces from anchor to end_anchor inclusive), "insert_after", "insert_before"
+- anchor: The full line with its anchor (e.g., "AppleBanana§    def process(data):")
+- end_anchor: Required for "replace" only
+- text: The new content (without anchors, with indentation)
 
-MODE LEGACY (Remplacement exact) — Fallback si les ancres ne sont pas disponibles :
-- old_string + new_string (l'ancien comportement)
+LEGACY MODE (Exact Replacement) — Fallback if anchors are not available:
+- old_string + new_string (the old behavior)
 
-BATCHING: Tu PEUX grouper plusieurs fichiers et éditions dans un seul appel via le paramètre "files".`,
+BATCHING: You CAN group multiple files and edits in a single call via the "files" parameter.`,
                 parameters: {
                     type: 'object',
                     properties: {
                         // ── Legacy mode (single file) ──
                         file_path: {
                             type: 'string',
-                            description: 'Chemin du fichier (mode legacy uniquement).'
+                            description: 'File path (legacy mode only).'
                         },
                         old_string: {
                             type: 'string',
-                            description: 'Le texte EXACT à remplacer (mode legacy).'
+                            description: 'The EXACT text to replace (legacy mode).'
                         },
                         new_string: {
                             type: 'string',
-                            description: 'Le nouveau texte (mode legacy).'
+                            description: 'The new text (legacy mode).'
                         },
                         // ── Anchor mode (multi-file batched) ──
                         files: {
                             type: 'array',
-                            description: 'Tableau de fichiers avec éditions par ancres (mode principal).',
+                            description: 'Array of files with anchored edits (primary mode).',
                             items: {
                                 type: 'object',
                                 properties: {
                                     path: {
                                         type: 'string',
-                                        description: 'Chemin relatif ou absolu du fichier.'
+                                        description: 'Relative or absolute file path.'
                                     },
                                     edits: {
                                         type: 'array',
-                                        description: 'Tableau d\'éditions à appliquer.',
+                                        description: 'Array of edits to apply.',
                                         items: {
                                             type: 'object',
                                             properties: {
                                                 edit_type: {
                                                     type: 'string',
                                                     enum: ['replace', 'insert_after', 'insert_before'],
-                                                    description: 'Type d\'édition.'
+                                                    description: 'Edit type.'
                                                 },
                                                 anchor: {
                                                     type: 'string',
-                                                    description: 'Ancre de début (ligne complète avec préfixe).'
+                                                    description: 'Start anchor (full line with prefix).'
                                                 },
                                                 end_anchor: {
                                                     type: 'string',
-                                                    description: 'Ancre de fin (requis pour replace).'
+                                                    description: 'End anchor (required for replace).'
                                                 },
                                                 text: {
                                                     type: 'string',
-                                                    description: 'Nouveau contenu. Utiliser \\n pour les sauts de ligne.'
+                                                    description: 'New content. Use \\n for new lines.'
                                                 }
                                             },
                                             required: ['edit_type', 'anchor', 'text']
@@ -129,7 +129,7 @@ async function executeAnchorMode(
         if (validation.requiresPermission) {
             const permResult = await permissionManager.askPermission(
                 chatId,
-                `Éditer (ancres) : ${absolutePath}`,
+                `Edit (anchors): ${absolutePath}`,
                 sourceChannel,
                 context.message?.sender || 'system'
             );
@@ -140,7 +140,7 @@ async function executeAnchorMode(
                     editsApplied: 0,
                     message: permResult.feedback 
                         ? `[REJECTED] ${permResult.feedback}` 
-                        : '[REJECTED] Permission refusée.'
+                        : '[REJECTED] Permission denied.'
                 });
                 continue;
             }
@@ -152,7 +152,7 @@ async function executeAnchorMode(
                 file: fileEntry.path,
                 success: false,
                 editsApplied: 0,
-                message: `Fichier inexistant: ${absolutePath}`
+                message: `File does not exist: ${absolutePath}`
             });
             continue;
         }
@@ -164,7 +164,7 @@ async function executeAnchorMode(
                 file: fileEntry.path,
                 success: false,
                 editsApplied: 0,
-                message: `ERREUR_SECURITE: Fichier modifié depuis la dernière lecture. Relire avec read_file.`
+                message: `SECURITY_ERROR: File modified since last read. Re-read with read_file.`
             });
             continue;
         }
@@ -184,7 +184,7 @@ async function executeAnchorMode(
                 file: fileEntry.path,
                 success: false,
                 editsApplied: 0,
-                message: `Erreur: ${error.message}`
+                message: `Error: ${error.message}`
             });
         }
     }
@@ -194,13 +194,13 @@ async function executeAnchorMode(
     const totalEdits = results.reduce((sum, r) => sum + r.editsApplied, 0);
 
     const summary = results.map(r => 
-        `${r.success ? '✅' : '❌'} ${r.file}: ${r.editsApplied} édits — ${r.message}`
+        `${r.success ? '✅' : '❌'} ${r.file}: ${r.editsApplied} edits — ${r.message}`
     ).join('\n');
 
     return {
         success: allSuccess,
         llmOutput: `${allSuccess ? 'SUCCESS' : 'PARTIAL'}: ${totalEdits} edits across ${results.length} file(s).\n${summary}`,
-        userOutput: `📝 *Édition multi-fichiers* : ${totalEdits} changements dans ${results.length} fichier(s)`
+        userOutput: `📝 *Multi-file edit*: ${totalEdits} changes in ${results.length} file(s)`
     };
 }
 
@@ -248,7 +248,7 @@ function applyAnchoredEdits(
             return {
                 success: false,
                 editsApplied: 0,
-                message: `Ancre introuvable: "${anchorId}". Le fichier a peut-être changé — relire avec read_file.`
+                message: `Anchor not found: "${anchorId}". The file might have changed — re-read with read_file.`
             };
         }
 
@@ -261,14 +261,14 @@ function applyAnchoredEdits(
                 return {
                     success: false,
                     editsApplied: 0,
-                    message: `Ancre de fin introuvable: "${endAnchorId}".`
+                    message: `End anchor not found: "${endAnchorId}".`
                 };
             }
             if (resolved < startIdx) {
                 return {
                     success: false,
                     editsApplied: 0,
-                    message: `end_anchor ("${endAnchorId}") doit être APRÈS anchor ("${anchorId}").`
+                    message: `end_anchor ("${endAnchorId}") must be AFTER anchor ("${anchorId}").`
                 };
             }
             endIdx = resolved;
@@ -294,7 +294,7 @@ function applyAnchoredEdits(
             return {
                 success: false,
                 editsApplied: 0,
-                message: `Éditions en chevauchement détectées aux lignes ${next.startIdx + 1}-${next.endIdx + 1} et ${current.startIdx + 1}-${current.endIdx + 1}.`
+                message: `Overlapping edits detected at lines ${next.startIdx + 1}-${next.endIdx + 1} and ${current.startIdx + 1}-${current.endIdx + 1}.`
             };
         }
     }
@@ -327,7 +327,7 @@ function applyAnchoredEdits(
                 return {
                     success: false,
                     editsApplied,
-                    message: `Type d'édition inconnu: "${edit.type}". Valeurs acceptées: replace, insert_after, insert_before.`
+                    message: `Unknown edit type: "${edit.type}". Accepted values: replace, insert_after, insert_before.`
                 };
         }
     }
@@ -342,7 +342,7 @@ function applyAnchoredEdits(
     return {
         success: true,
         editsApplied,
-        message: `${editsApplied} édition(s) appliquée(s).`
+        message: `${editsApplied} edition(s) applied.`
     };
 }
 
@@ -356,7 +356,7 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
     if (!file_path || old_string === undefined || new_string === undefined) {
         return {
             success: false,
-            message: 'Paramètres manquants. Mode ancre: fournir "files". Mode legacy: fournir "file_path", "old_string", "new_string".'
+            message: 'Missing parameters. Anchor mode: provide "files". Legacy mode: provide "file_path", "old_string", "new_string".'
         };
     }
 
@@ -367,7 +367,7 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
     if (validation.requiresPermission) {
         const permResult = await permissionManager.askPermission(
             chatId,
-            `Éditer un fichier (Hors Sandbox) : ${absolutePath}`,
+            `Edit a file (Non-Sandboxed): ${absolutePath}`,
             sourceChannel,
             context.message?.sender || 'system'
         );
@@ -376,19 +376,19 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
             if (permResult.feedback) {
                 return {
                     success: false,
-                    message: `[ACTION REJECTED] L'utilisateur a REFUSÉ cette action et a fourni cette instruction corrective : "${permResult.feedback}". Modifie tes paramètres et réessaie.`
+                    message: `[ACTION REJECTED] The user REJECTED this action and provided this corrective instruction: "${permResult.feedback}". Modify your parameters and try again.`
                 };
             }
             return {
                 success: false,
-                message: '[ACTION REJECTED] Permission refusée d\'écrire hors de la sandbox.'
+                message: '[ACTION REJECTED] Permission denied to write outside the sandbox.'
             };
         }
     }
 
     try {
         if (!fs.existsSync(absolutePath)) {
-            return { success: false, message: `Erreur: Le fichier ${absolutePath} n'existe pas.` };
+            return { success: false, message: `Error: File ${absolutePath} does not exist.` };
         }
 
         // Staleness check
@@ -396,7 +396,7 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
         if (changed) {
             return {
                 success: false,
-                message: `ERREUR_SECURITE : Le fichier ${file_path} a été modifié sur le disque depuis que tu l'as lu (Dernière lecture: ${new Date(lastRead!).toLocaleTimeString()}, Actuel: ${new Date(current!).toLocaleTimeString()}). Relis le fichier avec read_file avant d'appliquer tes changements pour éviter d'écraser le travail de l'utilisateur.`
+                message: `SECURITY_ERROR: File ${file_path} has been modified on disk since you last read it (Last read: ${new Date(lastRead!).toLocaleTimeString('en-US')}, Current: ${new Date(current!).toLocaleTimeString('en-US')}). Re-read with read_file before applying changes to avoid overwriting user work.`
             };
         }
 
@@ -408,14 +408,14 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
         if (occurrences === 0) {
             return {
                 success: false,
-                message: `Erreur: 'old_string' n'a pas été trouvée exactement dans le fichier. Vérifiez les espaces et l'indentation.`
+                message: `Error: 'old_string' was not found exactly in the file. Check spaces and indentation.`
             };
         }
 
         if (occurrences > 1) {
             return {
                 success: false,
-                message: `Erreur: Trouvé ${occurrences} correspondances pour 'old_string'. Modifiez votre 'old_string' pour inclure plus de lignes de contexte afin qu'elle soit unique.`
+                message: `Error: Found ${occurrences} matches for 'old_string'. Modify your 'old_string' to include more context lines to make it unique.`
             };
         }
 
@@ -451,13 +451,13 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
         return {
             success: true,
             llmOutput: `SUCCESS: File updated. Context around changes (with anchors):\n${snippet}`,
-            userOutput: `📝 *Fichier modifié* : \`${shortFileName}\`\n~ Remplacement effectué avec succès ~`
+            userOutput: `📝 *File modified*: \`${shortFileName}\`\n~ Replacement successfully performed ~`
         };
 
     } catch (error: any) {
         return {
             success: false,
-            message: `Erreur lors de l'édition du fichier : ${error.message}`
+            message: `Error during file editing: ${error.message}`
         };
     }
 }

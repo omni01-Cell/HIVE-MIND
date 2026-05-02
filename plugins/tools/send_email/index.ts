@@ -1,9 +1,8 @@
-// plugins/send_email/index.js
-// Plugin pour envoyer des emails via une automatisation externe
+// Email sending plugin via external automation
 
 export default {
     name: 'send_email',
-    description: 'Envoie un email à un destinataire.',
+    description: 'Sends an email to a recipient.',
     version: '1.0.0',
     enabled: true,
 
@@ -11,21 +10,21 @@ export default {
         type: 'function',
         function: {
             name: 'send_email',
-            description: 'Envoie un email à un destinataire.',
+            description: 'Sends an email to a recipient.',
             parameters: {
                 type: 'object',
                 properties: {
                     email: {
                         type: 'string',
-                        description: 'L\'adresse email du destinataire.'
+                        description: 'Recipient email address.'
                     },
                     header: {
                         type: 'string',
-                        description: 'Le sujet de l\'email.'
+                        description: 'Email subject.'
                     },
                     message: {
                         type: 'string',
-                        description: 'Le contenu détaillé de l\'email.'
+                        description: 'Detailed email content.'
                     }
                 },
                 required: ['email', 'header', 'message']
@@ -33,14 +32,15 @@ export default {
         }
     },
 
-    async execute(args: any, context: any) {
+    async execute(args: any, context: any, toolName?: string) {
         const { email, header, message } = args;
-        
-        // URL du Webhook (à configurer avec le workflow d'envoi d'email)
+        const { sender } = context || {};
+
+        // Webhook URL (to be configured with the email sending workflow)
         const WEBHOOK_URL = 'https://idarkshelly-idarshelly.hf.space/webhook/n8n-email-webhook';
 
         try {
-            console.log(`[send_email] Envoi d'email à ${email}...`);
+            console.log(`[send_email] Sending email to ${email}...`);
             
             const response = await fetch(WEBHOOK_URL, {
                 method: 'POST',
@@ -56,20 +56,20 @@ export default {
 
             if (!response.ok) {
                 const errorData = await response.text();
-                throw new Error(`Le service externe a répondu avec l'erreur: ${response.status} - ${errorData}`);
+                throw new Error(`External service responded with error: ${response.status} - ${errorData}`);
             }
 
             return {
                 success: true,
-                message: `L'email a été envoyé avec succès à ${email}.`,
+                message: `Email sent successfully to ${email}.`,
                 data: { email, header }
             };
 
         } catch (error: any) {
-            console.error('[send_email] Erreur lors de l\'envoi:', error);
+            console.error('[send_email] Error during sending:', error);
             return {
                 success: false,
-                message: `Impossible d'envoyer l'email : ${error.message}`
+                message: `Could not send email: ${error.message}`
             };
         }
     }

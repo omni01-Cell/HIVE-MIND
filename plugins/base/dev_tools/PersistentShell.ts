@@ -5,8 +5,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 /**
- * Gère un processus Shell persistant (bash) pour conserver l'état (CWD, Env vars).
- * Inspiré du pattern Claude Code (PersistentShell.ts).
+ * Manages a persistent Shell process (bash) to maintain state (CWD, Env vars).
+ * Inspired by the Claude Code pattern (PersistentShell.ts).
  */
 class PersistentShell extends EventEmitter {
     private shell: ChildProcessWithoutNullStreams | null = null;
@@ -59,11 +59,11 @@ class PersistentShell extends EventEmitter {
             const output = parts[0].trim();
             const remainder = parts[1] || '';
             
-            // Extraire le code de sortie (format: __SENTINEL__127)
+            // Extract exit code (format: __SENTINEL__127)
             const exitCodeMatch = remainder.match(/^(\d+)/);
             const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1]) : 0;
             
-            // Nettoyer le buffer pour la suite
+            // Clean buffer for next execution
             this.outputBuffer = '';
             this.isExecuting = false;
             
@@ -77,11 +77,18 @@ class PersistentShell extends EventEmitter {
     }
 
     /**
-     * Exécute une commande dans le shell persistant
+     * Returns the current working directory of the shell
+     */
+    getCwd(): string {
+        return this.currentCwd;
+    }
+
+    /**
+     * Executes a command in the persistent shell
      */
     async execute(command: string, timeoutMs: number = 30000): Promise<{ stdout: string, exitCode: number }> {
         if (this.isExecuting) {
-            throw new Error('Le shell est déjà en train d\'exécuter une commande.');
+            throw new Error('The shell is already executing a command.');
         }
 
         this.isExecuting = true;
@@ -90,24 +97,24 @@ class PersistentShell extends EventEmitter {
         return new Promise((resolve, reject) => {
             this.executionPromise = { resolve, reject };
 
-            // Timeout de sécurité
+            // Security timeout
             const timeout = setTimeout(() => {
                 if (this.isExecuting) {
                     this.isExecuting = false;
                     this.executionPromise = null;
-                    reject(new Error(`Commande expirée après ${timeoutMs}ms : ${command}`));
+                    reject(new Error(`Command timed out after ${timeoutMs}ms: ${command}`));
                 }
             }, timeoutMs);
 
-            // Injecter la commande + echo du sentinel avec le code de sortie
-            // On utilise ';' pour s'assurer que l'echo tourne même si la commande échoue
+            // Inject command + sentinel echo with exit code
+            // We use ';' to ensure echo runs even if the command fails
             const fullCommand = `${command}\necho "${this.sentinel}$?"\n`;
             this.shell?.stdin.write(fullCommand);
         });
     }
 
     /**
-     * Termine le shell
+     * Terminates the shell
      */
     shutdown() {
         this.shell?.kill();

@@ -1,34 +1,41 @@
 // @ts-nocheck
 // plugins/admin/index.js
-// Plugin Admin - Gestion des utilisateurs (soft delete, restore, etc.)
-// Réservé aux global admins
+// Admin Plugin - User management (soft delete, restore, etc.)
+// Reserved for global admins
 
-import { userService } from '../../../services/userService.js';
-import { adminService } from '../../../services/adminService.js';
-import { workingMemory } from '../../../services/workingMemory.js';
 import { readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Lazy loaded services
+const getServices = async () => {
+    const [{ userService }, { adminService }, { workingMemory }] = await Promise.all([
+        import('../../../services/userService.js'),
+        import('../../../services/adminService.js'),
+        import('../../../services/workingMemory.js')
+    ]);
+    return { userService, adminService, workingMemory };
+};
 export default {
     name: 'admin',
-    description: 'Outils d\'administration réservés aux super-admins : gestion des utilisateurs bannis.',
+    description: 'Administration tools reserved for super-admins: banned user management.',
     version: '1.0.0',
     enabled: true,
 
-    // Définitions des outils pour l'IA
+    // Tool definitions for the AI
     toolDefinitions: [
         {
             type: 'function',
             function: {
                 name: 'admin_soft_delete',
-                description: 'Supprime logiquement un utilisateur (soft delete). Le compte est marqué comme inactif mais pas effacé. SUPER ADMIN REQUIS.',
+                description: 'Logically deletes a user (soft delete). The account is marked as inactive but not erased. SUPER ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur' },
-                        reason: { type: 'string', description: 'Raison de la suppression' }
+                        user_jid: { type: 'string', description: 'User JID' },
+                        reason: { type: 'string', description: 'Reason for deletion' }
                     },
                     required: ['user_jid']
                 }
@@ -38,11 +45,11 @@ export default {
             type: 'function',
             function: {
                 name: 'admin_restore',
-                description: 'Restaure un utilisateur précédemment supprimé (soft delete). SUPER ADMIN REQUIS.',
+                description: 'Restores a previously soft-deleted user. SUPER ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur à restaurer' }
+                        user_jid: { type: 'string', description: 'JID of the user to restore' }
                     },
                     required: ['user_jid']
                 }
@@ -52,11 +59,11 @@ export default {
             type: 'function',
             function: {
                 name: 'admin_list_deleted',
-                description: 'Liste les utilisateurs supprimés (soft deleted). SUPER ADMIN REQUIS.',
+                description: 'Lists soft-deleted users. SUPER ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        limit: { type: 'integer', description: 'Nombre max de résultats (défaut: 20)' }
+                        limit: { type: 'integer', description: 'Max number of results (default: 20)' }
                     }
                 }
             }
@@ -65,11 +72,11 @@ export default {
             type: 'function',
             function: {
                 name: 'admin_check_deleted',
-                description: 'Vérifie si un utilisateur est dans l\'état supprimé. SUPER ADMIN REQUIS.',
+                description: 'Checks if a user is in soft-deleted state. SUPER ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        user_jid: { type: 'string', description: 'JID de l\'utilisateur' }
+                        user_jid: { type: 'string', description: 'User JID' }
                     },
                     required: ['user_jid']
                 }
@@ -80,14 +87,14 @@ export default {
             type: 'function',
             function: {
                 name: 'admin_antidelete',
-                description: 'Active ou désactive l\'anti-delete pour un groupe. Quand activé, les messages supprimés sont automatiquement repostés. ADMIN REQUIS.',
+                description: 'Enables or disables anti-delete for a group. When enabled, deleted messages are automatically reposted. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
                         action: {
                             type: 'string',
                             enum: ['on', 'off', 'status'],
-                            description: 'Action: on (activer), off (désactiver), status (voir l\'état)'
+                            description: 'Action: on (enable), off (disable), status (check state)'
                         }
                     },
                     required: ['action']
@@ -98,11 +105,11 @@ export default {
             type: 'function',
             function: {
                 name: 'admin_show_deleted',
-                description: 'Affiche les messages récemment supprimés dans le groupe. ADMIN REQUIS.',
+                description: 'Displays recently deleted messages in the group. ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        limit: { type: 'integer', description: 'Nombre de messages à afficher (défaut: 10)' }
+                        limit: { type: 'integer', description: 'Number of messages to display (default: 10)' }
                     }
                 }
             }
@@ -161,21 +168,28 @@ export default {
     ],
 
     /**
-     * Exécute une commande admin
+     * Executes an admin command
      */
     async execute(args: any, context: any, toolName: any) {
-        const { sender, message } = context;
+        // Defensive destructuring of context
+        const { sender, chatId, isGroup } = context || {};
 
-        // Vérifier que l'utilisateur est un global admin
+        if (!sender) {
+            return { success: false, message: 'CONTEXT_ERROR: sender is required for admin operations.' };
+        }
+
+        const { adminService } = await getServices();
+
+        // Verify that the user is a global admin
         const isGlobalAdmin = await adminService.isGlobalAdmin(sender);
         if (!isGlobalAdmin) {
             return {
                 success: false,
-                message: 'REFUSÉ: Commande réservée aux super-administrateurs.'
+                message: 'DENIED: Command reserved for super-administrators.'
             };
         }
 
-        // Dispatcher selon la commande
+        // Dispatch based on command
         switch (toolName) {
             case 'admin_soft_delete':
                 return await this._softDelete(args.user_jid, args.reason);
@@ -193,46 +207,47 @@ export default {
                 return await this._setVoiceMode(args.mode);
 
             case 'admin_audio_perm':
-                return await this._setAudioPermission(args.permission, context.chatId, context.isGroup);
+                return await this._setAudioPermission(args.permission, chatId, isGroup);
 
             case 'admin_antidelete':
-                return await this._toggleAntiDelete(args.action, context.chatId);
+                return await this._toggleAntiDelete(args.action, chatId);
 
             case 'admin_show_deleted':
-                return await this._showDeletedMessages(context.chatId);
+                return await this._showDeletedMessages(chatId);
 
             case 'admin_pv_audio':
                 return await this._setPvAudio(args.action, sender);
 
             default:
-                return { success: false, message: `Commande inconnue: ${toolName}` };
+                return { success: false, message: `Unknown command: ${toolName}` };
         }
     },
 
     /**
-     * Soft delete un utilisateur
+     * Soft delete a user
      */
     async _softDelete(userJid: any, reason: any) {
         try {
+            const { userService } = await getServices();
             const success = await userService.softDelete(userJid, reason);
             if (success) {
                 return {
                     success: true,
-                    message: `✅ Utilisateur ${userJid.split('@')[0]} supprimé (soft delete).\nRaison: ${reason || 'Non spécifiée'}`
+                    message: `✅ User ${userJid.split('@')[0]} soft deleted.\nReason: ${reason || 'Not specified'}`
                 };
             } else {
                 return {
                     success: false,
-                    message: `❌ Utilisateur non trouvé ou déjà supprimé.`
+                    message: `❌ User not found or already deleted.`
                 };
             }
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Restaure un utilisateur
+     * Restores a user
      */
     async _restore(userJid: any) {
         try {
@@ -240,21 +255,21 @@ export default {
             if (success) {
                 return {
                     success: true,
-                    message: `✅ Utilisateur ${userJid.split('@')[0]} restauré avec succès.`
+                    message: `✅ User ${userJid.split('@')[0]} successfully restored.`
                 };
             } else {
                 return {
                     success: false,
-                    message: `❌ Utilisateur non trouvé ou n'était pas supprimé.`
+                    message: `❌ User not found or was not deleted.`
                 };
             }
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Liste les utilisateurs supprimés
+     * Lists deleted users
      */
     async _listDeleted(limit: any) {
         try {
@@ -263,67 +278,67 @@ export default {
             if (deletedUsers.length === 0) {
                 return {
                     success: true,
-                    message: '📋 Aucun utilisateur supprimé.'
+                    message: '📋 No deleted users.'
                 };
             }
 
             const list = deletedUsers.map((u: any, i: any) =>
-                `${i + 1}. ${u.jid?.split('@')[0] || 'inconnu'} - ${u.deleted_at ? new Date(u.deleted_at).toLocaleDateString('fr-FR') : '?'}`
+                `${i + 1}. ${u.jid?.split('@')[0] || 'unknown'} - ${u.deleted_at ? new Date(u.deleted_at).toLocaleDateString('en-US') : '?'}`
             ).join('\n');
 
             return {
                 success: true,
-                message: `📋 **Utilisateurs supprimés** (${deletedUsers.length}):\n\n${list}`
+                message: `📋 **Deleted Users** (${deletedUsers.length}):\n\n${list}`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Vérifie si un utilisateur est supprimé
+     * Checks if a user is deleted
      */
     async _checkDeleted(userJid: any) {
         try {
             const isDeleted = await userService.isDeleted(userJid);
-            const status = isDeleted ? '🔴 SUPPRIMÉ' : '🟢 ACTIF';
+            const status = isDeleted ? '🔴 DELETED' : '🟢 ACTIVE';
             return {
                 success: true,
-                message: `Statut de ${userJid.split('@')[0]}: ${status}`
+                message: `Status for ${userJid.split('@')[0]}: ${status}`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Change le mode de transcription vocale
+     * Changes the voice transcription mode
      */
     async _setVoiceMode(mode: any) {
         try {
             const configPath = join(__dirname, '..', '..', 'config', 'config.json');
             const config = JSON.parse(readFileSync(configPath, 'utf-8'));
 
-            // Si "status", juste retourner le mode actuel
+            // If "status", just return the current mode
             if (mode === 'status') {
                 const currentMode = config.voice_transcription?.mode || 'restricted';
                 return {
                     success: true,
-                    message: `🎤 Mode transcription actuel: **${currentMode.toUpperCase()}**\n\n` +
-                        `• *restricted*: Transcrit seulement les vocaux qui répondent au bot\n` +
-                        `• *full*: Transcrit tous les vocaux (vérifie le nom du bot)`
+                    message: `🎤 Current transcription mode: **${currentMode.toUpperCase()}**\n\n` +
+                        `• *restricted*: Transcribes only voice notes replying to the bot\n` +
+                        `• *full*: Transcribes all voice notes (checks for bot name)`
                 };
             }
 
-            // Valider le mode
+            // Validate mode
             if (!['restricted', 'full'].includes(mode)) {
                 return {
                     success: false,
-                    message: `Mode invalide. Utilisez: .voice restricted | .voice full | .voice status`
+                    message: `Invalid mode. Use: .voice restricted | .voice full | .voice status`
                 };
             }
 
-            // Mettre à jour la config
+            // Update config
             if (!config.voice_transcription) {
                 config.voice_transcription = {};
             }
@@ -333,76 +348,76 @@ export default {
 
             return {
                 success: true,
-                message: `✅ Mode transcription changé: **${mode.toUpperCase()}**\n` +
+                message: `✅ Transcription mode changed: **${mode.toUpperCase()}**\n` +
                     (mode === 'restricted'
-                        ? `Les vocaux seront transcrits uniquement s'ils répondent au bot.`
-                        : `Tous les vocaux seront transcrits (si le nom du bot est mentionné).`)
+                        ? `Voice notes will be transcribed only if they reply to the bot.`
+                        : `All voice notes will be transcribed (if the bot name is mentioned).`)
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Change les permissions audio pour un groupe
+     * Changes audio permissions for a group
      * @param {string} permission - 'all' | 'admins_only' | 'none' | 'status'
-     * @param {string} groupJid - JID du groupe
-     * @param {boolean} isGroup - Est-ce un groupe ?
+     * @param {string} groupJid - Group JID
+     * @param {boolean} isGroup - Is it a group?
      */
     async _setAudioPermission(permission: any, groupJid: any, isGroup: any) {
         try {
-            // VÉRIFICATION: Cette commande ne fonctionne qu'en groupe
+            // CHECK: This command only works in groups
             if (!isGroup) {
                 return {
                     success: false,
-                    message: `❌ Cette commande ne fonctionne qu'en **groupe**.\n\n` +
-                        `Pour gérer les vocaux en PV, utilisez:\n` +
-                        `• \`.pv.audio.status\` - Voir le statut\n` +
-                        `• \`.pv.audio.off\` - Désactiver (Global Admin)\n` +
-                        `• \`.pv.audio.on\` - Réactiver (Global Admin)`
+                    message: `❌ This command only works in **groups**.\n\n` +
+                        `To manage private chat audio, use:\n` +
+                        `• \`.pv.audio.status\` - View status\n` +
+                        `• \`.pv.audio.off\` - Disable (Global Admin)\n` +
+                        `• \`.pv.audio.on\` - Enable (Global Admin)`
                 };
             }
 
-            // Si c'est une demande de status
+            // If it's a status request
             if (permission === 'status') {
                 const currentPerm = await workingMemory.getAudioPermission(groupJid);
                 const permLabels = {
-                    'all': '🟢 Tout le monde peut envoyer des vocaux',
-                    'admins_only': '🟡 Seuls les admins peuvent envoyer des vocaux',
-                    'none': '🔴 Personne ne peut envoyer de vocaux'
+                    'all': '🟢 Everyone can send voice notes',
+                    'admins_only': '🟡 Only admins can send voice notes',
+                    'none': '🔴 No one can send voice notes'
                 };
                 return {
                     success: true,
-                    message: `🔊 **Permissions Audio (Groupe)**\n\n${permLabels[currentPerm] || permLabels['all']}\n\n` +
-                        `Commandes:\n` +
-                        `• \`.mute.audio_for_none\` - Bloque les non-admins\n` +
-                        `• \`.mute.audio_for_all\` - Bloque tout le monde\n` +
-                        `• \`.allow.audio_for_all\` - Autorise tout le monde`
+                    message: `🔊 **Audio Permissions (Group)**\n\n${permLabels[currentPerm] || permLabels['all']}\n\n` +
+                        `Commands:\n` +
+                        `• \`.mute.audio_for_none\` - Block non-admins\n` +
+                        `• \`.mute.audio_for_all\` - Block everyone\n` +
+                        `• \`.allow.audio_for_all\` - Allow everyone`
                 };
             }
 
-            // Appliquer la permission
+            // Apply permission
             await workingMemory.setAudioPermission(groupJid, permission);
 
             const permLabels = {
-                'all': '🟢 Tout le monde peut maintenant envoyer des vocaux',
-                'admins_only': '🟡 Seuls les admins peuvent maintenant envoyer des vocaux transcrits',
-                'none': '🔴 Plus personne ne peut envoyer de vocaux (transcription désactivée)'
+                'all': '🟢 Everyone can now send voice notes',
+                'admins_only': '🟡 Only admins can now send transcribed voice notes',
+                'none': '🔴 No one can send voice notes anymore (transcription disabled)'
             };
 
             return {
                 success: true,
-                message: `✅ Permission audio mise à jour\n\n${permLabels[permission]}`
+                message: `✅ Audio permission updated\n\n${permLabels[permission]}`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Gère les vocaux en PV (Global Admin Only)
+     * Manages private chat audio (Global Admin Only)
      * @param {string} action - 'on' | 'off' | 'status'
-     * @param {string} senderJid - JID de l'expéditeur
+     * @param {string} senderJid - Sender JID
      */
     async _setPvAudio(action: any, senderJid: any) {
         try {
@@ -410,24 +425,24 @@ export default {
             const isGlobalAdmin = await adminService.isGlobalAdmin(senderJid);
 
             if (action === 'status') {
-                // Le status est accessible à tout le monde
+                // Status is accessible to everyone
                 const isDisabled = await workingMemory.isPvAudioDisabled();
                 return {
                     success: true,
-                    message: `🎤 **Vocaux en PV**\n\n` +
-                        `Statut: ${isDisabled ? '🔴 DÉSACTIVÉS globalement' : '🟢 ACTIVÉS'}\n\n` +
-                        `En PV, les vocaux sont transcrits directement sans restriction de mode.\n` +
+                    message: `🎤 **Private Chat Voice Notes**\n\n` +
+                        `Status: ${isDisabled ? '🔴 DISABLED globally' : '🟢 ENABLED'}\n\n` +
+                        `In private chats, voice notes are transcribed directly without mode restrictions.\n` +
                         (isGlobalAdmin
-                            ? `\nCommandes Global Admin:\n• \`.pv.audio.off\` - Désactiver\n• \`.pv.audio.on\` - Réactiver`
-                            : `\n_(Seuls les Global Admins peuvent modifier ce paramètre)_`)
+                            ? `\nGlobal Admin Commands:\n• \`.pv.audio.off\` - Disable\n• \`.pv.audio.on\` - Enable`
+                            : `\n_(Only Global Admins can modify this setting)_`)
                 };
             }
 
-            // Pour on/off, il faut être Global Admin
+            // For on/off, must be Global Admin
             if (!isGlobalAdmin) {
                 return {
                     success: false,
-                    message: `❌ **Accès refusé**\n\nSeuls les **Global Admins** peuvent activer/désactiver les vocaux en PV.`
+                    message: `❌ **Access denied**\n\nOnly **Global Admins** can enable/disable private chat voice notes.`
                 };
             }
 
@@ -437,18 +452,18 @@ export default {
             return {
                 success: true,
                 message: disable
-                    ? `🔴 **Vocaux PV DÉSACTIVÉS**\n\nLes vocaux en messages privés ne seront plus transcrits.`
-                    : `🟢 **Vocaux PV ACTIVÉS**\n\nLes vocaux en messages privés seront à nouveau transcrits.`
+                    ? `🔴 **Private Chat Voice Notes DISABLED**\n\nVoice notes in private messages will no longer be transcribed.`
+                    : `🟢 **Private Chat Voice Notes ENABLED**\n\nVoice notes in private messages will be transcribed again.`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Active/désactive l'anti-delete pour un groupe
+     * Enables/disables anti-delete for a group
      * @param {string} action - 'on' | 'off' | 'status'
-     * @param {string} chatId - JID du groupe
+     * @param {string} chatId - Group JID
      */
     async _toggleAntiDelete(action: any, chatId: any) {
         try {
@@ -457,11 +472,11 @@ export default {
                 return {
                     success: true,
                     message: `🗑️ **Anti-Delete**\n\n` +
-                        `Statut: ${isEnabled ? '🟢 ACTIVÉ' : '🔴 DÉSACTIVÉ'}\n\n` +
-                        `Quand activé, les messages supprimés sont automatiquement repostés.\n\n` +
-                        `• \`.antidelete on\` - Activer\n` +
-                        `• \`.antidelete off\` - Désactiver\n` +
-                        `• \`.deleted\` - Voir les messages supprimés`
+                        `Status: ${isEnabled ? '🟢 ENABLED' : '🔴 DISABLED'}\n\n` +
+                        `When enabled, deleted messages are automatically reposted.\n\n` +
+                        `• \`.antidelete on\` - Enable\n` +
+                        `• \`.antidelete off\` - Disable\n` +
+                        `• \`.deleted\` - View deleted messages`
                 };
             }
 
@@ -471,17 +486,17 @@ export default {
             return {
                 success: true,
                 message: enable
-                    ? `✅ **Anti-Delete ACTIVÉ**\n\nLes messages supprimés seront automatiquement repostés.`
-                    : `✅ **Anti-Delete DÉSACTIVÉ**\n\nLes messages supprimés ne seront plus repostés.`
+                    ? `✅ **Anti-Delete ENABLED**\n\nDeleted messages will be automatically reposted.`
+                    : `✅ **Anti-Delete DISABLED**\n\nDeleted messages will no longer be reposted.`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     },
 
     /**
-     * Affiche les messages récemment supprimés
-     * @param {string} chatId - JID du groupe
+     * Displays recently deleted messages
+     * @param {string} chatId - Group JID
      */
     async _showDeletedMessages(chatId: any) {
         try {
@@ -490,22 +505,22 @@ export default {
             if (deletedMessages.length === 0) {
                 return {
                     success: true,
-                    message: `📋 Aucun message supprimé enregistré pour ce groupe.`
+                    message: `📋 No deleted messages recorded for this group.`
                 };
             }
 
             const list = deletedMessages.map((m: any, i: any) => {
-                const time = new Date(m.deletedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                const time = new Date(m.deletedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                 const text = m.text.length > 50 ? m.text.substring(0, 50) + '...' : m.text;
                 return `${i + 1}. *${m.senderName}* (${time}):\n   "${text}"`;
             }).join('\n\n');
 
             return {
                 success: true,
-                message: `🗑️ **Messages supprimés récents**\n\n${list}`
+                message: `🗑️ **Recently Deleted Messages**\n\n${list}`
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur: ${error.message}` };
+            return { success: false, message: `Error: ${error.message}` };
         }
     }
 };

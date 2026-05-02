@@ -1,7 +1,7 @@
 // @ts-nocheck
 // plugins/system/index.js
-// Plugin Système - Gestion du Processus & OS
-// PERMISSIONS CRITIQUES : Réservé aux Super-Admins / Global Admins
+// System Plugin - Process & OS Management
+// CRITICAL PERMISSIONS: Reserved for Super-Admins / Global Admins
 
 import os from 'os';
 import { exec } from 'child_process';
@@ -11,17 +11,17 @@ const execAsync = promisify(exec);
 
 export default {
     name: 'system',
-    description: 'Gestion du système (Shutdown, Restart, Shell) - SuperAdmin Only',
+    description: 'System management (Shutdown, Restart, Shell) - SuperAdmin Only',
     version: '1.0.0',
     enabled: true,
 
-    // Definitions des outils
+    // Tool definitions
     toolDefinitions: [
         {
             type: 'function',
             function: {
                 name: 'os_system_info',
-                description: 'Affiche les informations système (CPU, RAM, Uptime).',
+                description: 'Displays system information (CPU, RAM, Uptime).',
                 parameters: { type: 'object', properties: {} }
             }
         },
@@ -29,12 +29,12 @@ export default {
             type: 'function',
             function: {
                 name: 'os_shutdown',
-                description: 'Arrête le bot (Process Exit). SUPER-ADMIN REQUIS.',
+                description: 'Stops the bot (Process Exit). SUPER-ADMIN REQUIRED.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        reason: { type: 'string', description: 'Raison de l\'arrêt' },
-                        restart: { type: 'boolean', description: 'Si true, tente un redémarrage (via PM2/Docker)' }
+                        reason: { type: 'string', description: 'Reason for shutdown' },
+                        restart: { type: 'boolean', description: 'If true, attempts a restart (via PM2/Docker)' }
                     },
                     required: ['reason']
                 }
@@ -44,58 +44,59 @@ export default {
             type: 'function',
             function: {
                 name: 'os_update_pull',
-                description: 'Effectue un Git Pull pour mettre à jour le bot. SUPER-ADMIN REQUIS.',
+                description: 'Performs a Git Pull to update the bot. SUPER-ADMIN REQUIRED.',
                 parameters: { type: 'object', properties: {} }
             }
         }
     ],
 
-    // Matchers textuels pour commandes rapides (.shutdown)
+    // Text matchers for quick commands (.shutdown)
     textMatchers: [
         {
-            pattern: /^\.(shutdown|arret|stop)\b/i,
+            pattern: /^\.(shutdown|stop)\b/i,
             handler: 'os_shutdown',
-            description: 'Arrêter le bot',
+            description: 'Stop the bot',
             extractArgs: (match, message, text) => {
-                const reason = text.replace(/^\.(shutdown|arret|stop)\s*/i, '').trim();
-                return { reason: reason || 'Commande manuelle', restart: false };
+                const reason = text.replace(/^\.(shutdown|stop)\s*/i, '').trim();
+                return { reason: reason || 'Manual command', restart: false };
             }
         },
         {
             pattern: /^\.(restart|reboot)\b/i,
-            handler: 'os_shutdown', // On utilise shutdown avec restart=true
-            description: 'Redémarrer le bot',
+            handler: 'os_shutdown', // Use shutdown with restart=true
+            description: 'Restart the bot',
             extractArgs: (match, message, text) => {
-                return { reason: 'Redémarrage manuel', restart: true };
+                return { reason: 'Manual restart', restart: true };
             }
         },
         {
             pattern: /^\.(sys|system|status)\b/i,
             handler: 'os_system_info',
-            description: 'Status système',
+            description: 'System status',
             extractArgs: () => ({})
         }
     ],
 
     /**
-     * Exécution des outils
+     * Tool Execution
      */
     async execute(args: any, context: any, toolName: any) {
-        const { transport, message, sender } = context;
+        const { transport, message, sender } = context || {};
 
-        // 1. VÉRIFICATION PERMISSIONS (GLOBAL ADMIN / SUPERUSER)
+        if (!transport) {
+            return { success: false, message: 'Transport not available' };
+        }
         const { adminService } = await import('../../../services/adminService.js');
         const isSuperUser = await adminService.isSuperUser(sender);
         const isGlobalAdmin = await adminService.isGlobalAdmin(sender);
 
-        // Info système accessible aux admins globaux, mais shutdown = SuperUser only (ou Global selon politique)
-        // Ici on permet aux Global Admins de voir les infos, mais pas forcément shutdown
+        // System info accessible to global admins, but shutdown = SuperUser only
         if (toolName === 'os_system_info') {
             /* Open to admins */
         } else {
-            // Actions critiques (Shutdown, Update) -> SuperUser Only
+            // Critical actions (Shutdown, Update) -> SuperUser Only
             if (!isSuperUser) {
-                return { success: false, message: '⛔ REFUSÉ : Seul le Créateur (SuperUser) peut toucher au système.' };
+                return { success: false, message: '⛔ DENIED: Only the Creator (SuperUser) can touch the system.' };
             }
         }
 
@@ -110,12 +111,12 @@ export default {
                 return this._gitPull();
 
             default:
-                return { success: false, message: `Commande inconnue: ${toolName}` };
+                return { success: false, message: `Unknown command: ${toolName}` };
         }
     },
 
     /**
-     * Infos Système
+     * System Info
      */
     _getSystemInfo() {
         const uptime = process.uptime();
@@ -128,7 +129,7 @@ export default {
 
         return {
             success: true,
-            message: `💻 **SYSTÈME STATUS**\n` +
+            message: `💻 **SYSTEM STATUS**\n` +
                 `- Uptime: ${Math.floor(uptime / 60)} min\n` +
                 `- RAM: ${formatBytes(memUsage.rss)} (Heap: ${formatBytes(memUsage.heapUsed)})\n` +
                 `- OS Mem: ${(freeMem / 1024 / 1024 / 1024).toFixed(1)}GB free / ${(totalMem / 1024 / 1024 / 1024).toFixed(1)}GB\n` +
@@ -146,17 +147,17 @@ export default {
         // Note: The execute method didn't extract chatId. Fixing logic here assuming context availability issues.
 
         const delay = 3000;
-        const action = args.restart ? 'Redémarrage' : 'Arrêt';
+        const action = args.restart ? 'Restart' : 'Shutdown';
 
-        // Réponse immédiate avant de mourir
+        // Immediate response before death
         setTimeout(() => {
-            console.log(`[System] ${action} en cours... (${args.reason})`);
-            process.exit(args.restart ? 0 : 0); // PM2 redémarre sur exit 0 ou 1 généralement
+            console.log(`[System] ${action} in progress... (${args.reason})`);
+            process.exit(args.restart ? 0 : 0); // PM2 restarts on exit 0 or 1 generally
         }, delay);
 
         return {
             success: true,
-            message: `⚠️ **${action} INITIE**\nRaison: ${args.reason}\nDélai: ${delay / 1000}s...`
+            message: `⚠️ **${action.toUpperCase()} INITIATED**\nReason: ${args.reason}\nDelay: ${delay / 1000}s...`
         };
     },
 
@@ -171,7 +172,7 @@ export default {
                 message: `📦 **GIT PULL**\n\`\`\`\n${stdout || stderr}\n\`\`\``
             };
         } catch (error: any) {
-            return { success: false, message: `Erreur Git: ${error.message}` };
+            return { success: false, message: `Git Error: ${error.message}` };
         }
     }
 };
