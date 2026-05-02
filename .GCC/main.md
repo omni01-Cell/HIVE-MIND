@@ -22,12 +22,11 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
 - **[SECURITY] VM Escape Mitigation**: Refined `BANNED_COMMANDS` to block privilege escalation (`sudo`) and patched inline execution vectors (`node -e`) via regex.
 - **[SECURITY] Dynamic HITL**: Replaced static `SUPER_ADMIN_JID` with dynamic `owner` resolution via Supabase `adminService` for permission escalation.
 - **[ARCH] V3 Dynamic Context Engineering**: Eliminated the split Fast/Agentic paths. Implemented a single `TieredContextLoader` that pulls a strictly formatted "Bureau de Travail" (User Passport, Scratchpad, Action History) from Redis L1 cache (~50ms).
-- **[DB] Supabase Users Schema**: Added `language` and `timezone` to `userService.ts` and `StateManager.ts` for real-time syncing of user preferences into the Passport.
+- **[DB] Supabase Users Schema**: Added `language` and `timezone` to `userService.ts` and `StateManager.ts` for real-time syncing of user preferences into the Passport. Schema successfully updated via `.GCC/supabase_update_v3.sql`.
 - **[FEATURE] WhatsApp File Reception & GC**: Implemented robust file reception (`document`, `audio`, `video`) for WhatsApp with real filename resolution. Added auto-cleanup (10-minute TTL) in `hm_storage/tmp_download/` and rich system context injection to enable the agent to autonomously manage or read received files.
-- **[CRITICAL] Error Logs Fix**: Handled undefined target in `schedulerHandler` due to `chat_id` / `context_id` mismatch for reminders. Disabled `language` column sync in `StateManager.ts` to prevent PGRST204 Supabase schema cache crash loop.
+- **[CRITICAL] Error Logs Fix**: Handled undefined target in `schedulerHandler` due to `chat_id` / `context_id` mismatch for reminders.
 
 ## ⏳ Pending / Next Actions
-- **[DB] Run SQL Schema Update**: User must execute `.GCC/supabase_update_v3.sql` in Supabase to add `language` and `timezone` columns to the `users` table.
 - **[DB] Admin Table Sync**: Verify if `group_admins` table exists in Supabase and ensure synchronization is functional.
 - **[TEST] End-to-End Integration**: Validate the new unified ReAct loop and `agent-browser` tools in the Railway environment.
 

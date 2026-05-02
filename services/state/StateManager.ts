@@ -175,8 +175,8 @@ export const StateManager = {
                     id: uuids[i],
                     username: data.last_pushname || 'Inconnu', // Legacy logic
                     interaction_count: parseInt(data.interaction_count || 0),
-                    // language: data.language || null, // FIX: Temporarily removed to prevent schema cache errors
-                    // timezone: data.timezone || null,
+                    language: data.language || null,
+                    timezone: data.timezone || null,
                     updated_at: new Date().toISOString()
                 });
             }
