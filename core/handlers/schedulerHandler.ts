@@ -139,6 +139,17 @@ export class SchedulerHandler {
         const reminders = await db.getPendingReminders();
 
         for (const reminder of reminders) {
+            let chatId = reminder.chat_id;
+            // Si context_id est présent (nouvelle architecture), le résoudre en legacy chatId
+            if (!chatId && reminder.context_id) {
+                chatId = await db.resolveLegacyIdFromContext(reminder.context_id);
+            }
+            if (!chatId) {
+                console.error(`[Scheduler] ❌ Impossible de résoudre le chatId pour le rappel ${reminder.id}`);
+                await db.markReminderSent(reminder.id);
+                continue;
+            }
+
             let actualMessage = reminder.message;
             let cronExpr = null;
             
@@ -160,22 +171,22 @@ export class SchedulerHandler {
                     const [targetJid, reason] = payload.split('|');
 
                     console.log(`[Scheduler] 🚀 Exécution BAN planifié pour ${targetJid}`);
-                    await this.transport.banUser(reminder.chat_id, targetJid);
+                    await this.transport.banUser(chatId, targetJid);
 
                     await this.transport.sendText(
-                        reminder.chat_id,
+                        chatId,
                         `🚫 **Ban planifié exécuté**\nUtilisateur: @${targetJid.split('@')[0]}\nRaison: ${reason || 'Aucune'}`
                     );
                 } catch (err: any) {
                     console.error(`[Scheduler] ❌ Erreur exécution BAN planifié: ${err.message}`);
                     await this.transport.sendText(
-                        reminder.chat_id,
+                        chatId,
                         `⚠️ Échec du ban planifié: ${err.message}`
                     );
                 }
             } else {
                 await this.transport.sendText(
-                    reminder.chat_id,
+                    chatId,
                     `⏰ Rappel: ${actualMessage}`
                 );
             }
