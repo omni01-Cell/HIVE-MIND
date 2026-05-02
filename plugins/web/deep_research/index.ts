@@ -44,7 +44,7 @@ export default {
                 const agent = new DeepResearchAgent(sender, chatId);
                 const reportMarkdown = await agent.start(topic);
 
-                 // 3. Generate PDF via visual_reporter
+                 // 3. Génération du PDF via visual_reporter
                  // On récupère le plugin visual_reporter dynamiquement
                  const { pluginLoader } = await import('../../loader.js');
                  const visualReporter = pluginLoader.get('visual_reporter');
@@ -78,3 +78,4 @@ export default {
         return { success: false, message: "Unknown tool" };
     }
 };
+

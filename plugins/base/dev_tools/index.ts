@@ -79,17 +79,17 @@ export default {
     // Matchers textuels pour commandes admin rapides
     textMatchers: TEXT_MATCHERS,
 
-    // Aggregated tool definitions (visible by the LLM)
+    // Définitions d'outils agrégées (visibles par le LLM)
     toolDefinitions: AGGREGATED_TOOL_DEFINITIONS,
 
     /**
-     * Tool Execution
-     * @param args       - Arguments provided by the LLM
-     * @param context    - Context (transport, chatId, sender, sourceChannel, etc.)
-     * @param toolName   - Name of the tool to execute
+     * Exécution des outils
+     * @param args       - Arguments fournis par le LLM
+     * @param context    - Contexte (transport, chatId, sender, sourceChannel…)
+     * @param toolName   - Nom de l'outil à exécuter
      */
     async execute(args: any, context: any, toolName: string) {
-         // Defensive destructuring of context
+         // Déstructuration défensive du contexte
          const { transport, chatId } = context || {};
 
          // ── Textual admin commands ──────────────────────────────────────

@@ -38,7 +38,7 @@ export default {
             await transport.sendText(chatId, `🛍️ **Shopping Mode Activated**\nSearching for: "${request}"...`);
             await transport.setPresence(chatId, 'composing');
 
-            // 2. Launch agent via dynamic import
+            // 2. Lancement de l'agent via import dynamique
             try {
                 const { ShoppingAgent } = await import('./shopping_agent.js');
                 const agent = new ShoppingAgent(sender, chatId);

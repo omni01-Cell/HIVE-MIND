@@ -42,10 +42,10 @@ export default {
     },
 
     /**
-     * Tool Execution
+     * Exécute la création de sticker
      * @param {Object} args - { pack_name, author, url }
      * @param {Object} context - { transport, message, chatId, sender }
-     * @param {string} toolName - Name of the tool
+     * @param {string} toolName - Nom de l'outil
      */
     async execute(args: any, context: any, toolName?: string) {
         const { transport, message, chatId } = context || {};
@@ -62,7 +62,7 @@ export default {
         // Case 0: Direct URL (via use_tool or other)
         if (url) {
             try {
-                // Dynamic import for fetch (if not global) or use global fetch
+                // Import dynamique pour fetch (si non global) ou utiliser le fetch global
                 const response = await fetch(url);
                 if (response.ok) {
                     const arrayBuffer = await response.arrayBuffer();

@@ -158,7 +158,7 @@ export const config: HIVEConfig = {
     }
   },
 
-  voice: modelsConfig.reglages_generaux?.audio_strategy || {},
+  voice: modelsConfig.voice_provider || {},
   scheduler: schedulerConfig,
 
   app: {

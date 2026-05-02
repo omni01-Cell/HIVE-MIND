@@ -5,7 +5,7 @@ export default {
     version: '1.1.0',
     enabled: true,
 
-    // Multiple definitions for function calling
+    // Définitions multiples pour function calling
     toolDefinitions: [
         {
             type: 'function',
@@ -130,10 +130,10 @@ export default {
     ],
 
     /**
-     * Tool Execution
+     * Exécution des outils
      */
     async execute(args: any, context: any, toolName: any) {
-        // Dynamic import to avoid cycles
+        // Import dynamique pour éviter les cycles
         const { pluginLoader } = await import('../../loader.js');
         const { transport, message, chatId } = context || {};
 
@@ -265,4 +265,6 @@ export default {
             };
         }
     }
+};
+
 };

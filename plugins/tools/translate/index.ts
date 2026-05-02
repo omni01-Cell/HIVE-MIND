@@ -40,7 +40,7 @@ export default {
             return { success: false, message: 'CONTEXT_ERROR: message is required for translation context.' };
         }
 
-        // If no text provided, try quoted message
+        // Si aucun texte n'est fourni, essayer le message cité
         let textToTranslate = text;
         if (!textToTranslate && message.quotedMsg?.text) {
             textToTranslate = message.quotedMsg.text;
@@ -98,4 +98,6 @@ export default {
             };
         }
     }
+};
+ }
 };

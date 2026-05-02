@@ -12,21 +12,21 @@ export default {
         type: 'function',
         function: {
             name: 'text_to_speech',
-            description: 'Convert text to vocal audio. Supports multiple voices (Gemini: Aoede, Charon, Kore, etc.).',
+            description: 'Convert text to vocal audio using Gemini 3.1 Flash TTS Preview. This is a Director\'s Chair model: you can control the voice, high-level style/tone, and use inline tags in the text (e.g. "[laughs]", "[short pause]", "[fast]").',
             parameters: {
                 type: 'object',
                 properties: {
                     text: {
                         type: 'string',
-                        description: 'The text to convert to audio'
-                    },
-                    language: {
-                        type: 'string',
-                        description: 'Language code (en, fr, es, de, etc.). Default: en'
+                        description: 'The text to convert to audio. You can use inline tags here like [happy], [sad], [whispers], [laughs], [short pause], etc. separated by words or punctuation.'
                     },
                     voice: {
                         type: 'string',
-                        description: 'Name of the Gemini voice to use (Aoede, Charon, Kore, Fenrir, etc.). If not specified, uses the default Erina voice.'
+                        description: 'Name of the Gemini voice (e.g., Aoede, Charon, Kore, Callirrhoe). Default: Aoede.'
+                    },
+                    style_notes: {
+                        type: 'string',
+                        description: 'High-level instructions for the performance (e.g. "Deliver this warmly and slowly", "British accent").'
                     }
                 },
                 required: ['text']
@@ -36,7 +36,7 @@ export default {
 
     async execute(args: any, context: any, toolName?: string) {
         const { transport, chatId, message, container } = context || {};
-        let { text, language = 'en', voice } = args;
+        let { text, voice, style_notes } = args;
 
         if (!transport || !chatId) {
             return { success: false, message: 'Transport or chatId missing from context' };
@@ -55,9 +55,13 @@ export default {
         }
 
         // Limit text length
-        if (text.length > 1000) {
-            text = text.substring(0, 1000);
+        if (text.length > 2000) {
+            text = text.substring(0, 2000);
         }
+
+        // Si on a des style_notes, on les ajoute au début du texte comme instruction globale
+        // Le modèle Gemini comprend les instructions au début
+        const finalText = style_notes ? `(${style_notes}) ${text}` : text;
 
         try {
             // Retrieve VoiceProvider from container or fallback
@@ -81,11 +85,12 @@ export default {
 
             let result: any;
 
-            // If a specific voice is requested, use Gemini
+            // On utilise toujours le provider de base (qui routera vers gemini si bien configuré),
+            // mais on force la voix si demandée
             if (voice) {
-                result = await voiceProvider.textToSpeechWithVoice(text, voice);
+                result = await voiceProvider.textToSpeechWithVoice(finalText, voice);
             } else {
-                result = await voiceProvider.textToSpeech(text, { language });
+                result = await voiceProvider.textToSpeech(finalText);
             }
 
             if (!result || !result.audioBuffer) {

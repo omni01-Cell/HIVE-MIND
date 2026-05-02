@@ -105,7 +105,7 @@ export default {
             return { success: false, message: 'CONTEXT_ERROR: chatId is required.' };
         }
 
-        // Lazy load goalsService to avoid top-level side effects
+        // Import dynamique pour éviter les instanciations prématurées
         const { goalsService } = await import('../../../services/goalsService.js');
 
         switch (toolName) {

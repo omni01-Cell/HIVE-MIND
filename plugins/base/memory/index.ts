@@ -2,7 +2,7 @@
 // Persistent fact memorization plugin (Option C)
 // Allows the AI to memorize, recall, and list information about users
 
-// Lazy loaded services helper
+// Helper de services chargés dynamiquement
 const getServices = async () => {
     const [{ factsMemory, workspaceMemory, semanticMemory }, { workingMemory }] = await Promise.all([
         import('../../../services/memory.js'),

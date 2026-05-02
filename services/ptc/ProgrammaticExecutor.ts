@@ -365,7 +365,7 @@ ${SANDBOX_HELPERS_SOURCE}
                 if (prop in target) return target[prop as string];
 
                 // Variables internes du VM à ignorer
-                const vmInternals = ['global', 'globalThis', 'GLOBAL', 'root', 'window', 'self'];
+                const vmInternals = ['global', 'globalThis', 'GLOBAL', 'root', 'window', 'self', '__hiveSleepResult'];
                 if (vmInternals.includes(prop as string)) return undefined;
 
                 // Variable non définie → erreur explicite

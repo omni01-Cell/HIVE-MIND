@@ -1268,7 +1268,9 @@ export class BotCore {
                                                     chatId,
                                                     sender: message.sender,
                                                     isGroup: message.isGroup,
-                                                    authority: fullContext.authority,
+                                                    authorityLevel: fullContext.authorityLevel,
+                                                    isSuperUser: fullContext.isSuperUser,
+                                                    isGlobalAdmin: fullContext.isGlobalAdmin,
                                                     sourceChannel: message.sourceChannel,
                                                 });
                                                 console.log(`[PTC→Native] ✅ Exécuté ${extractedTool} via fallback natif`);
@@ -1615,7 +1617,7 @@ export class BotCore {
         const { db } = this;
         const toolName = toolCall.function.name;
 
-        const { chatId, message, authority } = context;
+        const { chatId, message, authorityLevel, isSuperUser, isGlobalAdmin } = context;
 
         console.log(`[SafeExecute] 🛡️ Exécution sécurisée demandée: ${toolName}`);
 
@@ -1629,7 +1631,7 @@ export class BotCore {
                     sender: message.sender,
                     senderName: message.senderName,
                     isGroup: message.isGroup,
-                    authorityLevel: authority?.level || 0
+                    authorityLevel: authorityLevel || 'MEMBRE (Standard)'
                 });
 
                 if (!critique.approved) {
@@ -1651,7 +1653,7 @@ export class BotCore {
                     sender: message.sender,
                     senderName: message.senderName,
                     isGroup: message.isGroup,
-                    authorityLevel: authority?.level || 0
+                    authorityLevel: authorityLevel || 'MEMBRE (Standard)'
                 });
 
                 if (!evaluation.allowed) {

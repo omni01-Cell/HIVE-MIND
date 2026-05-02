@@ -13,7 +13,7 @@
         "build": "tsc --noEmit",
         "lint": "eslint . --ext .js,.ts",
         "lint:fix": "eslint . --ext .js,.ts --fix",
-        "cli": "tsx bin/hive-mind.ts",
+        "cli": "ACTIVE_TRANSPORT=cli APP_ENV=local tsx bin/hive-mind.ts start",
         "repair": "tsx scripts/repair-session.ts",
         "audit:group": "tsx scripts/audit-group.ts",
         "fix:usernames": "tsx scripts/fix-missing-usernames.ts",

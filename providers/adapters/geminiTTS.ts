@@ -59,7 +59,7 @@ export class GeminiTTSAdapter {
             throw new Error('Clé API Gemini manquante ou invalide');
         }
 
-        const model = options.model || this.config.model || 'gemini-2.5-flash-tts';
+        const model = options.model || this.config.model || 'gemini-3.1-flash-tts-preview';
         const voice = options.voice || this.config.voice || 'Aoede';
 
         // Valider la voix

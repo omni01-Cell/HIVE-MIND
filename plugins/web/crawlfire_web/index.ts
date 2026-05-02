@@ -89,7 +89,7 @@ export default {
             return { success: false, message: 'Transport or chatId missing from context' };
         }
 
-        // Lazy load container to avoid top-level side effects
+        // Import dynamique pour éviter les instanciations prématurées
         const { container } = await import('../../../core/ServiceContainer.js');
 
         let apiKey = process.env.FIRECRAWL_API_KEY;

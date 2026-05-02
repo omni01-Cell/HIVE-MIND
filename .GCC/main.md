@@ -15,7 +15,7 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
 - **[AGENTIC] Planner Resilience**: Implemented fallback for missing tool names in plan steps to prevent execution loop crashes.
 - **[PROTOCOL] Gemini Thought Persistence**: Updated `providers/adapters/gemini.ts` to correctly handle `thought` and `thought_signature` fields, essential for Gemini 2.0+ tool calling protocols.
 - **[SECURITY] MoralCompass Refactor**: Removed legacy `values.json` dependency. Refactored `MoralCompass.ts` to use the unified `system.md` XML security boundaries.
-- **[SECURITY] MoralCompass Bypass**: Implemented FAST PATH for `SAFE_TOOLS` (read-only) and Admin users to reduce LLM latency.
+- **[SECURITY] MoralCompass Bypass**: Implemented FAST PATH for `SAFE_TOOLS` (read-only) and Admin users to reduce LLM latency. Fixed a bug where a missing or numeric `authorityLevel` caused crashes during the admin check.
 - **[SECURITY] Agent Refusal Visibility**: Enhanced refusal payloads with `risk_level` and actionable reasons for better LLM self-correction.
 - **[SECURITY] Browser Blacklist**: Migrated `BrowserService` from a restrictive whitelist to an open-by-default blacklist strategy.
 - **[SECURITY] Universal Read / Restricted Write**: Adjusted FS tools to grant universal read access while maintaining strict sandboxing for write operations.

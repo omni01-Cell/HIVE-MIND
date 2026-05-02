@@ -48,7 +48,8 @@ export const moralCompass = {
         // WHY: The owner/admin deployed this bot — they have full authority.
         // Blocking their actions creates friction with zero security benefit.
         // SECURITY FIX: Only trust Global Admins and SuperUsers, NOT local Group Admins.
-        const isAdmin = context.authorityLevel?.includes('SuperUser') || context.authorityLevel?.includes('Global Admin');
+        const authStr = typeof context.authorityLevel === 'string' ? context.authorityLevel : '';
+        const isAdmin = authStr.includes('SuperUser') || authStr.includes('Global Admin');
         if (isAdmin) {
             console.log(`[MoralCompass] ✅ Admin bypass for ${name} (authority: ${context.authorityLevel})`);
             return { allowed: true, reason: null, risk_level: 'low' };

@@ -50,25 +50,25 @@ export default {
         }
 
         try {
-            // Dynamic import of wikipedia
-            const { default: wiki } = await import('wikipedia');
+            const apiUrl = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
+            
+            const response = await fetch(apiUrl, {
+                headers: {
+                    'User-Agent': 'HiveMindBot/1.0 (https://github.com/railway/hive-mind; contact@example.com)'
+                }
+            });
 
-            // Set language
-            wiki.setLang(lang);
-
-            // Search
-            const searchResults = await wiki.search(query);
-
-            if (!searchResults.results || searchResults.results.length === 0) {
-                return {
-                    success: false,
-                    message: `No results found for "${query}" on Wikipedia.`
-                };
+            if (!response.ok) {
+                if (response.status === 404) {
+                    return {
+                        success: false,
+                        message: `No results found for "${query}" on Wikipedia.`
+                    };
+                }
+                throw new Error(`Wikipedia API error: ${response.statusText}`);
             }
 
-            // Get summary of first page
-            const page = await wiki.page(searchResults.results[0].title);
-            const summary = await page.summary();
+            const summary = await response.json();
 
             // Limit text to 500 characters
             const shortExtract = summary.extract.length > 500

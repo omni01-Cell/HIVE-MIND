@@ -171,7 +171,7 @@ export default {
      * Executes an admin command
      */
     async execute(args: any, context: any, toolName: any) {
-        // Defensive destructuring of context
+        // Déstructuration défensive du contexte
         const { sender, chatId, isGroup } = context || {};
 
         if (!sender) {

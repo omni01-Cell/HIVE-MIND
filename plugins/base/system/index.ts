@@ -78,7 +78,7 @@ export default {
     ],
 
     /**
-     * Tool Execution
+     * Exécution des outils
      */
     async execute(args: any, context: any, toolName: any) {
         const { transport, message, sender } = context || {};
