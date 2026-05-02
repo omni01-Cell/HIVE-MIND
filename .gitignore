@@ -25,3 +25,5 @@ Thumbs.db
 *.swp
 .GCC/
 .agent/
+downloads/
+hm_storage/tmp_download/

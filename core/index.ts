@@ -834,6 +834,73 @@ export class BotCore {
                 ];
             }
 
+            // 3. Document / Fichier envoyé par l'utilisateur (Sauvegarde temporaire)
+            if (message.mediaType === 'document' || message.mediaType === 'video' || message.mediaType === 'audio') {
+                try {
+                    console.log(`[Core] 📁 Téléchargement fichier temporaire (${message.mediaType})...`);
+                    const buffer = await this.transport.downloadMedia(message);
+                    
+                    // Extraire le vrai nom du fichier
+                    let originalFileName = '';
+                    const rawMsg = message.raw?.message || message.raw;
+                    
+                    // Tenter de récupérer le nom original tel qu'affiché dans l'UI WhatsApp
+                    if (rawMsg?.documentMessage?.fileName) {
+                        originalFileName = rawMsg.documentMessage.fileName;
+                    } else if (rawMsg?.documentMessage?.title) {
+                        originalFileName = rawMsg.documentMessage.title;
+                    } else if (rawMsg?.documentWithCaptionMessage?.message?.documentMessage?.fileName) {
+                        originalFileName = rawMsg.documentWithCaptionMessage.message.documentMessage.fileName;
+                    } else if (message.mediaType === 'audio') {
+                        originalFileName = `vocal_${Date.now()}.ogg`; // Les audios WhatsApp perdent souvent leur nom
+                    } else if (message.mediaType === 'video') {
+                        originalFileName = `video_${Date.now()}.mp4`; // Les vidéos média aussi (sauf si envoyées en document)
+                    } else {
+                        originalFileName = `fichier_${Date.now()}`;
+                    }
+
+                    const fs = await import('fs');
+                    const path = await import('path');
+                    
+                    // Stockage temporaire structuré
+                    const downloadDir = path.join(process.cwd(), 'hm_storage', 'tmp_download');
+                    if (!fs.existsSync(downloadDir)) {
+                        fs.mkdirSync(downloadDir, { recursive: true });
+                    }
+                    
+                    // Nettoyer le nom pour la sécurité système
+                    const safeFileName = path.basename(originalFileName).replace(/[^a-zA-Z0-9.\-_ \(\)]/g, '_');
+                    const filePath = path.join(downloadDir, safeFileName);
+                    
+                    fs.writeFileSync(filePath, buffer);
+                    console.log(`[Core] ✅ Fichier téléchargé: ${filePath}`);
+                    
+                    // Planifier la suppression automatique (10 minutes)
+                    setTimeout(() => {
+                        fs.unlink(filePath, (err) => {
+                            if (err && err.code !== 'ENOENT') {
+                                console.error(`[Cleanup] Erreur lors de la suppression de ${filePath}:`, err.message);
+                            } else if (!err) {
+                                console.log(`[Cleanup] 🧹 Fichier temporaire supprimé: ${filePath}`);
+                            }
+                        });
+                    }, 10 * 60 * 1000); // 10 minutes
+                    
+                    // Information enrichie pour l'IA
+                    const timeString = new Date().toLocaleString('fr-FR');
+                    const fileNotice = `\n\n[SYSTÈME ALERTE FICHIER : \n- Expéditeur : @${senderName}\n- Date : ${timeString}\n- Fichier reçu : "${originalFileName}"\n- Type : ${message.mediaType}\n- Emplacement temporaire : ${filePath}\n\nATTENTION : Ce fichier est stocké dans un répertoire temporaire et SERA SUPPRIMÉ AUTOMATIQUEMENT dans 10 minutes. Si ce fichier est important et que vous devez le conserver, vous DEVEZ utiliser vos outils pour le copier ou le déplacer vers un stockage permanent avant de faire autre chose. Vous pouvez lire son contenu avec read_file si nécessaire.]`;
+                    
+                    if (Array.isArray(userContent)) {
+                        const textBlock = userContent.find((b: any) => b.type === 'text');
+                        if (textBlock) textBlock.text += fileNotice;
+                    } else {
+                        userContent += fileNotice;
+                    }
+                } catch (e: any) {
+                    console.error('[Core] ❌ Erreur téléchargement fichier:', e.message);
+                }
+            }
+
             // ========== CONTEXTE DE MESSAGE CITÉ (Quote Context) ==========
             // Intégrer le contexte du message cité pour que l'IA comprenne le contexte
             if (message.quotedMsg) {
