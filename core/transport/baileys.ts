@@ -613,8 +613,40 @@ class BaileysTransport extends EventEmitter {
     }
 
     async sendMedia(chatId: string, media: any, options: any = {}) {
-        console.warn('[Baileys] sendMedia pas encore implémenté.');
-        return {};
+        if (!this.sock) {
+            console.error('[Baileys] ❌ Erreur sendMedia: Socket non initialisé');
+            return {};
+        }
+
+        try {
+            const type = options.type || 'image';
+            const message: any = {};
+            const mediaSource = (typeof media === 'string' || Buffer.isBuffer(media)) 
+                ? (typeof media === 'string' && (media.startsWith('http') || media.startsWith('/') || media.includes('./')) ? { url: media } : media)
+                : media;
+
+            if (type === 'image') message.image = mediaSource;
+            else if (type === 'video') message.video = mediaSource;
+            else if (type === 'audio') {
+                message.audio = mediaSource;
+                message.ptt = options.ptt || false;
+                message.mimetype = options.mimetype || 'audio/mp4';
+            }
+            else if (type === 'document') {
+                message.document = mediaSource;
+                message.fileName = options.fileName || 'document';
+            }
+
+            if (options.caption) message.caption = options.caption;
+            
+            const socketOptions: any = {};
+            if (options.reply) socketOptions.quoted = options.reply;
+
+            return await this.sock.sendMessage(chatId, message, socketOptions);
+        } catch (error: any) {
+            console.error('[Baileys] ❌ Erreur sendMedia:', error.message);
+            return {};
+        }
     }
 
     async sendSticker(chatId: string, stickerBuffer: any) {

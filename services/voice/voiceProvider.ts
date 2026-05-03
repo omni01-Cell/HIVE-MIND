@@ -98,7 +98,7 @@ export class VoiceProvider {
         }
 
         for (const modelConfig of ttsModels) {
-            const { provider, model, priority } = modelConfig;
+            const { provider, model } = modelConfig;
             const adapter = this.adapters.get(provider);
 
             if (!adapter) {
@@ -106,9 +106,10 @@ export class VoiceProvider {
                 continue;
             }
 
-            // Vérifier disponibilité de l'adapter
+            // [ROBUSTESSE] Sauter immédiatement si la clé est manquante ou invalide
             if (!adapter.isAvailable()) {
-                console.log(`[VoiceProvider] ${provider}/${model} non disponible (clé manquante)`);
+                // On ne log qu'en debug pour ne pas polluer, sauf si c'est le seul
+                if (this.config.debug) console.log(`[VoiceProvider] ${provider}/${model} non disponible (clé manquante/invalide)`);
                 continue;
             }
 
@@ -128,11 +129,6 @@ export class VoiceProvider {
                     ...options,
                     model: model
                 };
-
-                // Si l'utilisateur demande une voix spécifique (Gemini)
-                if (options.voice && provider === 'gemini') {
-                    synthesizeOptions.voice = options.voice;
-                }
 
                 const result = await adapter.synthesize(text, synthesizeOptions);
 
@@ -164,39 +160,43 @@ export class VoiceProvider {
      * Force l'utilisation de Gemini pour les voix personnalisées
      * @param {string} text Texte à vocaliser
      * @param {string} voiceName Nom de la voix (Aoede, Charon, etc.)
+     * @param {Object} options Options supplémentaires (style, etc.)
      * @returns {Promise<{audioBuffer: Buffer, format: string, provider: string} | null>}
      */
-    async textToSpeechWithVoice(text: any, voiceName: any) {
+    async textToSpeechWithVoice(text: any, voiceName: any, options: any = {}) {
         const geminiAdapter = this.adapters.get('gemini');
 
+        // Si Gemini n'a pas de clé, on ne peut pas utiliser de voix spécifique
         if (!geminiAdapter || !geminiAdapter.isAvailable()) {
-            console.warn(`[VoiceProvider] Gemini non disponible pour voix "${voiceName}"`);
-            // Fallback sur TTS standard
-            return this.textToSpeech(text);
+            console.warn(`[VoiceProvider] Gemini non disponible pour voix spécifique, repli sur TTS standard`);
+            return this.textToSpeech(text, options);
         }
 
         // Vérifier que la voix existe
         const availableVoices = geminiAdapter.getAvailableVoices();
-        if (!availableVoices.includes(voiceName)) {
+        if (voiceName && !availableVoices.includes(voiceName)) {
             console.warn(`[VoiceProvider] Voix "${voiceName}" inconnue, fallback sur Aoede`);
             voiceName = 'Aoede';
         }
 
         try {
-            const result = await geminiAdapter.synthesize(text, { voice: voiceName });
+            const result = await geminiAdapter.synthesize(text, { 
+                ...options,
+                voice: voiceName || 'Aoede' 
+            });
 
-            console.log(`[VoiceProvider] ✅ TTS avec voix "${voiceName}" réussi`);
+            console.log(`[VoiceProvider] ✅ TTS Gemini réussi avec voix "${voiceName || 'Aoede'}"`);
 
             return {
                 ...result,
                 provider: 'gemini',
-                voice: voiceName
+                voice: voiceName || 'Aoede'
             };
 
         } catch (error: any) {
             console.error(`[VoiceProvider] ❌ Erreur voix "${voiceName}":`, error.message);
-            // Fallback sur TTS standard
-            return this.textToSpeech(text);
+            // Fallback sur TTS standard (qui essaiera minimax puis gtts)
+            return this.textToSpeech(text, options);
         }
     }
 

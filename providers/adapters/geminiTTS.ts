@@ -49,7 +49,7 @@ export class GeminiTTSAdapter {
     }
 
     /**
-     * Synthétise du texte en audio via Gemini 2.5 Flash TTS
+     * Synthétise du texte en audio via Gemini 3.1 Flash TTS
      * @param {string} text Texte à vocaliser
      * @param {Object} options Options (voice, style, model)
      * @returns {Promise<{audioBuffer: Buffer, format: string, filePath?: string}>}
@@ -67,15 +67,19 @@ export class GeminiTTSAdapter {
             console.warn(`[GeminiTTS] Voix "${voice}" inconnue, utilisation de "Aoede"`);
         }
 
-        // Appliquer les instructions de style si présentes
-        const finalText = options.style ? this._formatWithStyle(text, options.style) : text;
-
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
 
+        // Construction du contenu avec Director's Notes (style)
+        // Les instructions de haut niveau sont placées entre parenthèses au début selon la doc
+        const finalText = options.style ? `(${options.style}) ${text}` : text;
+
         const body = {
-            contents: [{ role: "user", parts: [{ text: finalText }] }],
+            contents: [{ 
+                role: "user", 
+                parts: [{ text: finalText }] 
+            }],
             generationConfig: {
-                responseModalities: ["audio"],
+                responseModalities: ["AUDIO"],
                 speechConfig: {
                     voiceConfig: {
                         prebuiltVoiceConfig: {
@@ -87,6 +91,7 @@ export class GeminiTTSAdapter {
         };
 
         console.log(`[GeminiTTS] Synthèse: "${text.substring(0, 50)}..." (voice: ${voice}, model: ${model})`);
+        if (options.style) console.log(`[GeminiTTS] 🎬 Style: ${options.style}`);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -110,23 +115,33 @@ export class GeminiTTSAdapter {
         const audioPart = candidate.content?.parts?.find((p: any) => p.inlineData);
 
         if (!audioPart) {
-            throw new Error('Pas de données audio dans la réponse');
+            throw new Error('Pas de données audio dans la réponse. Vérifiez que le modèle supporte le mode AUDIO.');
         }
 
         // Décoder l'audio Base64
         const audioBuffer = Buffer.from(audioPart.inlineData.data, 'base64');
-        const mimeType = audioPart.inlineData.mimeType || 'audio/mp3';
+        const mimeType = audioPart.inlineData.mimeType || 'audio/pcm';
 
-        // Déterminer l'extension
+        // Sauvegarde temporaire du fichier brut
         const ext = mimeType.includes('wav') ? 'wav' : mimeType.includes('pcm') ? 'pcm' : 'mp3';
         const tempPath = path.join(this.cacheDir, `gemini_${Date.now()}.${ext}`);
         fs.writeFileSync(tempPath, audioBuffer);
 
-        // Convertir en OGG pour WhatsApp
+        // Convertir en OGG pour WhatsApp (Opus)
         const outputOggPath = tempPath.replace(`.${ext}`, '.ogg');
-        await this._convertToOgg(tempPath, outputOggPath);
+        
+        try {
+            await this._convertToOgg(tempPath, outputOggPath, ext === 'pcm');
+        } catch (convErr: any) {
+            console.error('[GeminiTTS] Conversion error:', convErr.message);
+            // Fallback: si conversion échoue, on renvoie le buffer tel quel s'il est MP3/WAV
+            if (ext !== 'pcm') {
+                return { audioBuffer, format: ext, filePath: tempPath };
+            }
+            throw convErr;
+        }
 
-        // Cleanup
+        // Cleanup original
         try { fs.unlinkSync(tempPath); } catch (e: any) { }
 
         const oggBuffer = fs.readFileSync(outputOggPath);
@@ -134,16 +149,10 @@ export class GeminiTTSAdapter {
         return {
             audioBuffer: oggBuffer,
             format: 'ogg',
-            filePath: outputOggPath
+            filePath: outputOggPath,
+            provider: 'gemini',
+            model: model
         };
-    }
-
-    /**
-     * Formate le texte avec des instructions de style
-     * Exemples: "[excitedly]", "[whispering]", "[slowly]"
-     */
-    _formatWithStyle(text: any, style: any) {
-        return `[${style}] ${text}`;
     }
 
     /**
@@ -155,10 +164,22 @@ export class GeminiTTSAdapter {
 
     /**
      * Convertit vers OGG Opus
+     * @param {boolean} isRawPcm - Si vrai, spécifie les paramètres PCM pour FFmpeg
      */
-    _convertToOgg(inputPath: any, outputPath: any) {
+    _convertToOgg(inputPath: any, outputPath: any, isRawPcm: boolean = false) {
         return new Promise((resolve: any, reject: any) => {
-            ffmpeg(inputPath)
+            let command = ffmpeg(inputPath);
+            
+            if (isRawPcm) {
+                // Gemini TTS renvoie du PCM 16-bit little-endian mono à 24kHz
+                command = command.inputOptions([
+                    '-f s16le',
+                    '-ar 24000',
+                    '-ac 1'
+                ]);
+            }
+
+            command
                 .audioCodec('libopus')
                 .audioBitrate('32k')
                 .format('ogg')
