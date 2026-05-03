@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { TelegramClient } from "telegram";
+import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import { NewMessage } from "telegram/events/index.js";
 
@@ -84,6 +84,24 @@ export const telegramTransport = {
     sendMedia: async (chatId: string, media: any, options: any = {}) => {
         if (!telegramTransport.client) return;
         return await telegramTransport.client.sendMessage(chatId, { file: media });
+    },
+
+    sendVoiceNote: async (chatId: string, audio: any, options: any = {}) => {
+        if (!telegramTransport.client) return;
+        return await telegramTransport.client.sendMessage(chatId, { 
+            file: audio,
+            voice: true 
+        });
+    },
+
+    sendFile: async (chatId: string, filePath: string, fileName: string, caption: string = '') => {
+        if (!telegramTransport.client) return;
+        return await telegramTransport.client.sendMessage(chatId, { 
+            file: filePath,
+            forceDocument: true,
+            attributes: fileName ? [new Api.DocumentAttributeFilename({ fileName })] : [],
+            message: caption
+        });
     },
 
     sendSticker: async (chatId: any, stickerBuffer: any) => {

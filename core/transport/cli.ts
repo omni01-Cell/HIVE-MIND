@@ -104,6 +104,28 @@ export const cliTransport = {
     },
 
     /**
+     * Envoie une note vocale
+     */
+    sendVoiceNote: async (chatId: string, audio: any) => {
+        console.log(`\n🤖 HIVE-MIND > [VOCAL ENVOYÉ]\n`);
+        if (cliTransport.rl) {
+            cliTransport.rl.prompt();
+        }
+        return { id: 'sent_voice_' + Date.now() };
+    },
+
+    /**
+     * Envoie un fichier
+     */
+    sendFile: async (chatId: string, filePath: string, fileName: string) => {
+        console.log(`\n🤖 HIVE-MIND > [FICHIER ENVOYÉ: ${fileName}]\n`);
+        if (cliTransport.rl) {
+            cliTransport.rl.prompt();
+        }
+        return { id: 'sent_file_' + Date.now() };
+    },
+
+    /**
      * Récupère les métadonnées d'un groupe
      */
     getGroupMetadata: async (groupId: string) => {

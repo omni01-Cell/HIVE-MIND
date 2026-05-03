@@ -66,6 +66,22 @@ export const discordTransport = {
         }
     },
 
+    sendVoiceNote: async (chatId: string, audio: any, options: any = {}) => {
+        // Sur Discord, une note vocale est juste un fichier audio
+        return await discordTransport.sendMedia(chatId, audio, options);
+    },
+
+    sendFile: async (chatId: string, filePath: string, fileName: string, caption: string = '') => {
+        if (!discordTransport.client) return;
+        const channel = await discordTransport.client.channels.fetch(chatId);
+        if (channel && channel.isText()) {
+            return await channel.send({ 
+                content: caption,
+                files: [{ attachment: filePath, name: fileName }] 
+            });
+        }
+    },
+
     sendSticker: async (chatId: any, stickerBuffer: any) => {
         console.warn('[DiscordTransport] sendSticker not implemented fully');
     },
