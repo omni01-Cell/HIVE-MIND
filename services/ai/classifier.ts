@@ -175,7 +175,7 @@ Best family ID:`;
         { role: 'user', content: prompt }
       ]);
 
-      const text = response.content?.trim().toLowerCase().replace(/['"`]/g, '');
+      const text = response.content?.split('\n')[0].trim().toLowerCase().replace(/['"`]/g, '') || '';
 
       if (availableFamilies.includes(text)) {
         console.log(`[Classifier] 🧠 Expert choice: ${text} for "${query.substring(0, 30)}..."`);

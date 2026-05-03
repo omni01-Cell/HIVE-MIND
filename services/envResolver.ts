@@ -98,6 +98,39 @@ export class EnvResolver {
     }
 
     /**
+     * Retourne les indices des clés disponibles pour un fournisseur donné (ex: [1, 2] pour GEMINI_KEY_1, GEMINI_KEY_2)
+     * Supporte de 1 à 7 clés. Retourne [1] si seule la clé sans suffixe (ex: GEMINI_KEY) existe.
+     * @param {string} providerName - Nom du provider (ex: 'GEMINI')
+     * @returns {number[]} - Liste des indices
+     */
+    getAvailableKeysForProvider(providerName: any) {
+        const prefix = `${providerName.toUpperCase()}_KEY`;
+        const indices = [];
+
+        for (let i = 1; i <= 7; i++) {
+            if (process.env[`${prefix}_${i}`]) {
+                indices.push(i);
+            }
+        }
+
+        if (indices.length === 0 && process.env[prefix]) {
+            indices.push(1); // Default to key 1 if no suffix
+        }
+
+        // Cas de fallback pour les placeholders "VOTRE_CLE_XXX"
+        if (indices.length === 0) {
+            const fallbackKey = `VOTRE_CLE_${providerName.toUpperCase()}`;
+            if (process.env[fallbackKey]) {
+                indices.push(1);
+            }
+        }
+
+        // Par défaut, retourner au moins [1] pour éviter de casser la compatibilité
+        // si la clé est passée via un fichier non-env ou d'une autre manière
+        return indices.length > 0 ? indices : [1];
+    }
+
+    /**
      * Vérifie si une valeur est un placeholder
      * @private
      */

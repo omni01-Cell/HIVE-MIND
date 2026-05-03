@@ -58,29 +58,61 @@ Ce document liste l'état des tests de tous les plugins après la refonte V3.
 
 ---
 
-### 🧩 Plugin : `crawlfire_web`
-- **Outils** : `read_webpage`, `search_and_read` (Ici Firecrawl via code_execution)
+### 🧩 Plugin : `shopping`
+- **Outils** : `find_product`
 - **Statut** : ✅ Succès
-- **Requête** : "Can you read the webpage at https://example.com and tell me what the main heading says?"
-- **Réponse Modèle** : The main heading of the webpage at https://example.com is "**Example Domain**".
-- **Commentaires** : L'agent a utilisé de lui-même `firecrawl_scrape` dans `code_execution` avec brio et a extrait le contenu correctement.
+- **Requête** : "find me some laptops under 500 dollars"
+- **Réponse Modèle** : Lancement d'un `SubAgentEngine:PersonalShopper` qui a effectué plusieurs recherches et renvoyé un rapport structuré avec 3 modèles recommandés.
+- **Commentaires** : Intégration parfaite du système de Sub-Agent pour les recherches complexes.
+
+---
+
+### 🧩 Plugin : `sys_interaction`
+- **Outils** : `react_to_message`, `execute_bash_command` (via code_execution)
+- **Statut** : ✅ Succès
+- **Requête** : "test pinging an echo command"
+- **Réponse Modèle** : Exécution réussie de `echo "ping test 1"`, `echo "ping test 2"`.
+- **Commentaires** : Le fallback PTC a permis d'exécuter des commandes système de manière fluide.
+
+---
+
+### 🧩 Plugin : `deep_research`
+- **Outils** : `start_deep_search`
+- **Statut** : ✅ Succès
+- **Requête** : "Generate a visual report on the topic of AI growth"
+- **Réponse Modèle** : L'IA a lancé un `SubAgentEngine:DeepResearcher` pour approfondir le sujet.
+- **Commentaires** : La boucle de recherche itérative (6+ itérations) est fonctionnelle et résiliente aux erreurs de quota.
+
+---
+
+### 🧩 Plugin : `crawlfire_web`
+- **Outils** : `firecrawl_scrape`, `firecrawl_search`, etc.
+- **Statut** : ✅ Succès
+- **Requête** : Diverses recherches web.
+- **Réponse Modèle** : Extraction de contenu markdown réussie.
+- **Commentaires** : Un bug `json.data.map is not a function` a été identifié et corrigé (ajout d'un guard sur le format de réponse API).
+
+---
+
+### 🧩 Plugin : `visual_reporter` / `translate`
+- **Statut** : 🟡 Partiel
+- **Commentaires** : L'IA tente d'utiliser ces outils, mais ils sont parfois exclus du contexte par le RAG de sélection d'outils, ce qui provoque des erreurs dans le `code_execution` (UNKNOWN_TOOL). Néanmoins, la logique d'appel est correcte.
+
+---
+
+### 🧩 Plugin : `sticker`
+- **Outils** : `create_sticker`
+- **Statut** : ✅ Succès
+- **Requête** : Testé avec une image de 64px et une image HD de 7Mo via un script de simulation.
+- **Réponse Modèle** : Génération réussie d'un fichier `.webp` (Sticker WhatsApp) de ~60Ko.
+- **Commentaires** : Correction d'un bug d'importation (`Sticker is not a constructor`) lié au format ESM. Le plugin est maintenant robuste et gère bien le redimensionnement des images lourdes.
 
 ---
 
 ### ⏳ Plugins en Attente / Non Testés
-*(Le RAG a parfois écarté ces outils ou le test organique n'a pas encore été fait).*
-
-- **dev_tools** (`execute_bash_command`)
-- **goals** (`create_goal`, `list_goals`)
-- **mcp_tools** (Dynamique - *Mis en pause par manque de quota*)
-- **memory** (`remember_fact`, `workspace_search`...)
-- **sys_interaction** (`react_to_message`)
-- **shopping** (`find_product`)
-- **translate** (`translate_text`)
-- **visual_reporter** (`generate_markdown_report`)
-- **deep_research** (`start_deep_search`)
+- **goals** (`create_goal`, `list_goals`) - L'IA était trop occupée par les tâches précédentes lors du test CLI de 30s.
 - **group_manager** (`whatsapp_filter_add`)
-- **sticker** (`create_sticker`)
+- **mcp_tools** (Dynamique)
 
 ---
 

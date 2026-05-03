@@ -1,6 +1,6 @@
 // Sticker creation plugin from images/videos
 
-import Sticker, { StickerTypes } from 'wa-sticker-formatter';
+import { Sticker, StickerTypes } from 'wa-sticker-formatter';
 
 export default {
     name: 'create_sticker',

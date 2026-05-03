@@ -163,9 +163,20 @@ class ProviderRouter {
     /**
      * Récupère la clé API d'une famille
      */
-    getApiKey(familyName: string = this.currentFamily): string | null {
-        const key = credentials.familles_ia[familyName];
-        // Utiliser EnvResolver pour résolution centralisée
+    getApiKey(familyName: string = this.currentFamily, keyIndex: number = 1): string | null {
+        let key = credentials.familles_ia[familyName];
+        
+        // Résolution du nom de variable attendu (ex: GEMINI_KEY_2)
+        const suffix = keyIndex > 1 ? `_${keyIndex}` : '';
+        const expectedEnvName = `${familyName.toUpperCase()}_KEY${suffix}`;
+
+        // Si on demande un index spécifique > 1, on essaie d'abord cette variable d'environnement précise
+        if (keyIndex > 1) {
+            const indexedKey = envResolver.resolve(`\${${expectedEnvName}}`, expectedEnvName);
+            if (indexedKey) return indexedKey;
+        }
+
+        // Sinon, on retombe sur la résolution classique
         return envResolver.resolve(key, `${familyName.toUpperCase()}_KEY`);
     }
 
@@ -470,32 +481,44 @@ class ProviderRouter {
 
             if (modelsToTry.length === 0) {
                 // Sinon (fallback ou famille différente), on cherche les modèles 'chat' de cette famille
+                // Smart Router V2: On exclut les modèles purement audio/live pour préserver les quotas texte
+                const excludedTypes = ['live_api', 'tts', 'stt', 'audio', 'transcription'];
+                
                 const rawModels = familyConfig?.modeles
-                    ?.filter((m: any) => m.types?.includes('chat'))
+                    ?.filter((m: any) => {
+                        if (!m.types?.includes('chat')) return false;
+                        // Ne pas bloquer si isServiceRecipe est true (services internes peuvent bypasser le filtre)
+                        if (options.isServiceRecipe) return true;
+                        
+                        const hasExcluded = m.types.some((t: string) => excludedTypes.includes(t));
+                        return !hasExcluded;
+                    })
                     .map((m: any) => m.id) || [];
                 // [RELIABILITY] Trier par fiabilité — modèles défaillants relégués en dernier
                 modelsToTry = this._sortModelsByReliability(rawModels);
             }
 
-
             // Essayer chaque modèle de la famille
             for (const model of modelsToTry) {
+                let keyIndex = 1;
                 try {
-                    // [ZERO-429] Check proactif avec marges de sécurité
+                    // [ZERO-429] Smart Router V2 : Recherche proactive de clé avec multi-rotation
                     if (quotaManager) {
-                        const health = await quotaManager.getModelHealth(model, { rpm: 0.20, tpm: 0.10, rpd: 0.05 });
+                        const bestKeyIndex = await quotaManager.getAvailableKeyForModel(model, family, { rpm: 0.20, tpm: 0.10, rpd: 0.05 });
 
-                        if (!health.healthy) {
-                            console.log(`[Router] ⏭️ ${model} skipped: ${health.reason}`);
-                            continue; // Pas de _recordFailure, ce n'est pas une vraie erreur
+                        if (bestKeyIndex === null) {
+                            console.log(`[Router] ⏭️ ${model} skipped: Toutes les clés sont épuisées (429 Proactif)`);
+                            continue; // Pas de _recordFailure, on passe au modèle suivant
                         }
+                        keyIndex = bestKeyIndex;
                     }
 
-                    console.log(`[Router] 🚀 Tentative: ${family} → ${model}`);
+                    console.log(`[Router] 🚀 Tentative: ${family} → ${model} (Clé ${keyIndex})`);
                     const result = await adapter.chat(messages, {
                         ...options,
                         model,
-                        apiKey: this.getApiKey(family),
+                        apiKey: this.getApiKey(family, keyIndex),
+                        keyIndex, // Passer l'index pour que l'adapter puisse incrémenter le bon compteur
                         familyConfig
                     });
 
@@ -516,7 +539,7 @@ class ProviderRouter {
                         Math.ceil(((messages.map((m: any) => m.content).join(' ').length) + (result.content || '').length) / 4);
 
                     if (quotaManager) {
-                        quotaManager.recordUsage(family, model, estimatedTokens).catch((e: any) => console.error(e));
+                        quotaManager.recordUsage(family, model, estimatedTokens, keyIndex).catch((e: any) => console.error(e));
                     }
 
                     return {
@@ -526,7 +549,7 @@ class ProviderRouter {
                     };
 
                 } catch (error: any) {
-                    console.warn(`[Router] ⚠️ Échec ${family}/${model}: ${error.message.substring(0, 200)}...`); // Limit length
+                    console.warn(`[Router] ⚠️ Échec ${family}/${model} (Clé ${keyIndex || 1}): ${error.message.substring(0, 200)}...`); // Limit length
                     lastError = error;
 
                     // Gestion intelligente des Quotas (Smart Circuit Breaker)
@@ -543,9 +566,9 @@ class ProviderRouter {
                             waitTime = Math.ceil(parseFloat(matchWait[1]));
                         }
 
-                        // On bloque spécifiquement CE modèle, pas toute la famille
-                        await quotaManager.recordQuotaExceeded(model, waitTime);
-                        console.log(`[Router] 🛡️ Modèle ${model} bloqué pour ${waitTime}s (Feedback Temps Réel)`);
+                        // On bloque spécifiquement CE modèle, pas toute la famille, et pour cette CLÉ
+                        await quotaManager.recordQuotaExceeded(model, waitTime, keyIndex);
+                        console.log(`[Router] 🛡️ Modèle ${model} (Clé ${keyIndex}) bloqué pour ${waitTime}s (Feedback Temps Réel)`);
                     } else {
                         // Erreur non-quota: pénaliser la famille ET le modèle spécifique
                         this._recordFailure(family, error);

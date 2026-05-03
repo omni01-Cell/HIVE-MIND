@@ -101,6 +101,7 @@ RÈGLES:
 3. Utiliser \`await\` pour chaque appel d'outil
 4. Utiliser \`Promise.all()\` pour les appels parallèles
 5. SILENCE ABSOLU: Ne JAMAIS montrer, imprimer, ou expliquer ce code JavaScript à l'utilisateur dans ton message texte. Le code doit être envoyé uniquement via l'appel d'outil.
+6. INTERDICTION ABSOLUE: Ne JAMAIS utiliser require(), import(), eval() ou fetch(). Utilise UNIQUEMENT les outils fournis ci-dessus.
 
 TÂCHES LONGUES (>30s) — API HIVE:
 L'objet global \`HIVE\` est disponible pour gérer les tâches qui dépassent le timeout LLM.

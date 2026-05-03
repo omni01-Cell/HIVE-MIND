@@ -212,6 +212,10 @@ export default {
         });
         if (!json.success) throw new Error(json.error || "Search failed");
 
+        if (!Array.isArray(json.data)) {
+            return { success: true, message: `🔍 Search result for "${query}": No results found or invalid response format.` };
+        }
+
         const results = json.data.map((d: any) => {
             let md = d.markdown || 'No markdown content';
             if (md.length > 5000) md = md.substring(0, 5000) + "...";

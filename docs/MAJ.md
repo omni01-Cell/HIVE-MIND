@@ -37,6 +37,11 @@ Modifier le format de stockage pour inclure le nom de l'auteur et un hash unique
 
 ## 🔧 Autres Améliorations Techniques
 
+### 🧠 Smart Router V2 (Ultra-Resilience)
+- **Rotation Multi-Clés** : Support de 7 clés par fournisseur avec switch automatique sur 429.
+- **Filtrage Multimodal** : Isolation des modèles Audio/Live pour préserver les quotas texte.
+- **Quota Granulaire** : Suivi Redis par index de clé (K1...K7).
+- [Détails complets dans docs/SMART_ROUTER_V2.md]
 
 ## ⏳ Gestion du Temps (RAG Temporel)
 

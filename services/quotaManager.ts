@@ -1,6 +1,7 @@
 // @ts-nocheck
 
 import { redis as redisClient } from './redisClient.js';
+import { envResolver } from './envResolver.js';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -184,18 +185,49 @@ class QuotaManager {
     }
 
     /**
+     * Recherche la première clé saine (avec marges) pour un modèle donné.
+     * @param {string} modelId - ID du modèle
+     * @param {string} providerName - Nom du fournisseur (pour résoudre les clés existantes)
+     * @param {Object} margins - Marges de sécurité { rpm: 0.2, tpm: 0.1, rpd: 0.05 }
+     * @returns {Promise<number|null>} - Index de la clé saine, ou null si aucune clé n'est dispo
+     */
+    async getAvailableKeyForModel(modelId: any, providerName: any, margins = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }) {
+        if (!this.client.isReady) return 1; // Fail open en dégradé, on prend la clé 1 par défaut
+
+        const availableIndices = envResolver.getAvailableKeysForProvider(providerName);
+        
+        if (!availableIndices || availableIndices.length === 0) {
+            return 1; // Fallback sécurisé
+        }
+
+        // On teste les clés une par une, de la 1 à la N
+        // On pourrait optimiser avec des pipelines MGET massif, mais comme c'est séquentiel (on s'arrête au premier sain), un `await` par clé est acceptable et évite de charger des infos inutiles si la clé 1 est souvent bonne.
+        for (const index of availableIndices) {
+            const health = await this.getModelHealth(modelId, margins, index);
+            if (health.healthy) {
+                return index; // On a trouvé une clé qui n'a pas atteint ses limites
+            }
+        }
+
+        // Si on arrive ici, toutes les clés connues pour ce modèle ont dépassé leur quota.
+        console.warn(`[QuotaManager] 🚨 Toutes les clés de ${providerName} sont épuisées pour le modèle ${modelId} !`);
+        return null;
+    }
+
+    /**
      * Bloque temporairement un modèle suite à une erreur de quota (429)
      * @param {string} modelId - ID du modèle
      * @param {number} timeoutSeconds - Durée du blocage en secondes
+     * @param {number} keyIndex - Index de la clé utilisée (défaut: 1)
      */
-    async recordQuotaExceeded(modelId: any, timeoutSeconds: any = 60) {
+    async recordQuotaExceeded(modelId: any, timeoutSeconds: any = 60, keyIndex: any = 1) {
         if (!this.client.isReady || !modelId) return;
 
-        const blockKey = `quota:${modelId}:blocked`;
+        const blockKey = `quota:${modelId}:k${keyIndex}:blocked`;
         try {
             // On set une clé qui expire automatiquement
             await this.client.setEx(blockKey, timeoutSeconds, '1');
-            console.log(`[QuotaManager] 🥶 Modèle ${modelId} mis au frigo pour ${timeoutSeconds}s (Quota Exceeded)`);
+            console.log(`[QuotaManager] 🥶 Modèle ${modelId} (Clé ${keyIndex}) mis au frigo pour ${timeoutSeconds}s (Quota Exceeded)`);
         } catch (error: any) {
             console.error('[QuotaManager] Erreur recordQuotaExceeded:', error);
         }
@@ -250,9 +282,10 @@ class QuotaManager {
      * Récupère l'état de santé détaillé d'un modèle avec marges de sécurité
      * @param {string} modelId - ID du modèle
      * @param {Object} margins - Marges de sécurité { rpm: 0.2, tpm: 0.1, rpd: 0.05 }
+     * @param {number} keyIndex - Index de la clé utilisée (défaut: 1)
      * @returns {Promise<{healthy: boolean, blocked: boolean, rpmUsed: number, rpmLimit: number, tpmUsed: number, tpmLimit: number, rpdUsed: number, rpdLimit: number, reason?: string}>}
      */
-    async getModelHealth(modelId: any,  margins = { rpm: 0.20,  tpm: 0.10,  rpd: 0.05 }) {
+    async getModelHealth(modelId: any, margins = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }, keyIndex: any = 1) {
         const result = {
             healthy: true,
             blocked: false,
@@ -269,7 +302,7 @@ class QuotaManager {
         if (!modelId) return result;
 
         const date = new Date().toISOString().split('T')[0];
-        const blockKey = `quota:${modelId}:blocked`;
+        const blockKey = `quota:${modelId}:k${keyIndex}:blocked`;
 
         try {
             // 1. Vérifier blocage explicite (Circuit Breaker)
@@ -291,9 +324,9 @@ class QuotaManager {
             result.tpmLimit = limits.tpm || Infinity;
             result.rpdLimit = limits.rpd || Infinity;
 
-            const keyRPM = `quota:${modelId}:rpm`;
-            const keyTPM = `quota:${modelId}:tpm`;
-            const keyRPD = `quota:${modelId}:rpd:${date}`;
+            const keyRPM = `quota:${modelId}:k${keyIndex}:rpm`;
+            const keyTPM = `quota:${modelId}:k${keyIndex}:tpm`;
+            const keyRPD = `quota:${modelId}:k${keyIndex}:rpd:${date}`;
 
             const [rpm, tpm, rpd] = await Promise.all([
                 this.client.get(keyRPM),

@@ -194,7 +194,8 @@ export class BotCore {
                 syncDetails += ` [${parts.join(', ')}]`;
 
                 // --- Auto-Sync pour indexer les nouveaux/modifiés ---
-                if (syncStatus.new > 0 || syncStatus.modified > 0) {
+                const skipSync = process.env.APP_ENV === 'local' || process.env.NODE_ENV === 'test';
+                if (!skipSync && (syncStatus.new > 0 || syncStatus.modified > 0)) {
                     try {
                         const embeddings = container.get('embeddings');
                         const tools = pluginLoader.getToolDefinitions();
@@ -1268,9 +1269,9 @@ export class BotCore {
                                                     chatId,
                                                     sender: message.sender,
                                                     isGroup: message.isGroup,
-                                                    authorityLevel: fullContext.authorityLevel,
-                                                    isSuperUser: fullContext.isSuperUser,
-                                                    isGlobalAdmin: fullContext.isGlobalAdmin,
+                                                    authorityLevel: (fullContext as any).authorityLevel || fullContext.authority?.level,
+                                                    isSuperUser: fullContext.authority?.isSuperUser,
+                                                    isGlobalAdmin: fullContext.authority?.isGlobalAdmin,
                                                     sourceChannel: message.sourceChannel,
                                                 });
                                                 console.log(`[PTC→Native] ✅ Exécuté ${extractedTool} via fallback natif`);

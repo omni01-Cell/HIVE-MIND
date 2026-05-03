@@ -618,8 +618,19 @@ class BaileysTransport extends EventEmitter {
     }
 
     async sendSticker(chatId: string, stickerBuffer: any) {
-        console.warn('[Baileys] sendSticker pas encore implémenté.');
-        return {};
+        if (!this.sock) {
+            console.error('[Baileys] ❌ Erreur sendSticker: Socket non initialisé');
+            return {};
+        }
+
+        try {
+            return await this.sock.sendMessage(chatId, {
+                sticker: stickerBuffer
+            });
+        } catch (error: any) {
+            console.error('[Baileys] ❌ Erreur sendSticker:', error.message);
+            return {};
+        }
     }
 
     async downloadMedia(message: any) {
