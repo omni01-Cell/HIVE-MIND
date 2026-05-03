@@ -97,13 +97,30 @@ Category:`;
         { role: 'user', content: prompt }
       ]);
 
-      const category = response.content?.trim().toUpperCase().replace(/['"`]/g, '');
+      let text = response.content || '';
+      
+      // Nettoyage des balises <think> ou <THINK> si présentes (modèles type DeepSeek-R1)
+      text = text.replace(/<(think|THINK)>[\s\S]*?<\/(think|THINK)>/g, '').trim();
+      
+      // Si le texte contient encore du blabla, on essaie de prendre le dernier mot en majuscule
+      // qui correspondrait à une catégorie valide
+      const words = text.split(/\s+/);
+      let category = '';
+      
+      // On cherche dans les mots du message si l'un correspond à une catégorie
+      for (let i = words.length - 1; i >= 0; i--) {
+        const candidate = words[i].toUpperCase().replace(/[^A-Z_]/g, '');
+        if (categories[candidate]) {
+          category = candidate;
+          break;
+        }
+      }
 
-      if (categories[category]) {
+      if (category && categories[category]) {
         console.log(`[Classifier] 📂 Category detected: ${category}`);
         return category;
       } else {
-        console.warn(`[Classifier] Invalid category: "${category}", falling back to FAST_CHAT`);
+        console.warn(`[Classifier] Invalid category detected in: "${text.substring(0, 50)}...", falling back to FAST_CHAT`);
         return 'FAST_CHAT';
       }
     } catch (error: any) {
@@ -175,13 +192,28 @@ Best family ID:`;
         { role: 'user', content: prompt }
       ]);
 
-      const text = response.content?.split('\n')[0].trim().toLowerCase().replace(/['"`]/g, '') || '';
+      let text = response.content || '';
 
-      if (availableFamilies.includes(text)) {
-        console.log(`[Classifier] 🧠 Expert choice: ${text} for "${query.substring(0, 30)}..."`);
-        return text;
+      // Nettoyage des balises <think> ou <THINK> si présentes
+      text = text.replace(/<(think|THINK)>[\s\S]*?<\/(think|THINK)>/g, '').trim();
+
+      // On cherche dans les mots si l'un correspond à une famille disponible
+      const words = text.split(/\s+/);
+      let family = null;
+
+      for (let i = words.length - 1; i >= 0; i--) {
+        const candidate = words[i].toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        if (availableFamilies.includes(candidate)) {
+          family = candidate;
+          break;
+        }
+      }
+
+      if (family) {
+        console.log(`[Classifier] 🧠 Expert choice: ${family} for "${query.substring(0, 30)}..."`);
+        return family;
       } else {
-        console.warn(`[Classifier] Invalid response: "${text}". Falling back to ${availableFamilies[0]}`);
+        console.warn(`[Classifier] Invalid response: "${text.substring(0, 50)}...". Falling back to ${availableFamilies[0]}`);
         return availableFamilies[0];
       }
     } catch (error: any) {

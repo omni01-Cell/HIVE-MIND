@@ -810,6 +810,13 @@ class BaileysTransport extends EventEmitter {
     }
 
     /**
+     * Alias pour sendVoice compatible avec les plugins V3
+     */
+    async sendVoiceNote(chatId: any, audioPath: any, options: any = {}) {
+        return this.sendVoice(chatId, audioPath, options);
+    }
+
+    /**
      * Envoie un fichier (Document)
      */
     async sendFile(chatId: any, filePath: any, fileName: any, caption: any = '') {

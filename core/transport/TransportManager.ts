@@ -182,6 +182,14 @@ export class TransportManager {
         return this.getTransport(sourceChannel).sendMedia(channelId, media, options);
     }
 
+    async sendVoiceNote(channelId: string, audio: any, options: any = {}, sourceChannel?: string) {
+        return this.getTransport(sourceChannel).sendVoiceNote(channelId, audio, options);
+    }
+
+    async sendFile(channelId: string, filePath: any, fileName: string, caption: string = '', sourceChannel?: string) {
+        return this.getTransport(sourceChannel).sendFile(channelId, filePath, fileName, caption);
+    }
+
     async downloadMedia(message: any, sourceChannel?: string) {
         return this.getTransport(sourceChannel || message.sourceChannel).downloadMedia(message);
     }
@@ -192,6 +200,14 @@ export class TransportManager {
             return transport.downloadQuotedMedia(message);
         }
         return null;
+    }
+
+    async sendSticker(channelId: string, stickerBuffer: any, sourceChannel?: string) {
+        return this.getTransport(sourceChannel).sendSticker(channelId, stickerBuffer);
+    }
+
+    async isAdmin(groupId: string, userId: string, sourceChannel?: string) {
+        return this.getTransport(sourceChannel).isAdmin(groupId, userId);
     }
 
     async disconnect() {

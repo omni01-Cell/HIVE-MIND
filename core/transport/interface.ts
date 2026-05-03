@@ -46,6 +46,27 @@ export const TransportInterface = {
     },
 
     /**
+     * Envoie une note vocale
+     * @param {string} chatId 
+     * @param {Buffer|string} audio - Buffer ou URL/Path
+     * @param {Object} options 
+     */
+    sendVoiceNote: async (chatId: any, audio: any, options: any = {}) => {
+        throw new Error('sendVoiceNote() must be implemented');
+    },
+
+    /**
+     * Envoie un fichier
+     * @param {string} chatId 
+     * @param {string} filePath 
+     * @param {string} fileName 
+     * @param {string} caption 
+     */
+    sendFile: async (chatId: any, filePath: any, fileName: any, caption: any = '') => {
+        throw new Error('sendFile() must be implemented');
+    },
+
+    /**
      * Envoie un sticker
      * @param {string} chatId 
      * @param {Buffer} stickerBuffer 
