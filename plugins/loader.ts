@@ -1,4 +1,4 @@
-// @ts-nocheck
+// plugins/loader.js
 // plugins/loader.js
 // Dynamic plugin loader (Brick-Like system)
 
@@ -509,7 +509,7 @@ class PluginLoader {
         if (plugin) {
             // Remove old definition
             this.toolDefinitions = this.toolDefinitions.filter(
-                t => t.function?.name !== name
+                (t: any) => t.function?.name !== name
             );
             this.plugins.delete(name);
         }

@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/index.js
 // providers/index.js
 // Model Provider Layer - Routeur multi-familles
 
@@ -332,6 +332,9 @@ class ProviderRouter {
 
         // Étape 2a: Filtre basique (Clé API valide)
         let availableFamilies = preferredFamilies.filter((f: string) => this.isAvailable(f));
+        if (options.isServiceRecipe) {
+            availableFamilies = availableFamilies.filter((f: string) => modelsConfig.familles[f]?.service_enabled !== false);
+        }
 
         // Étape 2b: Filtre PROACTIF (Quotas avec marges de sécurité)
         if (quotaManager) {
@@ -358,6 +361,9 @@ class ProviderRouter {
             // Fallback: On réessaie tout ce qui a une clé valide (pas de health check en urgence)
             const allFamilies = Object.keys(modelsConfig.familles);
             availableFamilies = allFamilies.filter((f: string) => this.isAvailable(f));
+            if (options.isServiceRecipe) {
+                availableFamilies = availableFamilies.filter((f: string) => modelsConfig.familles[f]?.service_enabled !== false);
+            }
 
             // En mode secours, on essaie quand même de trouver des sains
             if (quotaManager && availableFamilies.length > 0) {
@@ -690,7 +696,7 @@ class ProviderRouter {
         return Object.entries(modelsConfig.familles as Record<string, any>).map(([key, config]) => ({
             id: key,
             name: config.nom_affiche,
-            models: config.modeles?.map((m) => m.id) || [],
+            models: config.modeles?.map((m: any) => m.id) || [],
             hasApiKey: !!this.getApiKey(key) && !this.getApiKey(key)!.startsWith('VOTRE_')
         }));
     }
@@ -795,4 +801,3 @@ export async function loadAdapters() {
 loadAdapters().catch(console.error);
 
 export default providerRouter;
-

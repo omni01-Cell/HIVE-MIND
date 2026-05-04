@@ -1,4 +1,4 @@
-// @ts-nocheck
+// services/quotaManager.js
 
 import { redis as redisClient } from './redisClient.js';
 import { envResolver } from './envResolver.js';
@@ -33,7 +33,8 @@ class QuotaManager {
             this.quotas = {};
 
             if (config.familles) {
-                for (const [providerName, providerConfig] of Object.entries(config.familles)) {
+                for (const [providerName, providerConfigRaw] of Object.entries(config.familles)) {
+                    const providerConfig = providerConfigRaw as any;
                     if (providerConfig.modeles) {
                         for (const model of providerConfig.modeles) {
                             if (model.quota && model.id) {
@@ -288,7 +289,19 @@ class QuotaManager {
      * @returns {Promise<{healthy: boolean, blocked: boolean, rpmUsed: number, rpmLimit: number, tpmUsed: number, tpmLimit: number, rpdUsed: number, rpdLimit: number, reason?: string}>}
      */
     async getModelHealth(modelId: any, margins = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }, keyIndex: any = 1) {
-        const result = {
+        interface HealthResult {
+            healthy: boolean;
+            blocked: boolean;
+            rpmUsed: number;
+            rpmLimit: number;
+            tpmUsed: number;
+            tpmLimit: number;
+            rpdUsed: number;
+            rpdLimit: number;
+            reason: string | null;
+        }
+
+        let result: HealthResult = {
             healthy: true,
             blocked: false,
             rpmUsed: 0,
