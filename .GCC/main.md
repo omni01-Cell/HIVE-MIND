@@ -26,10 +26,11 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
 - ✅ Done: [CRITICAL] Error Logs Fix (scheduler target undefined).
 - ✅ Done: [PLUGINS] V3 Migration & Localization (English-native).
 - ✅ Done: [ROUTER] Smart Router V2 with Quota Management.
-
+- ✅ Done: [VOICE] TTS Overhaul (Gemini 3.1 Director's Chair + Minimax Persona).
+- 🔄 In progress: Audio Strategy refinement (Live vs Cascade).
 
 ## Next action
-Confirm skill initialization and verify the updated GCC state.
+Implement refined audio logic (STT/TTS cascade) and verify afaire.md tasks.
 
 ## Abandoned branches
 - None.
