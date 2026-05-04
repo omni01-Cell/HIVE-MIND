@@ -194,7 +194,9 @@ export class GeminiTTSAdapter {
     _convertToOgg(inputPath: any, outputPath: any, isRawPcm: boolean = false) {
         return new Promise((resolve: any, reject: any) => {
             const command = ffmpeg();
-            
+
+            command.input(inputPath);
+
             if (isRawPcm) {
                 // Gemini TTS renvoie du PCM 16-bit little-endian mono à 24kHz
                 command.inputOptions([
@@ -204,7 +206,7 @@ export class GeminiTTSAdapter {
                 ]);
             }
 
-            command.input(inputPath)
+            command
                 .audioCodec('libopus')
                 .audioBitrate('32k')
                 .audioFrequency(48000) // Standard Opus frequency

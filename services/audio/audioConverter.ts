@@ -45,13 +45,12 @@ export async function convertOggToPcm(inputPath) {
  */
 export async function convertPcmToOgg(inputPath, outputPath) {
     return new Promise((resolve: any, reject: any) => {
-        ffmpeg()
+        ffmpeg(inputPath)
             .inputOptions([
                 '-f s16le',
                 '-ar 16000',   // Sample rate
                 '-ac 1'        // Mono
             ])
-            .input(inputPath)
             .audioCodec('libopus')
             .audioBitrate('64k')
             .audioFrequency(48000)
