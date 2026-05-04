@@ -135,24 +135,27 @@ export class GeminiTTSAdapter {
 
         // Décoder l'audio Base64
         const audioBuffer = Buffer.from(audioPart.inlineData.data, 'base64');
-        const mimeType = audioPart.inlineData.mimeType || 'audio/pcm';
+        const mimeType = (audioPart.inlineData.mimeType || 'audio/pcm').toLowerCase();
 
         console.log(`[GeminiTTS] Audio data received: ${audioBuffer.length} bytes, MIME: ${mimeType}`);
         console.log(`[GeminiTTS] First 16 bytes (hex): ${audioBuffer.slice(0, 16).toString('hex')}`);
 
         // Sauvegarde temporaire du fichier brut
+        // audio/l16 est du PCM brut
+        const isPcm = mimeType.includes('pcm') || mimeType.includes('l16');
         const isWav = mimeType.includes('wav') || audioBuffer.slice(0, 4).toString() === 'RIFF';
-        const ext = isWav ? 'wav' : (mimeType.includes('pcm') ? 'pcm' : 'mp3');
+        
+        const ext = isWav ? 'wav' : (isPcm ? 'pcm' : 'mp3');
         const tempPath = path.join(this.cacheDir, `gemini_${Date.now()}.${ext}`);
         fs.writeFileSync(tempPath, audioBuffer);
 
-        console.log(`[GeminiTTS] Saved raw file to: ${tempPath} (Detected ext: ${ext})`);
+        console.log(`[GeminiTTS] Saved raw file to: ${tempPath} (Detected ext: ${ext}, isPcm: ${isPcm})`);
 
         // Convertir en OGG pour WhatsApp (Opus)
         const outputOggPath = tempPath.replace(`.${ext}`, '.ogg');
         
         try {
-            await this._convertToOgg(tempPath, outputOggPath, ext === 'pcm');
+            await this._convertToOgg(tempPath, outputOggPath, isPcm);
         } catch (convErr: any) {
             console.error('[GeminiTTS] Conversion error:', convErr.message);
             // Si on a le stderr complet via le log précédent, on pourra voir pourquoi
