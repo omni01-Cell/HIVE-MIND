@@ -6,5 +6,8 @@
     "fileFiltering": {
       "respectGitIgnore": false
     }
+  },
+  "general": {
+    "defaultApprovalMode": "auto_edit"
   }
 }

@@ -1,396 +1,78 @@
-# 📋 Tests du Bot - Checklist Complète
-> **Dernière mise à jour :** 18 Janvier 2026
-> Ce document regroupe tous les tests à effectuer après chaque modification.
+# 🧪 HIVE-MIND-RAILWAY Testing Guide
+
+This project implements two levels of End-to-End (E2E) testing to ensure stability across both local development and production environments.
+
+## 1. Local CLI E2E Test (`scripts/test_cli_e2e.ts`)
+
+Tests the core agentic logic, tools, and router locally without using WhatsApp.
+
+### Purpose
+- Validate tool calling (Shopping, Translate, Goals, etc.).
+- Verify the MultiAgent Planner and Smart Router.
+- Fast iteration cycle before pushing to production.
+
+### Usage
+```bash
+npx tsx scripts/test_cli_e2e.ts
+```
+
+### How it works
+- Boots the full production stack (Redis, Supabase, AI Providers) but uses the `cli` transport.
+- Simulates incoming messages using `simulateIncomingMessage()`.
+- Uses internal delays to wait for the LLM to process and call tools.
 
 ---
 
-# 🔊 Voice System (Janvier 2026)
+## 2. Production WhatsApp E2E Test (`scripts/test_wa_e2e.ts`)
 
-## 1. TTS Fallback (VoiceProvider)
-### Test 1.1 - Chaîne de fallback
-**Action :** Envoyer un vocal au bot.
-**Vérifier :**
-- [ ] Logs indiquent fallback si Minimax HS (`✅ TTS réussi via gemini...` ou `gtts`).
-- [ ] Réception d'un PTT (micro bleu).
+A "Black-Box" test suite that uses real WhatsApp accounts to test the live bot on Railway.
 
-### Test 1.2 - Format vocal WhatsApp (PTT)
-**Vérifier :**
-- [ ] Icône micro bleu (pas note de musique).
-- [ ] Vitesse lecture modifiable.
+### Purpose
+- Test the bot exactly like a real user.
+- Verify production-only features (Railway infrastructure, Voice/TTS, Media handling).
+- Monitor live server logs (`railway logs`) alongside test execution.
 
-## 2. Modes de Transcription
-### Test 2.1 - Vérifier mode
-**Action :** `.voice status`
-**Vérifier :** Affiche le mode actuel (restricted/full).
+### Prerequisites
+- [Railway CLI](https://docs.railway.app/guides/cli) installed and logged in.
 
-### Test 2.2 - Mode Restricted
-**Action :** `.voice restricted`
-**Vérifier :** Confirmation du mode.
-**Action :** Vocal sans répondre au bot -> Ignoré.
-**Action :** Vocal en répondant au bot -> Transcrit.
+### Usage
 
-### Test 2.3 - Mode Full
-**Action :** `.voice full`
-**Vérifier :** Confirmation du mode.
-**Scénarios valides (transcription déclenchée) :**
-- Vocal mentionnant le nom du bot (ex: "Erina, bonjour") → ✅ Transcrit
-- Vocal en **réponse/quote** à un message du bot → ✅ Transcrit
-**Scénarios ignorés :**
-- Vocal sans nom ET sans reply au bot → ⏭️ Ignoré
+#### Step 1: Connect your test accounts
+You need to scan the QR code for each account once.
+```bash
+# Connect Admin account
+npx tsx scripts/test_wa_e2e.ts --account admin
 
-## 3. Permissions Audio par Groupe
-> ⚠️ Ces commandes ne fonctionnent **qu'en groupe** !
+# Connect Regular User account
+npx tsx scripts/test_wa_e2e.ts --account user
+```
 
-### Test 3.1 - Status par défaut
-**Action :** `.audio.status`
-**Vérifier :** Affiche "Tout le monde" par défaut.
+#### Step 2: Run tests
+Modify the `run()` function in `scripts/test_wa_e2e.ts` to add your test cases, then run:
+```bash
+npx tsx scripts/test_wa_e2e.ts --account user
+```
 
-### Test 3.2 - Bloquer non-admins
-**Action :** `.mute.audio_for_none`
-**Vérifier :** Non-admin ignoré, Admin OK.
+### Key Features
+- **Live Logs:** Automatically tails `railway logs` and prefixes them with `[RAILWAY]` in your terminal.
+- **Programmatic Assertions:** Use `sendAndWaitForResponse()` to send a message and wait for a specific pattern in the bot's reply.
+- **Security Testing:** Easily switch between `admin` and `user` to verify permission boundaries.
 
-### Test 3.3 - Bloquer tout le monde
-**Action :** `.mute.audio_for_all` -> Personne ne passe.
-
-### Test 3.4 - Reset
-**Action :** `.allow.audio_for_all`.
-
-### Test 3.5 - Commande en PV (doit échouer)
-**Action :** Envoyer `.mute.audio_for_none` en PV.
-**Vérifier :** Message d'erreur + suggestion `.pv.audio.*`
-
-## 3b. Vocaux en PV (Global Admin)
-> En PV : Transcription directe, pas de modes restricted/full
-
-### Test 3b.1 - Status PV
-**Action :** `.pv.audio.status`
-**Vérifier :** Affiche le statut actuel.
-
-### Test 3b.2 - Désactiver (Global Admin)
-**Action :** `.pv.audio.off`
-**Vérifier :** Succès pour Global Admin, Refus pour les autres.
-
-### Test 3b.3 - Réactiver (Global Admin)
-**Action :** `.pv.audio.on`
-
-## 4. Plugin text_to_speech
-### Test 4.1 - Déclenchement manuel
-**Action :** "Erina, dis bonjour avec ta voix" -> Utilise l'outil `text_to_speech`.
-**Vérifier :**
-- [ ] Audio reçu en note vocale si `send_as=voice_note`.
-- [ ] Logs indiquent le provider utilisé (`gemini`, fallback éventuel).
-
-### Test 4.2 - Commandes texte directes
-**Actions :**
-- `.tts Bonjour, ceci est un test`
-- `.tts [laughs] Test avec émotion`
-- `.gtts Test GTTS simple`
-**Vérifier :**
-- [ ] Chaque commande déclenche `text_to_speech`.
-- [ ] `.tts` tente Gemini avant GTTS.
-- [ ] `.gtts` force GTTS sans voix/style Gemini.
-- [ ] Le résultat est envoyé en `audio/ogg; codecs=opus` pour WhatsApp/PTT.
-
-## 5. Cas d'erreur Audio
-### Test 5.1 - Tous providers HS
-**Action :** Couper clés API.
-**Vérifier :** Fallback texte gracieux.
-
-## 5b. Vision d'Images (Multimodal)
-> Le bot peut maintenant voir les images directes ET les images en quoted reply
-
-### Test 5b.1 - Image directe en PV
-**Action :** Envoyer une image sans texte en PV.
-**Vérifier :** Le bot décrit/commente l'image.
-
-### Test 5b.2 - Image directe avec caption
-**Action :** Envoyer une image avec "Erina c'est quoi ça ?" en groupe.
-**Vérifier :** Le bot voit l'image ET le texte.
-
-### Test 5b.3 - Image en quoted reply
-**Action :** Répondre à une image en mentionnant le bot "Erina qu'est-ce qu'on voit ici ?"
-**Vérifier :** Le bot télécharge l'image du quoted et la décrit.
-
-### Test 5b.4 - Quote d'image sans texte + mention
-**Action :** Quelqu'un envoie une image, tu reply avec "@Erina"
-**Vérifier :** Le bot voit l'image du quoted.
-
-## 5c. Audio Natif (Gemini Live)
-> Nécessite `prefer_native: true` dans `models_config.json`
-
-### Test 5c.1 - Vocal simple (PV)
-**Action :** Envoyer un vocal "Bonjour Erina" en PV.
-**Vérifier :** Réponse vocale rapide (<2s) avec voix fluide.
-**Logs :** `[Core] 🎙️ Traitement Audio Natif`
-
-### Test 5c.2 - Vocal avec Tool Calling
-**Action :** Envoyer un vocal "Cherche la météo à Paris" en PV.
-**Vérifier :** 
-1. Le bot cherche la météo (Tool: search_web)
-2. Le bot répond vocalement avec le résultat
-**Logs :** `[GeminiLive] 🛠️ Tool call detected`
+### Example Test Case
+```typescript
+const ok = await sendAndWaitForResponse(
+    sock, 
+    targetJID, 
+    "/ping", 
+    (msg) => msg.message?.conversation?.includes('pong')
+);
+```
 
 ---
 
-# 🛡️ Sécurité & Modération
+## 3. Standard Test Protocols
 
-## 6. Anti-Delete (Message Revocation Guard)
-### Test 6.1 - Status
-**Action :** `.antidelete status`.
-
-### Test 6.2 - Activation
-**Action :** `.antidelete on` -> Confirmé.
-
-### Test 6.3 - Fonctionnement
-**Action :** Supprimer un message.
-**Vérifier :** Bot reposte le message supprimé.
-
-### Test 6.4 - Historique
-**Action :** `.deleted`.
-
-### Test 6.5 - Désactivation
-**Action :** `.antidelete off`.
-
-### Test 6.6 - Via IA
-**Action :** "Erina, active l'anti-suppression".
-
-## 7. Ghost Tagging
-### Test 7.1 - Admin Tag
-**Action :** Admin envoie `tagall`.
-**Vérifier :** Message "Tag All" + Notifications pour tous.
-
-### Test 7.2 - User Tag (Interdit)
-**Action :** User lambda envoie `tagall`.
-**Vérifier :** Réaction ❌, pas de tag.
-
-### Test 7.3 - Via IA
-**Action :** "Erina, notifie tout le monde".
-
-## 8. Commandes de Groupe (IA)
-### Test 8.1 - Unmute
-**Action :** "Redonne la parole à @User".
-
-### Test 8.2 - Promote
-**Action :** "Mets @User admin".
-
-### Test 8.3 - Demote
-**Action :** "Retire admin à @User".
-
-### Test 8.4 - Info
-**Action :** "Infos du groupe".
-
-## 9. Commandes Legacy (.task)
-### Test 9.1 - Ban
-**Action :** `.task ban @User`.
-### Test 9.2 - Mute
-**Action :** `.task mute @User 10`.
-### Test 9.3 - Unmute
-**Action :** `.task unmute @User`.
-### Test 9.4 - Tagall
-**Action :** `.task tagall Message`.
-
----
-
-# 🎨 Formatage & UX
-
-## 10. Formatage WhatsApp
-### Test 10.1 - Gras
-**Action :** Générer texte riche.
-**Vérifier :** `**` devient `*` proprement.
-
-### Test 10.2 - Titres
-**Action :** Demander un plan.
-**Vérifier :** `# Titre` devient `*TITRE*`.
-
-### Test 10.3 - Liens
-**Action :** Demander un lien.
-**Vérifier :** Format `Texte (URL)`.
-
-## 11. Démarrage & UX
-### Test 11.1 - ASCII Art
-**Vérifier :** Logo couleur + Nom bot.
-
-### Test 11.2 - Progress Bar
-**Vérifier :** Animation fluide.
-
-### Test 11.3 - Modules
-**Vérifier :** Liste checklist verte.
-
-## 12. Identité Dynamique
-### Test 12.1 - Nom Profile
-**Vérifier :** Nom correspond à `profile.json`.
-
-### Test 12.2 - Détection Nom
-**Action :** "Erina", "Nakiri", "Erina Nakiri" déclenchent le bot.
-
-### Test 12.3 - Changement Nom
-**Action :** Changer JSON -> Relancer -> Vérifier tout.
-
----
-
-# 🧠 Intelligence & Social
-
-## 13. Mentions Fuzzy
-### Test 13.1 - Exacte
-**Action :** "Mentionne @Pierre".
-
-### Test 13.2 - Approximative
-**Action :** "Dis bonjour à Seb".
-
-### Test 13.3 - Introuvable
-**Action :** Nom bidon -> Pas de crash.
-
-## 14. Vélocité
-### Test 14.1 - Calme
-**Vérifier :** Réponse simple.
-### Test 14.2 - Actif
-**Vérifier :** Citation.
-### Test 14.3 - Chaos
-**Vérifier :** Citation + Mention.
-
-## 15. Conversation Contextuelle
-### Test 15.1 - Suivi
-**Action :** Parler sans mentionner nom < 2min.
-### Test 15.2 - Interruption
-**Action :** Tiers parle -> Bot arrête de suivre A.
-
-## 16. Interactions Humaines
-### Test 16.1 - Présence
-**Vérifier :** "En ligne".
-### Test 16.2 - Réactions
-**Action :** "Like ce message".
-### Test 16.3 - Jugement
-**Action :** Dire une bêtise -> Réaction 🤦‍♂️.
-
-## 17. Fonctions Natives
-### Test 17.1 - Sondage
-**Action :** "Lance un sondage Pizza vs Sushi".
-### Test 17.2 - Contact
-**Action :** "Envoie contact de X".
-
-## 18. Agent Autonome
-### Test 18.1 - Multi-step
-**Action :** Question complexe (ex: "Age de X + Age de Y").
-**Vérifier :** Plusieurs boucles de pensée, réponse finale agrégée.
-
-## 19. Smart Router
-### Test 19.1 - Code
-**Action :** "Fonction Python..." -> Modèle Code.
-### Test 19.2 - Créatif
-**Action :** "Poème..." -> Modèle Generalist.
-
-## 20. Recherche Web
-### Test 20.1 - Actu
-**Action :** "Dernières nouvelles foot".
-
----
-
-# 🛠️ Maintenance & Outils
-
-## 21. RAG (Terminal CLI)
-### Test 21.1 - Status
-**Cmd :** `doc status`.
-### Test 21.2 - Ingest
-**Cmd :** `doc ingest`.
-### Test 21.3 - Clear
-**Cmd :** `doc clear`.
-
-## 22. Graceful Degradation
-### Test 22.1 - Crash Outil
-Simuler erreur -> Bot explique problème sans crasher.
-
-## 23. Commandes Dev
-### Test 23.1 - Dev Contact
-Cmd : `.devcontact`.
-### Test 23.2 - Shutdown
-Cmd : `.shutdown`.
-
----
-
-# 📊 Tableau de Bord (Résumé)
-
-| # | Fonctionnalité | Status |
-|---|----------------|--------|
-| **1. Voice System** | | |
-| 1.1 | TTS Fallback (Minimax -> Gemini -> GTTS) | ⬜ |
-| 1.2 | Format vocal WhatsApp (PTT) | ⬜ |
-| **2. Transcription** | | |
-| 2.1 | .voice status | ⬜ |
-| 2.2 | Mode Restricted (Reply only) | ⬜ |
-| 2.3 | Mode Full (Détection nom "Erina") | ⬜ |
-| **3. Permissions Audio** | | |
-| 3.1 | .audio.status | ⬜ |
-| 3.2 | .mute.audio_for_none | ⬜ |
-| 3.3 | .mute.audio_for_all | ⬜ |
-| 3.4 | .allow.audio_for_all | ⬜ |
-| **4. Plugin TTS** | | |
-| 4.1 | Outil text_to_speech explicite | ⬜ |
-| **5. Robustesse Audio** | | |
-| 5.1 | Fallback texte si TTS échoue | ⬜ |
-| **6. Anti-Delete** | | |
-| 6.1 | .antidelete status | ⬜ |
-| 6.2 | .antidelete on | ⬜ |
-| 6.3 | Détection et repost message supprimé | ⬜ |
-| 6.4 | .deleted (Historique) | ⬜ |
-| 6.5 | .antidelete off | ⬜ |
-| 6.6 | Contrôle via IA | ⬜ |
-| **7. Ghost Tagging** | | |
-| 7.1 | Tagall Admin (Succès) | ⬜ |
-| 7.2 | Tagall User (Échec/Punition) | ⬜ |
-| 7.3 | Tagall via IA | ⬜ |
-| **8. Group Commandes (IA)** | | |
-| 8.1 | Unmute via IA | ⬜ |
-| 8.2 | Promote via IA | ⬜ |
-| 8.3 | Demote via IA | ⬜ |
-| 8.4 | Group Info via IA | ⬜ |
-| **9. Commandes Legacy** | | |
-| 9.1 | .task ban | ⬜ |
-| 9.2 | .task mute | ⬜ |
-| 9.3 | .task unmute | ⬜ |
-| 9.4 | .task tagall | ⬜ |
-| **10. Formatage WhatsApp** | | |
-| 10.1| Conversion gras (** -> *) | ⬜ |
-| 10.2| Conversion titres (# -> *MAJ*) | ⬜ |
-| 10.3| Conversion liens [Txt](Url) | ⬜ |
-| **11. Démarrage & UX** | | |
-| 11.1| Logo ASCII HIVE-MIND | ⬜ |
-| 11.2| Progress Bar | ⬜ |
-| 11.3| Statut Modules | ⬜ |
-| **12. Identité Dynamique** | | |
-| 12.1| Nom dans ASCII | ⬜ |
-| 12.2| Détection textuelle (Erina/Nakiri) | ⬜ |
-| 12.3| Changement dynamique de nom | ⬜ |
-| **13. Mentions Fuzzy** | | |
-| 13.1| Mention exacte (@Pierre) | ⬜ |
-| 13.2| Mention diminutif (@Seb) | ⬜ |
-| 13.3| Mention introuvable | ⬜ |
-| **14. Vélocité** | | |
-| 14.1| Mode Calme (Texte) | ⬜ |
-| 14.2| Mode Actif (Citation) | ⬜ |
-| 14.3| Mode Chaos (Citation + Mention) | ⬜ |
-| **15. Conversation Context.** | | |
-| 15.1| Suivi conversation | ⬜ |
-| 15.2| Interruption par tiers | ⬜ |
-| **16. Interactions Humaines** | | |
-| 16.1| Présence "En ligne" | ⬜ |
-| 16.2| Réactions explicites | ⬜ |
-| 16.3| Réaction jugement (IA) | ⬜ |
-| **17. Fonctions Natives** | | |
-| 17.1| Sondages (Polls) | ⬜ |
-| 17.2| Envoi Contact (VCard) | ⬜ |
-| **18. Agent Autonome** | | |
-| 18.1| Raisonnement Multi-step | ⬜ |
-| **19. Smart Router** | | |
-| 19.1| Classif. Code | ⬜ |
-| 19.2| Classif. Creative | ⬜ |
-| **20. Recherche Web** | | |
-| 20.1| Actu / Météo | ⬜ |
-| **21. RAG (Terminal CLI)** | | |
-| 21.1| doc status | ⬜ |
-| 21.2| doc ingest | ⬜ |
-| 21.3| doc clear | ⬜ |
-| **22. Graceful Degradation** | | |
-| 22.1| Crash Outil -> Message Erreur | ⬜ |
-| **23. Commandes Dev** | | |
-| 23.1| .devcontact | ⬜ |
-| 23.2| .shutdown | ⬜ |
+- **Design Doc:** Every major change starts with a Design Doc.
+- **TDD:** Write unit tests in `tests/` before implementation.
+- **E2E Validation:** Always run the CLI E2E test locally before a `git push`.
+- **Production Smoke Test:** After deployment, run the WA E2E test to ensure the live environment is healthy.

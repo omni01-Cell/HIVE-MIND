@@ -7,6 +7,8 @@ git_credential.json
 
 # Session & Auth
 auth_info/
+session_test_admin/
+session_test_user/
 
 
 # Generated files
