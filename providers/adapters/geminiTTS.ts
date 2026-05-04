@@ -183,23 +183,27 @@ export class GeminiTTSAdapter {
      */
     _convertToOgg(inputPath: any, outputPath: any, isRawPcm: boolean = false) {
         return new Promise((resolve: any, reject: any) => {
-            let command = ffmpeg(inputPath);
+            const command = ffmpeg();
             
             if (isRawPcm) {
                 // Gemini TTS renvoie du PCM 16-bit little-endian mono à 24kHz
-                command = command.inputOptions([
+                command.inputOptions([
                     '-f s16le',
                     '-ar 24000',
                     '-ac 1'
                 ]);
             }
 
-            command
+            command.input(inputPath)
                 .audioCodec('libopus')
                 .audioBitrate('32k')
+                .audioFrequency(48000) // Standard Opus frequency
                 .format('ogg')
                 .on('end', () => resolve(outputPath))
-                .on('error', (err: any) => reject(new Error(`FFmpeg error: ${err.message}`)))
+                .on('error', (err: any, stdout: any, stderr: any) => {
+                    if (stderr) console.error('[GeminiTTS] FFmpeg stderr:', stderr);
+                    reject(new Error(`FFmpeg error: ${err.message}`));
+                })
                 .save(outputPath);
         });
     }

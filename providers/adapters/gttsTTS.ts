@@ -96,9 +96,13 @@ export class GttsTTSAdapter {
             ffmpeg(inputPath)
                 .audioCodec('libopus')
                 .audioBitrate('32k')
+                .audioFrequency(48000)
                 .format('ogg')
                 .on('end', () => resolve(outputPath))
-                .on('error', (err: any) => reject(new Error(`FFmpeg error: ${err.message}`)))
+                .on('error', (err: any, stdout: any, stderr: any) => {
+                    if (stderr) console.error('[GTTS] FFmpeg stderr:', stderr);
+                    reject(new Error(`FFmpeg error: ${err.message}`));
+                })
                 .save(outputPath);
         });
     }
