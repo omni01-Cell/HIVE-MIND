@@ -5,7 +5,8 @@
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { classifier } from '../services/ai/classifier.js';
+// LLM classifier permanently disabled — category is now always
+// provided by the caller (e.g. category: 'AGENTIC') or defaults to AGENTIC.
 import { envResolver } from '../services/envResolver.js';
 import { costTracker } from '../services/finops/CostTracker.js';
 
@@ -289,19 +290,14 @@ class ProviderRouter {
      */
     /**
      * Smart Router Chat Logic
-     * Level 0: Regex (handled by caller/plugins usually, but here we Routing)
-     * Level 1: Context (Redis)
-     * Level 2: Availability (QuotaManager)
-     * Level 3: Classification (Gemini Flash)
+     * Level 1: Context (Sticky Session)
+     * Level 2: Availability (QuotaManager — Zero-429)
+     * Level 3: Category Resolution (caller-provided or default AGENTIC — NO LLM call)
      */
     async chat(messages: any[], options: any = {}): Promise<any> {
         console.log(`[Router Debug] chat called. messages type: ${typeof messages}, isArray: ${Array.isArray(messages)}`);
         // 1. Initialisation
         const { chatId, sender } = options;
-        // On récupère le QuotaManager via l'adaptateur ou via import direct si besoin, 
-        // mais idéalement il faudrait l'injecter. Pour l'instant on suppose qu'il est dispo via container
-        // ou on l'importe dynamiquement si on n'a pas accès au container ici facilement.
-        // NOTE: ProviderRouter est un singleton, on peut importer le container.
         const { container } = await import('../core/ServiceContainer.js');
         let quotaManager: any = null;
         try {
@@ -313,12 +309,8 @@ class ProviderRouter {
         // =========================================================
         // NIVEAU 1: CONTEXTE (STICKY SESSION)
         // =========================================================
-        // Si une conversation est en cours avec un modèle spécifique, on essaie de le garder.
-        // (Simplification: Ici on check si options.family est forcé, sinon on pourrait check Redis)
-
         let preferredFamilies = modelsConfig.reglages_generaux.familles_prioritaires;
 
-        // Si l'utilisateur force une famille (via commande ou contexte précédent)
         if (options.family) {
             preferredFamilies = [options.family];
             console.log(`[Router] 🔒 Famille forcée par contexte: ${options.family}`);
@@ -327,50 +319,36 @@ class ProviderRouter {
         // =========================================================
         // NIVEAU 2: DISPONIBILITÉ PROACTIVE (ZERO-429)
         // =========================================================
-        // Filtrer les familles candidates via le QuotaManager AVEC MARGES DE SÉCURITÉ
-        // On ne présente que les familles ayant AU MOINS un modèle "sain" (pas proche des limites)
-
-        // Étape 2a: Filtre basique (Clé API valide)
         let availableFamilies = preferredFamilies.filter((f: string) => this.isAvailable(f));
         if (options.isServiceRecipe) {
             availableFamilies = availableFamilies.filter((f: string) => modelsConfig.familles[f]?.service_enabled !== false);
         }
 
-        // Étape 2b: Filtre PROACTIF (Quotas avec marges de sécurité)
         if (quotaManager) {
             try {
-                // On ne garde que les familles avec au moins 1 modèle "sain"
-                // Marges: RPM < 80%, TPM < 90%, RPD < 95%
                 const healthyFamilies = await quotaManager.getHealthyFamilies(
                     modelsConfig.familles,
                     { rpm: 0.20, tpm: 0.10, rpd: 0.05 }
                 );
-
-                // Intersection: familles avec clé API ET modèles sains
                 availableFamilies = availableFamilies.filter((f: string) => healthyFamilies.includes(f));
-
-                // console.log(`[Router] 🏥 Familles saines: [${healthyFamilies.join(', ')}]`);
             } catch (e: any) {
                 console.warn('[Router] Erreur health check, fallback sur filtre basique:', e.message);
-                // On continue avec le filtre basique si erreur
             }
         }
 
         if (availableFamilies.length === 0) {
             console.warn('[Router] ⚠️ TOUS les modèles prioritaires sont épuisés ou proches des limites ! Passage en mode SECOURS.');
-            // Fallback: On réessaie tout ce qui a une clé valide (pas de health check en urgence)
             const allFamilies = Object.keys(modelsConfig.familles);
             availableFamilies = allFamilies.filter((f: string) => this.isAvailable(f));
             if (options.isServiceRecipe) {
                 availableFamilies = availableFamilies.filter((f: string) => modelsConfig.familles[f]?.service_enabled !== false);
             }
 
-            // En mode secours, on essaie quand même de trouver des sains
             if (quotaManager && availableFamilies.length > 0) {
                 try {
                     const emergencyHealthy = await quotaManager.getHealthyFamilies(
                         modelsConfig.familles,
-                        { rpm: 0.05, tpm: 0.05, rpd: 0.02 } // Marges réduites en urgence
+                        { rpm: 0.05, tpm: 0.05, rpd: 0.02 }
                     );
                     if (emergencyHealthy.length > 0) {
                         availableFamilies = availableFamilies.filter((f: string) => emergencyHealthy.includes(f));
@@ -384,66 +362,43 @@ class ProviderRouter {
         }
 
         // =========================================================
-        // NIVEAU 3: DÉTECTION CATÉGORIE + MODÈLES PRÉCIS
+        // NIVEAU 3: RÉSOLUTION CATÉGORIE (pas d'appel LLM)
         // =========================================================
-        // Si on n'a pas de famille/modèle forcé, on détecte la catégorie 
-        // et on récupère les 2 modèles précis (primary + fallback)
+        // La catégorie est TOUJOURS fournie par l'appelant (ex: core/index.ts
+        // passe category: 'AGENTIC'). Si aucune catégorie n'est fournie,
+        // on utilise AGENTIC par défaut. Plus de classification LLM.
+        if (!options.family && !options.model && !options.isServiceRecipe) {
+            const category = options.category || 'AGENTIC';
+            console.log(`[Router] 🎯 Catégorie: ${category}${options.category ? '' : ' (défaut)'}`);
 
-        // SKIP Level 3 si c'est un appel de service recipe (déjà spécifique)
-        if (!options.family && !options.model && !options.isClassifierCall && !options.isServiceRecipe) {
-            let category: string | null = null;
+            const candidates = this.getChatCandidates(category);
 
-            // Raccourci: si l'appelant connaît déjà la catégorie (ex: FastPath → FAST_CHAT)
-            // on skip la classification LLM (coûteuse) mais on respecte toute la cascade
-            if (options.category) {
-                category = options.category;
-                console.log(`[Router] ⚡ Catégorie pré-définie: ${category} (skip classification)`);
-            } else {
-                const detectionStart = Date.now();
-                const lastMsg = messages[messages.length - 1]?.content || "";
+            if (candidates && candidates.primary) {
+                console.log(`[Router] 📋 Modèles: ${candidates.primary} (fallback: ${candidates.fallback})`);
 
-                try {
-                    category = await classifier.detectCategory(lastMsg, this);
-                    console.log(`[Router] Détection catégorie: ${(Date.now() - detectionStart).toFixed(3)}ms`);
-                } catch (err: any) {
-                    console.warn(`[Router] ⚠️ Échec détection catégorie: ${err.message}`);
-                }
-            }
+                const primaryParsed = this.parseModelString(candidates.primary);
+                const fallbackParsed = candidates.fallback ? this.parseModelString(candidates.fallback) : null;
 
-            if (category) {
-                const candidates = this.getChatCandidates(category);
+                if (primaryParsed) {
+                    options.family = primaryParsed.family;
+                    options.model = primaryParsed.model;
 
-                if (candidates && candidates.primary) {
-                    console.log(`[Router] 🎯 Catégorie: ${category}`);
-                    console.log(`[Router] 📋 Modèles: ${candidates.primary} (fallback: ${candidates.fallback})`);
+                    if (fallbackParsed) {
+                        options.fallbackFamily = fallbackParsed.family;
+                        options.fallbackModel = fallbackParsed.model;
+                    }
 
-                    // Parser le primary model pour extraire famille + model ID
-                    const primaryParsed = this.parseModelString(candidates.primary);
-                    const fallbackParsed = candidates.fallback ? this.parseModelString(candidates.fallback) : null;
+                    if (availableFamilies.includes(primaryParsed.family)) {
+                        availableFamilies = [primaryParsed.family, ...availableFamilies.filter((f: string) => f !== primaryParsed.family)];
+                    }
 
-                    if (primaryParsed) {
-                        options.family = primaryParsed.family;
-                        options.model = primaryParsed.model;
-
-                        if (fallbackParsed) {
-                            options.fallbackFamily = fallbackParsed.family;
-                            options.fallbackModel = fallbackParsed.model;
-                        }
-
-                        // Réorganiser availableFamilies pour mettre le choix en premier
-                        if (availableFamilies.includes(primaryParsed.family)) {
-                            availableFamilies = [primaryParsed.family, ...availableFamilies.filter((f: string) => f !== primaryParsed.family)];
-                        }
-
-                        // Si fallback disponible et différent, l'ajouter
-                        if (fallbackParsed && fallbackParsed.family !== primaryParsed.family) {
-                            if (availableFamilies.includes(fallbackParsed.family)) {
-                                availableFamilies = [
-                                    primaryParsed.family,
-                                    fallbackParsed.family,
-                                    ...availableFamilies.filter((f: string) => f !== primaryParsed.family && f !== fallbackParsed.family)
-                                ];
-                            }
+                    if (fallbackParsed && fallbackParsed.family !== primaryParsed.family) {
+                        if (availableFamilies.includes(fallbackParsed.family)) {
+                            availableFamilies = [
+                                primaryParsed.family,
+                                fallbackParsed.family,
+                                ...availableFamilies.filter((f: string) => f !== primaryParsed.family && f !== fallbackParsed.family)
+                            ];
                         }
                     }
                 }
@@ -728,15 +683,7 @@ class ProviderRouter {
         return stats;
     }
 
-    /**
-     * Méthode dépréciée au profit de classifier.js
-     *@deprecated Utiliser classifier.classify(query, candidates, router)
-     */
-    async _classifyRequest(messages: any[], candidates: any) {
-        const lastMsg = messages[messages.length - 1]?.content || "";
-        const family = await classifier.classify(lastMsg, candidates, this);
-        return family ? { family } : null;
-    }
+
 
     /**
      * Réinitialise les statistiques d'utilisation

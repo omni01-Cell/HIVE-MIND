@@ -373,7 +373,7 @@ class BaileysTransport extends EventEmitter {
                     if (normalizedMsg.text || normalizedMsg.useNativeAudio) {
                         // 🚀 SWARM UPGRADE: Utilisation du Dispatcher pour parallélisation
                         // On utilise chatId comme Lock Key (pour l'ordre)
-                        // On passe l'objet message complet pour le check isFastPath
+                        // On passe l'objet message complet pour le check isPriorityCommand
                         swarm.dispatch(normalizedMsg.chatId, normalizedMsg, async () => {
                             if (self.messageCallback) {
                                 await self.messageCallback(normalizedMsg);

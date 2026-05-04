@@ -8,7 +8,7 @@ import os from 'os';
  * 1. Isolation par Clé (JID) : Les tâches d'un même JID sont sérialisées.
  * 2. Parallélisme Global : Les JIDs différents s'exécutent en parallèle.
  * 3. Observabilité : Métriques en temps réel.
- * 4. FastLane : Bypass de la limite pour les commandes prioritaires.
+ * 4. Priority Bypass : System commands skip the global queue.
  */
 class SwarmDispatcher {
     accessMap: any;
@@ -71,23 +71,19 @@ class SwarmDispatcher {
     }
 
     /**
-     * Vérifie si le message est prioritaire (FastPath)
+     * Checks if the message is a priority system command (bypasses global queue).
      */
-    isFastPath(message: any) {
+    isPriorityCommand(message: any) {
         if (!message) return false;
-        // WHY: WhatsApp normalized messages use `text`, not `content`.
-        // `content` is the OpenAI message format — never existed on raw messages.
-        // Check both for cross-transport compatibility.
         const msgText = message.text || message.content;
         if (!msgText || typeof msgText !== 'string') return false;
-        // Commandes systèmes légères
-        const fastRegex = /^!(ping|menu|help|stop|info)/i;
-        return fastRegex.test(msgText);
+        const priorityRegex = /^!(ping|menu|help|stop|info)/i;
+        return priorityRegex.test(msgText);
     }
 
     /**
      * Wrapper d'exécution pour gérer la concurrence globale
-     * @param {boolean} isPriority - Si true, bypass la limite de charge (FastLane)
+     * @param {boolean} isPriority - Si true, bypass la limite de charge (Priority Lane)
      */
     async _executeWithThrottling(jid: any, taskId: any, taskFactory: any, isPriority: any = false) {
         const max = this.getMaxConcurrency();
@@ -104,7 +100,7 @@ class SwarmDispatcher {
                 this.globalQueue.push(resolve);
             });
         } else if (isPriority && this.metrics.activeThreads >= max) {
-            console.log(`[Swarm] ⚡ FastLane Bypass for Task [${jid}:${taskId}] (Active: ${this.metrics.activeThreads} >= ${max})`);
+            console.log(`[Swarm] ⚡ Priority Bypass for Task [${jid}:${taskId}] (Active: ${this.metrics.activeThreads} >= ${max})`);
         }
 
         // 2. Début exécution réelle
@@ -133,15 +129,15 @@ class SwarmDispatcher {
     /**
      * Dispatch une tâche dans le Swarm.
      * @param {string} jid - Identifiant unique de conversation (Lock Key)
-     * @param {object} message - Message brut (pour analyse FastPath) ou Objet {id, content}
+     * @param {object} message - Message brut (pour analyse priorité) ou Objet {id, content}
      * @param {Function} taskFactory - Factory retournant une Promise (ex: () => handleMessage())
      * @returns {Promise} - Résultat de la tâche
      */
     async dispatch(jid: any, message: any, taskFactory: any) {
         const taskId = message?.key?.id || message?.id || `Msg_${Date.now()}`;
 
-        // Check FastPath
-        const isPriority = this.isFastPath(message);
+        // Check priority command
+        const isPriority = this.isPriorityCommand(message);
 
         // 1. Récupérer la dernière promesse pour ce JID (ou Resolved immédiat)
         const previousTask = this.accessMap.get(jid) || Promise.resolve();

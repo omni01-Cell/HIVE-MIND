@@ -980,9 +980,8 @@ export class BotCore {
 
 
 
-            // [AGENTIC] Initialisation de la boucle de réflexion
-            // On arrive ici uniquement si FastPath a été skippé ou a échoué (Fallback)
-            console.log(`[Think-Fast] 🚀 Démarrage de la boucle ReAct (max ${MAX_ITERATIONS} itérations)`);
+            // [UNIFIED] All messages go through the ReAct loop — no FAST/AGENTIC split
+            console.log(`[ReAct] 🚀 Démarrage de la boucle ReAct (max ${MAX_ITERATIONS} itérations)`);
 
             // [FIX] Récupération des outils pour l'Agentic Path
             // On utilise le mode 'forceModeration' si nécessaire, ou standard
