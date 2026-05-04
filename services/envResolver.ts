@@ -74,18 +74,32 @@ export class EnvResolver {
 
             // 3b. Inférer le nom de variable (VOTRE_CLE_GEMINI → GEMINI_KEY)
             const inferredName = this._inferVarName(value);
-            if (inferredName && process.env[inferredName]) {
-                resolvedValue = process.env[inferredName];
-                this._cache(cacheKey, resolvedValue);
-                return resolvedValue;
+            if (inferredName) {
+                if (process.env[inferredName]) {
+                    resolvedValue = process.env[inferredName];
+                    this._cache(cacheKey, resolvedValue);
+                    return resolvedValue;
+                }
+                if (process.env[`${inferredName}_1`]) {
+                    resolvedValue = process.env[`${inferredName}_1`];
+                    this._cache(cacheKey, resolvedValue);
+                    return resolvedValue;
+                }
             }
         }
 
         // Stratégie 4: Si varName fourni explicitement, l'essayer
-        if (varName && process.env[varName]) {
-            resolvedValue = process.env[varName];
-            this._cache(cacheKey, resolvedValue);
-            return resolvedValue;
+        if (varName) {
+            if (process.env[varName]) {
+                resolvedValue = process.env[varName];
+                this._cache(cacheKey, resolvedValue);
+                return resolvedValue;
+            }
+            if (process.env[`${varName}_1`]) {
+                resolvedValue = process.env[`${varName}_1`];
+                this._cache(cacheKey, resolvedValue);
+                return resolvedValue;
+            }
         }
 
         // Échec de résolution
