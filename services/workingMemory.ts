@@ -547,72 +547,26 @@ export const workingMemory = {
         }
     },
 
-    // ========== EMOTIONAL ENGINE (Project Sentience) ==========
+    // ========== EMOTIONAL ENGINE — DEPRECATED ==========
+    // WHY (Audit H2): Duplicate of consciousnessService.updateAnnoyance().
+    // These methods wrote to `emotion:${chatId}:${userId}:annoyance` while
+    // consciousnessService writes to `consciousness:${chatId}:${userId}:annoyance`,
+    // causing split emotional state. ConsciousnessService is the canonical owner.
+    // Stubs throw to catch any undetected callers at runtime.
 
-    /**
-     * Met à jour le niveau d'agacement envers un utilisateur
-     * @param {string} chatId - ID du chat (groupe ou privé)
-     * @param {string} userId - JID de l'utilisateur cible
-     * @param {number} delta - Variation (+10, -5...)
-     * @returns {Promise<number>} Nouveau niveau (0-100)
-     */
-    async updateAnnoyance(chatId: any, userId: any, delta: any) {
-        try {
-            await ensureConnected();
-            if (!redis.isOpen) return 0;
+    async updateAnnoyance(_chatId: any, _userId: any, _delta: any): Promise<number> {
+        throw new Error('[WorkingMemory] updateAnnoyance is DEPRECATED — use consciousnessService.updateAnnoyance() instead');
+    },
 
-            const key = `emotion:${chatId}:${userId}:annoyance`;
-
-            // Récupérer la valeur actuelle
-            let current = parseInt((await redis.get(key)) || '0');
-
-            // Appliquer le delta
-            let newValue = current + delta;
-
-            // Borner entre 0 et 100
-            newValue = Math.max(0, Math.min(100, newValue));
-
-            if (newValue === 0) {
-                await redis.del(key); // Nettoyer si apaisé
-            } else {
-                await redis.set(key, newValue.toString(), { EX: 3600 }); // TTL 1h (Rancune à court terme)
-            }
-
-            // Log si changement significatif
-            if (Math.abs(newValue - current) >= 10 || newValue > 80) {
-                console.log(`[Emotion] Annoyance ${userId.split('@')[0]} in ${chatId.split('@')[0]}: ${current} -> ${newValue}`);
-            }
-
-            return newValue;
-        } catch (error: any) {
-            console.error('[WorkingMemory] updateAnnoyance error:', error.message);
-            return 0;
-        }
+    async getAnnoyance(_chatId: any, _userId: any): Promise<number> {
+        throw new Error('[WorkingMemory] getAnnoyance is DEPRECATED — use consciousnessService.getAnnoyance() instead');
     },
 
     /**
-     * Récupère le niveau d'agacement actuel
-     * @param {string} chatId 
-     * @param {string} userId 
-     * @returns {Promise<number>} Score (0-100)
-     */
-    async getAnnoyance(chatId: any, userId: any) {
-        try {
-            await ensureConnected();
-            if (!redis.isOpen) return 0;
-
-            const key = `emotion:${chatId}:${userId}:annoyance`;
-            const val = await redis.get(key);
-
-            return val ? parseInt(val) : 0;
-        } catch (error: any) {
-            console.error('[WorkingMemory] getAnnoyance error:', error.message);
-            return 0;
-        }
-    },
-
-    /**
-     * Récupère les groupes actifs récemment
+     * Récupère les groupes actifs récemment.
+     * WHY (Audit L3): Previous implementation used redis.keys('group:*:lastActivity')
+     * which is O(N) and blocks the Redis event loop. This version uses the
+     * existing 'groups:activity' sorted set (populated by trackGroupActivity()).
      * @param {number} withinMinutes - Actifs dans les X dernières minutes
      * @returns {Promise<string[]>} Liste des chatIds actifs
      */
@@ -622,18 +576,8 @@ export const workingMemory = {
             if (!redis.isOpen) return [];
 
             const cutoff = Date.now() - (withinMinutes * 60 * 1000);
-            const keys = await redis.keys('group:*:lastActivity');
-            const activeGroups = [];
-
-            for (const key of keys) {
-                const timestamp = await redis.get(key);
-                if (timestamp && parseInt(timestamp) > cutoff) {
-                    const groupId = key.replace('group:', '').replace(':lastActivity', '');
-                    activeGroups.push(groupId);
-                }
-            }
-
-            return activeGroups;
+            // WHY: ZRANGEBYSCORE is O(log(N)+M) vs O(N) for KEYS — no event loop blocking.
+            return await redis.zRangeByScore('groups:activity', cutoff, '+inf');
         } catch (error: any) {
             console.error('[WorkingMemory] getActiveGroups error:', error.message);
             return [];

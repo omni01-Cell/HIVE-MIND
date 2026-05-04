@@ -9,6 +9,14 @@ import { eventBus, BotEvents } from '../core/events.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// WHY (Audit M3): This list was duplicated at two fallback sites.
+// Single source of truth prevents inconsistency if one copy is updated.
+const SAFE_FALLBACK_TOOLS = [
+    'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
+    'execute_bash_command', 'edit_file', 'list_directory', 'grep_search', 'code_execution',
+    'google_ai_search', 'read_file'
+] as const;
+
 /**
  * Standard format that each plugin must expose
  * @typedef {Object} Plugin
@@ -354,11 +362,6 @@ class PluginLoader {
 
             if (!data || data.length === 0) {
                 console.warn('[PluginLoader] No tools found by RAG, fallback to base tools');
-                const SAFE_FALLBACK_TOOLS = [
-                    'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
-                    'execute_bash_command', 'edit_file', 'list_directory', 'grep_search', 'code_execution',
-                    'google_ai_search', 'read_file'
-                ];
                 return this.toolDefinitions.filter((t: any) => 
                     t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name)
                 );
@@ -400,18 +403,9 @@ class PluginLoader {
 
         } catch (error: any) {
             console.error('[PluginLoader] getRelevantTools error:', error.message);
-            // Fallback: Core Tools + Safe Tools (Pas de slice arbitraire)
-            const SAFE_FALLBACK_TOOLS = [
-                'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
-                'execute_bash_command', 'edit_file', 'list_directory', 'grep_search', 'code_execution',
-                'google_ai_search', 'read_file'
-            ];
-            
-            const fallbackTools = this.toolDefinitions.filter((t: any) => 
+            return this.toolDefinitions.filter((t: any) => 
                 t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name)
             );
-            
-            return fallbackTools;
         }
     }
 

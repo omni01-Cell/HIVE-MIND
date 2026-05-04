@@ -64,21 +64,24 @@ class QuotaManager {
     }
 
     /**
-     * Enregistre l'utilisation d'un modèle après un appel réussi
+     * Enregistre l'utilisation d'un modèle après un appel réussi.
+     * WHY: Keys include keyIndex so getModelHealth() reads the same keys we write.
      * @param {string} provider - Nom du provider (pour compatibilité/logging)
      * @param {string} modelId - ID du modèle utilisé
      * @param {number} estimatedTokens - Estimation des tokens
+     * @param {number} keyIndex - Index de la clé API utilisée (défaut: 1)
      */
-    async recordUsage(provider: any, modelId: any, estimatedTokens: any = 0) {
+    async recordUsage(provider: any, modelId: any, estimatedTokens: any = 0, keyIndex: any = 1) {
         if (!this.client.isReady) return;
         if (!modelId) return;
 
         const date = new Date().toISOString().split('T')[0];
 
-        // Quota key is now based on MODEL ID
-        const quotaKeyRPM = `quota:${modelId}:rpm`;
-        const quotaKeyTPM = `quota:${modelId}:tpm`;
-        const quotaKeyRPD = `quota:${modelId}:rpd:${date}`;
+        // WHY: Keys MUST match the pattern used in getModelHealth() — `k${keyIndex}` segment
+        // ensures per-key tracking for multi-key rotation (Smart Router V2).
+        const quotaKeyRPM = `quota:${modelId}:k${keyIndex}:rpm`;
+        const quotaKeyTPM = `quota:${modelId}:k${keyIndex}:tpm`;
+        const quotaKeyRPD = `quota:${modelId}:k${keyIndex}:rpd:${date}`;
 
         try {
             const multi = this.client.multi();
@@ -137,12 +140,11 @@ class QuotaManager {
         if (!modelId) return true;
 
         const date = new Date().toISOString().split('T')[0];
-        const blockKey = `quota:${modelId}:blocked`;
+        const blockKey = `quota:${modelId}:k1:blocked`;
 
         // 1. Vérifier si le modèle est explicitement bloqué (Circuit Breaker)
         const isBlocked = await this.client.get(blockKey);
         if (isBlocked) {
-            // console.log(`[QuotaManager] ⛔ Modèle ${modelId} bloqué temporairement (Cooldown actif)`);
             return false;
         }
 
@@ -150,9 +152,10 @@ class QuotaManager {
 
         const limits = this.quotas[modelId];
 
-        const keyRPM = `quota:${modelId}:rpm`;
-        const keyTPM = `quota:${modelId}:tpm`;
-        const keyRPD = `quota:${modelId}:rpd:${date}`;
+        // WHY: Keys aligned with recordUsage() and getModelHealth() — per-key pattern
+        const keyRPM = `quota:${modelId}:k1:rpm`;
+        const keyTPM = `quota:${modelId}:k1:tpm`;
+        const keyRPD = `quota:${modelId}:k1:rpd:${date}`;
 
         try {
             const [rpm, tpm, rpd] = await Promise.all([
@@ -180,7 +183,9 @@ class QuotaManager {
 
         } catch (error: any) {
             console.error(`[QuotaManager] Erreur lecture quota ${modelId}:`, error);
-            return true; // Fail open
+            // WHY: Fail-closed for consistency with the degraded mode path (L127).
+            // If Redis throws a non-connectivity error, we cannot trust quota state.
+            return false;
         }
     }
 
@@ -249,10 +254,7 @@ class QuotaManager {
         return available;
     }
 
-    // Deprecated but kept for compatibility validation (can be removed if unused)
-    async filterAvailableProviders(candidates: any) {
-        return candidates;
-    }
+    // filterAvailableProviders removed — no callers found (audit L2)
 
     /**
      * Récupère l'état actuel des quotas pour un provider (Debug)
@@ -262,9 +264,9 @@ class QuotaManager {
         const date = new Date().toISOString().split('T')[0];
 
         const [rpm, tpm, rpd] = await Promise.all([
-            this.client.get(`quota:${provider}:rpm`),
-            this.client.get(`quota:${provider}:tpm`),
-            this.client.get(`quota:${provider}:rpd:${date}`)
+            this.client.get(`quota:${provider}:k1:rpm`),
+            this.client.get(`quota:${provider}:k1:tpm`),
+            this.client.get(`quota:${provider}:k1:rpd:${date}`)
         ]);
 
         return {

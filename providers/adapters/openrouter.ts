@@ -36,6 +36,12 @@ export default {
             stream: false
         };
 
+        if (options.reasoning) {
+            body.reasoning = options.reasoning;
+        } else if ((model || '').includes('hy3-preview')) {
+            body.reasoning = { effort: 'none' };
+        }
+
         // Tool calling — format OpenAI standard, normalisé par OpenRouter
         if (tools?.length) {
             body.tools = tools;
@@ -95,7 +101,7 @@ export default {
             return {
                 content: choice.message?.content || '',
                 toolCalls: choice.message?.tool_calls || null,
-                reasoningContent: choice.message?.reasoning_content || null,
+                reasoningContent: choice.message?.reasoning_content || choice.message?.reasoning || null,
                 finishReason: choice.finish_reason,
                 usage: data.usage
             };

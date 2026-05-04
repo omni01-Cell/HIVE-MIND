@@ -744,7 +744,14 @@ class ProviderRouter {
 export const providerRouter = new ProviderRouter();
 
 // Auto-import des adaptateurs disponibles
-async function loadAdapters() {
+// WHY: Exported and idempotent so ServiceContainer can `await loadAdapters()`.
+// The module-level fire-and-forget call below provides backward compatibility
+// for code paths that import providerRouter without going through the container.
+let _adaptersLoaded = false;
+export async function loadAdapters() {
+    if (_adaptersLoaded) return; // Idempotent — safe to call multiple times
+    _adaptersLoaded = true;
+
     // Mapping: nom du fichier adaptateur → nom(s) à enregistrer
     const adapterMapping = {
         'openai': ['openai'],
@@ -784,7 +791,8 @@ async function loadAdapters() {
     }
 }
 
-// Charger les adaptateurs au démarrage
+// Backward compatibility: auto-load when module is imported outside ServiceContainer
 loadAdapters().catch(console.error);
 
 export default providerRouter;
+

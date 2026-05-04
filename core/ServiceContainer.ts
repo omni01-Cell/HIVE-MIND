@@ -153,9 +153,15 @@ export class ServiceContainer {
         const { GeminiLiveProvider } = await import('../services/audio/geminiLiveProvider.js');
         this.register('geminiLiveProvider', new GeminiLiveProvider({ apiKey: geminiKey || '' }));
 
-        // 7. Reflection (Async)
-        import('../services/dreamService.js').then(m => this.register('dream', m.dreamService));
-        import('../services/moralCompass.js').then(m => this.register('moralCompass', m.moralCompass));
+        // 7. Reflection
+        // WHY: These MUST be awaited. Fire-and-forget .then() caused a race condition
+        // where container.get('moralCompass') could throw if called before import resolved.
+        const [dreamModule, compassModule] = await Promise.all([
+            import('../services/dreamService.js'),
+            import('../services/moralCompass.js'),
+        ]);
+        this.register('dream', dreamModule.dreamService);
+        this.register('moralCompass', compassModule.moralCompass);
 
         const { factsMemory, workspaceMemory } = await import('../services/memory.js');
         this.register('facts', factsMemory);
@@ -166,8 +172,13 @@ export class ServiceContainer {
         this.register('browser', browserService);
 
         // 8. Provider Router (singleton global — utilisé par ShoppingAgent, DeepResearch, JournalGenerator)
-        const { providerRouter } = await import('../providers/index.js');
-        this.register('providerRouter', providerRouter);
+        const providerModule = await import('../providers/index.js');
+        // WHY: loadAdapters() runs at module level as fire-and-forget. We must await it
+        // to guarantee all adapters are registered before the container is marked ready.
+        if (typeof providerModule.loadAdapters === 'function') {
+            await providerModule.loadAdapters();
+        }
+        this.register('providerRouter', providerModule.providerRouter);
 
         this.initialized = true;
     }

@@ -3,10 +3,20 @@
  * File d'attente à équité garantie (Fairness Queue)
  * Implémente un algorithme Round-Robin pondéré entre les chatIds
  */
+
+/** Shape of an event in the queue */
+interface QueueEvent {
+    readonly chatId: string;
+    readonly message: unknown;
+    readonly isPremium: boolean;
+    readonly timestamp: number;
+    [key: string]: unknown;
+}
+
 export class FairnessQueue {
-    queues: any;
-    chatIds: any;
-    currentIndex: any;
+    queues: Map<string, QueueEvent[]>;
+    chatIds: string[];
+    currentIndex: number;
 
     constructor() {
         // Map<chatId, Array<Event>>
@@ -20,16 +30,17 @@ export class FairnessQueue {
     /**
      * Ajoute un événement à la file spécifique de son chatId
      * @param {string} chatId 
-     * @param {Object} event 
+     * @param {QueueEvent} event 
      * @param {boolean} isPremium - Si vrai, saute la file (ex: Admin DM)
      */
-    enqueue(chatId: any, event: any, isPremium: any = false) {
+    enqueue(chatId: string, event: QueueEvent, isPremium: boolean = false) {
         if (!this.queues.has(chatId)) {
             this.queues.set(chatId, []);
             this.chatIds.push(chatId);
         }
 
         const queue = this.queues.get(chatId);
+        if (!queue) return; // Invariant: set above, but TypeScript requires the guard
 
         // Les événements premium (Admin) sont ajoutés au DÉBUT de leur file
         // et on pourrait même implémenter une file prioritaire séparée si besoin
