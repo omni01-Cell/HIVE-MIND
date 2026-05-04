@@ -526,14 +526,13 @@
         "github": {
             "nom_affiche": "GitHub Models (Free Tier)",
             "base_url": "https://models.inference.ai.azure.com",
+            "service_enabled": false,
             "modeles": [
                 {
                     "id": "Phi-4",
                     "description": "Microsoft Phi-4 (Logic / Code)",
                     "types": [
-                        "chat",
-                        "coding",
-                        "reasoning"
+                        "chat"
                     ],
                     "quota": {
                         "rpm": 15,
@@ -546,15 +545,7 @@
                     "id": "microsoft/Phi-4-multimodal-instruct",
                     "description": "Microsoft Phi-4 Multimodal (5.6B SLM): Vision + Audio + Texte unifiés. 128K context, OCR, ASR, raisonnement croisé multimodal. Optimisé edge/faible latence.",
                     "types": [
-                        "chat",
-                        "coding",
-                        "reasoning",
-                        "vision",
-                        "audio",
-                        "transcription",
-                        "long_context",
-                        "multimodal",
-                        "edge"
+                        "chat"
                     ],
                     "quota": {
                         "rpm": 15,
@@ -567,8 +558,7 @@
                     "id": "Llama-3.3-70B-Instruct",
                     "description": "Meta Llama 3.3 70B (Generalist)",
                     "types": [
-                        "chat",
-                        "agentic"
+                        "chat"
                     ],
                     "quota": {
                         "rpm": 10,
@@ -581,8 +571,7 @@
                     "id": "DeepSeek-V3",
                     "description": "DeepSeek V3 (Reasoning)",
                     "types": [
-                        "chat",
-                        "reasoning"
+                        "chat"
                     ],
                     "quota": {
                         "rpm": 10,
@@ -595,8 +584,7 @@
                     "id": "DeepSeek-R1",
                     "description": "DeepSeek R1 (Advanced Reasoning)",
                     "types": [
-                        "chat",
-                        "reasoning"
+                        "chat"
                     ],
                     "quota": {
                         "rpm": 10,
