@@ -45,8 +45,8 @@
         },
         "service_recipes": {
             "EXECUTOR": {
-                "family": "openrouter",
-                "model": "google/gemma-4-31b-it:free",
+                "family": "gemini",
+                "model": "gemma-4-31b-it",
                 "fallback": "z-ai/glm-5.1",
                 "temperature": 0.7
             },
@@ -63,8 +63,8 @@
                 "temperature": 0.1
             },
             "PLANNER": {
-                "family": "openrouter",
-                "model": "google/gemma-4-31b-it:free",
+                "family": "gemini",
+                "model": "gemma-4-31b-it",
                 "fallback": "moonshotai/kimi-k2.5",
                 "temperature": 0.5
             },
@@ -362,6 +362,22 @@
                         "tpm": 1000000,
                         "rpd": 2000
                     }
+                },
+                {
+                    "id": "gemma-4-31b-it",
+                    "description": "Gemma via Google Gemini API",
+                    "types": [
+                        "chat",
+                        "agentic",
+                        "coding",
+                        "reasoning"
+                    ],
+                    "quota": {
+                        "rpm": 15,
+                        "tpm": 1000000,
+                        "rpd": 1500
+                    },
+                    "ptc_tier": "A"
                 }
             ]
         },
