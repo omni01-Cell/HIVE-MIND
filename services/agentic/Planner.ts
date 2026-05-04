@@ -255,7 +255,7 @@ Your estimate determines if multi-step planning is needed.
 </user_request>
 
 <available_tools>
-${tools.slice(0, 10).map((t: any) => t.name).join(', ')}...
+${tools.slice(0, 10).map((t: any) => t.function?.name || t.name).join(', ')}...
 </available_tools>
 
 <estimation_criteria>
@@ -310,7 +310,7 @@ ${goal}
 </goal>
 
 <available_tools>
-${context.tools.slice(0, 15).map((t: any) => `- ${t.name}: ${t.description}`).join('\n')}
+${context.tools.slice(0, 15).map((t: any) => `- ${t.function?.name || t.name}: ${t.function?.description || t.description}`).join('\n')}
 </available_tools>
 
 <planning_instructions>

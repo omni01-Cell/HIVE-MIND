@@ -88,7 +88,7 @@ export default {
             }];
         });
 
-        const body = {
+        const body: any = {
             model: modelId,
             messages: cleanMessages,
             temperature,

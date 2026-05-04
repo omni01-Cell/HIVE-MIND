@@ -35,7 +35,7 @@ export class GeminiTTSAdapter {
     cacheDir: any;
     availableVoices: any;
 
-    constructor(apiKey, config = {}) {
+    constructor(apiKey: any, config: any = {}) {
         this.name = 'gemini';
         this.apiKey = apiKey;
         this.config = config;

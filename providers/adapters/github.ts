@@ -14,7 +14,7 @@ export default {
         const { model, apiKey, tools, temperature = 0.7 } = options;
         const modelId = model || 'gpt-4o-mini'; // Default fallback
 
-        const body = {
+        const body: any = {
             model: modelId,
             messages: messages.map((m: any) => ({
                 role: m.role,

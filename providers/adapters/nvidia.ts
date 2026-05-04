@@ -4,7 +4,7 @@
 // Supporte: moonshotai/kimi-k2.5, z-ai/glm-5.1, minimaxai/minimax-m2.7
 
 // Paramètres spécifiques par modèle
-const MODEL_CONFIG = {
+const MODEL_CONFIG: any = {
     'moonshotai/kimi-k2.5': {
         max_tokens: 16384,
         chat_template_kwargs: { thinking: true }
@@ -34,7 +34,7 @@ export default {
         // Récupérer les paramètres spécifiques au modèle
         const modelCfg = MODEL_CONFIG[model] || { max_tokens: 16384 };
 
-        const body = {
+        const body: any = {
             model: model || 'moonshotai/kimi-k2.5',
             messages: messages.map((m: any) => ({
                 role: m.role,

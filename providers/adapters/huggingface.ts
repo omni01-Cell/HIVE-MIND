@@ -1,6 +1,7 @@
 // providers/adapters/huggingface.ts
 
 // providers/adapters/huggingface.js
+// @ts-ignore
 import OpenAI from 'openai';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';

@@ -25,7 +25,7 @@ export default {
         console.log(`[Moonshot] Appel: ${baseUrl} avec modèle ${modelId}`);
         console.log(`[Moonshot] Clé API: ${keyPreview} (longueur: ${apiKey?.length || 0})`);
 
-        const body = {
+        const body: any = {
             model: modelId,
             messages: messages.map((m: any) => ({
                 role: m.role,

@@ -11,7 +11,7 @@ export default {
     async chat(messages: any, options: any) {
         const { model, apiKey, tools, temperature = 0.7 } = options;
 
-        const body = {
+        const body: any = {
             model: model || 'gpt-4o-mini',
             messages,
             temperature,

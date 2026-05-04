@@ -18,7 +18,7 @@ export class GeminiLiveAdapter {
     provider: any;
     defaultVoice: any;
 
-    constructor(apiKey, options = {}) {
+    constructor(apiKey: any, options: any = {}) {
         this.apiKey = apiKey;
         this.options = options;
         this.provider = null;

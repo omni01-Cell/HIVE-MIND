@@ -1618,21 +1618,27 @@ export class BotCore {
         const { db } = this;
         const toolName = toolCall.function.name;
 
-        const { chatId, message, authorityLevel, isSuperUser, isGlobalAdmin } = context;
+        const { chatId, message, authority } = context;
+        
+        // [AUDIT M3] Extraction robuste de l'autorité
+        const isSuperUser = authority?.isSuperUser || context.isSuperUser || false;
+        const isGlobalAdmin = authority?.isGlobalAdmin || context.isGlobalAdmin || false;
+        const level = authority?.level || context.level || 0;
+        const authorityLevel = isSuperUser ? 'SUPERUSER' : (isGlobalAdmin ? 'GLOBAL_ADMIN' : `USER (Lvl ${level})`);
 
-        console.log(`[SafeExecute] 🛡️ Exécution sécurisée demandée: ${toolName}`);
+        console.log(`[SafeExecute] 🛡️ Exécution sécurisée demandée: ${toolName} (Level: ${authorityLevel})`);
 
         try {
             // [MULTI-AGENT] Critique pour actions critiques
             const { multiAgent } = await import('../services/agentic/MultiAgent.js');
-            if (multiAgent.needsCritique(toolCall, context)) {
+            if (multiAgent.needsCritique(toolCall, { ...context, isSuperUser, isGlobalAdmin, authorityLevel })) {
                 console.log(`[MultiAgent] 🕵️ Action critique détectée: ${toolName}`);
                 const critique: any = await multiAgent.critique(toolCall, {
                     chatId,
                     sender: message.sender,
                     senderName: message.senderName,
                     isGroup: message.isGroup,
-                    authorityLevel: authorityLevel || 'MEMBRE (Standard)'
+                    authorityLevel: authorityLevel
                 });
 
                 if (!critique.approved) {
@@ -1951,6 +1957,7 @@ ${textToCompress}`
 
         const context = {
             transport: this.transport,
+            container, // Injection du container pour accès aux services (Audit M3)
             message,
             chatId: message.chatId,
             sender: message.sender,

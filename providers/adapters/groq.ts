@@ -15,7 +15,7 @@ export default {
         // Default to Llama 3.1 8B Instant (Fastest/Cheapest)
         const modelId = model || 'llama-3.1-8b-instant';
 
-        const body = {
+        const body: any = {
             model: modelId,
             messages: messages.map((m: any) => ({
                 role: m.role,
@@ -37,7 +37,7 @@ export default {
             body.tool_choice = 'auto';
         }
 
-        const headers = {
+        const headers: any = {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
         };

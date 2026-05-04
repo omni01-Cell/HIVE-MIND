@@ -54,11 +54,11 @@ export class GttsTTSAdapter {
             const ttsInstance = gtts(language);
 
             // Générer l'audio en buffer
-            const audioBuffer = await new Promise((resolve: any, reject: any) => {
-                const chunks = [];
+            const audioBuffer: any = await new Promise((resolve: any, reject: any) => {
+                const chunks: any[] = [];
                 const stream = ttsInstance.stream(text);
 
-                stream.on('data', chunk => chunks.push(chunk));
+                stream.on('data', (chunk: any) => chunks.push(chunk));
                 stream.on('end', () => resolve(Buffer.concat(chunks)));
                 stream.on('error', reject);
             });

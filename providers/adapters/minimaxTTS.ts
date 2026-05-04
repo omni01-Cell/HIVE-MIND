@@ -21,7 +21,7 @@ export class MinimaxTTSAdapter {
     config: any;
     cacheDir: any;
 
-    constructor(apiKey, config = {}) {
+    constructor(apiKey: any, config: any = {}) {
         this.name = 'minimax';
         this.apiKey = apiKey;
         this.baseUrl = 'https://api.minimax.io/v1/t2a_v2';

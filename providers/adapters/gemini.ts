@@ -112,7 +112,7 @@ export default {
         // Extraire le system prompt
         const systemInstruction = messages.find((m: any) => m.role === 'system')?.content;
 
-        const body = {
+        const body: any = {
             contents,
             generationConfig: {
                 temperature,

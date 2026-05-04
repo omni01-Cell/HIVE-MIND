@@ -19,7 +19,7 @@ export default {
             .map((m: any) => ({
                 role: m.role,
                 content: Array.isArray(m.content)
-                    ? m.content.map((c) => {
+                    ? m.content.map((c: any) => {
                         if (c.type === 'image_url') {
                             // Transformation du format OpenAI vers Anthropic
                             return {
@@ -36,7 +36,7 @@ export default {
                     : m.content
             }));
 
-        const body = {
+        const body: any = {
             model: modelId,
             max_tokens: 1000,
             system: systemMessage,

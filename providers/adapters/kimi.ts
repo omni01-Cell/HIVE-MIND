@@ -26,7 +26,7 @@ export default {
         console.log(`[Kimi] Appel: ${baseUrl} avec modèle ${modelId}`);
         console.log(`[Kimi] Clé API: ${keyPreview} (longueur: ${apiKey?.length || 0})`);
 
-        const body = {
+        const body: any = {
             model: modelId,
             messages: messages.map((m: any) => ({
                 role: m.role,
