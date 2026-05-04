@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/geminiLive.ts
 // providers/geminiLive.js
 // Provider pour Gemini 2.5 Flash Native Audio via Live API (WebSocket)
 // Supporte: Transcription vocale, Réponses HD, Détection d'émotion, Tool calling
@@ -34,7 +34,7 @@ export class GeminiLiveProvider {
     tools: any;
     onToolCall: any;
 
-    constructor(apiKey, options = {}) {
+    constructor(apiKey: any, options: any = {}) {
         this.ai = new GoogleGenAI({ apiKey });
         this.model = options.model || 'gemini-2.5-flash-native-audio-preview-12-2025';
         this.defaultVoice = options.voice || HD_VOICES.ZEPHYR;
@@ -66,11 +66,11 @@ export class GeminiLiveProvider {
      */
     async processAudio(audioBuffer: any, options: any = {}) {
         const voice = options.voice || this.defaultVoice;
-        const responseQueue = [];
+        const responseQueue: any[] = [];
         let session: any;
 
         try {
-            const config = {
+            const config: any = {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {
                     voiceConfig: {
@@ -96,8 +96,8 @@ export class GeminiLiveProvider {
                 config,
                 callbacks: {
                     onopen: () => console.log('[GeminiLive] Session ouverte'),
-                    onmessage: (message) => responseQueue.push(message),
-                    onerror: (e) => console.error('[GeminiLive] Erreur:', e.message),
+                    onmessage: (message: any) => responseQueue.push(message),
+                    onerror: (e: any) => console.error('[GeminiLive] Erreur:', e.message),
                     onclose: () => console.log('[GeminiLive] Session fermée')
                 }
             });
@@ -131,11 +131,11 @@ export class GeminiLiveProvider {
      */
     async textToSpeech(text: any, options: any = {}) {
         const voice = options.voice || this.defaultVoice;
-        const responseQueue = [];
+        const responseQueue: any[] = [];
         let session: any;
 
         try {
-            const config = {
+            const config: any = {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {
                     voiceConfig: {
@@ -150,8 +150,8 @@ export class GeminiLiveProvider {
                 model: this.model,
                 config,
                 callbacks: {
-                    onmessage: (message) => responseQueue.push(message),
-                    onerror: (e) => console.error('[GeminiLive] TTS Error:', e.message)
+                    onmessage: (message: any) => responseQueue.push(message),
+                    onerror: (e: any) => console.error('[GeminiLive] TTS Error:', e.message)
                 }
             });
 
@@ -161,7 +161,7 @@ export class GeminiLiveProvider {
             });
 
             // Attendre l'audio
-            const response = await this._waitForResponse(responseQueue, session);
+            const response: any = await this._waitForResponse(responseQueue, session);
 
             session.close();
 
@@ -289,7 +289,7 @@ export class GeminiLiveProvider {
 /**
  * Factory function pour créer le provider
  */
-export function createGeminiLiveProvider(credentials, options = {}) {
+export function createGeminiLiveProvider(credentials: any, options: any = {}) {
     const apiKey = credentials.familles_ia?.gemini;
     if (!apiKey) {
         throw new Error('[GeminiLive] Clé API Gemini manquante');

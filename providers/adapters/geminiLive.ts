@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/geminiLive.ts
 // providers/adapters/geminiLive.js
 // Adapter pour Gemini 2.5 Flash Native Audio (Live API)
 // PRIORITY 0: Provider principal pour TTS haute qualité

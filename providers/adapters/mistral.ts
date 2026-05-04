@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/mistral.ts
 // providers/adapters/mistral.js
 // Adaptateur pour Mistral AI
 

@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/geminiTTS.ts
 // providers/adapters/geminiTTS.js
 // Gemini 2.5 Flash TTS Adapter
 // Features: Natural prompt control, 30 voices, <300ms latency, 80+ locales

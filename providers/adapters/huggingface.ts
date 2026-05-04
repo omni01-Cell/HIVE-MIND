@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/huggingface.ts
 
 // providers/adapters/huggingface.js
 import OpenAI from 'openai';

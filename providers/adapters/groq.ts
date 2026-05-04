@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/groq.ts
 
 // providers/adapters/groq.js
 // Adaptateur pour Groq (LPU Inference Engine)

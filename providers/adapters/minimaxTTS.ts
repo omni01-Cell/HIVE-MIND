@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/minimaxTTS.ts
 // providers/adapters/minimaxTTS.js
 // Minimax TTS Adapter - Voix HIVE-MIND (Primary)
 // Documentation: https://platform.minimax.io/docs/

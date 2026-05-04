@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/anthropic.ts
 // providers/adapters/anthropic.js
 // Adaptateur pour Anthropic Claude
 

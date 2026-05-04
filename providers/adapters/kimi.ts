@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/kimi.ts
 // providers/adapters/kimi.js
 // Adaptateur pour Kimi K2 Turbo (API Kimi Code)
 // Compatible avec les clés sk-kimi-... via api.kimi.com/coding/v1

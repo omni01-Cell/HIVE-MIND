@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/nvidia.ts
 // providers/adapters/nvidia.js
 // Adaptateur pour l'API NVIDIA NIM (integrate.api.nvidia.com)
 // Supporte: moonshotai/kimi-k2.5, z-ai/glm-5.1, minimaxai/minimax-m2.7
@@ -65,7 +65,7 @@ export default {
         const requestStart = Date.now();
         console.log(`[NVIDIA] 📡 Appel ${model || 'default'} -> ${invokeUrl}`);
         console.log(`[NVIDIA] 📦 Payload size: ${JSON.stringify(body).length} chars`);
-        if (tools?.length) console.log(`[NVIDIA] 🛠️ Tools detected: ${tools.map((t) => t.function?.name).join(', ')}`);
+        if (tools?.length) console.log(`[NVIDIA] 🛠️ Tools detected: ${tools.map((t: any) => t.function?.name).join(', ')}`);
         console.log(`[NVIDIA] 🔑 API Key (prefix): ${apiKey?.substring(0, 10)}...`);
 
         try {

@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/openai.ts
 // providers/adapters/openai.js
 // Adaptateur pour OpenAI
 

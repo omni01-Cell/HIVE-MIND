@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/openrouter.ts
 // providers/adapters/openrouter.ts
 // Adaptateur pour OpenRouter (https://openrouter.ai/api/v1)
 // API OpenAI-compatible avec normalisation tool calling cross-provider.

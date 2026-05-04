@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/gemini.ts
 // providers/adapters/gemini.js
 // Adaptateur pour Google Gemini
 

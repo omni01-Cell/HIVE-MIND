@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/github.ts
 
 // providers/adapters/github.js
 // Adaptateur pour GitHub Models (OpenAI Compatible)

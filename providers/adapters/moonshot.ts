@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/moonshot.ts
 // providers/adapters/moonshot.js
 // Adaptateur pour Moonshot AI (API standard)
 // Compatible avec les clés sk-... via api.moonshot.cn

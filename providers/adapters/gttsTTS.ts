@@ -1,4 +1,4 @@
-// @ts-nocheck
+// providers/adapters/gttsTTS.ts
 // providers/adapters/gttsTTS.js
 // Google TTS (Free Tier) Adapter
 // Uses node-gtts - Last resort fallback
