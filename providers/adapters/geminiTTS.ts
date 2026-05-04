@@ -14,6 +14,20 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function buildDirectorNotes(options: any = {}) {
+    const notes = [
+        options.style,
+        options.tone ? `Tone: ${options.tone}` : null,
+        options.accent ? `Accent: ${options.accent}` : null,
+        options.pace ? `Pace: ${options.pace}` : null,
+        options.language ? `Language or dialect: ${options.language}` : null,
+        options.speaker_1 ? `Speaker 1: ${options.speaker_1}` : null,
+        options.speaker_2 ? `Speaker 2: ${options.speaker_2}` : null
+    ].filter(Boolean);
+
+    return notes.length > 0 ? notes.join('. ') : '';
+}
+
 export class GeminiTTSAdapter {
     name: any;
     apiKey: any;
@@ -34,7 +48,7 @@ export class GeminiTTSAdapter {
 
         // Voix disponibles (30 voix officielles)
         this.availableVoices = [
-            'Aoede', 'Zephyr', 'Callirhoe', 'Autonoe', 'Despina', 'Erinome', 'Leda', 'Kore', 'Vindemiatrix',
+            'Aoede', 'Zephyr', 'Callirrhoe', 'Autonoe', 'Despina', 'Erinome', 'Leda', 'Kore', 'Vindemiatrix',
             'Charon', 'Puck', 'Fenrir', 'Orus', 'Enceladus', 'Iapetus', 'Umbriel', 'Zubenelgenubi', 'Achernar',
             'Algieba', 'Algenib', 'Rasalgethi', 'Laomedeia', 'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima',
             'Achird', 'Sadachbia', 'Sadaltager', 'Sulafar'
@@ -71,7 +85,8 @@ export class GeminiTTSAdapter {
 
         // Construction du contenu avec Director's Notes (style)
         // Les instructions de haut niveau sont placées entre parenthèses au début selon la doc
-        const finalText = options.style ? `(${options.style}) ${text}` : text;
+        const directorNotes = buildDirectorNotes(options);
+        const finalText = directorNotes ? `(${directorNotes}) ${text}` : text;
 
         const body = {
             contents: [{ 
@@ -91,7 +106,7 @@ export class GeminiTTSAdapter {
         };
 
         console.log(`[GeminiTTS] Synthèse: "${text.substring(0, 50)}..." (voice: ${voice}, model: ${model})`);
-        if (options.style) console.log(`[GeminiTTS] 🎬 Style: ${options.style}`);
+        if (directorNotes) console.log(`[GeminiTTS] 🎬 Director notes: ${directorNotes}`);
 
         const response = await fetch(url, {
             method: 'POST',

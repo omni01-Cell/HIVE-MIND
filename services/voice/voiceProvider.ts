@@ -16,6 +16,13 @@ import { GeminiLiveAdapter } from '../../providers/adapters/geminiLive.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function stripInlineAudioTags(text: string) {
+    return String(text || '')
+        .replace(/\[[^\]\n]{1,80}\]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 /**
  * Charge les credentials
  */
@@ -197,6 +204,101 @@ export class VoiceProvider {
             console.error(`[VoiceProvider] ❌ Erreur voix "${voiceName}":`, error.message);
             // Fallback sur TTS standard (qui essaiera minimax puis gtts)
             return this.textToSpeech(text, options);
+        }
+    }
+
+    /**
+     * TTS dédié au plugin public: Gemini 3.1 Flash TTS en priorité, GTTS en fallback strict.
+     * Les options avancées Gemini ne sont jamais envoyées à GTTS.
+     */
+    async textToSpeechGeminiFirst(text: any, options: any = {}) {
+        if (!text || String(text).trim().length === 0) {
+            console.warn('[VoiceProvider] Texte vide, TTS plugin ignoré');
+            return null;
+        }
+
+        const cleanText = String(text).trim();
+        const geminiAdapter = this.adapters.get('gemini');
+        const gttsAdapter = this.adapters.get('gtts');
+        const geminiModel = options.model || 'gemini-3.1-flash-tts-preview';
+
+        if (geminiAdapter?.isAvailable()) {
+            if (!this.quotaManager || await this.quotaManager.isModelAvailable(geminiModel)) {
+                const availableVoices = geminiAdapter.getAvailableVoices();
+                const voice = availableVoices.includes(options.voice) ? options.voice : 'Aoede';
+
+                try {
+                    const result = await geminiAdapter.synthesize(cleanText, {
+                        model: geminiModel,
+                        voice,
+                        style: options.style,
+                        tone: options.tone,
+                        accent: options.accent,
+                        pace: options.pace,
+                        language: options.language,
+                        speaker_1: options.speaker_1,
+                        speaker_2: options.speaker_2
+                    });
+
+                    if (this.quotaManager) {
+                        await this.quotaManager.recordUsage('gemini', geminiModel);
+                    }
+
+                    console.log(`[VoiceProvider] ✅ Plugin TTS via gemini/${geminiModel}`);
+                    return {
+                        ...result,
+                        provider: 'gemini',
+                        model: geminiModel,
+                        voice,
+                        fallbackUsed: false
+                    };
+                } catch (error: any) {
+                    console.error(`[VoiceProvider] ❌ Plugin TTS Gemini échoué:`, error.message);
+                }
+            } else {
+                console.log(`[VoiceProvider] gemini/${geminiModel} quota épuisé, fallback GTTS`);
+            }
+        }
+
+        return this.textToSpeechGttsOnly(cleanText, {
+            language: options.fallback_language || options.language || 'fr',
+            fallbackUsed: true
+        });
+    }
+
+    /**
+     * GTTS simple uniquement: nettoie les tags Gemini et ignore voix/style/director notes.
+     */
+    async textToSpeechGttsOnly(text: any, options: any = {}) {
+        const gttsAdapter = this.adapters.get('gtts');
+        const cleanText = String(text || '').trim();
+
+        if (!cleanText) {
+            console.warn('[VoiceProvider] Texte vide, GTTS ignoré');
+            return null;
+        }
+
+        if (!gttsAdapter?.isAvailable()) {
+            console.error('[VoiceProvider] ❌ GTTS indisponible');
+            return null;
+        }
+
+        try {
+            const fallbackText = stripInlineAudioTags(cleanText);
+            const result = await gttsAdapter.synthesize(fallbackText || cleanText, {
+                language: options.language || 'fr'
+            });
+
+            console.log('[VoiceProvider] ✅ Plugin TTS via gtts');
+            return {
+                ...result,
+                provider: 'gtts',
+                model: 'gtts',
+                fallbackUsed: options.fallbackUsed ?? false
+            };
+        } catch (error: any) {
+            console.error(`[VoiceProvider] ❌ Plugin TTS GTTS échoué:`, error.message);
+            return null;
         }
     }
 

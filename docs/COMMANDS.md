@@ -79,6 +79,26 @@ Services cognitifs pour enrichir l'expérience.
 
 ---
 
+## 🔊 Text-to-Speech (TTS)
+Le plugin `text_to_speech` convertit du texte en audio. Il peut être déclenché par l'IA en langage naturel ou directement par commande texte.
+
+### Commandes Textuelles
+| Commande | Format | Description |
+| :--- | :--- | :--- |
+| `.tts` | `.tts [laughs] Bonjour tout le monde` | Utilise Gemini 3.1 Flash TTS en priorité, puis GTTS si Gemini échoue/quota épuisé. |
+| `.gtts` | `.gtts Bonjour tout le monde` | Force GTTS simple uniquement. Les tags/voix/styles Gemini sont ignorés/nettoyés. |
+
+### Options IA
+Quand l'outil est appelé par l'IA, il peut aussi choisir :
+- `voice` : une des 30 voix Gemini (`Aoede`, `Callirrhoe`, `Charon`, `Kore`, etc.).
+- `style_notes`, `tone`, `accent`, `pace`, `language`, `speaker_1`, `speaker_2` : contrôles Gemini Director Chair.
+- `provider` : `auto`/`gemini` pour Gemini puis GTTS fallback, ou `gtts` pour GTTS simple.
+- `send_as` : `voice_note` pour un vocal WhatsApp, ou `audio` pour envoyer directement un média audio standard.
+
+En fallback GTTS, le plugin ne transmet pas les paramètres Gemini avancés. Il nettoie les tags inline (`[laughs]`, `[slow]`, etc.) et garde seulement le texte + la langue.
+
+---
+
 ## 📝 Notes Techniques
 - **Préfixe IA** : Aucun. Parlez naturellement "Erina, ..." ou mentionnez `@Erina`.
 - **Préfixe Commande** : `.` (point) pour les commandes techniques (`.shutdown`).

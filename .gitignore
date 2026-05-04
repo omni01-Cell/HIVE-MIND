@@ -3,6 +3,7 @@ node_modules/
 
 # Environment
 .env
+git_credential.json
 
 # Session & Auth
 auth_info/

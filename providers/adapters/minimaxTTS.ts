@@ -78,7 +78,7 @@ export class MinimaxTTSAdapter {
         const response = await fetch(this.baseUrl, {
             method: 'POST',
             headers: {
-                'Authorization': this.apiKey,
+                'Authorization': `Bearer ${this.apiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)

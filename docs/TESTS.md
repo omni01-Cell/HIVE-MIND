@@ -76,6 +76,20 @@
 ## 4. Plugin text_to_speech
 ### Test 4.1 - Déclenchement manuel
 **Action :** "Erina, dis bonjour avec ta voix" -> Utilise l'outil `text_to_speech`.
+**Vérifier :**
+- [ ] Audio reçu en note vocale si `send_as=voice_note`.
+- [ ] Logs indiquent le provider utilisé (`gemini`, fallback éventuel).
+
+### Test 4.2 - Commandes texte directes
+**Actions :**
+- `.tts Bonjour, ceci est un test`
+- `.tts [laughs] Test avec émotion`
+- `.gtts Test GTTS simple`
+**Vérifier :**
+- [ ] Chaque commande déclenche `text_to_speech`.
+- [ ] `.tts` tente Gemini avant GTTS.
+- [ ] `.gtts` force GTTS sans voix/style Gemini.
+- [ ] Le résultat est envoyé en `audio/ogg; codecs=opus` pour WhatsApp/PTT.
 
 ## 5. Cas d'erreur Audio
 ### Test 5.1 - Tous providers HS

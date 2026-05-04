@@ -826,10 +826,14 @@ class BaileysTransport extends EventEmitter {
     /**
      * Envoie une note vocale (PTT)
      */
-    async sendVoice(chatId: any, audioPath: any, options: any = {}) {
+    async sendVoice(chatId: any, audio: any, options: any = {}) {
+        const audioSource = Buffer.isBuffer(audio)
+            ? audio
+            : (typeof audio === 'string' ? { url: audio } : audio);
+
         const message = {
-            audio: { url: audioPath },
-            mimetype: 'audio/mp4',
+            audio: audioSource,
+            mimetype: options.mimetype || 'audio/ogg; codecs=opus',
             ptt: true // Affiche comme une note vocale
         };
 
