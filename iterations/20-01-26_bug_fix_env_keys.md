@@ -27,7 +27,7 @@ L'erreur suivante apparaissait :
 
 ### Contexte
 HIVE-MIND utilise un système de configuration en deux couches :
-1. **`credentials.json`** : Contient des placeholders comme `"VOTRE_CLE_GEMINI"`
+1. **`credentials.json`** : Contient des placeholders comme `"${GEMINI_KEY}"`
 2. **Variables d'environnement (`.env`)** : Contient les vraies clés API
 
 Le `ServiceContainer.js` (lignes 88-89) résout correctement ces placeholders :
@@ -44,12 +44,12 @@ Le script `admin-cli.js` instanciait directement `EmbeddingsService` **sans rés
 // ❌ CODE BUGUÉ (AVANT)
 const credentials = JSON.parse(readFileSync(...));
 const embeddings = new EmbeddingsService({
-    geminiKey: credentials.familles_ia?.gemini,  // "VOTRE_CLE_GEMINI" (literal)
-    openaiKey: credentials.familles_ia?.openai   // "VOTRE_CLE_OPENAI" (literal)
+    geminiKey: credentials.familles_ia?.gemini,  // "${GEMINI_KEY}" (literal)
+    openaiKey: credentials.familles_ia?.openai   // "${OPENAI_KEY}" (literal)
 });
 ```
 
-Résultat : L'API Gemini recevait la chaîne `"VOTRE_CLE_GEMINI"` comme clé au lieu de la vraie valeur depuis `.env`.
+Résultat : L'API Gemini recevait la chaîne `"${GEMINI_KEY}"` comme clé au lieu de la vraie valeur depuis `.env`.
 
 ---
 

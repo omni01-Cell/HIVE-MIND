@@ -32,7 +32,7 @@
 #### `config/credentials.json`
 ```diff
 - "google_search": {
--     "apiKey": "VOTRE_CLE_GOOGLE_SEARCH_API",
+-     "apiKey": "${GOOGLE_SEARCH_API_KEY}",
 -     "cseId": "VOTRE_SEARCH_ENGINE_ID"
 - }
 ```
@@ -49,7 +49,7 @@
 ```diff
 - # =================== SERVICES EXTERNES ===================
 - # Google Custom Search (optionnel, pour web_search)
-- VOTRE_CLE_GOOGLE_SEARCH_API=your-google-api-key
+- ${GOOGLE_SEARCH_API_KEY}=your-google-api-key
 - VOTRE_SEARCH_ENGINE_ID=your-custom-search-engine-id
 ```
 

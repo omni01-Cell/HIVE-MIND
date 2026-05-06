@@ -7,6 +7,7 @@ import WebSocket from 'ws';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { convertOggToPcm } from './audioConverter.js';
+import { envResolver } from '../envResolver.js';
 
 /**
  * GeminiLiveProvider
@@ -27,7 +28,7 @@ export class GeminiLiveProvider {
     transcribedText: any;
 
     constructor(config: any = {}) {
-        this.apiKey = config.apiKey || process.env.GEMINI_API_KEY;
+        this.apiKey = config.apiKey || envResolver.resolveProviderKey('gemini') || process.env.GEMINI_API_KEY;
         this.model = config.model || 'gemini-3.1-flash-live-preview';
         this.ws = null;
         this.isConnected = false;
@@ -45,6 +46,11 @@ export class GeminiLiveProvider {
      */
     async connect(sessionConfig: any = {}): Promise<void> {
         return new Promise((resolve, reject) => {
+            if (!this.apiKey) {
+                reject(new Error('Gemini Live API key missing: expected GEMINI_KEY or GEMINI_KEY_N'));
+                return;
+            }
+
             const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
 
             console.log('[GeminiLive] 🔌 Connexion au Live API...');

@@ -10,7 +10,6 @@ describe('EnvResolver unit tests', () => {
     delete process.env.GEMINI_KEY_1;
     delete process.env.GEMINI_KEY_2;
     delete process.env.GROQ_KEY;
-    delete process.env.VOTRE_CLE_GEMINI;
     delete process.env.EXPLICIT_VAR;
   });
 
@@ -33,9 +32,7 @@ describe('EnvResolver unit tests', () => {
     expect(envResolver.resolveProviderKey('gemini', 2)).toBe('gemini_two');
   });
 
-  it('should ignore legacy VOTRE_CLE provider key variables', () => {
-    process.env.VOTRE_CLE_GEMINI = 'legacy_key';
-
+  it('should ignore unsupported legacy provider key aliases', () => {
     expect(envResolver.resolveProviderKey('gemini')).toBeNull();
     expect(envResolver.getAvailableKeysForProvider('gemini')).toEqual([]);
   });

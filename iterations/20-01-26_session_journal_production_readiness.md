@@ -66,7 +66,7 @@ const modelsToTry = familyConfig?.modeles
 ```
 
 **Ma pensée immédiate :**
-> "La clé affiche `VOTRE...` au lieu d'une vraie clé. C'est un problème de résolution de variables d'environnement. Le système lit le placeholder littéral au lieu de `process.env.VOTRE_CLE_GEMINI`."
+> "La clé affiche `VOTRE...` au lieu d'une vraie clé. C'est un problème de résolution de variables d'environnement. Le système lit le placeholder littéral au lieu de `process.env.${GEMINI_KEY}`."
 
 ### 2.2 Investigation Systématique
 
@@ -88,8 +88,8 @@ grep -r "credentials.json" --include="*.js"
 ```javascript
 // ❌ AVANT
 const embeddings = new EmbeddingsService({
-    geminiKey: credentials.familles_ia?.gemini,  // "VOTRE_CLE_GEMINI"
-    openaiKey: credentials.familles_ia?.openai   // "VOTRE_CLE_OPENAI"
+    geminiKey: credentials.familles_ia?.gemini,  // "${GEMINI_KEY}"
+    openaiKey: credentials.familles_ia?.openai   // "${OPENAI_KEY}"
 });
 ```
 
@@ -306,7 +306,7 @@ Si vous avez un fallback, assurez-vous qu'il soit **fonctionnel ET cohérent** a
 ### 4. Les Petits Détails Comptent
 - `gemini-embedding-1.0` vs `001` : Bloque toute la prod
 - `768` vs `1024` : Incompatibilité DB
-- `VOTRE_CLE` vs vraie clé : Service inutilisable
+- `legacy placeholder` vs vraie clé : Service inutilisable
 
 ### 5. Audit Systématique > Confiance Aveugle
 Même si un système "fonctionne", un audit révèle souvent des bugs latents qui auraient explosé en production.

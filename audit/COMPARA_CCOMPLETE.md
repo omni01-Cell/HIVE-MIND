@@ -63,11 +63,11 @@ function resolveEnvValue(value) {
 if (key && key.startsWith('VOTRE_')) {
     if (process.env[key]) return process.env[key];
 }
-return key; // ⚠️ Peut retourner "VOTRE_CLE_OPENAI"
+return key; // ⚠️ Peut retourner "${OPENAI_KEY}"
 ```
 
 **Symptômes**:
-- Certaines APIs reçoivent le texte "VOTRE_CLE_OPENAI" au lieu de la vraie clé
+- Certaines APIs reçoivent le texte "${OPENAI_KEY}" au lieu de la vraie clé
 - Comportement erratique selon le chemin de résolution
 - Difficile à débugguer
 
@@ -84,7 +84,7 @@ export class EnvResolver {
     /**
      * Résout une valeur depuis .env
      * @param {string} varName - Nom de la variable (ex: GEMINI_KEY)
-     * @param {string} placeholder - Placeholder (ex: VOTRE_CLE_GEMINI)
+     * @param {string} placeholder - Placeholder (ex: ${GEMINI_KEY})
      * @returns {string|null} - Clé résolue ou null
      */
     resolve(varName, placeholder = null) {

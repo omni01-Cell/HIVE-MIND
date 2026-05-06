@@ -135,7 +135,7 @@ import { envResolver } from './services/envResolver.js';
 
 // Diagnostic des variables d'env
 envResolver.diagnose();
-// Output: [EnvResolver] Variable non résolue: VOTRE_CLE_API
+// Output: [EnvResolver] Variable non résolue: ${API_KEY}
 ```
 
 #### 2. **ToolCallExtractor - Centralisé**

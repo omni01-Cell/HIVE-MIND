@@ -17,8 +17,8 @@ try {
     const credentials = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'credentials.json'), 'utf-8'));
 
     // Résoudre les variables d'environnement
-    const geminiKey = resolveApiKey(credentials.familles_ia?.gemini);
-    const openaiKey = resolveApiKey(credentials.familles_ia?.openai);
+    const geminiKey = resolveApiKey(credentials.familles_ia?.gemini, 'gemini');
+    const openaiKey = resolveApiKey(credentials.familles_ia?.openai, 'openai');
 
     embeddings = new EmbeddingsService({
         geminiKey,

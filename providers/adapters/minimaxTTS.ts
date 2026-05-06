@@ -38,7 +38,7 @@ export class MinimaxTTSAdapter {
      * Vérifie si l'adapter est disponible
      */
     isAvailable() {
-        return this.apiKey && !this.apiKey.includes('VOTRE_CLE');
+        return typeof this.apiKey === 'string' && this.apiKey.trim().length > 0 && this.apiKey.trim().toLowerCase() !== 'no_key';
     }
 
     /**

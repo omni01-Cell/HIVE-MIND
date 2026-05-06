@@ -89,8 +89,8 @@ export class ServiceContainer {
         this.register('moderation', moderationService);
 
         // 3. Service Embeddings
-        const geminiKey = resolveApiKey(credentials.familles_ia?.gemini || '');
-        const openaiKey = resolveApiKey(credentials.familles_ia?.openai || '');
+        const geminiKey = resolveApiKey(credentials.familles_ia?.gemini || '', 'gemini');
+        const openaiKey = resolveApiKey(credentials.familles_ia?.openai || '', 'openai');
 
         const primaryEmbedding = modelsConfig.reglages_generaux.embeddings.primary;
 
@@ -119,14 +119,14 @@ export class ServiceContainer {
 
         // Legacy Voice
         const { MinimaxVoiceService } = await import('../services/voice/minimax.js');
-        const minimaxKey = resolveApiKey(credentials.familles_ia?.minimax || '');
+        const minimaxKey = resolveApiKey(credentials.familles_ia?.minimax || '', 'minimax');
         const voiceConfig = modelsConfig.voice_provider?.minimax_config || {};
         const voiceService = new MinimaxVoiceService(minimaxKey || '', voiceConfig);
         this.register('voiceService', voiceService);
 
         // Transcription
         const { GroqTranscriptionService } = await import('../services/transcription/groqSTT.js');
-        const groqKey = resolveApiKey(credentials.familles_ia?.groq || '');
+        const groqKey = resolveApiKey(credentials.familles_ia?.groq || '', 'groq');
         const sttConfig = modelsConfig.voice_provider?.stt_models?.[0] || {};
         const sttService = new GroqTranscriptionService(groqKey || '', sttConfig);
         this.register('transcriptionService', sttService);

@@ -145,7 +145,7 @@ export const config: HIVEConfig = {
     groq: process.env.GROQ_KEY || resolveEnvValue(credentials.familles_ia?.groq),
     mistral: process.env.MISTRAL_KEY || resolveEnvValue(credentials.familles_ia?.mistral),
     minimax: process.env.MINIMAX_KEY || resolveEnvValue(credentials.familles_ia?.minimax),
-    nvidia: process.env.VOTRE_CLE_NVIDIA || resolveEnvValue(credentials.familles_ia?.nvidia)
+    nvidia: process.env.NVIDIA_KEY || resolveEnvValue(credentials.familles_ia?.nvidia)
   },
 
   models: modelsConfig,

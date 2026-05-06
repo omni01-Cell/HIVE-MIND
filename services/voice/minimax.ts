@@ -41,7 +41,7 @@ export class MinimaxVoiceService {
      * @returns {Promise<string>} Chemin du fichier OGG généré
      */
     async generateAudio(text: any, voiceId: any = null) {
-        if (!this.apiKey || this.apiKey.includes('VOTRE_CLE')) {
+        if (typeof this.apiKey !== 'string' || this.apiKey.trim().length === 0 || this.apiKey.trim().toLowerCase() === 'no_key') {
             throw new Error('Clé API Minimax manquante ou invalide');
         }
 

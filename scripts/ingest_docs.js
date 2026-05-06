@@ -56,7 +56,7 @@ async function init() {
     function resolveKey(keyName, jsonValue) {
         if (!jsonValue || jsonValue.startsWith('VOTRE_')) {
             if (jsonValue && process.env[jsonValue]) return process.env[jsonValue];
-            if (keyName === 'gemini') return process.env.GEMINI_API_KEY || process.env.VOTRE_CLE_GEMINI;
+            if (keyName === 'gemini') return process.env.GEMINI_KEY || process.env.GEMINI_KEY_1 || process.env.GEMINI_API_KEY;
             if (keyName === 'openai') return process.env.OPENAI_API_KEY;
         }
         return jsonValue;

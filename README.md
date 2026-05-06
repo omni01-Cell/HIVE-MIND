@@ -315,7 +315,7 @@ HIVE-MIND supports **multi-key rotation** — up to 7 keys per provider for zero
 
 ```env
 # Primary key (fallback)
-VOTRE_CLE_GEMINI=your-gemini-api-key
+${GEMINI_KEY}=your-gemini-api-key
 
 # Rotation keys (optional, improves quota resilience)
 GEMINI_KEY_1=your-first-key

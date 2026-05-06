@@ -2,7 +2,7 @@ import Groq from 'groq-sdk';
 import 'dotenv/config';
 
 async function test() {
-    const groq = new Groq({ apiKey: process.env.VOTRE_CLE_GROQ || '' });
+    const groq = new Groq({ apiKey: process.env.${GROQ_KEY} || '' });
     try {
         const result = await groq.chat.completions.create({
             messages: [{ role: 'user', content: 'Hi' }],

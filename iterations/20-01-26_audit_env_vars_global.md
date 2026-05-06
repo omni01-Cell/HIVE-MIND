@@ -59,7 +59,7 @@ const service = new Service({ geminiKey, openaiKey });
 ### Fichiers Modifiés
 
 #### 1. `scripts/admin-cli.js`
-**Problème:** EmbeddingsService recevait `"VOTRE_CLE_GEMINI"` littéral  
+**Problème:** EmbeddingsService recevait `"${GEMINI_KEY}"` littéral  
 **Solution:** Ajout résolution env vars avant instantiation  
 **Impact:** Le CLI `tools:index` fonctionne maintenant correctement
 

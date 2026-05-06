@@ -86,7 +86,7 @@ export class EnvResolver {
 
     /**
      * Résout une clé provider strictement depuis PROVIDER_KEY / PROVIDER_KEY_N.
-     * N'utilise pas credentials.json ni les anciens alias VOTRE_CLE_*.
+     * N'utilise pas credentials.json ni les anciens alias legacy.
      */
     resolveProviderKey(providerName: any, keyIndex: any = null) {
         const prefix = `${String(providerName).toUpperCase()}_KEY`;
@@ -138,8 +138,7 @@ export class EnvResolver {
      * @private
      */
     _isPlaceholder(value: any) {
-        return value.startsWith('VOTRE_') || 
-               value.startsWith('${') || 
+        return value.startsWith('${') || 
                value.startsWith('YOUR_') ||
                value === 'undefined' ||
                value === 'null';
