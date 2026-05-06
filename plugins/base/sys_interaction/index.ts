@@ -1,3 +1,5 @@
+import path from 'path';
+
 // plugins/sys_interaction/index.js
 export default {
     name: 'sys_interaction',
@@ -247,10 +249,18 @@ export default {
                     const fileTargetChannel = args.target_channel || context.sourceChannel;
                     const fileTargetChatId = args.target_chat_id || chatId;
 
+                    const ext = path.extname(filePath).toLowerCase();
+                    let mediaType = 'document';
+                    if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) mediaType = 'image';
+                    else if (['.mp4', '.avi', '.mov', '.mkv'].includes(ext)) mediaType = 'video';
+                    else if (['.mp3', '.ogg', '.wav', '.m4a'].includes(ext)) mediaType = 'audio';
+
+                    const fileName = path.basename(filePath);
+
                     // Universal support via sendMedia
                     // The transport will adapt the send based on its own capabilities
-                    await transport.sendMedia(fileTargetChatId, filePath, { caption }, fileTargetChannel);
-                    return { success: true, message: `[ACTION] File sent on ${fileTargetChannel} to chat ${fileTargetChatId}.` };
+                    await transport.sendMedia(fileTargetChatId, filePath, { caption, type: mediaType, fileName }, fileTargetChannel);
+                    return { success: true, message: `[ACTION] File sent on ${fileTargetChannel} to chat ${fileTargetChatId} as ${mediaType}.` };
                 }
 
                 default:
