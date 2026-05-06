@@ -61,7 +61,8 @@ export class GeminiLiveProvider {
                 console.log('[GeminiLive] ✅ WebSocket connecté');
                 this.isConnected = true;
                 this._sendSetup(sessionConfig);
-                // Ne PAS resolve ici — on attend setupComplete
+                setupReceived = true;
+                resolve();
             });
 
             this.ws.on('message', (data: any) => {
@@ -73,11 +74,10 @@ export class GeminiLiveProvider {
                     const keys = Object.keys(message);
                     console.log('[GeminiLive] 📨 Server message keys:', keys.join(', '));
 
-                    // Intercept setupComplete to resolve connect()
+                    // Intercept setupComplete (if still sent by server)
                     if (message.setupComplete && !setupReceived) {
                         setupReceived = true;
                         console.log('[GeminiLive] ✓ Setup confirmed — session prête');
-                        resolve();
                         return;
                     }
 
@@ -127,17 +127,15 @@ export class GeminiLiveProvider {
      * Envoyer la configuration de session (camelCase requis par l'API Gemini)
      */
     _sendSetup(config: any) {
-        // Official API format: wrapper key is 'setup'
+        // Official API format: wrapper key is 'config'
         const configMessage: any = {
-            setup: {
+            config: {
                 model: `models/${this.model}`,
-                generationConfig: {
-                    responseModalities: ['AUDIO'],
-                    speechConfig: {
-                        voiceConfig: {
-                            prebuiltVoiceConfig: {
-                                voiceName: config.voice || 'Aoede'
-                            }
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: {
+                            voiceName: config.voice || 'Aoede'
                         }
                     }
                 }
@@ -146,16 +144,16 @@ export class GeminiLiveProvider {
 
         console.log(`[GeminiLive] 📋 Setup: model=${this.model}`);
 
-        // System instruction (inside setup per API spec)
+        // System instruction
         if (config.systemPrompt) {
-            configMessage.setup.systemInstruction = {
+            configMessage.config.systemInstruction = {
                 parts: [{ text: config.systemPrompt }]
             };
         }
 
         // Tools (function declarations)
         if (config.tools && config.tools.length > 0) {
-            configMessage.setup.tools = [{
+            configMessage.config.tools = [{
                 functionDeclarations: config.tools.map((tool: any) => ({
                     name: tool.function.name,
                     description: tool.function.description,
@@ -291,7 +289,7 @@ export class GeminiLiveProvider {
                 this.audioQueue.push(Buffer.from(part.inlineData.data, 'base64'));
             }
 
-            // Texte (transcription de la réponse audio)
+            // Texte (transcription de la réponse audio - fallback)
             if (part.text) {
                 console.log('[GeminiLive] 📝 Texte:', part.text.substring(0, 80), '...');
                 this.transcribedText = (this.transcribedText || '') + part.text;
@@ -301,6 +299,15 @@ export class GeminiLiveProvider {
             if (part.functionCall) {
                 await this._handleFunctionCall(part.functionCall);
             }
+        }
+
+        // Receiving Text Transcriptions (New API format)
+        if (content.inputTranscription) {
+            console.log('[GeminiLive] 👤 User Transcription:', content.inputTranscription.text);
+        }
+        if (content.outputTranscription) {
+            console.log('[GeminiLive] 🤖 Gemini Transcription:', content.outputTranscription.text);
+            this.transcribedText = (this.transcribedText || '') + content.outputTranscription.text;
         }
 
         // Si turn complete, résoudre la promesse
