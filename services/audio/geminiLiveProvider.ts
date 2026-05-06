@@ -206,6 +206,10 @@ export class GeminiLiveProvider {
             pcmBuffer = audioBuffer;
         }
 
+        // Append 2 seconds of silence (64000 bytes) to force VAD (Voice Activity Detection) to trigger turn completion naturally
+        const silence = Buffer.alloc(64000);
+        pcmBuffer = Buffer.concat([pcmBuffer, silence]);
+
         // Send audio in chunks of 4096 bytes (256ms of 16kHz 16-bit PCM)
         const chunkSize = 4096;
         for (let i = 0; i < pcmBuffer.length; i += chunkSize) {
@@ -218,20 +222,11 @@ export class GeminiLiveProvider {
                     }
                 }
             });
-            // Petit délai artificiel pour simuler le streaming si nécessaire (souvent ignoré par l'API qui traite aussi vite que possible)
+            // Petit délai artificiel
             await new Promise(resolve => setTimeout(resolve, 10));
         }
 
-        console.log(`[GeminiLive] 🎤 Audio envoyé en chunks (${pcmBuffer.length} bytes PCM)`);
-
-        // For pre-recorded audio (non-streaming), signal end of user turn
-        // so the server knows to start generating a response.
-        this._send({
-            clientContent: {
-                turnComplete: true
-            }
-        });
-        console.log('[GeminiLive] ✅ turnComplete signal sent');
+        console.log(`[GeminiLive] 🎤 Audio envoyé en chunks avec silence VAD (${pcmBuffer.length} bytes PCM)`);
     }
 
     /**

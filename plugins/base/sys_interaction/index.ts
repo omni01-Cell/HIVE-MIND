@@ -249,17 +249,30 @@ export default {
                     const fileTargetChannel = args.target_channel || context.sourceChannel;
                     const fileTargetChatId = args.target_chat_id || chatId;
 
-                    const ext = path.extname(filePath).toLowerCase();
+                    const isUrl = filePath.startsWith('http://') || filePath.startsWith('https://');
+                    let finalPath = filePath;
+
+                    if (!isUrl) {
+                        const sandboxDir = process.env.SANDBOX_DIR || process.cwd();
+                        finalPath = path.isAbsolute(filePath) ? filePath : path.join(sandboxDir, filePath);
+                        
+                        const fs = await import('fs');
+                        if (!fs.existsSync(finalPath)) {
+                            return { success: false, message: `File not found: ${finalPath}` };
+                        }
+                    }
+
+                    const ext = path.extname(finalPath).toLowerCase();
                     let mediaType = 'document';
                     if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) mediaType = 'image';
                     else if (['.mp4', '.avi', '.mov', '.mkv'].includes(ext)) mediaType = 'video';
                     else if (['.mp3', '.ogg', '.wav', '.m4a'].includes(ext)) mediaType = 'audio';
 
-                    const fileName = path.basename(filePath);
+                    const fileName = path.basename(finalPath);
 
                     // Universal support via sendMedia
                     // The transport will adapt the send based on its own capabilities
-                    await transport.sendMedia(fileTargetChatId, filePath, { caption, type: mediaType, fileName }, fileTargetChannel);
+                    await transport.sendMedia(fileTargetChatId, finalPath, { caption, type: mediaType, fileName }, fileTargetChannel);
                     return { success: true, message: `[ACTION] File sent on ${fileTargetChannel} to chat ${fileTargetChatId} as ${mediaType}.` };
                 }
 

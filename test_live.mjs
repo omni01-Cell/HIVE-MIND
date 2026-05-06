@@ -1,8 +1,6 @@
 import WebSocket from 'ws';
-import dotenv from 'dotenv';
-dotenv.config();
-const API_KEY = process.env.GEMINI_API_KEY;
-if (!API_KEY) { console.log("NO API KEY in .env"); process.exit(1); }
+const API_KEY = process.env.GEMINI_API_KEY || ''; // Needs actual key, but let's see if we get an auth error or something else.
+if (!API_KEY) { console.log("NO API KEY"); process.exit(0); }
 const ws = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${API_KEY}`);
 
 ws.on('open', () => {
@@ -12,14 +10,16 @@ ws.on('open', () => {
 });
 ws.on('message', (data) => {
     const msg = JSON.parse(data.toString());
+    console.log("MSG KEYS:", Object.keys(msg));
     if (msg.setupComplete) {
         ws.send(JSON.stringify({
-            clientContent: { turns: [{ parts: [{ text: "Say 'hello world' in French." }], role: "user" }], turnComplete: true }
+            clientContent: { turns: [{ parts: [{ text: "Hello, say hi!" }], role: "user" }], turnComplete: true }
         }));
     }
     if (msg.serverContent) {
-        console.log("SERVER:", JSON.stringify(msg.serverContent));
+        console.log("SERVER CONTENT:", JSON.stringify(msg.serverContent));
     }
 });
 ws.on('error', console.error);
-setTimeout(() => ws.close(), 8000);
+ws.on('close', (c, r) => console.log("CLOSE", c, r.toString()));
+setTimeout(() => ws.close(), 10000);

@@ -1371,7 +1371,12 @@ export class BotCore {
                     // [CoT] Détection pensée-seulement : si le contenu est uniquement des tags <thought>,
                     // forcer une itération supplémentaire pour obtenir une vraie réponse.
                     const contentStr = response.content || '';
-                    const thoughtOnlyCheck = contentStr.replace(/<(think|thought|thinking)>([\s\S]*?)(?:<\/\1>|$)/gi, '').trim();
+                    const thoughtOnlyCheck = contentStr
+                        .replace(/<(think|thought|thinking)>([\s\S]*?)<\/\1>/gi, '')
+                        .replace(/^([\s\S]*?)<\/(think|thought|thinking)>/gi, '')
+                        .replace(/<(think|thought|thinking)>([\s\S]*?)$/gi, '')
+                        .replace(/<\/?(think|thought|thinking)>/gi, '')
+                        .trim();
 
                     if (!thoughtOnlyCheck && contentStr.length > 0 && iterations < MAX_ITERATIONS) {
                         console.log('[CoT] ⚠️ Réponse contenant uniquement des pensées. Relance pour obtenir une réponse utilisateur.');
@@ -1481,21 +1486,53 @@ export class BotCore {
 
             // [AGENTIC] Nettoyage de la pensée interne (Invisible pour l'utilisateur)
             // Supporte <think>, <thought>, <thinking> (DeepSeek, Gemini, etc.)
-            const thoughtRegex = /<(think|thought|thinking)>([\s\S]*?)(?:<\/\1>|$)/gi;
             const thoughts: string[] = [];
-            let thoughtMatch: RegExpExecArray | null;
-            const extractRegex = /<(think|thought|thinking)>([\s\S]*?)(?:<\/\1>|$)/gi;
-            while ((thoughtMatch = extractRegex.exec(finalResponse)) !== null) {
+            const originalResponseForLog = finalResponse;
+            
+            // 1. Properly enclosed tags
+            const enclosedRegex = /<(think|thought|thinking)>([\s\S]*?)<\/\1>/gi;
+            // 2. Unclosed opening tag (from tag to the end)
+            const unclosedRegex = /<(think|thought|thinking)>([\s\S]*?)$/gi;
+            // 3. Unopened closing tag (from start to the closing tag)
+            const unopenedRegex = /^([\s\S]*?)<\/(think|thought|thinking)>/gi;
+
+            let thoughtMatch;
+            
+            // Extract properly enclosed thoughts
+            while ((thoughtMatch = enclosedRegex.exec(finalResponse)) !== null) {
                 thoughts.push(thoughtMatch[2].trim());
             }
+            finalResponse = finalResponse.replace(enclosedRegex, '');
+            
+            // Extract unopened closing tag (the LLM forgot to open)
+            while ((thoughtMatch = unopenedRegex.exec(finalResponse)) !== null) {
+                thoughts.push(thoughtMatch[1].trim());
+            }
+            finalResponse = finalResponse.replace(unopenedRegex, '');
+            
+            // Extract unclosed opening tag (the LLM forgot to close)
+            while ((thoughtMatch = unclosedRegex.exec(finalResponse)) !== null) {
+                thoughts.push(thoughtMatch[2].trim());
+            }
+            finalResponse = finalResponse.replace(unclosedRegex, '');
+            
+            // Fallback: remove any stray unopened or unclosed tags
+            finalResponse = finalResponse.replace(/<\/?(think|thought|thinking)>/gi, '').trim();
 
             if (thoughts.length > 0) {
                 console.log(`[CoT] 🧠 Pensée de l'agent (${thoughts.length} bloc(s)) :`);
                 thoughts.forEach((t, i) => console.log(`  [${i + 1}] ${t.substring(0, 200)}${t.length > 200 ? '...' : ''}`));
 
-                finalResponse = finalResponse.replace(thoughtRegex, '').trim();
-
                 // Si après nettoyage il ne reste rien
+                if (!finalResponse) {
+                    if (iterations > 0) {
+                        finalResponse = "*(Réflexion terminée sans réponse textuelle)*";
+                    } else {
+                        return;
+                    }
+                }
+            } else if (originalResponseForLog !== finalResponse) {
+                // Si on a nettoyé des balises orphelines sans capturer de pensée valide
                 if (!finalResponse) {
                     if (iterations > 0) {
                         finalResponse = "*(Réflexion terminée sans réponse textuelle)*";
