@@ -206,25 +206,28 @@ export class GeminiLiveProvider {
             pcmBuffer = audioBuffer;
         }
 
-        const base64Audio = pcmBuffer.toString('base64');
-
-        // Send audio via realtimeInput.audio (format per official Google docs)
-        this._send({
-            realtimeInput: {
-                audio: {
-                    data: base64Audio,
-                    mimeType: 'audio/pcm;rate=16000'
+        // Send audio in chunks of 4096 bytes (256ms of 16kHz 16-bit PCM)
+        const chunkSize = 4096;
+        for (let i = 0; i < pcmBuffer.length; i += chunkSize) {
+            const chunk = pcmBuffer.subarray(i, Math.min(i + chunkSize, pcmBuffer.length));
+            this._send({
+                realtimeInput: {
+                    audio: {
+                        data: chunk.toString('base64'),
+                        mimeType: 'audio/pcm;rate=16000'
+                    }
                 }
-            }
-        });
+            });
+            // Petit délai artificiel pour simuler le streaming si nécessaire (souvent ignoré par l'API qui traite aussi vite que possible)
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
 
-        console.log(`[GeminiLive] 🎤 Audio envoyé (${pcmBuffer.length} bytes PCM, original: ${audioBuffer.length} bytes)`);
+        console.log(`[GeminiLive] 🎤 Audio envoyé en chunks (${pcmBuffer.length} bytes PCM)`);
 
         // For pre-recorded audio (non-streaming), signal end of user turn
         // so the server knows to start generating a response.
         this._send({
             clientContent: {
-                turns: [],
                 turnComplete: true
             }
         });
