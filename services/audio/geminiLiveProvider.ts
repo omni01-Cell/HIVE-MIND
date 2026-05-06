@@ -222,9 +222,9 @@ export class GeminiLiveProvider {
 
         // For pre-recorded audio (non-streaming), signal end of user turn
         // so the server knows to start generating a response.
-        // Without this, the server VAD waits indefinitely for more audio.
         this._send({
             clientContent: {
+                turns: [],
                 turnComplete: true
             }
         });
@@ -283,6 +283,7 @@ export class GeminiLiveProvider {
      * Gérer le contenu serveur (audio + text)
      */
     async _handleServerContent(content: any) {
+        console.log('[GeminiLive] 🔍 Raw serverContent:', JSON.stringify(content, null, 2));
         const parts = content.modelTurn?.parts || [];
 
         for (const part of parts) {
