@@ -48,54 +48,63 @@
                 "family": "gemini",
                 "model": "gemini-3.1-flash-lite-preview",
                 "fallback": "moonshotai/kimi-k2.6",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.7
             },
             "CRITIC": {
                 "family": "mistral",
                 "model": "mistral-large-latest",
                 "fallback": "openai/gpt-oss-120b",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.2
             },
             "OBSERVER": {
                 "family": "groq",
                 "model": "openai/gpt-oss-120b",
                 "fallback": "qwen/qwen3-32b",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.1
             },
             "PLANNER": {
                 "family": "gemini",
                 "model": "gemini-3.1-flash-lite-preview",
                 "fallback": "z-ai/glm-5.1",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.5
             },
             "DREAM_SERVICE": {
                 "family": "groq",
                 "model": "qwen/qwen3-32b",
                 "fallback": "mistral-large-latest",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.8
             },
             "MORAL_COMPASS": {
                 "family": "groq",
                 "model": "openai/gpt-oss-120b",
                 "fallback": "gemini-3.1-flash-lite-preview",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.3
             },
             "ACTION_EVALUATOR": {
                 "family": "groq",
                 "model": "qwen/qwen3-32b",
                 "fallback": "openai/gpt-oss-120b",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.4
             },
             "CLASSIFIER": {
                 "family": "groq",
                 "model": "qwen/qwen3-32b",
                 "fallback": "openai/gpt-oss-120b",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0
             },
             "TAG_SERVICE": {
                 "family": "groq",
                 "model": "llama-3.1-8b-instant",
                 "fallback": "qwen/qwen3-32b",
+                "fallback_2": "gemma-4-31b-it",
                 "temperature": 0
             },
             "STT_SERVICE": {

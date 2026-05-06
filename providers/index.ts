@@ -85,11 +85,16 @@ class ProviderRouter {
 
         console.log(`[Router] 🔧 Service Recipe: ${serviceName} → ${recipe.model}`);
 
-        // Préparer la cascade: primary → fallback
+        // Préparer la cascade: primary → fallback → fallback_2
         const modelsToTry = [recipe.model];
         if (recipe.fallback) {
             modelsToTry.push(recipe.fallback);
         }
+        if (recipe.fallback_2) {
+            modelsToTry.push(recipe.fallback_2);
+        }
+
+        const fallbackModels = new Set([recipe.fallback, recipe.fallback_2].filter(Boolean));
 
         let lastError: any = null;
 
@@ -108,10 +113,10 @@ class ProviderRouter {
                     model: parsed.model,
                     temperature: recipe.temperature ?? options.temperature,
                     isServiceRecipe: true, // Flag pour éviter classification
-                    isFallback: modelStr === recipe.fallback
+                    isFallback: fallbackModels.has(modelStr)
                 });
 
-                if (modelStr === recipe.fallback) {
+                if (fallbackModels.has(modelStr)) {
                     console.log(`[Router] ⚠️ ${serviceName} utilisé fallback: ${modelStr}`);
                 }
 
