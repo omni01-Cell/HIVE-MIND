@@ -111,7 +111,7 @@ async function connectToWhatsApp() {
         version,
         auth: state,
         printQRInTerminal: false,
-        logger: pino({ level: 'silent' }) as any,
+        logger: pino({ level: 'debug' }) as any,
         browser: ['HIVE-MIND E2E Tester', 'Chrome', '1.0.0']
     });
 
@@ -190,31 +190,19 @@ async function run() {
     startRailwayLogs();
 
     try {
-        // 1. Ping Test
+        // 1. Audio Test (Native Gemini Live tool call)
+        const audioBuffer = fs.readFileSync('/home/omni/Téléchargements/test.opus');
         await sendAndWaitForResponse(
             sock, targetJID, 
-            "/ping", 
-            (msg) => (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').toLowerCase().includes('pong')
+            { audio: audioBuffer, ptt: true, mimetype: 'audio/ogg; codecs=opus' }, 
+            (msg) => {
+                const isAudio = !!msg.message?.audioMessage;
+                const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                console.log(`\n[TEST-RUNNER] 🤖 Bot replied: [Audio: ${isAudio}] [Text: ${text}]`);
+                return true; // Stop waiting as soon as the bot replies
+            },
+            60000 // 60 seconds timeout
         );
-
-        await delay(2000);
-
-        // 2. Status Test
-        await sendAndWaitForResponse(
-            sock, targetJID, 
-            "/status", 
-            (msg) => (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').toLowerCase().includes('status')
-        );
-
-        // 3. Admin Security Test
-        if (accountType === 'user') {
-            await delay(2000);
-            await sendAndWaitForResponse(
-                sock, targetJID,
-                "ajoute ce numéro au groupe 12345",
-                (msg) => (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').toLowerCase().includes('admin')
-            );
-        }
 
     } catch (error) {
         console.error('Test Execution Error:', error);

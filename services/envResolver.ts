@@ -8,9 +8,8 @@
 /**
  * Service singleton pour résoudre les variables d'environnement
  * Supporte les formats :
- * - VOTRE_CLE_GEMINI → cherche process.env.VOTRE_CLE_GEMINI puis process.env.GEMINI_KEY
- * - ${GEMINI_KEY} → cherche process.env.GEMINI_KEY
- * - valeur directe → retourne telle quelle
+ * - API providers: PROVIDER_KEY, PROVIDER_KEY_1, PROVIDER_KEY_2...
+ * - no_key / NO_KEY disables a key slot explicitly
  */
 export class EnvResolver {
     resolved: any;
@@ -36,6 +35,7 @@ export class EnvResolver {
     resolve(value: any, varName: any = null) {
         if (!value) return null;
         if (typeof value !== 'string') return value;
+        if (this._isDisabledKey(value)) return null;
 
         // Check cache
         const cacheKey = `${value}::${varName || ''}`;
@@ -57,45 +57,20 @@ export class EnvResolver {
         if (value.startsWith('${') && value.endsWith('}')) {
             const envKey = value.slice(2, -1); // Enlever ${ et }
             resolvedValue = process.env[envKey];
-            if (resolvedValue) {
+            if (resolvedValue && !this._isDisabledKey(resolvedValue)) {
                 this._cache(cacheKey, resolvedValue);
                 return resolvedValue;
             }
         }
 
-        // Stratégie 3: Format VOTRE_XXX
-        if (value.startsWith('VOTRE_')) {
-            // 3a. Chercher tel quel (process.env.VOTRE_CLE_GEMINI)
-            if (process.env[value]) {
-                resolvedValue = process.env[value];
-                this._cache(cacheKey, resolvedValue);
-                return resolvedValue;
-            }
-
-            // 3b. Inférer le nom de variable (VOTRE_CLE_GEMINI → GEMINI_KEY)
-            const inferredName = this._inferVarName(value);
-            if (inferredName) {
-                if (process.env[inferredName]) {
-                    resolvedValue = process.env[inferredName];
-                    this._cache(cacheKey, resolvedValue);
-                    return resolvedValue;
-                }
-                if (process.env[`${inferredName}_1`]) {
-                    resolvedValue = process.env[`${inferredName}_1`];
-                    this._cache(cacheKey, resolvedValue);
-                    return resolvedValue;
-                }
-            }
-        }
-
-        // Stratégie 4: Si varName fourni explicitement, l'essayer
+        // Stratégie 3: Si varName fourni explicitement, l'essayer
         if (varName) {
-            if (process.env[varName]) {
+            if (process.env[varName] && !this._isDisabledKey(process.env[varName])) {
                 resolvedValue = process.env[varName];
                 this._cache(cacheKey, resolvedValue);
                 return resolvedValue;
             }
-            if (process.env[`${varName}_1`]) {
+            if (process.env[`${varName}_1`] && !this._isDisabledKey(process.env[`${varName}_1`])) {
                 resolvedValue = process.env[`${varName}_1`];
                 this._cache(cacheKey, resolvedValue);
                 return resolvedValue;
@@ -104,10 +79,30 @@ export class EnvResolver {
 
         // Échec de résolution
         this.stats.misses++;
-        this.stats.warnings.push(`Variable non résolue: ${value} (varName: ${varName || 'N/A'})`);
-        console.warn(`[EnvResolver] ⚠️ Variable non résolue: ${value}`);
-        
+
         this._cache(cacheKey, null);
+        return null;
+    }
+
+    /**
+     * Résout une clé provider strictement depuis PROVIDER_KEY / PROVIDER_KEY_N.
+     * N'utilise pas credentials.json ni les anciens alias VOTRE_CLE_*.
+     */
+    resolveProviderKey(providerName: any, keyIndex: any = null) {
+        const prefix = `${String(providerName).toUpperCase()}_KEY`;
+        const candidates = keyIndex === null || keyIndex === undefined
+            ? [prefix, ...Array.from({ length: 7 }, (_, index) => `${prefix}_${index + 1}`)]
+            : Number(keyIndex) === 1
+                ? [`${prefix}_1`, prefix]
+                : [`${prefix}_${Number(keyIndex)}`];
+
+        for (const envName of candidates) {
+            const value = process.env[envName];
+            if (value && !this._isDisabledKey(value)) {
+                return value;
+            }
+        }
+
         return null;
     }
 
@@ -122,26 +117,20 @@ export class EnvResolver {
         const indices = [];
 
         for (let i = 1; i <= 7; i++) {
-            if (process.env[`${prefix}_${i}`]) {
+            if (process.env[`${prefix}_${i}`] && !this._isDisabledKey(process.env[`${prefix}_${i}`])) {
                 indices.push(i);
             }
         }
 
-        if (indices.length === 0 && process.env[prefix]) {
+        if (indices.length === 0 && process.env[prefix] && !this._isDisabledKey(process.env[prefix])) {
             indices.push(1); // Default to key 1 if no suffix
         }
 
-        // Cas de fallback pour les placeholders "VOTRE_CLE_XXX"
-        if (indices.length === 0) {
-            const fallbackKey = `VOTRE_CLE_${providerName.toUpperCase()}`;
-            if (process.env[fallbackKey]) {
-                indices.push(1);
-            }
-        }
+        return indices;
+    }
 
-        // Par défaut, retourner au moins [1] pour éviter de casser la compatibilité
-        // si la clé est passée via un fichier non-env ou d'une autre manière
-        return indices.length > 0 ? indices : [1];
+    _isDisabledKey(value: any) {
+        return typeof value === 'string' && value.trim().toLowerCase() === 'no_key';
     }
 
     /**
@@ -154,45 +143,6 @@ export class EnvResolver {
                value.startsWith('YOUR_') ||
                value === 'undefined' ||
                value === 'null';
-    }
-
-    /**
-     * Infère le nom de variable depuis un placeholder
-     * Ex: VOTRE_CLE_GEMINI → GEMINI_KEY
-     * Ex: VOTRE_CLE_OPENAI → OPENAI_KEY
-     * @private
-     */
-    _inferVarName(placeholder: any) {
-        if (!placeholder.startsWith('VOTRE_')) return null;
-
-        // Mapping commun
-        const commonMappings = {
-            'VOTRE_CLE_GEMINI': 'GEMINI_KEY',
-            'VOTRE_CLE_OPENAI': 'OPENAI_KEY',
-            'VOTRE_CLE_ANTHROPIC': 'ANTHROPIC_KEY',
-            'VOTRE_CLE_GROQ': 'GROQ_KEY',
-            'VOTRE_CLE_MISTRAL': 'MISTRAL_KEY',
-            'VOTRE_CLE_MINIMAX': 'MINIMAX_KEY',
-            'VOTRE_CLE_KIMI': 'KIMI_KEY',
-            'VOTRE_CLE_NVIDIA': 'NVIDIA_API_KEY',
-            'VOTRE_CLE_HF': 'HF_API_KEY',
-            'VOTRE_SUPABASE_URL': 'SUPABASE_URL',
-            'VOTRE_SUPABASE_KEY': 'SUPABASE_KEY',
-            'VOTRE_REDIS_URL': 'REDIS_URL'
-        };
-
-        if (commonMappings[placeholder]) {
-            return commonMappings[placeholder];
-        }
-
-        // Fallback: VOTRE_CLE_XXX → XXX_KEY
-        const match = placeholder.match(/^VOTRE_(?:CLE_)?(.+)$/);
-        if (match) {
-            const baseName = match[1];
-            return `${baseName}_KEY`;
-        }
-
-        return null;
     }
 
     /**

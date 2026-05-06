@@ -1,11 +1,11 @@
 // providers/adapters/nvidia.ts
 // providers/adapters/nvidia.js
 // Adaptateur pour l'API NVIDIA NIM (integrate.api.nvidia.com)
-// Supporte: moonshotai/kimi-k2.5, z-ai/glm-5.1, minimaxai/minimax-m2.7
+// Supporte: moonshotai/kimi-k2.6, z-ai/glm-5.1, minimaxai/minimax-m2.7
 
 // Paramètres spécifiques par modèle
 const MODEL_CONFIG: any = {
-    'moonshotai/kimi-k2.5': {
+    'moonshotai/kimi-k2.6': {
         max_tokens: 16384,
         chat_template_kwargs: { thinking: true }
     },
@@ -134,4 +134,3 @@ export default {
         throw new Error('[NVIDIA Adapter] Embeddings non implémentés pour cette API.');
     }
 };
-

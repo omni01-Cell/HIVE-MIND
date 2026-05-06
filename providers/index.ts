@@ -164,21 +164,8 @@ class ProviderRouter {
     /**
      * Récupère la clé API d'une famille
      */
-    getApiKey(familyName: string = this.currentFamily, keyIndex: number = 1): string | null {
-        let key = credentials.familles_ia[familyName];
-        
-        // Résolution du nom de variable attendu (ex: GEMINI_KEY_2)
-        const suffix = keyIndex > 1 ? `_${keyIndex}` : '';
-        const expectedEnvName = `${familyName.toUpperCase()}_KEY${suffix}`;
-
-        // Si on demande un index spécifique > 1, on essaie d'abord cette variable d'environnement précise
-        if (keyIndex > 1) {
-            const indexedKey = envResolver.resolve(`\${${expectedEnvName}}`, expectedEnvName);
-            if (indexedKey) return indexedKey;
-        }
-
-        // Sinon, on retombe sur la résolution classique
-        return envResolver.resolve(key, `${familyName.toUpperCase()}_KEY`);
+    getApiKey(familyName: string = this.currentFamily, keyIndex: number | null = null): string | null {
+        return envResolver.resolveProviderKey(familyName, keyIndex);
     }
 
     /**
@@ -652,7 +639,7 @@ class ProviderRouter {
             id: key,
             name: config.nom_affiche,
             models: config.modeles?.map((m: any) => m.id) || [],
-            hasApiKey: !!this.getApiKey(key) && !this.getApiKey(key)!.startsWith('VOTRE_')
+            hasApiKey: !!this.getApiKey(key)
         }));
     }
 

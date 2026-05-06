@@ -6,44 +6,61 @@ describe('EnvResolver unit tests', () => {
   
   beforeEach(() => {
     envResolver.clearCache();
+    delete process.env.GEMINI_KEY;
+    delete process.env.GEMINI_KEY_1;
+    delete process.env.GEMINI_KEY_2;
+    delete process.env.GROQ_KEY;
+    delete process.env.VOTRE_CLE_GEMINI;
+    delete process.env.EXPLICIT_VAR;
   });
 
   it('should return null if value is null', () => {
     expect(envResolver.resolve(null)).toBeNull();
   });
 
-  it('should return value directly if not a placeholder', () => {
-    expect(envResolver.resolve('real_api_key_123')).toBe('real_api_key_123');
+  it('should return null when a value is no_key', () => {
+    expect(envResolver.resolve('no_key')).toBeNull();
+    expect(envResolver.resolve('NO_KEY')).toBeNull();
   });
 
-  it('should resolve format ${VAR_NAME}', () => {
-    process.env.TEST_VAR = 'secret_value';
-    expect(envResolver.resolve('${TEST_VAR}')).toBe('secret_value');
-    delete process.env.TEST_VAR;
+  it('should resolve only provider key format for indexed API keys', () => {
+    process.env.GEMINI_KEY = 'gemini_primary';
+    process.env.GEMINI_KEY_1 = 'gemini_one';
+    process.env.GEMINI_KEY_2 = 'gemini_two';
+
+    expect(envResolver.resolveProviderKey('gemini')).toBe('gemini_primary');
+    expect(envResolver.resolveProviderKey('gemini', 1)).toBe('gemini_one');
+    expect(envResolver.resolveProviderKey('gemini', 2)).toBe('gemini_two');
   });
 
-  it('should resolve format VOTRE_XXX directly', () => {
-    process.env.VOTRE_CLE_GEMINI = 'gemini_secret';
-    expect(envResolver.resolve('VOTRE_CLE_GEMINI')).toBe('gemini_secret');
-    delete process.env.VOTRE_CLE_GEMINI;
+  it('should ignore legacy VOTRE_CLE provider key variables', () => {
+    process.env.VOTRE_CLE_GEMINI = 'legacy_key';
+
+    expect(envResolver.resolveProviderKey('gemini')).toBeNull();
+    expect(envResolver.getAvailableKeysForProvider('gemini')).toEqual([]);
   });
 
-  it('should infer var name from VOTRE_XXX (e.g. GEMINI_KEY)', () => {
-    process.env.GEMINI_KEY = 'gemini_inferred';
-    expect(envResolver.resolve('VOTRE_CLE_GEMINI')).toBe('gemini_inferred');
-    delete process.env.GEMINI_KEY;
+  it('should ignore no_key provider variables in key rotation', () => {
+    process.env.GEMINI_KEY = 'no_key';
+    process.env.GEMINI_KEY_1 = 'NO_KEY';
+    process.env.GEMINI_KEY_2 = 'gemini_two';
+
+    expect(envResolver.resolveProviderKey('gemini')).toBe('gemini_two');
+    expect(envResolver.resolveProviderKey('gemini', 1)).toBeNull();
+    expect(envResolver.resolveProviderKey('gemini', 2)).toBe('gemini_two');
+    expect(envResolver.getAvailableKeysForProvider('gemini')).toEqual([2]);
   });
 
-  it('should return null and log warning if variable is not found', () => {
-    // We expect a null return and a warning in console
+  it('should return null without warning when provider key is missing', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(envResolver.resolve('VOTRE_MISSING_VAR')).toBeNull();
+    expect(envResolver.resolveProviderKey('groq')).toBeNull();
+    expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 
-  it('should use explicit varName if provided', () => {
-    process.env.EXPLICIT_VAR = 'explicit_value';
-    expect(envResolver.resolve('VOTRE_MISSING_VAR', 'EXPLICIT_VAR')).toBe('explicit_value');
-    delete process.env.EXPLICIT_VAR;
+  it('should list unsuffixed provider key as key index 1', () => {
+    process.env.GROQ_KEY = 'groq_primary';
+
+    expect(envResolver.getAvailableKeysForProvider('groq')).toEqual([1]);
   });
 });

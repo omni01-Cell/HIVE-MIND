@@ -46,26 +46,26 @@
         "service_recipes": {
             "EXECUTOR": {
                 "family": "gemini",
-                "model": "gemma-4-31b-it",
-                "fallback": "z-ai/glm-5.1",
+                "model": "gemini-3.1-flash-lite-preview",
+                "fallback": "moonshotai/kimi-k2.6",
                 "temperature": 0.7
             },
             "CRITIC": {
                 "family": "mistral",
-                "model": "codestral-latest",
-                "fallback": "groq/gpt-oss-120b",
+                "model": "mistral-large-latest",
+                "fallback": "openai/gpt-oss-120b",
                 "temperature": 0.2
             },
             "OBSERVER": {
                 "family": "groq",
-                "model": "openai/gpt-oss-20b",
-                "fallback": "llama-3.1-8b-instant",
+                "model": "openai/gpt-oss-120b",
+                "fallback": "qwen/qwen3-32b",
                 "temperature": 0.1
             },
             "PLANNER": {
                 "family": "gemini",
-                "model": "gemma-4-31b-it",
-                "fallback": "moonshotai/kimi-k2.5",
+                "model": "gemini-3.1-flash-lite-preview",
+                "fallback": "z-ai/glm-5.1",
                 "temperature": 0.5
             },
             "DREAM_SERVICE": {
@@ -77,7 +77,7 @@
             "MORAL_COMPASS": {
                 "family": "groq",
                 "model": "openai/gpt-oss-120b",
-                "fallback": "kimi-for-coding",
+                "fallback": "gemini-3.1-flash-lite-preview",
                 "temperature": 0.3
             },
             "ACTION_EVALUATOR": {
@@ -88,8 +88,8 @@
             },
             "CLASSIFIER": {
                 "family": "groq",
-                "model": "llama-3.1-8b-instant",
-                "fallback": "qwen/qwen3-32b",
+                "model": "qwen/qwen3-32b",
+                "fallback": "openai/gpt-oss-120b",
                 "temperature": 0
             },
             "TAG_SERVICE": {
@@ -108,44 +108,44 @@
         "chat_recipes": {
             "categories": {
                 "CODING": {
-                    "primary": "moonshotai/kimi-k2.5",
-                    "fallback": "codestral-latest",
+                    "primary": "moonshotai/kimi-k2.6",
+                    "fallback": "gemini-3.1-pro-preview",
                     "description": "Code complexe, algorithmes, debugging"
                 },
                 "REASONING": {
-                    "primary": "groq/gpt-oss-120b",
-                    "fallback": "qwen/qwen3-32b",
+                    "primary": "gemini-3.1-pro-preview",
+                    "fallback": "openai/gpt-oss-120b",
                     "description": "Logique, mathématiques, raisonnement profond"
                 },
                 "FAST_CHAT": {
-                    "primary": "gemini-3.1-flash-lite-preview",
-                    "fallback": "minimax/minimax-m2.5:free",
-                    "description": "Salutations, questions simples, chat rapide (363 tok/s)"
+                    "primary": "gemini-3-flash-preview",
+                    "fallback": "qwen/qwen3-32b",
+                    "description": "Salutations, questions simples, chat rapide sans petit modèle"
                 },
                 "MULTIMODAL": {
-                    "primary": "microsoft/Phi-4-multimodal-instruct",
+                    "primary": "gemini-3.1-pro-preview",
                     "fallback": "gemini-2.5-flash",
                     "description": "Texte + Image + Audio combinés"
                 },
                 "VISION": {
-                    "primary": "gemini-2.5-flash",
-                    "fallback": "microsoft/Phi-4-multimodal-instruct",
+                    "primary": "gemini-3.1-pro-preview",
+                    "fallback": "gemini-2.5-flash",
                     "description": "Analyse d'images, OCR, génération visuelle"
                 },
                 "AGENTIC": {
-                    "primary": "gemini-3.1-flash-lite-preview",
-                    "fallback": "gemini-3-flash-preview",
-                    "description": "Tâches agentic rapides, function calling natif (363 tok/s)"
+                    "primary": "gemini-3.1-pro-preview",
+                    "fallback": "moonshotai/kimi-k2.6",
+                    "description": "Tâches agentic complexes, function calling et raisonnement"
                 },
                 "CREATIVITY": {
                     "primary": "qwen/qwen3-32b",
-                    "fallback": "gemini-2.5-flash-lite",
+                    "fallback": "minimax/minimax-m2.5:free",
                     "description": "Rédaction créative, storytelling, poésie"
                 }
             }
         },
         "model_capabilities": {
-            "kimi-for-coding": {
+            "moonshotai/kimi-k2.6": {
                 "service_roles": [
                     "EXECUTOR",
                     "PLANNER"
@@ -154,7 +154,7 @@
                     "CODING",
                     "AGENTIC"
                 ],
-                "primary_strength": "256K context + quotas généreux (50 RPM)"
+                "primary_strength": "Modèle agentique vérifié disponible via NVIDIA NIM"
             },
             "qwen/qwen3-32b": {
                 "service_roles": [
@@ -178,7 +178,21 @@
                 ],
                 "primary_strength": "Expert code + analyse risques"
             },
-            "groq/gpt-oss-120b": {
+            "gemini-3.1-pro-preview": {
+                "service_roles": [
+                    "EXECUTOR",
+                    "PLANNER",
+                    "MORAL_COMPASS"
+                ],
+                "chat_categories": [
+                    "REASONING",
+                    "MULTIMODAL",
+                    "VISION",
+                    "AGENTIC"
+                ],
+                "primary_strength": "Modèle Gemini Pro le plus performant vérifié sur la clé locale"
+            },
+            "openai/gpt-oss-120b": {
                 "service_roles": [
                     "MORAL_COMPASS"
                 ],
@@ -197,13 +211,12 @@
             },
             "groq/llama-3.1-8b-instant": {
                 "service_roles": [
-                    "CLASSIFIER",
                     "TAG_SERVICE"
                 ],
                 "chat_categories": [
-                    "FAST_CHAT"
+                    "TAG_SERVICE"
                 ],
-                "primary_strength": "Ultra-rapide pour tâches simples"
+                "primary_strength": "Ultra-rapide réservé au tagging utilisateur"
             }
         }
     },
@@ -241,6 +254,40 @@
         "gemini": {
             "nom_affiche": "Google Gemini",
             "modeles": [
+                {
+                    "id": "gemini-3.1-pro-preview",
+                    "description": "Gemini 3.1 Pro Preview: modèle Pro le plus performant accessible via la clé Gemini locale.",
+                    "types": [
+                        "agentic",
+                        "chat",
+                        "reasoning",
+                        "coding",
+                        "vision"
+                    ],
+                    "quota": {
+                        "rpm": 5,
+                        "tpm": 250000,
+                        "rpd": 20
+                    },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "gemini-3-pro-preview",
+                    "description": "Gemini 3 Pro Preview: modèle Pro généraliste accessible via la clé Gemini locale.",
+                    "types": [
+                        "agentic",
+                        "chat",
+                        "reasoning",
+                        "coding",
+                        "vision"
+                    ],
+                    "quota": {
+                        "rpm": 5,
+                        "tpm": 250000,
+                        "rpd": 20
+                    },
+                    "ptc_tier": "S"
+                },
                 {
                     "id": "gemini-3-flash-preview",
                     "description": "Gemini 3 Flash: Raisonnement niveau Doctorat (SWE-bench 78.0%, GPQA 90.4%), pensée dynamique, agentic coding, multimodalisme natif avancé.",
@@ -796,8 +843,8 @@
             "base_url": "https://integrate.api.nvidia.com/v1",
             "modeles": [
                 {
-                    "id": "moonshotai/kimi-k2.5",
-                    "description": "Kimi K2.5 via NVIDIA NIM: Modèle de raisonnement avancé avec thinking mode (16K tokens output).",
+                    "id": "moonshotai/kimi-k2.6",
+                    "description": "Kimi K2.6 via NVIDIA NIM: modèle agentique avancé vérifié disponible sur la clé locale.",
                     "types": [
                         "chat",
                         "reasoning",
@@ -879,22 +926,6 @@
             "nom_affiche": "OpenRouter (Gateway Rapide)",
             "base_url": "https://openrouter.ai/api/v1",
             "modeles": [
-                {
-                    "id": "google/gemma-4-31b-it:free",
-                    "description": "Gemma 4 31B: Reasoning rapide, coding, agentic (Free Tier).",
-                    "types": [
-                        "chat",
-                        "reasoning",
-                        "coding",
-                        "agentic"
-                    ],
-                    "quota": {
-                        "rpm": 20,
-                        "tpm": 100000,
-                        "rpd": 1000
-                    },
-                    "ptc_tier": "B"
-                },
                 {
                     "id": "minimax/minimax-m2.5:free",
                     "description": "MiniMax M2.5: SOTA Agentic & Coding (SWE-Bench 80.2%, BFCL 76.8%). MoE 230B/10B active. Free Tier.",

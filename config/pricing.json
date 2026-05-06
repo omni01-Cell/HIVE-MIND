@@ -42,7 +42,7 @@
         "moonshotai/Kimi-K2-Instruct-0905": { "input": 0.00, "output": 0.00 },
         "whisper-large-v3": { "input": 0.00, "output": 0.00 },
         "whisper-large-v3-turbo": { "input": 0.00, "output": 0.00 },
-        "google/gemma-4-31b-it:free": { "input": 0.00, "output": 0.00 },
+        "gemma-4-31b-it": { "input": 0.00, "output": 0.00 },
         "minimax/minimax-m2.5:free": { "input": 0.00, "output": 0.00 },
         "z-ai/glm-4.5-air:free": { "input": 0.00, "output": 0.00 }
     }
