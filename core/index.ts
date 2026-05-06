@@ -781,6 +781,9 @@ export class BotCore {
                     } else if (response.transcribedText) {
                         // Fallback texte si pas d'audio généré
                         await this.transport.sendText(chatId, response.transcribedText);
+                    } else {
+                        // Fallback ultime : aucune réponse
+                        await this.transport.sendText(chatId, "🔇 Désolé, je n'ai pas pu générer de réponse vocale à ton message.");
                     }
 
                     // 2. Stocker en mémoire (texte transcrit par Gemini)

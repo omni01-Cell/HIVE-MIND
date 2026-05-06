@@ -132,7 +132,7 @@ export class GeminiLiveProvider {
             setup: {
                 model: `models/${this.model}`,
                 generationConfig: {
-                    responseModalities: ['AUDIO'],
+                    responseModalities: ['AUDIO', 'TEXT'],
                     speechConfig: {
                         voiceConfig: {
                             prebuiltVoiceConfig: {
