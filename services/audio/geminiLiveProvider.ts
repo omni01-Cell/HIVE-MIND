@@ -61,8 +61,7 @@ export class GeminiLiveProvider {
                 console.log('[GeminiLive] ✅ WebSocket connecté');
                 this.isConnected = true;
                 this._sendSetup(sessionConfig);
-                setupReceived = true;
-                resolve();
+                // Ne PAS resolve ici — on attend setupComplete
             });
 
             this.ws.on('message', (data: any) => {
@@ -74,10 +73,11 @@ export class GeminiLiveProvider {
                     const keys = Object.keys(message);
                     console.log('[GeminiLive] 📨 Server message keys:', keys.join(', '));
 
-                    // Intercept setupComplete (if still sent by server)
+                    // Intercept setupComplete to resolve connect()
                     if (message.setupComplete && !setupReceived) {
                         setupReceived = true;
                         console.log('[GeminiLive] ✓ Setup confirmed — session prête');
+                        resolve();
                         return;
                     }
 
@@ -127,15 +127,17 @@ export class GeminiLiveProvider {
      * Envoyer la configuration de session (camelCase requis par l'API Gemini)
      */
     _sendSetup(config: any) {
-        // Official API format: wrapper key is 'config'
+        // Official API format: wrapper key is 'setup'
         const configMessage: any = {
-            config: {
+            setup: {
                 model: `models/${this.model}`,
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: {
-                            voiceName: config.voice || 'Aoede'
+                generationConfig: {
+                    responseModalities: ['AUDIO'],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: config.voice || 'Aoede'
+                            }
                         }
                     }
                 }
@@ -146,14 +148,14 @@ export class GeminiLiveProvider {
 
         // System instruction
         if (config.systemPrompt) {
-            configMessage.config.systemInstruction = {
+            configMessage.setup.systemInstruction = {
                 parts: [{ text: config.systemPrompt }]
             };
         }
 
         // Tools (function declarations)
         if (config.tools && config.tools.length > 0) {
-            configMessage.config.tools = [{
+            configMessage.setup.tools = [{
                 functionDeclarations: config.tools.map((tool: any) => ({
                     name: tool.function.name,
                     description: tool.function.description,
