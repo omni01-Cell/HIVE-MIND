@@ -268,12 +268,32 @@ export default {
                     else if (['.mp4', '.avi', '.mov', '.mkv'].includes(ext)) mediaType = 'video';
                     else if (['.mp3', '.ogg', '.wav', '.m4a'].includes(ext)) mediaType = 'audio';
 
+                    let resolvedMimeType = 'application/octet-stream';
+                    try {
+                        const mime = await import('mime-types');
+                        resolvedMimeType = mime.default.lookup(ext) || 'application/octet-stream';
+                    } catch (e) {
+                        const defaultMimes: Record<string, string> = {
+                            '.md': 'text/markdown',
+                            '.txt': 'text/plain',
+                            '.pdf': 'application/pdf',
+                            '.json': 'application/json',
+                            '.csv': 'text/csv',
+                            '.html': 'text/html',
+                            '.xml': 'application/xml',
+                            '.zip': 'application/zip',
+                            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                        };
+                        resolvedMimeType = defaultMimes[ext] || 'application/octet-stream';
+                    }
+
                     const fileName = path.basename(finalPath);
 
                     // Universal support via sendMedia
                     // The transport will adapt the send based on its own capabilities
-                    await transport.sendMedia(fileTargetChatId, finalPath, { caption, type: mediaType, fileName }, fileTargetChannel);
-                    return { success: true, message: `[ACTION] File sent on ${fileTargetChannel} to chat ${fileTargetChatId} as ${mediaType}.` };
+                    await transport.sendMedia(fileTargetChatId, finalPath, { caption, type: mediaType, fileName, mimetype: resolvedMimeType }, fileTargetChannel);
+                    return { success: true, message: `[ACTION] File sent on ${fileTargetChannel} to chat ${fileTargetChatId} as ${mediaType} (${resolvedMimeType}).` };
                 }
 
                 default:

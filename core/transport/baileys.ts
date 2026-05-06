@@ -635,6 +635,7 @@ class BaileysTransport extends EventEmitter {
             else if (type === 'document') {
                 message.document = mediaSource;
                 message.fileName = options.fileName || 'document';
+                if (options.mimetype) message.mimetype = options.mimetype;
             }
 
             if (options.caption) message.caption = options.caption;
