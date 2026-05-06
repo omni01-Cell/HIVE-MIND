@@ -130,7 +130,7 @@ export class PermissionManager {
      */
     private getAuthorizedDirectoriesHint(): string {
         const dirs = [...this.allowedDirectories].join('\n  - ');
-        return `\n[SANDBOX HINT] Tu as accès en lecture/écriture UNIQUEMENT aux répertoires suivants :\n  - ${dirs}\n  → ${this.storageDir} : ton espace de stockage persistant (fichiers, données, notes).\n  → ${this.sandboxDir} : ton espace d'exécution de code et de scripts temporaires.\nRetente l'action en ciblant l'un de ces répertoires.`;
+        return `\n[SANDBOX HINT] Tu as un accès en LECTURE universel (tout le système de fichiers). Pour l'ÉCRITURE, tu es limité aux répertoires suivants :\n  - ${dirs}\n  → ${this.storageDir} : ton espace de stockage persistant (fichiers, données, notes).\n  → ${this.sandboxDir} : ton espace d'exécution de code et de scripts temporaires.\nRetente l'action d'écriture en ciblant l'un de ces répertoires.`;
     }
 
     validateBashCommand(command: string, currentCwd: string = this.originalCwd): { result: boolean; requiresPermission: boolean; reason?: string } {

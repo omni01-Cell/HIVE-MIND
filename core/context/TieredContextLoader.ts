@@ -316,7 +316,7 @@ export class TieredContextLoader {
 
         block += `### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the \`get_my_capabilities\` tool**.\n`;
 
-        block += `\n### 📂 EXECUTION ENVIRONMENT (SANDBOX)\nYou are an agent confined within a secure environment.\n- **Workspace**: \`${permissionManager.sandboxDir}\`\n- **Persistent Memory**: \`${permissionManager.storageDir}\`\nUse only these directories for files.\n`;
+        block += `\n### 📂 EXECUTION ENVIRONMENT\nYou have **universal read access** to the entire filesystem — use \`read_file\`, \`list_directory\`, and \`grep_search\` on ANY path (e.g., \`/home\`, \`/etc\`, project root, etc.).\n**Write access** is restricted to your authorized zones:\n- **Workspace**: \`${permissionManager.sandboxDir}\`\n- **Persistent Memory**: \`${permissionManager.storageDir}\`\nFor write operations, use only these directories.\n`;
 
         block += `\n### ⚡ EXECUTION DIRECTIVES (MANDATORY)\n`;
         block += `- **Actionable request → act NOW in this turn.** Never announce an action if you can execute it directly.\n`;
