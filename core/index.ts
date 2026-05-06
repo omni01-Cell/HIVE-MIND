@@ -1556,14 +1556,17 @@ export class BotCore {
                         const ttsResult = await voiceProvider.textToSpeech(finalResponse);
 
                         if (ttsResult && ttsResult.filePath) {
+                            // Indicateur "enregistrement" pour le voice note
+                            await this.transport.setPresence(chatId, 'recording');
+
                             // Envoyer la note vocale via sendVoiceNote (PTT)
                             await this.transport.sendVoiceNote(chatId, ttsResult.filePath, {
                                 duration: Math.min(finalResponse.length * 40, 3000)
                             });
                             console.log(`[Core] ✓ Réponse vocale envoyée (${ttsResult.provider})`);
 
-                            // On n'envoie PAS le texte pour éviter le doublon (Simulated Voice Mode)
-                            await this.transport.setPresence(chatId, 'paused');
+                            // Revenir en disponible
+                            await this.transport.setPresence(chatId, 'available');
 
                             // Stockage mémoire
                             await workingMemory.addMessage(chatId, 'assistant', finalResponse);

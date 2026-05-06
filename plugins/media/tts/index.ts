@@ -158,11 +158,17 @@ export default {
                         : 'HIVE-MIND Audio (GTTS fallback)'
                 });
             } else {
+                // Indicateur "enregistrement" pour le voice note (PTT)
+                await transport.setPresence(chatId, 'recording');
+
                 const options = {
                     duration: Math.min(text.length * 60, 30000),
                     mimetype: result.format === 'ogg' ? 'audio/ogg; codecs=opus' : undefined
                 };
                 await transport.sendVoiceNote(chatId, result.filePath || result.audioBuffer, options);
+
+                // Revenir en disponible
+                await transport.setPresence(chatId, 'available');
             }
 
             return {
