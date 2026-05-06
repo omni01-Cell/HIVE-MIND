@@ -115,6 +115,110 @@ export class BotCore {
     get voiceProvider() { return container.get('voiceProvider'); }
     get quotaManager() { return container.get('quotaManager'); }
 
+    async _getLiveAudioTools() {
+        const semanticTools = await pluginLoader.getRelevantTools(
+            'conversation vocale fichiers repertoire directory list_directory grep_search read_file send_file',
+            8,
+            20
+        );
+
+        const requiredToolNames = [
+            'send_message',
+            'send_file',
+            'list_directory',
+            'grep_search',
+            'read_file',
+            'get_my_capabilities',
+            'google_ai_search',
+            'workspace_read',
+            'workspace_search'
+        ];
+
+        const allToolDefs = (pluginLoader as any).toolDefinitions || [];
+        const toolsByName = new Map<string, any>();
+
+        for (const tool of semanticTools || []) {
+            const name = tool?.function?.name;
+            if (name) toolsByName.set(name, tool);
+        }
+
+        for (const tool of allToolDefs) {
+            const name = tool?.function?.name;
+            if (name && requiredToolNames.includes(name)) {
+                toolsByName.set(name, tool);
+            }
+        }
+
+        const tools = Array.from(toolsByName.values());
+        if (process.env.PTC_ENABLED !== 'false' && !toolsByName.has('code_execution')) {
+            tools.push(ptcExecutor.buildCodeExecutionToolDef(tools));
+        }
+
+        return tools;
+    }
+
+    async _executeLiveTool(name: string, args: any, message: any, availableTools: any[], authority: any) {
+        if (name === 'code_execution') {
+            console.log('[PTC] ⚡ Exécution programmatique déclenchée via Gemini Live');
+            const code = args?.code;
+            if (!code || typeof code !== 'string') {
+                return { success: false, error: 'code_execution requires a string "code" argument.' };
+            }
+
+            const chatId = message.chatId;
+            const toolFns = buildToolFunctions(
+                availableTools,
+                (toolName: string, toolArgs: any, ctx: any) => pluginLoader.execute(toolName, toolArgs, ctx),
+                {
+                    transport: this.transport,
+                    message,
+                    chatId,
+                    sender: message.sender,
+                    sourceChannel: message.sourceChannel,
+                    onProgress: (status: string) => {
+                        eventBus.publish(BotEvents.TOOL_PROGRESS, { tool: 'code_execution', status, chatId });
+                    },
+                }
+            );
+
+            try {
+                const hiveBridge = hiveWakeSystem.buildHiveBridge(chatId);
+                hiveWakeSystem.registerWakeCallback(chatId, async (wakeEvent) => {
+                    console.log(`[WakeSystem] ⏰ Réveil contextuel pour chatId=${chatId}`);
+                    await this._onMessage({
+                        chatId: wakeEvent.chatId,
+                        sender: 'system@wake',
+                        senderName: 'WAKE_SYSTEM',
+                        text: `[WAKE_EVENT] ${wakeEvent.prompt}`,
+                        isGroup: wakeEvent.chatId?.endsWith('@g.us') ?? false,
+                        isSystem: true,
+                        sourceChannel: 'internal',
+                    } as any);
+                });
+
+                const ptcResult = await ptcExecutor.execute(code, toolFns, hiveBridge);
+                if (ptcResult.metadata.sleepScheduled) {
+                    const sleep = ptcResult.metadata.sleepScheduled;
+                    return {
+                        success: true,
+                        type: 'SLEEP_SCHEDULED',
+                        message: sleep.message,
+                        wakeEventId: sleep.wakeEventId,
+                        wakeAtMs: sleep.wakeAtMs,
+                    };
+                }
+                return ptcResult;
+            } catch (error: any) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        return this._safeExecuteTool(
+            { id: `live_${Date.now()}`, function: { name, arguments: JSON.stringify(args || {}) } },
+            { chatId: message.chatId, message, authority }
+        );
+    }
+
     /**
      * Initialise tous les composants
      */
@@ -729,15 +833,12 @@ export class BotCore {
                     // Construire le contexte via le loader unifié V3
                     const context: any = await tieredContextLoader.load(chatId, message);
 
-                    // Tools sélection
-                    // On charge les outils génériques car on a pas encore le texte
-                    const relevantTools = await pluginLoader.getRelevantTools("conversation générale", 5);
+                    const relevantTools = await this._getLiveAudioTools();
 
                     // Définir l'executor pour que le Provider puisse appeler les tools du Bot
                     geminiLive.toolExecutor = async (name: any, args: any) => {
                         console.log(`[Core] 🛠️ Exécution tool via Live: ${name}`);
-                        // On réutilise _executeTool du Core
-                        return await this._executeTool({ function: { name, arguments: JSON.stringify(args) } }, message);
+                        return await this._executeLiveTool(name, args, message, relevantTools, context.authority);
                     };
 
                     // Appel Streaming vers Gemini Live

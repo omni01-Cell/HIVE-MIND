@@ -10,6 +10,7 @@ import {
     downloadMediaMessage,
     isRealMessage
 } from '@whiskeysockets/baileys';
+import { getAudioWaveform } from '@whiskeysockets/baileys/lib/Utils/messages-media.js';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { readFileSync } from 'fs';
@@ -832,11 +833,41 @@ class BaileysTransport extends EventEmitter {
             ? audio
             : (typeof audio === 'string' ? { url: audio } : audio);
 
-        const message = {
+        let waveform = options.waveform;
+        if (!waveform) {
+            try {
+                const waveformSource = Buffer.isBuffer(audio)
+                    ? audio
+                    : (typeof audio === 'string' ? audio : audio?.url);
+                if (waveformSource) {
+                    waveform = await getAudioWaveform(waveformSource);
+                }
+            } catch (error: any) {
+                console.warn('[Baileys] Impossible de générer la waveform PTT:', error.message);
+            }
+        }
+        if (!waveform) {
+            waveform = Uint8Array.from([
+                8, 18, 35, 52, 39, 24, 12, 21,
+                44, 68, 55, 31, 16, 27, 49, 73,
+                61, 36, 20, 29, 58, 82, 64, 38,
+                22, 34, 60, 76, 54, 30, 15, 26,
+                47, 70, 57, 33, 18, 25, 45, 66,
+                51, 28, 14, 23, 42, 63, 50, 32,
+                17, 24, 46, 69, 56, 34, 19, 27,
+                43, 59, 48, 29, 16, 22, 36, 20
+            ]);
+        }
+
+        const message: any = {
             audio: audioSource,
             mimetype: options.mimetype || 'audio/ogg; codecs=opus',
             ptt: true // Affiche comme une note vocale
         };
+
+        if (waveform) {
+            message.waveform = waveform;
+        }
 
         const socketOptions = {};
         if (options.reply) {

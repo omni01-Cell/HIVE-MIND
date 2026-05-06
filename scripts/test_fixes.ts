@@ -62,9 +62,19 @@ import sysInteraction from '../plugins/base/sys_interaction/index.js';
 
 async function testSendFile() {
     // Mock the transport
-    let sentMedia = null;
+    let sentMedia: {
+        chatId: string;
+        filePath: string;
+        options: Record<string, any>;
+        channel?: string;
+    } | null = null;
     const mockTransport = {
-        sendMedia: async (chatId, filePath, options, channel) => {
+        sendMedia: async (
+            chatId: string,
+            filePath: string,
+            options: Record<string, any>,
+            channel?: string
+        ) => {
             sentMedia = { chatId, filePath, options, channel };
         }
     };
@@ -99,4 +109,3 @@ async function testSendFile() {
 }
 
 testSendFile().catch(console.error);
-
