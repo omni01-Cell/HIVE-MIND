@@ -767,7 +767,7 @@ export class BotCore {
                             const outputOgg = response.audioFile.replace('.pcm', '.ogg');
                             await converter.convertPcmToOgg(response.audioFile, outputOgg);
 
-                            await this.transport.sendVoice(chatId, outputOgg);
+                            await this.transport.sendVoiceNote(chatId, { url: outputOgg });
 
                             // Nettoyage
                             setTimeout(() => {
