@@ -190,18 +190,18 @@ async function run() {
     startRailwayLogs();
 
     try {
-        // 1. Audio Test (Native Gemini Live tool call)
-        const audioBuffer = fs.readFileSync('/home/omni/Téléchargements/test.opus');
+        // Test: Demander un voice note au bot pour voir l'indicateur "recording"
+        console.log('[TEST-RUNNER] 📤 Sending text message asking for voice note...');
         await sendAndWaitForResponse(
-            sock, targetJID, 
-            { audio: audioBuffer, ptt: true, mimetype: 'audio/ogg; codecs=opus' }, 
+            sock, targetJID,
+            'réponds par vocal: hello test',
             (msg) => {
-                const isAudio = !!msg.message?.audioMessage;
+                const hasVoiceNote = !!msg.message?.audioMessage;
                 const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-                console.log(`\n[TEST-RUNNER] 🤖 Bot replied: [Audio: ${isAudio}] [Text: ${text}]`);
-                return true; // Stop waiting as soon as the bot replies
+                console.log(`\n[TEST-RUNNER] 🤖 Bot replied: [VoiceNote: ${hasVoiceNote}] [Text: ${text}]`);
+                return hasVoiceNote; // Stop when we receive a voice note
             },
-            60000 // 60 seconds timeout
+            90000 // 90 seconds timeout
         );
 
     } catch (error) {
