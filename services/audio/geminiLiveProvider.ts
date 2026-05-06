@@ -127,16 +127,17 @@ export class GeminiLiveProvider {
      * Envoyer la configuration de session (camelCase requis par l'API Gemini)
      */
     _sendSetup(config: any) {
-        // Official API format: wrapper key is 'config', NOT 'setup'
-        // responseModalities lives at top level of config, NOT inside generationConfig
+        // Official API format: wrapper key is 'setup'
         const configMessage: any = {
-            config: {
+            setup: {
                 model: `models/${this.model}`,
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: {
-                            voiceName: config.voice || 'Aoede'
+                generationConfig: {
+                    responseModalities: ['AUDIO'],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: config.voice || 'Aoede'
+                            }
                         }
                     }
                 }
@@ -145,16 +146,16 @@ export class GeminiLiveProvider {
 
         console.log(`[GeminiLive] 📋 Setup: model=${this.model}`);
 
-        // System instruction (inside config per API spec)
+        // System instruction (inside setup per API spec)
         if (config.systemPrompt) {
-            configMessage.config.systemInstruction = {
+            configMessage.setup.systemInstruction = {
                 parts: [{ text: config.systemPrompt }]
             };
         }
 
         // Tools (function declarations)
         if (config.tools && config.tools.length > 0) {
-            configMessage.config.tools = [{
+            configMessage.setup.tools = [{
                 functionDeclarations: config.tools.map((tool: any) => ({
                     name: tool.function.name,
                     description: tool.function.description,
