@@ -66,9 +66,14 @@ export class GeminiLiveProvider {
 
             this.ws.on('message', (data: any) => {
                 try {
-                    const message = JSON.parse(data.toString());
+                    const raw = data.toString();
+                    const message = JSON.parse(raw);
 
-                    // Intercept setupComplete pour résoudre connect()
+                    // Debug: log every server message key for diagnostics
+                    const keys = Object.keys(message);
+                    console.log('[GeminiLive] 📨 Server message keys:', keys.join(', '));
+
+                    // Intercept setupComplete to resolve connect()
                     if (message.setupComplete && !setupReceived) {
                         setupReceived = true;
                         console.log('[GeminiLive] ✓ Setup confirmed — session prête');
@@ -76,7 +81,7 @@ export class GeminiLiveProvider {
                         return;
                     }
 
-                    // Tous les autres messages passent par le handler normal
+                    // All other messages go through the normal handler
                     this._handleMessage(message);
 
                 } catch (error: any) {
@@ -122,16 +127,16 @@ export class GeminiLiveProvider {
      * Envoyer la configuration de session (camelCase requis par l'API Gemini)
      */
     _sendSetup(config: any) {
-        const setupMessage: any = {
-            setup: {
+        // Official API format: wrapper key is 'config', NOT 'setup'
+        // responseModalities lives at top level of config, NOT inside generationConfig
+        const configMessage: any = {
+            config: {
                 model: `models/${this.model}`,
-                generationConfig: {
-                    responseModalities: ['AUDIO'],
-                    speechConfig: {
-                        voiceConfig: {
-                            prebuiltVoiceConfig: {
-                                voiceName: config.voice || 'Aoede'
-                            }
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: {
+                            voiceName: config.voice || 'Aoede'
                         }
                     }
                 }
@@ -140,16 +145,16 @@ export class GeminiLiveProvider {
 
         console.log(`[GeminiLive] 📋 Setup: model=${this.model}`);
 
-        // System instruction
+        // System instruction (inside config per API spec)
         if (config.systemPrompt) {
-            setupMessage.setup.systemInstruction = {
+            configMessage.config.systemInstruction = {
                 parts: [{ text: config.systemPrompt }]
             };
         }
 
         // Tools (function declarations)
         if (config.tools && config.tools.length > 0) {
-            setupMessage.setup.tools = [{
+            configMessage.config.tools = [{
                 functionDeclarations: config.tools.map((tool: any) => ({
                     name: tool.function.name,
                     description: tool.function.description,
@@ -158,7 +163,7 @@ export class GeminiLiveProvider {
             }];
         }
 
-        this._send(setupMessage);
+        this._send(configMessage);
         console.log('[GeminiLive] ⚙️ Session configurée (tools:', config.tools?.length || 0, ')');
     }
 
@@ -202,8 +207,7 @@ export class GeminiLiveProvider {
 
         const base64Audio = pcmBuffer.toString('base64');
 
-        // Envoyer l'audio via realtimeInput.audio (format documenté par Google)
-        // La VAD côté serveur détecte automatiquement la fin du tour
+        // Send audio via realtimeInput.audio (format per official Google docs)
         this._send({
             realtimeInput: {
                 audio: {
@@ -214,6 +218,16 @@ export class GeminiLiveProvider {
         });
 
         console.log(`[GeminiLive] 🎤 Audio envoyé (${pcmBuffer.length} bytes PCM, original: ${audioBuffer.length} bytes)`);
+
+        // For pre-recorded audio (non-streaming), signal end of user turn
+        // so the server knows to start generating a response.
+        // Without this, the server VAD waits indefinitely for more audio.
+        this._send({
+            clientContent: {
+                turnComplete: true
+            }
+        });
+        console.log('[GeminiLive] ✅ turnComplete signal sent');
     }
 
     /**

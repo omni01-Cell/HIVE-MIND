@@ -25,7 +25,7 @@
 
 import { redis } from './redisClient.js';
 import { StateManager } from './state/StateManager.js';
-import { supabase } from './supabase.js';
+import { supabase, db as supabaseDb } from './supabase.js';
 
 /**
  * Service de gestion des groupes WhatsApp
@@ -244,8 +244,8 @@ export const groupService = {
     async getGroupSettings(groupJid: any) {
         if (!supabase) return {};
         try {
-            // Utilise getGroupConfig de supabase.ts qui gère déjà le mapping
-            const config = await supabase.getGroupConfig(groupJid);
+            // Utilise getGroupConfig de supabase.ts `db` wrapper (not the raw client)
+            const config = await supabaseDb.getGroupConfig(groupJid);
             return config || {};
         } catch (error: any) {
             console.error('[GroupService] getGroupSettings error:', error.message);
