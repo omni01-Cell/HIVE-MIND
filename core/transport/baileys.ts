@@ -19,6 +19,43 @@ import { fileURLToPath } from 'url';
 import { EventEmitter } from 'events';
 import swarm from '../concurrency/SwarmDispatcher.js'; // [NEW] Module Swarm
 
+/**
+ * Génère une waveform (60 valeurs Uint8) à partir d'un buffer audio
+ * Compatible avec le format attendu par WhatsApp pour les voice notes
+ */
+function generateWaveformFromBuffer(audioBuffer: Buffer): Uint8Array {
+    const waveformSize = 60;
+    const waveform = new Uint8Array(waveformSize);
+
+    if (!audioBuffer || audioBuffer.length < 100) {
+        // Audio trop court, retourner une waveform par défaut
+        return waveform;
+    }
+
+    // Pour les fichiers OGG, on peut utiliser les données brutes pour l'échantillonnage
+    // On.sample le buffer tous les N octets pour créer une approximation visuelle
+    const sampleStep = Math.max(1, Math.floor(audioBuffer.length / (waveformSize * 4)));
+
+    for (let i = 0; i < waveformSize; i++) {
+        const startIdx = i * sampleStep * 4;
+        let sum = 0;
+        let count = 0;
+
+        // Prendre quelques échantillons autour de cette position
+        for (let j = 0; j < 16 && startIdx + j < audioBuffer.length; j++) {
+            const byte = audioBuffer[startIdx + j];
+            sum += Math.abs(byte - 128); // Distance de 128 (milieu)
+            count++;
+        }
+
+        // Normaliser entre 0-255
+        const avg = count > 0 ? sum / count : 0;
+        waveform[i] = Math.min(255, Math.max(0, avg * 4 + 20)); // Ajouter un offset pour visibilité
+    }
+
+    return waveform;
+}
+
 // DTC Phase 1: Nouveaux services unifiés
 // import { userService } from '../../services/userService.js'; // REMOVED FOR DI
 // import { groupService } from '../../services/groupService.js'; // REMOVED FOR DI
@@ -836,22 +873,39 @@ class BaileysTransport extends EventEmitter {
         let waveform = options.waveform;
         if (!waveform) {
             try {
-                // Pour la waveform, on a besoin du chemin de fichier direct
+                // Essaye d'abord avec getAudioWaveform de Baileys
                 let waveformPath: string | Buffer | undefined;
                 if (Buffer.isBuffer(audio)) {
                     waveformPath = audio;
                 } else if (typeof audio === 'string') {
-                    waveformPath = audio; // File path directly
+                    waveformPath = audio;
                 } else if (audio?.url) {
                     waveformPath = audio.url;
                 }
                 if (waveformPath) {
                     waveform = await getAudioWaveform(waveformPath);
-                    console.log(`[Baileys] Waveform generated: ${waveform ? 'yes' : 'no'}, length: ${waveform?.length}`);
                 }
             } catch (error: any) {
-                console.warn('[Baileys] Impossible de générer la waveform PTT:', error.message);
+                console.warn('[Baileys] getAudioWaveform failed:', error.message);
             }
+
+            // Fallback: générer une waveform à partir du buffer audio
+            if (!waveform && Buffer.isBuffer(audio)) {
+                waveform = generateWaveformFromBuffer(audio);
+            } else if (!waveform && typeof audio === 'string') {
+                // Tenter de lire le fichier et générer la waveform
+                try {
+                    const fs = await import('fs');
+                    if (fs.existsSync(audio)) {
+                        const fileBuffer = fs.readFileSync(audio);
+                        waveform = generateWaveformFromBuffer(fileBuffer);
+                    }
+                } catch (e: any) {
+                    console.warn('[Baileys] Failed to read audio file for waveform:', e.message);
+                }
+            }
+
+            console.log(`[Baileys] Waveform: ${waveform ? 'generated' : 'fallback'}, length: ${waveform?.length}`);
         }
         if (!waveform) {
             console.log('[Baileys] Using static waveform fallback');
