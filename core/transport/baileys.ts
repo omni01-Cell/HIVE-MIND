@@ -836,11 +836,17 @@ class BaileysTransport extends EventEmitter {
         let waveform = options.waveform;
         if (!waveform) {
             try {
-                const waveformSource = Buffer.isBuffer(audio)
-                    ? audio
-                    : (typeof audio === 'string' ? audio : audio?.url);
-                if (waveformSource) {
-                    waveform = await getAudioWaveform(waveformSource);
+                // Pour la waveform, on a besoin du chemin de fichier direct
+                let waveformPath: string | Buffer | undefined;
+                if (Buffer.isBuffer(audio)) {
+                    waveformPath = audio;
+                } else if (typeof audio === 'string') {
+                    waveformPath = audio; // File path directly
+                } else if (audio?.url) {
+                    waveformPath = audio.url;
+                }
+                if (waveformPath) {
+                    waveform = await getAudioWaveform(waveformPath);
                     console.log(`[Baileys] Waveform generated: ${waveform ? 'yes' : 'no'}, length: ${waveform?.length}`);
                 }
             } catch (error: any) {
