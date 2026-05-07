@@ -117,21 +117,51 @@ export class BotCore {
 
     async _getLiveAudioTools() {
         // Gemini Live API crashes (1011) when setup payload exceeds ~10KB.
-        // getRelevantTools() always injects 14 CORE_TOOLS regardless of limit,
-        // so we bypass it entirely and hand-pick only voice-essential tools.
-        const LIVE_TOOL_NAMES = [
-            'send_message',
-            'google_ai_search',
-            'get_my_capabilities',
-            'search_long_term_memory',
-            'search_wikipedia',
-        ];
+        // getRelevantTools() injects 14 CORE_TOOLS — we bypass it entirely.
+        // Strategy: 3 hardcoded essentials + 2 RAG-selected tools.
 
+        const HARDCODED_TOOLS = ['send_message', 'google_ai_search', 'get_my_capabilities'];
         const allToolDefs = (pluginLoader as any).toolDefinitions || [];
-        const tools = allToolDefs.filter((t: any) =>
-            t?.function?.name && LIVE_TOOL_NAMES.includes(t.function.name)
-        );
 
+        // 1. Hardcoded essentials
+        const toolsByName = new Map<string, any>();
+        for (const tool of allToolDefs) {
+            const name = tool?.function?.name;
+            if (name && HARDCODED_TOOLS.includes(name)) {
+                toolsByName.set(name, tool);
+            }
+        }
+
+        // 2. Direct RAG query (bypass getRelevantTools to avoid CORE_TOOLS injection)
+        try {
+            const { supabase } = await import('../services/supabase.js');
+            const embeddingsService = container.has('embeddings') ? container.get('embeddings') : null;
+
+            if (supabase && embeddingsService) {
+                const queryVector = await (embeddingsService as any).embed('conversation vocale recherche information');
+                if (queryVector) {
+                    const { data } = await supabase.rpc('match_tools', {
+                        query_embedding: queryVector,
+                        match_count: 5
+                    });
+
+                    if (data && data.length > 0) {
+                        let added = 0;
+                        for (const match of data) {
+                            const name = match.definition?.function?.name;
+                            if (name && !toolsByName.has(name) && added < 2) {
+                                toolsByName.set(name, match.definition);
+                                added++;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: any) {
+            console.warn('[GeminiLive] RAG fallback: direct query failed:', e.message);
+        }
+
+        const tools = Array.from(toolsByName.values());
         console.log(`[GeminiLive] 🔧 ${tools.length} tools for Live: ${tools.map((t: any) => t.function.name).join(', ')}`);
         return tools;
     }
