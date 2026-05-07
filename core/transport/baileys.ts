@@ -841,12 +841,14 @@ class BaileysTransport extends EventEmitter {
                     : (typeof audio === 'string' ? audio : audio?.url);
                 if (waveformSource) {
                     waveform = await getAudioWaveform(waveformSource);
+                    console.log(`[Baileys] Waveform generated: ${waveform ? 'yes' : 'no'}, length: ${waveform?.length}`);
                 }
             } catch (error: any) {
                 console.warn('[Baileys] Impossible de générer la waveform PTT:', error.message);
             }
         }
         if (!waveform) {
+            console.log('[Baileys] Using static waveform fallback');
             waveform = Uint8Array.from([
                 8, 18, 35, 52, 39, 24, 12, 21,
                 44, 68, 55, 31, 16, 27, 49, 73,
