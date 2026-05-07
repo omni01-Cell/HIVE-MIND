@@ -1011,8 +1011,10 @@ class BaileysTransport extends EventEmitter {
         };
 
         const status = presenceMap[type] || 'composing';
+        console.log(`[Baileys] setPresence: ${status} -> ${chatId}`);
         try {
             await this.sock.sendPresenceUpdate(status, chatId);
+            console.log(`[Baileys] ✓ setPresence ${status} sent successfully`);
         } catch (err: any) {
             console.warn(`[Baileys] Warning setPresence: ${err.message}`);
         }
