@@ -117,42 +117,22 @@ export class BotCore {
 
     async _getLiveAudioTools() {
         // Gemini Live API crashes (1011) when setup payload exceeds ~10KB.
-        // Strategy: 3 essential core tools + max 2 RAG tools = 5 tools max.
-        const semanticTools = await pluginLoader.getRelevantTools(
-            'conversation recherche information',
-            2,
-            2
-        );
-
-        // Absolute minimum: tools the bot cannot function without in voice mode
-        const requiredToolNames = [
+        // getRelevantTools() always injects 14 CORE_TOOLS regardless of limit,
+        // so we bypass it entirely and hand-pick only voice-essential tools.
+        const LIVE_TOOL_NAMES = [
             'send_message',
             'google_ai_search',
             'get_my_capabilities',
+            'search_long_term_memory',
+            'search_wikipedia',
         ];
 
         const allToolDefs = (pluginLoader as any).toolDefinitions || [];
-        const toolsByName = new Map<string, any>();
+        const tools = allToolDefs.filter((t: any) =>
+            t?.function?.name && LIVE_TOOL_NAMES.includes(t.function.name)
+        );
 
-        // Required tools first (priority)
-        for (const tool of allToolDefs) {
-            const name = tool?.function?.name;
-            if (name && requiredToolNames.includes(name)) {
-                toolsByName.set(name, tool);
-            }
-        }
-
-        // Then RAG tools (max 2, skip if already in required)
-        for (const tool of semanticTools || []) {
-            const name = tool?.function?.name;
-            if (name && !toolsByName.has(name)) {
-                toolsByName.set(name, tool);
-            }
-        }
-
-        const tools = Array.from(toolsByName.values());
         console.log(`[GeminiLive] 🔧 ${tools.length} tools for Live: ${tools.map((t: any) => t.function.name).join(', ')}`);
-
         return tools;
     }
 
