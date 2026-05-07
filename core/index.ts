@@ -117,30 +117,24 @@ export class BotCore {
 
     async _getLiveAudioTools() {
         // Gemini Live API crashes (1011) when setup payload exceeds ~10KB.
-        // Keep tool count low: 4 semantic + essential required = max 10 total.
+        // Strategy: 3 essential core tools + max 2 RAG tools = 5 tools max.
         const semanticTools = await pluginLoader.getRelevantTools(
-            'conversation vocale recherche information',
-            4,
-            10
+            'conversation recherche information',
+            2,
+            2
         );
 
-        // Only tools useful in a voice conversation — no file editing, no workspace writes
+        // Absolute minimum: tools the bot cannot function without in voice mode
         const requiredToolNames = [
             'send_message',
-            'send_file',
             'google_ai_search',
-            'search_long_term_memory',
             'get_my_capabilities',
         ];
 
         const allToolDefs = (pluginLoader as any).toolDefinitions || [];
         const toolsByName = new Map<string, any>();
 
-        for (const tool of semanticTools || []) {
-            const name = tool?.function?.name;
-            if (name) toolsByName.set(name, tool);
-        }
-
+        // Required tools first (priority)
         for (const tool of allToolDefs) {
             const name = tool?.function?.name;
             if (name && requiredToolNames.includes(name)) {
@@ -148,11 +142,16 @@ export class BotCore {
             }
         }
 
-        // Hard cap: Gemini Live cannot handle more than ~10 tools without 1011
-        const MAX_LIVE_TOOLS = 10;
-        const tools = Array.from(toolsByName.values()).slice(0, MAX_LIVE_TOOLS);
+        // Then RAG tools (max 2, skip if already in required)
+        for (const tool of semanticTools || []) {
+            const name = tool?.function?.name;
+            if (name && !toolsByName.has(name)) {
+                toolsByName.set(name, tool);
+            }
+        }
 
-        console.log(`[GeminiLive] 🔧 ${tools.length} tools for Live mode: ${tools.map((t: any) => t.function.name).join(', ')}`);
+        const tools = Array.from(toolsByName.values());
+        console.log(`[GeminiLive] 🔧 ${tools.length} tools for Live: ${tools.map((t: any) => t.function.name).join(', ')}`);
 
         return tools;
     }
