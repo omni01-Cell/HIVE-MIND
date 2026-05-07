@@ -190,18 +190,18 @@ async function run() {
     startRailwayLogs();
 
     try {
-        // Test: Demander un voice note au bot pour voir l'indicateur "recording"
-        console.log('[TEST-RUNNER] 📤 Sending text message asking for voice note...');
+        // Test: Demander un voice note LONG au bot pour voir l'indicateur "recording" et waveform
+        console.log('[TEST-RUNNER] 📤 Sending text message asking for LONG voice note...');
         await sendAndWaitForResponse(
             sock, targetJID,
-            'réponds par vocal: hello test',
+            'réponds par vocal: dis moi une blague longue et marrante en français, fais un vocal d au moins 30 secondes',
             (msg) => {
                 const hasVoiceNote = !!msg.message?.audioMessage;
                 const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
                 console.log(`\n[TEST-RUNNER] 🤖 Bot replied: [VoiceNote: ${hasVoiceNote}] [Text: ${text}]`);
                 return hasVoiceNote; // Stop when we receive a voice note
             },
-            90000 // 90 seconds timeout
+            120000 // 120 seconds timeout for longer audio
         );
 
     } catch (error) {
