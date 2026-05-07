@@ -150,9 +150,10 @@ export class BotCore {
         }
 
         const tools = Array.from(toolsByName.values());
-        if (process.env.PTC_ENABLED !== 'false' && !toolsByName.has('code_execution')) {
-            tools.push(ptcExecutor.buildCodeExecutionToolDef(tools));
-        }
+        // PTC code_execution is EXCLUDED from Gemini Live mode.
+        // Its description embeds all tool docs (~5KB+) which exceeds the Live API's
+        // setup message size limit, causing 1011 Internal Error on the server.
+        // PTC is designed for text-mode ReAct loops, not real-time audio streaming.
 
         return tools;
     }

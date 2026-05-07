@@ -130,6 +130,31 @@ export class GeminiLiveProvider {
     }
 
     /**
+     * Sanitise un schéma de paramètres pour l'API Gemini Live.
+     * Gemini ne supporte pas `additionalProperties` — le serveur crash (1011) si présent.
+     */
+    _sanitizeParameters(params: any): any {
+        if (!params || typeof params !== 'object') return params;
+
+        const cleaned: any = {};
+        for (const [key, value] of Object.entries(params)) {
+            if (key === 'additionalProperties') continue;
+            if (key === 'properties' && typeof value === 'object' && value !== null) {
+                const cleanedProps: any = {};
+                for (const [propName, propVal] of Object.entries(value as Record<string, any>)) {
+                    cleanedProps[propName] = this._sanitizeParameters(propVal);
+                }
+                cleaned[key] = cleanedProps;
+            } else if (key === 'items' && typeof value === 'object') {
+                cleaned[key] = this._sanitizeParameters(value);
+            } else {
+                cleaned[key] = value;
+            }
+        }
+        return cleaned;
+    }
+
+    /**
      * Envoyer la configuration de session (camelCase requis par l'API Gemini)
      */
     _sendSetup(config: any) {
@@ -159,19 +184,28 @@ export class GeminiLiveProvider {
             };
         }
 
-        // Tools (function declarations)
+        // Tools (function declarations) — sanitised for Live API compatibility
         if (config.tools && config.tools.length > 0) {
-            configMessage.setup.tools = [{
-                functionDeclarations: config.tools.map((tool: any) => ({
+            const MAX_DESC_LENGTH = 500;
+            const sanitisedDeclarations = config.tools.map((tool: any) => {
+                const desc = tool.function.description || '';
+                return {
                     name: tool.function.name,
-                    description: tool.function.description,
-                    parameters: tool.function.parameters
-                }))
+                    description: desc.length > MAX_DESC_LENGTH
+                        ? desc.substring(0, MAX_DESC_LENGTH) + '…'
+                        : desc,
+                    parameters: this._sanitizeParameters(tool.function.parameters)
+                };
+            });
+
+            configMessage.setup.tools = [{
+                functionDeclarations: sanitisedDeclarations
             }];
         }
 
+        const payload = JSON.stringify(configMessage);
+        console.log(`[GeminiLive] ⚙️ Session configurée (tools: ${config.tools?.length || 0}, payload: ${payload.length} bytes)`);
         this._send(configMessage);
-        console.log('[GeminiLive] ⚙️ Session configurée (tools:', config.tools?.length || 0, ')');
     }
 
     /**
