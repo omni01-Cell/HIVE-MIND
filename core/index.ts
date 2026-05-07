@@ -116,22 +116,21 @@ export class BotCore {
     get quotaManager() { return container.get('quotaManager'); }
 
     async _getLiveAudioTools() {
+        // Gemini Live API crashes (1011) when setup payload exceeds ~10KB.
+        // Keep tool count low: 4 semantic + essential required = max 10 total.
         const semanticTools = await pluginLoader.getRelevantTools(
-            'conversation vocale fichiers repertoire directory list_directory grep_search read_file send_file',
-            8,
-            20
+            'conversation vocale recherche information',
+            4,
+            10
         );
 
+        // Only tools useful in a voice conversation — no file editing, no workspace writes
         const requiredToolNames = [
             'send_message',
             'send_file',
-            'list_directory',
-            'grep_search',
-            'read_file',
-            'get_my_capabilities',
             'google_ai_search',
-            'workspace_read',
-            'workspace_search'
+            'search_long_term_memory',
+            'get_my_capabilities',
         ];
 
         const allToolDefs = (pluginLoader as any).toolDefinitions || [];
@@ -149,11 +148,11 @@ export class BotCore {
             }
         }
 
-        const tools = Array.from(toolsByName.values());
-        // PTC code_execution is EXCLUDED from Gemini Live mode.
-        // Its description embeds all tool docs (~5KB+) which exceeds the Live API's
-        // setup message size limit, causing 1011 Internal Error on the server.
-        // PTC is designed for text-mode ReAct loops, not real-time audio streaming.
+        // Hard cap: Gemini Live cannot handle more than ~10 tools without 1011
+        const MAX_LIVE_TOOLS = 10;
+        const tools = Array.from(toolsByName.values()).slice(0, MAX_LIVE_TOOLS);
+
+        console.log(`[GeminiLive] 🔧 ${tools.length} tools for Live mode: ${tools.map((t: any) => t.function.name).join(', ')}`);
 
         return tools;
     }
