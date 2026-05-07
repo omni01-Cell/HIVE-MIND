@@ -238,18 +238,28 @@ export class GeminiLiveProvider {
     /**
      * Attendre la réponse du modèle
      */
-    async waitForResponse(timeoutMs: any = 30000): Promise<any> {
+    async waitForResponse(timeoutMs: any = 120000): Promise<any> {
         return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                this.responseResolver = null;
-                this.responseRejector = null;
-                reject(new Error('Response timeout'));
-            }, timeoutMs);
+            let timeout: NodeJS.Timeout;
+
+            const resetTimeout = () => {
+                if (timeout) clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    this.responseResolver = null;
+                    this.responseRejector = null;
+                    (this as any)._resetActivityTimeout = null;
+                    reject(new Error(`Response timeout (${timeoutMs}ms without activity)`));
+                }, timeoutMs);
+            };
+
+            (this as any)._resetActivityTimeout = resetTimeout;
+            resetTimeout();
 
             this.responseResolver = (response: any) => {
                 clearTimeout(timeout);
                 this.responseResolver = null;
                 this.responseRejector = null;
+                (this as any)._resetActivityTimeout = null;
                 resolve(response);
             };
 
@@ -257,6 +267,7 @@ export class GeminiLiveProvider {
                 clearTimeout(timeout);
                 this.responseResolver = null;
                 this.responseRejector = null;
+                (this as any)._resetActivityTimeout = null;
                 reject(error);
             };
         });
@@ -266,6 +277,10 @@ export class GeminiLiveProvider {
      * Gérer les messages du serveur (après setup)
      */
     _handleMessage(message: any) {
+        if ((this as any)._resetActivityTimeout) {
+            (this as any)._resetActivityTimeout();
+        }
+
         // Server content (réponse du modèle)
         if (message.serverContent) {
             this._handleServerContent(message.serverContent);

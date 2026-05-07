@@ -841,14 +841,21 @@ export class BotCore {
                         return await this._executeLiveTool(name, args, message, relevantTools, context.authority);
                     };
 
-                    // Appel Streaming vers Gemini Live
-                    const response = await geminiLive.processAudioWithTools({
-                        audioBuffer: message.audioBuffer,
-                        systemPrompt: context.systemPrompt,
-                        tools: relevantTools,
-                        conversationHistory: (context.history || []).slice(-5), // Limite contexte audio
-                        voice: hiveCfg.models?.reglages_generaux?.audio_strategy?.native_voice || 'Aoede'
-                    });
+                    let response: any = null;
+                    try {
+                        // Appel Streaming vers Gemini Live
+                        response = await geminiLive.processAudioWithTools({
+                            audioBuffer: message.audioBuffer,
+                            systemPrompt: context.systemPrompt,
+                            tools: relevantTools,
+                            conversationHistory: (context.history || []).slice(-5), // Limite contexte audio
+                            voice: hiveCfg.models?.reglages_generaux?.audio_strategy?.native_voice || 'Aoede'
+                        });
+                    } catch (apiError: any) {
+                        console.error('[Core] ❌ Erreur API Gemini Live:', apiError.message);
+                        await this.transport.sendText(chatId, "⚠️ Une erreur technique s'est produite avec l'API vocale (timeout ou déconnexion). Peux-tu reformuler ?");
+                        return;
+                    }
 
                     // 1. Envoyer la réponse AUDIO
                     if (response.audioFile) {
