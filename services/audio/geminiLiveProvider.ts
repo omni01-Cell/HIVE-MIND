@@ -158,6 +158,10 @@ export class GeminiLiveProvider {
      * Envoyer la configuration de session (camelCase requis par l'API Gemini)
      */
     _sendSetup(config: any) {
+        // Gemini Live API crashes (1011) when setup payload exceeds ~10KB.
+        const MAX_SETUP_PAYLOAD_BYTES = 8000;
+        const MAX_DESC_LENGTH = 300;
+
         // Official API format: wrapper key is 'setup'
         const configMessage: any = {
             setup: {
@@ -177,17 +181,21 @@ export class GeminiLiveProvider {
 
         console.log(`[GeminiLive] 📋 Setup: model=${this.model}`);
 
-        // System instruction
+        // System instruction — truncate for Live mode to save payload budget
         if (config.systemPrompt) {
+            const MAX_PROMPT_LENGTH = 2000;
+            const prompt = config.systemPrompt.length > MAX_PROMPT_LENGTH
+                ? config.systemPrompt.substring(0, MAX_PROMPT_LENGTH) + '\n[...truncated for Live API]'
+                : config.systemPrompt;
             configMessage.setup.systemInstruction = {
-                parts: [{ text: config.systemPrompt }]
+                parts: [{ text: prompt }]
             };
         }
 
         // Tools (function declarations) — sanitised for Live API compatibility
+        let sanitisedDeclarations: any[] = [];
         if (config.tools && config.tools.length > 0) {
-            const MAX_DESC_LENGTH = 500;
-            const sanitisedDeclarations = config.tools.map((tool: any) => {
+            sanitisedDeclarations = config.tools.map((tool: any) => {
                 const desc = tool.function.description || '';
                 return {
                     name: tool.function.name,
@@ -203,8 +211,18 @@ export class GeminiLiveProvider {
             }];
         }
 
-        const payload = JSON.stringify(configMessage);
-        console.log(`[GeminiLive] ⚙️ Session configurée (tools: ${config.tools?.length || 0}, payload: ${payload.length} bytes)`);
+        // Payload size guard: progressively drop tools until under the limit
+        let payload = JSON.stringify(configMessage);
+        while (payload.length > MAX_SETUP_PAYLOAD_BYTES && sanitisedDeclarations.length > 0) {
+            const dropped = sanitisedDeclarations.pop();
+            console.warn(`[GeminiLive] ⚠️ Payload ${payload.length}B > ${MAX_SETUP_PAYLOAD_BYTES}B — dropping tool: ${dropped?.name}`);
+            configMessage.setup.tools = sanitisedDeclarations.length > 0
+                ? [{ functionDeclarations: sanitisedDeclarations }]
+                : undefined;
+            payload = JSON.stringify(configMessage);
+        }
+
+        console.log(`[GeminiLive] ⚙️ Session configurée (tools: ${sanitisedDeclarations.length}, payload: ${payload.length} bytes)`);
         this._send(configMessage);
     }
 
