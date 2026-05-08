@@ -41,7 +41,7 @@
             "native_for_groups": true,
             "preserve_emotions": true,
             "max_native_duration_seconds": 60,
-            "native_voice": "Kore"
+            "native_voice": "Sadachbia"
         },
         "service_recipes": {
             "EXECUTOR": {
