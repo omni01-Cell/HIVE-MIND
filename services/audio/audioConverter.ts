@@ -43,12 +43,12 @@ export async function convertOggToPcm(inputPath) {
  * @param {string} outputPath - Chemin de sortie OGG
  * @returns {Promise<string>} Chemin du fichier OGG
  */
-export async function convertPcmToOgg(inputPath, outputPath) {
+export async function convertPcmToOgg(inputPath, outputPath, sampleRate = 24000) {
     return new Promise((resolve: any, reject: any) => {
         ffmpeg(inputPath)
             .inputOptions([
                 '-f s16le',
-                '-ar 16000',   // Sample rate
+                `-ar ${sampleRate}`,
                 '-ac 1'        // Mono
             ])
             .audioCodec('libopus')
@@ -61,7 +61,7 @@ export async function convertPcmToOgg(inputPath, outputPath) {
                 reject(err);
             })
             .on('end', () => {
-                console.log(`[AudioConverter] ✅ PCM→OGG: ${outputPath}`);
+                console.log(`[AudioConverter] ✅ PCM→OGG: ${outputPath} (input ${sampleRate}Hz)`);
                 resolve(outputPath);
             })
             .save(outputPath);
@@ -89,7 +89,7 @@ export async function processAudioPipeline(inputOgg, outputOgg, processCallback)
 
         // 3. PCM → OGG
         console.log('[AudioConverter] 🔄 Pipeline: PCM → OGG');
-        await convertPcmToOgg(tempPcmPath, outputOgg);
+        await convertPcmToOgg(tempPcmPath, outputOgg, 16000);
 
         return outputOgg;
 
