@@ -10,7 +10,6 @@ import {
     downloadMediaMessage,
     isRealMessage
 } from '@whiskeysockets/baileys';
-import { getAudioWaveform } from '@whiskeysockets/baileys/lib/Utils/messages-media.js';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import { readFileSync } from 'fs';
@@ -20,40 +19,57 @@ import { EventEmitter } from 'events';
 import swarm from '../concurrency/SwarmDispatcher.js'; // [NEW] Module Swarm
 
 /**
- * Génère une waveform (60 valeurs Uint8) à partir d'un buffer audio
- * Compatible avec le format attendu par WhatsApp pour les voice notes
+ * Génère une waveform (64 valeurs Uint8) à partir d'un fichier audio via FFmpeg
+ * Décode l'audio en PCM pour obtenir de vrais échantillons (pas les bytes bruts du conteneur)
  */
-function generateWaveformFromBuffer(audioBuffer: Buffer): Uint8Array {
-    const waveformSize = 60;
-    const waveform = new Uint8Array(waveformSize);
+async function generateWaveformFromFile(audioPath: string): Promise<Uint8Array | null> {
+    const WAVEFORM_SIZE = 64;
+    try {
+        const { execSync } = await import('child_process');
+        const ffmpegInstaller = await import('@ffmpeg-installer/ffmpeg');
 
-    if (!audioBuffer || audioBuffer.length < 100) {
-        // Audio trop court, retourner une waveform par défaut
-        return waveform;
-    }
+        // Décoder l'audio en PCM 16-bit mono 8kHz (basse fréquence = moins de data, suffisant pour waveform)
+        const pcmBuffer = execSync(
+            `"${ffmpegInstaller.default.path}" -i "${audioPath}" -f s16le -ac 1 -ar 8000 -`,
+            { maxBuffer: 2 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }
+        );
 
-    // Pour les fichiers OGG, on peut utiliser les données brutes pour l'échantillonnage
-    // On.sample le buffer tous les N octets pour créer une approximation visuelle
-    const sampleStep = Math.max(1, Math.floor(audioBuffer.length / (waveformSize * 4)));
+        if (!pcmBuffer || pcmBuffer.length < 200) return null;
 
-    for (let i = 0; i < waveformSize; i++) {
-        const startIdx = i * sampleStep * 4;
-        let sum = 0;
-        let count = 0;
+        // Chaque sample = 2 bytes (16-bit signed LE)
+        const totalSamples = Math.floor(pcmBuffer.length / 2);
+        const samplesPerSegment = Math.floor(totalSamples / WAVEFORM_SIZE);
+        const waveform = new Uint8Array(WAVEFORM_SIZE);
 
-        // Prendre quelques échantillons autour de cette position
-        for (let j = 0; j < 16 && startIdx + j < audioBuffer.length; j++) {
-            const byte = audioBuffer[startIdx + j];
-            sum += Math.abs(byte - 128); // Distance de 128 (milieu)
-            count++;
+        let maxRms = 0;
+        const rmsValues: number[] = [];
+
+        for (let i = 0; i < WAVEFORM_SIZE; i++) {
+            const offset = i * samplesPerSegment * 2;
+            let sumSquares = 0;
+
+            for (let j = 0; j < samplesPerSegment && (offset + j * 2 + 1) < pcmBuffer.length; j++) {
+                const sample = pcmBuffer.readInt16LE(offset + j * 2);
+                sumSquares += sample * sample;
+            }
+
+            const rms = Math.sqrt(sumSquares / samplesPerSegment);
+            rmsValues.push(rms);
+            if (rms > maxRms) maxRms = rms;
         }
 
-        // Normaliser entre 0-255
-        const avg = count > 0 ? sum / count : 0;
-        waveform[i] = Math.min(255, Math.max(0, avg * 4 + 20)); // Ajouter un offset pour visibilité
-    }
+        // Normaliser entre 5 et 255 (5 minimum pour éviter un affichage totalement plat)
+        for (let i = 0; i < WAVEFORM_SIZE; i++) {
+            waveform[i] = maxRms > 0
+                ? Math.max(5, Math.min(255, Math.round((rmsValues[i] / maxRms) * 250 + 5)))
+                : 30;
+        }
 
-    return waveform;
+        return waveform;
+    } catch (e: any) {
+        console.warn('[Baileys] FFmpeg waveform generation failed:', e.message);
+        return null;
+    }
 }
 
 // DTC Phase 1: Nouveaux services unifiés
@@ -872,52 +888,29 @@ class BaileysTransport extends EventEmitter {
 
         let waveform = options.waveform;
         if (!waveform) {
-            try {
-                // Essaye d'abord avec getAudioWaveform de Baileys
-                let waveformPath: string | Buffer | undefined;
-                if (Buffer.isBuffer(audio)) {
-                    waveformPath = audio;
-                } else if (typeof audio === 'string') {
-                    waveformPath = audio;
-                } else if (audio?.url) {
-                    waveformPath = audio.url;
-                }
-                if (waveformPath) {
-                    waveform = await getAudioWaveform(waveformPath);
-                }
-            } catch (error: any) {
-                console.warn('[Baileys] getAudioWaveform failed:', error.message);
+            // Résoudre le chemin du fichier audio pour FFmpeg
+            let filePath: string | null = null;
+            if (typeof audio === 'string') {
+                filePath = audio;
+            } else if (audio?.url && typeof audio.url === 'string' && !audio.url.startsWith('http')) {
+                filePath = audio.url;
             }
 
-            // Fallback: générer une waveform à partir du buffer audio
-            if (!waveform && Buffer.isBuffer(audio)) {
-                waveform = generateWaveformFromBuffer(audio);
-            } else if (!waveform && typeof audio === 'string') {
-                // Tenter de lire le fichier et générer la waveform
-                try {
-                    const fs = await import('fs');
-                    if (fs.existsSync(audio)) {
-                        const fileBuffer = fs.readFileSync(audio);
-                        waveform = generateWaveformFromBuffer(fileBuffer);
-                    }
-                } catch (e: any) {
-                    console.warn('[Baileys] Failed to read audio file for waveform:', e.message);
-                }
+            if (filePath) {
+                waveform = await generateWaveformFromFile(filePath);
             }
-
-            console.log(`[Baileys] Waveform: ${waveform ? 'generated' : 'fallback'}, length: ${waveform?.length}`);
         }
         if (!waveform) {
-            console.log('[Baileys] Using static waveform fallback');
+            // Fallback statique si FFmpeg échoue ou si l'audio est un Buffer/URL distant
             waveform = Uint8Array.from([
-                8, 18, 35, 52, 39, 24, 12, 21,
-                44, 68, 55, 31, 16, 27, 49, 73,
-                61, 36, 20, 29, 58, 82, 64, 38,
-                22, 34, 60, 76, 54, 30, 15, 26,
-                47, 70, 57, 33, 18, 25, 45, 66,
-                51, 28, 14, 23, 42, 63, 50, 32,
-                17, 24, 46, 69, 56, 34, 19, 27,
-                43, 59, 48, 29, 16, 22, 36, 20
+                30, 55, 90, 120, 85, 50, 25, 45,
+                80, 130, 100, 60, 35, 55, 95, 140,
+                110, 70, 40, 60, 105, 155, 120, 75,
+                45, 65, 110, 145, 100, 55, 30, 50,
+                85, 130, 105, 65, 38, 52, 88, 125,
+                95, 58, 32, 48, 80, 120, 92, 62,
+                35, 50, 85, 128, 100, 68, 40, 55,
+                82, 110, 90, 58, 33, 48, 72, 45
             ]);
         }
 
