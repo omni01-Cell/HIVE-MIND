@@ -43,7 +43,9 @@
         "@whiskeysockets/baileys": "^6.7.0",
         "acorn": "^8.16.0",
         "acorn-walk": "^8.3.5",
+        "agent-browser": "latest",
         "ajv": "^8.17.1",
+        "audio-decode": "^2.2.3",
         "cheerio": "^1.1.2",
         "cli-progress": "^3.12.0",
         "commander": "^14.0.3",
@@ -62,6 +64,7 @@
         "node-gtts": "^2.0.2",
         "pdfkit": "^0.17.2",
         "pino": "^8.17.0",
+        "playwright": "latest",
         "qrcode-terminal": "^0.12.0",
         "react": "^19.2.5",
         "redis": "^4.6.12",
@@ -71,9 +74,7 @@
         "web-tree-sitter": "^0.26.8",
         "wikipedia": "^2.1.2",
         "ws": "^8.19.0",
-        "zod": "^4.3.6",
-        "agent-browser": "latest",
-        "playwright": "latest"
+        "zod": "^4.3.6"
     },
     "devDependencies": {
         "@types/cli-progress": "^3.11.6",

@@ -58,11 +58,11 @@ async function generateWaveformFromFile(audioPath: string): Promise<Uint8Array |
             if (rms > maxRms) maxRms = rms;
         }
 
-        // Normaliser entre 5 et 255 (5 minimum pour éviter un affichage totalement plat)
+        // Normaliser entre 0 et 100 (WhatsApp attend des valeurs 0-127, Baileys utilise 0-100)
         for (let i = 0; i < WAVEFORM_SIZE; i++) {
             waveform[i] = maxRms > 0
-                ? Math.max(5, Math.min(255, Math.round((rmsValues[i] / maxRms) * 250 + 5)))
-                : 30;
+                ? Math.max(1, Math.min(100, Math.round((rmsValues[i] / maxRms) * 100)))
+                : 15;
         }
 
         return waveform;
@@ -902,15 +902,16 @@ class BaileysTransport extends EventEmitter {
         }
         if (!waveform) {
             // Fallback statique si FFmpeg échoue ou si l'audio est un Buffer/URL distant
+            // WhatsApp attend des valeurs 0-100 (max 127), aligné avec Baileys getAudioWaveform
             waveform = Uint8Array.from([
-                30, 55, 90, 120, 85, 50, 25, 45,
-                80, 130, 100, 60, 35, 55, 95, 140,
-                110, 70, 40, 60, 105, 155, 120, 75,
-                45, 65, 110, 145, 100, 55, 30, 50,
-                85, 130, 105, 65, 38, 52, 88, 125,
-                95, 58, 32, 48, 80, 120, 92, 62,
-                35, 50, 85, 128, 100, 68, 40, 55,
-                82, 110, 90, 58, 33, 48, 72, 45
+                15, 35, 58, 78, 55, 32, 12, 28,
+                52, 85, 65, 38, 22, 35, 62, 90,
+                72, 45, 25, 38, 68, 100, 78, 48,
+                28, 42, 72, 95, 65, 35, 15, 32,
+                55, 85, 68, 42, 24, 33, 57, 82,
+                62, 37, 20, 30, 52, 78, 60, 40,
+                22, 32, 55, 83, 65, 44, 25, 35,
+                53, 72, 58, 37, 21, 30, 47, 28
             ]);
         }
 
@@ -922,6 +923,8 @@ class BaileysTransport extends EventEmitter {
 
         if (waveform) {
             message.waveform = waveform;
+            const vals = Array.from(waveform);
+            console.log(`[Baileys] 🎵 Waveform: ${waveform.length} samples, range=[${Math.min(...vals)}-${Math.max(...vals)}], first8=[${vals.slice(0, 8).join(',')}]`);
         }
 
         const socketOptions = {};
