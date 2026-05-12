@@ -1,3 +1,8 @@
+interface DailyPulseContext {
+    chatId?: string;
+    transport?: any;
+}
+
 export default {
     name: 'daily_pulse',
     description: 'Generates an audio news brief (Daily Pulse) summarizing group activity.',
@@ -19,7 +24,7 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: any) {
+    async execute(args: unknown, context: DailyPulseContext, toolName: string) {
         const { chatId, transport } = context || {};
 
         if (!chatId || !transport) {
@@ -57,8 +62,9 @@ export default {
                     return { success: true, message: "Daily Pulse generated (Text Mode - Audio unavailable)" };
                 }
 
-            } catch (error: any) {
-                console.error('[DailyPulse] Error:', error);
+            } catch (error: unknown) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                console.error('[DailyPulse] Error:', err);
                 return { success: false, message: "Error during Daily Pulse production." };
             }
         }

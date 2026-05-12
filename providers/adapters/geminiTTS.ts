@@ -89,9 +89,9 @@ export class GeminiTTSAdapter {
         const finalText = directorNotes ? `(${directorNotes}) ${text}` : text;
 
         const body = {
-            contents: [{ 
-                role: "user", 
-                parts: [{ text: finalText }] 
+            contents: [{
+                role: "user",
+                parts: [{ text: finalText }]
             }],
             generationConfig: {
                 responseModalities: ["AUDIO"],
@@ -144,7 +144,7 @@ export class GeminiTTSAdapter {
         // audio/l16 est du PCM brut
         const isPcm = mimeType.includes('pcm') || mimeType.includes('l16');
         const isWav = mimeType.includes('wav') || audioBuffer.slice(0, 4).toString() === 'RIFF';
-        
+
         const ext = isWav ? 'wav' : (isPcm ? 'pcm' : 'mp3');
         const tempPath = path.join(this.cacheDir, `gemini_${Date.now()}.${ext}`);
         fs.writeFileSync(tempPath, audioBuffer);
@@ -153,7 +153,7 @@ export class GeminiTTSAdapter {
 
         // Convertir en OGG pour WhatsApp (Opus)
         const outputOggPath = tempPath.replace(`.${ext}`, '.ogg');
-        
+
         try {
             await this._convertToOgg(tempPath, outputOggPath, isPcm);
         } catch (convErr: any) {

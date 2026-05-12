@@ -1,4 +1,4 @@
-# HIVE-MIND · Codex Agent Instructions
+# HIVE-MIND · Agent Instructions
 
 > **Scope:** These instructions govern every Codex session in this repository.  
 > They are non-negotiable. Read them fully before writing a single line of code.

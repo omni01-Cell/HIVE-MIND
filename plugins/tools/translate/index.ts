@@ -1,5 +1,21 @@
 // Text translation plugin
 
+interface TranslateArgs {
+    text?: string;
+    source_lang?: string;
+    target_lang: string;
+}
+
+interface TranslateContext {
+    message?: {
+        quotedMsg?: {
+            text?: string;
+        };
+        [key: string]: any;
+    };
+    [key: string]: any;
+}
+
 export default {
     name: 'translate_text',
     description: 'Translates text from one language to another.',
@@ -32,8 +48,8 @@ export default {
         }
     },
 
-    async execute(args: any, context: any, toolName?: string) {
-        const { text, source_lang = 'auto', target_lang } = args;
+    async execute(args: unknown, context: TranslateContext, toolName?: string) {
+        const { text, source_lang = 'auto', target_lang } = args as TranslateArgs;
         const { message } = context || {};
 
         if (!message) {
@@ -57,7 +73,7 @@ export default {
             // Dynamic import to avoid loading issues
             const { translate } = await import('@vitalets/google-translate-api');
 
-            const result: any = await translate(textToTranslate, {
+            const result = await translate(textToTranslate, {
                 from: source_lang,
                 to: target_lang
             });
@@ -76,7 +92,8 @@ export default {
                 'ru': '🇷🇺 Russian'
             };
 
-            const sourceName = langNames[result.from?.language?.iso] || result.from?.language?.iso || 'Auto';
+            const resAny = result as any;
+            const sourceName = langNames[resAny.from?.language?.iso] || resAny.from?.language?.iso || 'Auto';
             const targetName = langNames[target_lang as string] || target_lang;
 
             return {
@@ -85,16 +102,17 @@ export default {
                 data: {
                     original: textToTranslate,
                     translated: result.text,
-                    from: result.from?.language?.iso,
+                    from: resAny.from?.language?.iso,
                     to: target_lang
                 }
             };
 
-        } catch (error: any) {
-            console.error('[Translate Plugin] Error:', error);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Translate Plugin] Error:', err);
             return {
                 success: false,
-                message: `Translation error: ${error.message}`
+                message: `Translation error: ${err.message}`
             };
         }
     }

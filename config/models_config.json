@@ -142,7 +142,7 @@
                     "description": "Analyse d'images, OCR, génération visuelle"
                 },
                 "AGENTIC": {
-                    "primary": "gemini-3.1-pro-preview",
+                    "primary": "gemini-3.1-flash-lite-preview",
                     "fallback": "moonshotai/kimi-k2.6",
                     "description": "Tâches agentic complexes, function calling et raisonnement"
                 },

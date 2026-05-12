@@ -1,3 +1,13 @@
+interface FindProductArgs {
+    request: string;
+}
+
+interface ShoppingContext {
+    chatId?: string;
+    sender?: string;
+    transport?: any;
+}
+
 export default {
     name: 'shopping',
     description: 'Intelligent Shopping Assistant (Comparison, Specs, Prices).',
@@ -24,7 +34,7 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: any) {
+    async execute(args: unknown, context: ShoppingContext, toolName: string) {
         const { chatId, sender, transport } = context || {};
 
         if (!chatId || !transport) {
@@ -32,7 +42,7 @@ export default {
         }
 
         if (toolName === 'find_product') {
-            const { request } = args;
+            const { request } = args as FindProductArgs;
 
             // 1. Start
             await transport.sendText(chatId, `🛍️ **Shopping Mode Activated**\nSearching for: "${request}"...`);
@@ -48,9 +58,10 @@ export default {
                     success: true,
                     message: result
                 };
-            } catch (error: any) {
-                console.error('[ShoppingPlugin] Error:', error);
-                return { success: false, message: `Shopping search failed: ${error.message}` };
+            } catch (error: unknown) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                console.error('[ShoppingPlugin] Error:', err);
+                return { success: false, message: `Shopping search failed: ${err.message}` };
             }
         }
         return { success: false, message: "Unknown tool" };
