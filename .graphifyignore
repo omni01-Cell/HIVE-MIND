@@ -1,0 +1,17 @@
+node_modules/
+.git/
+.gemini/
+.vscode/
+.codex/
+.GCC/
+session/
+temp/
+coverage/
+TEST_RESULT/
+storage_hm/
+db_text/
+docs/
+scratch/
+sandbox*/
+iterations/
+audit/
