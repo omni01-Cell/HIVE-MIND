@@ -768,8 +768,16 @@ class BaileysTransport extends EventEmitter {
     }
 
     async isAdmin(groupId: string, userId: string) {
-        console.warn('[Baileys] isAdmin pas encore implémenté complètement.');
-        return false;
+        try {
+            const metadata = await this.getGroupMetadata(groupId);
+            if (!metadata || !metadata.participants) return false;
+            
+            const participant = metadata.participants.find((p: any) => p.id === userId);
+            return participant ? (participant.admin === 'admin' || participant.admin === 'superadmin') : false;
+        } catch (error) {
+            console.error('[Baileys] Erreur dans isAdmin:', error);
+            return false;
+        }
     }
 
     /**

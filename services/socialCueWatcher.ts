@@ -93,6 +93,13 @@ Réponds en JSON strict :
     },
 
     /**
+     * Alias pour la compatibilité avec schedulerHandler
+     */
+    async scanGroup(chatId: any) {
+        return this.analyzeGroupPulse(chatId);
+    },
+
+    /**
      * Décide si le bot doit intervenir
      * @param {Object} analysis 
      * @returns {boolean}
