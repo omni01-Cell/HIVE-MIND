@@ -120,13 +120,15 @@ export class VoiceProvider {
                 continue;
             }
 
-            // Vérifier quota si QuotaManager disponible
+            // Vérifier quota et sélectionner la meilleure clé si QuotaManager disponible
+            let selectedKeyIndex = 1;
             if (this.quotaManager) {
-                const isAvailable = await this.quotaManager.isModelAvailable(model);
-                if (!isAvailable) {
-                    console.log(`[VoiceProvider] ${provider}/${model} quota épuisé, fallback...`);
+                const bestKey = await this.quotaManager.getAvailableKeyForModel(model, provider);
+                if (bestKey === null) {
+                    console.log(`[VoiceProvider] ${provider}/${model} toutes clés épuisées, fallback...`);
                     continue;
                 }
+                selectedKeyIndex = bestKey;
             }
 
             try {
@@ -139,9 +141,9 @@ export class VoiceProvider {
 
                 const result = await adapter.synthesize(text, synthesizeOptions);
 
-                // Enregistrer l'utilisation si QuotaManager disponible
+                // Enregistrer l'utilisation avec le bon keyIndex
                 if (this.quotaManager) {
-                    await this.quotaManager.recordUsage(provider, model);
+                    await this.quotaManager.recordUsage(provider, model, 0, selectedKeyIndex);
                 }
 
                 console.log(`[VoiceProvider] ✅ TTS réussi via ${provider}/${model}`);
@@ -223,7 +225,21 @@ export class VoiceProvider {
         const geminiModel = options.model || 'gemini-3.1-flash-tts-preview';
 
         if (geminiAdapter?.isAvailable()) {
-            if (!this.quotaManager || await this.quotaManager.isModelAvailable(geminiModel)) {
+            // WHY: getAvailableKeyForModel checks all keys, not just k1.
+            let geminiKeyIndex = 1;
+            let keysAvailable = true;
+
+            if (this.quotaManager) {
+                const bestKey = await this.quotaManager.getAvailableKeyForModel(geminiModel, 'gemini');
+                if (bestKey === null) {
+                    keysAvailable = false;
+                    console.log(`[VoiceProvider] gemini/${geminiModel} toutes clés épuisées, fallback GTTS`);
+                } else {
+                    geminiKeyIndex = bestKey;
+                }
+            }
+
+            if (keysAvailable) {
                 const availableVoices = geminiAdapter.getAvailableVoices();
                 const voice = availableVoices.includes(options.voice) ? options.voice : 'Aoede';
 
@@ -241,7 +257,7 @@ export class VoiceProvider {
                     });
 
                     if (this.quotaManager) {
-                        await this.quotaManager.recordUsage('gemini', geminiModel);
+                        await this.quotaManager.recordUsage('gemini', geminiModel, 0, geminiKeyIndex);
                     }
 
                     console.log(`[VoiceProvider] ✅ Plugin TTS via gemini/${geminiModel}`);
@@ -255,8 +271,6 @@ export class VoiceProvider {
                 } catch (error: any) {
                     console.error(`[VoiceProvider] ❌ Plugin TTS Gemini échoué:`, error.message);
                 }
-            } else {
-                console.log(`[VoiceProvider] gemini/${geminiModel} quota épuisé, fallback GTTS`);
             }
         }
 

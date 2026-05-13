@@ -492,7 +492,7 @@ class ProviderRouter {
                         Math.ceil(((messages.map((m: any) => m.content).join(' ').length) + (result.content || '').length) / 4);
 
                     if (quotaManager) {
-                        quotaManager.recordUsage(family, model, estimatedTokens, keyIndex).catch((e: any) => console.error(e));
+                        await quotaManager.recordUsage(family, model, estimatedTokens, keyIndex);
                     }
 
                     return {

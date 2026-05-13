@@ -8,15 +8,25 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// WHY: 2-second TTL avoids redundant Redis GETs within a single routing cycle
+// while the 20% RPM safety margin absorbs any staleness.
+const L0_CACHE_TTL_MS = 2000;
+
 class QuotaManager {
     client: any;
     quotas: any;
     localRateLimit: any;
     redisDownSince: any;
+    /** Reverse map: modelId → providerName (populated from models_config.json) */
+    modelToProvider: Map<string, string>;
+    /** L0 in-memory cache: redisKey → { value, expiresAt } */
+    private _l0Cache: Map<string, { value: string | null, expiresAt: number }>;
 
     constructor() {
         this.client = redisClient;
         this.quotas = {};
+        this.modelToProvider = new Map();
+        this._l0Cache = new Map();
         this._loadConfig();
         
         // Mode dégradé : tracking local en cas de Redis down
@@ -29,22 +39,21 @@ class QuotaManager {
             const configPath = join(__dirname, '..', 'config', 'models_config.json');
             const config = JSON.parse(readFileSync(configPath, 'utf-8'));
 
-            // Flatten quotas: modelId -> quota
+            // Flatten quotas: modelId -> quota + build reverse map modelId -> providerName
             this.quotas = {};
+            this.modelToProvider = new Map();
 
             if (config.familles) {
                 for (const [providerName, providerConfigRaw] of Object.entries(config.familles)) {
                     const providerConfig = providerConfigRaw as any;
-                    if (providerConfig.modeles) {
-                        for (const model of providerConfig.modeles) {
-                            if (model.quota && model.id) {
-                                this.quotas[model.id] = model.quota;
-                            }
-                        }
-                    }
-                    if (providerConfig.models) { // Handle HuggingFace typo/structure diff if exists
-                        for (const model of providerConfig.models) {
-                            if (model.quota && model.id) {
+                    const allModels = [
+                        ...(providerConfig.modeles || []),
+                        ...(providerConfig.models || [])  // HuggingFace structure variant
+                    ];
+                    for (const model of allModels) {
+                        if (model.id) {
+                            this.modelToProvider.set(model.id, providerName);
+                            if (model.quota) {
                                 this.quotas[model.id] = model.quota;
                             }
                         }
@@ -62,6 +71,42 @@ class QuotaManager {
      */
     async init() {
         // Initialisé (silencieux)
+    }
+
+    // =========================================================================
+    // L0 IN-MEMORY CACHE — avoids redundant Redis GETs within a routing cycle
+    // =========================================================================
+
+    /** Read from L0 cache. Returns undefined on miss (not null — null is a valid cached value). */
+    private _l0Get(key: string): string | null | undefined {
+        const entry = this._l0Cache.get(key);
+        if (!entry) return undefined;
+        if (Date.now() > entry.expiresAt) {
+            this._l0Cache.delete(key);
+            return undefined;
+        }
+        return entry.value;
+    }
+
+    /** Write to L0 cache with TTL. */
+    private _l0Set(key: string, value: string | null): void {
+        this._l0Cache.set(key, { value, expiresAt: Date.now() + L0_CACHE_TTL_MS });
+        // Prevent unbounded growth: evict expired entries when cache is large
+        if (this._l0Cache.size > 200) {
+            const now = Date.now();
+            for (const [k, entry] of this._l0Cache.entries()) {
+                if (now > entry.expiresAt) this._l0Cache.delete(k);
+            }
+        }
+    }
+
+    /** Read a Redis key, checking L0 cache first. */
+    private async _cachedGet(key: string): Promise<string | null> {
+        const cached = this._l0Get(key);
+        if (cached !== undefined) return cached;
+        const value = await this.client.get(key);
+        this._l0Set(key, value);
+        return value;
     }
 
     /**
@@ -102,6 +147,14 @@ class QuotaManager {
             multi.expire(quotaKeyRPD, 48 * 3600);
 
             await multi.exec();
+
+            // L0 write-through: update local cache so next getModelHealth() sees fresh counters
+            const cachedRpm = this._l0Get(quotaKeyRPM);
+            this._l0Set(quotaKeyRPM, String(parseInt(cachedRpm || '0') + 1));
+            this._l0Set(quotaKeyRPD, String(parseInt(this._l0Get(quotaKeyRPD) || '0') + 1));
+            if (estimatedTokens > 0) {
+                this._l0Set(quotaKeyTPM, String(parseInt(this._l0Get(quotaKeyTPM) || '0') + estimatedTokens));
+            }
         } catch (error: any) {
             console.error('[QuotaManager] Erreur Redis:', error);
         }
@@ -140,54 +193,23 @@ class QuotaManager {
         
         if (!modelId) return true;
 
-        const date = new Date().toISOString().split('T')[0];
-        const blockKey = `quota:${modelId}:k1:blocked`;
-
-        // 1. Vérifier si le modèle est explicitement bloqué (Circuit Breaker)
-        const isBlocked = await this.client.get(blockKey);
-        if (isBlocked) {
-            return false;
-        }
-
         if (!this.quotas[modelId]) return true; // Pas de quota défini = illimité
 
-        const limits = this.quotas[modelId];
+        // WHY: We iterate ALL available keys for this model's provider.
+        // The old code hardcoded k1, which caused the model to be declared
+        // unavailable even when keys 2-7 had remaining quota.
+        const providerName = this.modelToProvider.get(modelId);
+        const indices = providerName
+            ? envResolver.getAvailableKeysForProvider(providerName)
+            : [1];
+        const keyIndices = indices.length > 0 ? indices : [1];
 
-        // WHY: Keys aligned with recordUsage() and getModelHealth() — per-key pattern
-        const keyRPM = `quota:${modelId}:k1:rpm`;
-        const keyTPM = `quota:${modelId}:k1:tpm`;
-        const keyRPD = `quota:${modelId}:k1:rpd:${date}`;
-
-        try {
-            const [rpm, tpm, rpd] = await Promise.all([
-                this.client.get(keyRPM),
-                this.client.get(keyTPM),
-                this.client.get(keyRPD)
-            ]);
-
-            const currentRPM = parseInt(rpm || '0');
-            const currentTPM = parseInt(tpm || '0');
-            const currentRPD = parseInt(rpd || '0');
-
-            // Vérification RPM (Requêtes par minute)
-            // On ajoute +1 virtuellement pour voir si ça passerait
-            if (limits.rpm && (currentRPM + 1) > limits.rpm) return false;
-
-            // Vérification TPM (Tokens par minute)
-            // On ajoute le coût estimé du prompt pour ne pas dépasser PENDANT la génération
-            if (limits.tpm && (currentTPM + estimatedCost) > limits.tpm) return false;
-
-            // Vérification RPD (Requêtes par jour)
-            if (limits.rpd && (currentRPD + 1) > limits.rpd) return false;
-
-            return true;
-
-        } catch (error: any) {
-            console.error(`[QuotaManager] Erreur lecture quota ${modelId}:`, error);
-            // WHY: Fail-closed for consistency with the degraded mode path (L127).
-            // If Redis throws a non-connectivity error, we cannot trust quota state.
-            return false;
+        for (const keyIndex of keyIndices) {
+            const health = await this.getModelHealth(modelId, { rpm: 0.20, tpm: 0.10, rpd: 0.05 }, keyIndex);
+            if (health.healthy) return true;
         }
+
+        return false;
     }
 
     /**
@@ -227,11 +249,18 @@ class QuotaManager {
      * @param {number} keyIndex - Index de la clé utilisée (défaut: 1)
      */
     async recordQuotaExceeded(modelId: any, timeoutSeconds: any = 60, keyIndex: any = 1) {
-        if (!this.client.isReady || !modelId) return;
+        if (!modelId) return;
 
         const blockKey = `quota:${modelId}:k${keyIndex}:blocked`;
+
+        // L0 write-through FIRST: ensures the next getAvailableKeyForModel()
+        // within the same routing cycle won't re-select this blocked key,
+        // even if the Redis write hasn't propagated yet.
+        this._l0Set(blockKey, '1');
+
+        if (!this.client.isReady) return;
+
         try {
-            // On set une clé qui expire automatiquement
             await this.client.setEx(blockKey, timeoutSeconds, '1');
             console.log(`[QuotaManager] 🥶 Modèle ${modelId} (Clé ${keyIndex}) mis au frigo pour ${timeoutSeconds}s (Quota Exceeded)`);
         } catch (error: any) {
@@ -320,8 +349,8 @@ class QuotaManager {
         const blockKey = `quota:${modelId}:k${keyIndex}:blocked`;
 
         try {
-            // 1. Vérifier blocage explicite (Circuit Breaker)
-            const isBlocked = await this.client.get(blockKey);
+            // 1. Vérifier blocage explicite (Circuit Breaker) — L0 cache-aware
+            const isBlocked = await this._cachedGet(blockKey);
             if (isBlocked) {
                 result.healthy = false;
                 result.blocked = true;
@@ -343,10 +372,11 @@ class QuotaManager {
             const keyTPM = `quota:${modelId}:k${keyIndex}:tpm`;
             const keyRPD = `quota:${modelId}:k${keyIndex}:rpd:${date}`;
 
+            // L0 cache-aware reads: avoids redundant Redis GETs within a single routing cycle
             const [rpm, tpm, rpd] = await Promise.all([
-                this.client.get(keyRPM),
-                this.client.get(keyTPM),
-                this.client.get(keyRPD)
+                this._cachedGet(keyRPM),
+                this._cachedGet(keyTPM),
+                this._cachedGet(keyRPD)
             ]);
 
             result.rpmUsed = parseInt(rpm || '0');
@@ -396,8 +426,19 @@ class QuotaManager {
         if (!this.client.isReady) return modelIds; // Fail open
 
         const results = await Promise.all(modelIds.map(async (modelId: any) => {
-            const health = await this.getModelHealth(modelId, margins);
-            return { modelId, healthy: health.healthy };
+            // WHY: Check ALL keys for this model's provider, not just k1.
+            // A model is healthy if at least one key passes the health check.
+            const providerName = this.modelToProvider.get(modelId);
+            const indices = providerName
+                ? envResolver.getAvailableKeysForProvider(providerName)
+                : [1];
+            const keyIndices = indices.length > 0 ? indices : [1];
+
+            for (const keyIndex of keyIndices) {
+                const health = await this.getModelHealth(modelId, margins, keyIndex);
+                if (health.healthy) return { modelId, healthy: true };
+            }
+            return { modelId, healthy: false };
         }));
 
         return results.filter((r: any) => r.healthy).map((r: any) => r.modelId);
