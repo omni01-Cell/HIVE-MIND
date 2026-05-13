@@ -1,16 +1,16 @@
-# Graph Report - HIVE-MIND-RAILWAY  (2026-05-12)
+# Graph Report - HIVE-MIND-RAILWAY  (2026-05-13)
 
 ## Corpus Check
-- 224 files · ~173,699 words
+- 226 files · ~175,586 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1752 nodes · 2588 edges · 142 communities (108 shown, 34 thin omitted)
+- 1774 nodes · 2612 edges · 144 communities (105 shown, 39 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 15 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a6512700`
+- Built from commit: `a5c382b7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -128,15 +128,17 @@
 - [[_COMMUNITY_Community 110|Community 110]]
 - [[_COMMUNITY_Community 111|Community 111]]
 - [[_COMMUNITY_Community 112|Community 112]]
-- [[_COMMUNITY_Community 115|Community 115]]
-- [[_COMMUNITY_Community 116|Community 116]]
+- [[_COMMUNITY_Community 113|Community 113]]
+- [[_COMMUNITY_Community 114|Community 114]]
 - [[_COMMUNITY_Community 117|Community 117]]
-- [[_COMMUNITY_Community 121|Community 121]]
-- [[_COMMUNITY_Community 125|Community 125]]
-- [[_COMMUNITY_Community 126|Community 126]]
+- [[_COMMUNITY_Community 118|Community 118]]
+- [[_COMMUNITY_Community 119|Community 119]]
+- [[_COMMUNITY_Community 123|Community 123]]
 - [[_COMMUNITY_Community 127|Community 127]]
-- [[_COMMUNITY_Community 134|Community 134]]
-- [[_COMMUNITY_Community 135|Community 135]]
+- [[_COMMUNITY_Community 128|Community 128]]
+- [[_COMMUNITY_Community 129|Community 129]]
+- [[_COMMUNITY_Community 136|Community 136]]
+- [[_COMMUNITY_Community 137|Community 137]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `BotCore` - 40 edges
@@ -151,138 +153,138 @@
 10. `PluginLoader` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `applyAnchoredEdits()` --calls--> `extractId()`  [INFERRED]
-  plugins/base/dev_tools/FileEditTool.ts → services/anchor/lineHashing.ts
 - `execute()` --calls--> `getFileSkeleton()`  [INFERRED]
   plugins/base/dev_tools/ASTTools.ts → services/ast/TreeSitterService.ts
 - `execute()` --calls--> `getFunction()`  [INFERRED]
   plugins/base/dev_tools/ASTTools.ts → services/ast/TreeSitterService.ts
-- `execute()` --calls--> `hashLines()`  [EXTRACTED]
-  plugins/base/dev_tools/ASTTools.ts → services/anchor/index.ts
 - `execute()` --calls--> `findSymbolReferences()`  [INFERRED]
   plugins/base/dev_tools/ASTTools.ts → services/ast/TreeSitterService.ts
+- `applyAnchoredEdits()` --calls--> `extractId()`  [INFERRED]
+  plugins/base/dev_tools/FileEditTool.ts → services/anchor/lineHashing.ts
+- `fixMissingUsernames()` --calls--> `ensureConnected()`  [EXTRACTED]
+  scripts/fix-missing-usernames.ts → services/redisClient.ts
 
-## Communities (142 total, 34 thin omitted)
+## Communities (144 total, 39 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.05
-Nodes (20): buildDirectorNotes(), __dirname, GeminiTTSAdapter, __dirname, GttsTTSAdapter, __dirname, MinimaxTTSAdapter, inferProviderName() (+12 more)
+Nodes (18): CostTracker, FilterProcessor, __dirname, loadAdapters(), ProviderRouter, __dirname, __dirname, modelsConfig (+10 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.05
-Nodes (15): CostTracker, FilterProcessor, __dirname, loadAdapters(), ProviderRouter, __dirname, __dirname, modelsConfig (+7 more)
+Nodes (38): EmbeddingConfig, EmbeddingsService, IEmbeddingsService, AppConfig, AppConfigSchema, ModelsConfig, ModelsConfigSchema, SchedulerConfig (+30 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.07
-Nodes (35): moderationActions, configDB, filterDB, warningsDB, whitelistDB, _addFilter(), _addWhitelist(), _analyzeAndExecuteMission() (+27 more)
+Cohesion: 0.05
+Nodes (30): _checkDeleted(), __dirname, execute(), getServices(), _listDeleted(), _restore(), _setAudioPermission(), _setPvAudio() (+22 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.06
-Nodes (28): DEFAULT_CONFIG, ProgrammaticExecutor, autoRepairCode(), countChar(), countToolCalls(), findClosestTool(), JS_BUILTINS, levenshtein() (+20 more)
+Nodes (30): AnchorStateManager, TrackedDocument, ANCHOR_WORDS, hashLines(), escapeRegExp(), extractId(), formatLineWithHash(), stripHashes() (+22 more)
 
 ### Community 4 - "Community 4"
+Cohesion: 0.06
+Nodes (28): DEFAULT_CONFIG, ProgrammaticExecutor, autoRepairCode(), countChar(), countToolCalls(), findClosestTool(), JS_BUILTINS, levenshtein() (+20 more)
+
+### Community 5 - "Community 5"
 Cohesion: 0.05
 Nodes (28): adminCmd, adminJids, debugCmd, __dirname, embeddings, program, query, redisCmd (+20 more)
 
-### Community 5 - "Community 5"
-Cohesion: 0.04
-Nodes (47): Adapt to model updates, Be specific about the output, Best Practices, Build the full paths for the original and new files, Check if the folder exists, code:block35, code:block36 (Python), code:block37 (import os) (+39 more)
-
 ### Community 6 - "Community 6"
 Cohesion: 0.04
-Nodes (44): 0 · SESSION BOOTSTRAP (Rule Zero — Mandatory), 1 · ZERO HALLUCINATION PROTOCOL, 2 · COGNITIVE & TOOLING LAYER, 3 · ARCHITECTURE & STATE BOUNDARIES, 4 · CODE QUALITY MATRIX, 5 · INVARIANT CHECKLIST (Run before every function you write), 6.1 · File Structure, 6.2 · `main.md` Template (+36 more)
+Nodes (47): Adapt to model updates, Be specific about the output, Best Practices, Build the full paths for the original and new files, Check if the folder exists, code:block35, code:block36 (Python), code:block37 (import os) (+39 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.04
 Nodes (44): 0 · SESSION BOOTSTRAP (Rule Zero — Mandatory), 1 · ZERO HALLUCINATION PROTOCOL, 2 · COGNITIVE & TOOLING LAYER, 3 · ARCHITECTURE & STATE BOUNDARIES, 4 · CODE QUALITY MATRIX, 5 · INVARIANT CHECKLIST (Run before every function you write), 6.1 · File Structure, 6.2 · `main.md` Template (+36 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.07
-Nodes (12): handleGoalExecution(), handleSocialCueScan(), execute(), SchedulerHandler, analyzePerformance(), cleanupOldData(), generateWeeklyReport(), monitorDatabaseHealth() (+4 more)
+Cohesion: 0.04
+Nodes (44): 0 · SESSION BOOTSTRAP (Rule Zero — Mandatory), 1 · ZERO HALLUCINATION PROTOCOL, 2 · COGNITIVE & TOOLING LAYER, 3 · ARCHITECTURE & STATE BOUNDARIES, 4 · CODE QUALITY MATRIX, 5 · INVARIANT CHECKLIST (Run before every function you write), 6.1 · File Structure, 6.2 · `main.md` Template (+36 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.07
-Nodes (9): SubAgentConfig, SubAgentEngine, execute(), DeepResearchAgent, PluginLoader, execute(), FindProductArgs, ShoppingContext (+1 more)
+Cohesion: 0.06
+Nodes (13): SubAgentConfig, SubAgentEngine, execute(), DeepResearchAgent, AGGREGATED_TOOL_DEFINITIONS, TEXT_MATCHERS, TOOL_ROUTER, tools (+5 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.07
-Nodes (12): BotIdentity, DEFAULT_MODULES, generateLogo(), ModuleResult, StartupDisplay, StartupModule, THEME, __dirname (+4 more)
+Cohesion: 0.08
+Nodes (11): handleGoalExecution(), handleSocialCueScan(), execute(), SchedulerHandler, analyzePerformance(), cleanupOldData(), generateWeeklyReport(), monitorDatabaseHealth() (+3 more)
 
-### Community 11 - "Community 11"
+### Community 12 - "Community 12"
 Cohesion: 0.1
 Nodes (8): BrowserService, execFileAsync, BrowserExecOptions, BrowserResult, RefInfo, ScreenshotResult, SnapshotResult, CliInterface
 
-### Community 12 - "Community 12"
-Cohesion: 0.11
-Nodes (15): ActionStep, OngoingAction, main(), fixMissingUsernames(), __dirname, checkHealth(), __dirname, ensureConnected() (+7 more)
-
-### Community 14 - "Community 14"
-Cohesion: 0.13
+### Community 13 - "Community 13"
+Cohesion: 0.12
 Nodes (7): DatabaseMonitor, execAsync, execute(), _getSystemInfo(), _gitPull(), reason, _shutdown()
 
-### Community 15 - "Community 15"
+### Community 14 - "Community 14"
 Cohesion: 0.07
 Nodes (23): allFiles, circles, dependencyGraph, details, __dirname, EXCLUDED_DIRECTORIES, exportList, exports (+15 more)
 
-### Community 17 - "Community 17"
+### Community 16 - "Community 16"
 Cohesion: 0.11
 Nodes (10): __dirname, GeminiLiveAdapter, GeminiLiveProvider, HD_VOICES, AUDIO_FORMATS, AudioConfig, cleanupTempFiles(), oggToPcm() (+2 more)
 
-### Community 18 - "Community 18"
-Cohesion: 0.1
-Nodes (14): ServiceContainer, consolidationLocks, consolidationService, credentials, __dirname, geminiKey, graphMemory, openaiKey (+6 more)
-
-### Community 19 - "Community 19"
+### Community 17 - "Community 17"
 Cohesion: 0.13
 Nodes (13): handler, payload, BotEvents, EventBus, PricingConfig, PricingEntry, UsageRecord, __dirname (+5 more)
 
-### Community 20 - "Community 20"
-Cohesion: 0.13
-Nodes (12): config, DailyPulseContext, execute(), journalGenerator, AntiDeleteHandler, sentContent, storedMsg, updates (+4 more)
+### Community 18 - "Community 18"
+Cohesion: 0.16
+Nodes (11): main(), fixMissingUsernames(), __dirname, __dirname, ensureConnected(), redis, userService, IdentityMap (+3 more)
+
+### Community 19 - "Community 19"
+Cohesion: 0.11
+Nodes (11): DailyPulseContext, execute(), journalGenerator, AntiDeleteHandler, sentContent, storedMsg, updates, checkHealth() (+3 more)
+
+### Community 21 - "Community 21"
+Cohesion: 0.16
+Nodes (17): _addFilter(), _addWhitelist(), _analyzeAndExecuteMission(), _configure(), execute(), _generateInvite(), _getGroupInfo(), _getMission() (+9 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.12
-Nodes (4): FairnessQueue, QueueEvent, __dirname, Orchestrator
-
-### Community 23 - "Community 23"
-Cohesion: 0.14
-Nodes (11): EmbeddingConfig, EmbeddingsService, IEmbeddingsService, ContainerInitOptions, __dirname, ServiceEntry, ServiceInstance, IMemoryLogger (+3 more)
-
-### Community 24 - "Community 24"
 Cohesion: 0.18
 Nodes (4): convertOggToPcm(), convertPcmToOgg(), processAudioPipeline(), GeminiLiveProvider
 
-### Community 25 - "Community 25"
+### Community 23 - "Community 23"
 Cohesion: 0.15
-Nodes (12): delay(), DelayRange, extractMentions(), isStorable(), jidToPhone(), phoneToJid(), randomDelay(), mentions (+4 more)
+Nodes (11): delay(), DelayRange, extractMentions(), jidToPhone(), phoneToJid(), randomDelay(), mentions, output (+3 more)
+
+### Community 25 - "Community 25"
+Cohesion: 0.14
+Nodes (8): cli, __dirname, ptcExecutor, extractToolCallsFromText(), parseToolArguments(), ToolCall, ToolCallRaw, ToolCallStats
 
 ### Community 26 - "Community 26"
-Cohesion: 0.15
-Nodes (12): AppConfig, AppConfigSchema, ModelsConfig, ModelsConfigSchema, SchedulerConfig, SchedulerSchema, baseConfig, credentials (+4 more)
+Cohesion: 0.18
+Nodes (11): cliTransport, discordTransport, TransportInterface, validateTransport(), telegramTransport, ActionRecord, BotEvent, ContextData (+3 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.19
-Nodes (6): container, SemanticMemory, groupService, credentialsPath, db, __dirname
+Cohesion: 0.12
+Nodes (13): buildContext(), __dirname, __dirname, container, consciousness, BotProfile, __dirname, PhoneticRule (+5 more)
 
-### Community 29 - "Community 29"
-Cohesion: 0.19
-Nodes (13): LANGUAGE_MAP, ensureInitialized(), findSymbolReferences(), getFileSkeleton(), getFunction(), languageCache, loadLanguage(), parseDefinitions() (+5 more)
+### Community 30 - "Community 30"
+Cohesion: 0.15
+Nodes (6): DEFAULT_MODULES, generateLogo(), ModuleResult, StartupDisplay, StartupModule, THEME
+
+### Community 31 - "Community 31"
+Cohesion: 0.22
+Nodes (9): _banUser(), _kickUser(), extractNumericId(), findInJidArray(), findInJidMap(), formatForDisplay(), jidMatch(), JidType (+1 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.2
-Nodes (10): hashLines(), applyAnchoredEdits(), execute(), executeAnchorMode(), executeLegacyMode(), fileState, FileStateTracker, BANNED_DIRS (+2 more)
+Cohesion: 0.18
+Nodes (4): ServiceContainer, ActionStep, OngoingAction, GroqTranscriptionService
 
 ### Community 33 - "Community 33"
-Cohesion: 0.15
-Nodes (3): LightweightMultiAgent, multiAgent, buildToolFunctions()
+Cohesion: 0.22
+Nodes (10): _getGroupStats(), _listMyGroups(), groupService, factsMemory, getEmbeddingsService(), semanticMemory, workspaceMemory, credentialsPath (+2 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.23
-Nodes (3): AnchorStateManager, TrackedDocument, ANCHOR_WORDS
+Cohesion: 0.19
+Nodes (13): buildToolDefinition(), catalog, execute(), init(), parseFileName(), scanStickers(), searchStickers(), SendStickerArgs (+5 more)
 
-### Community 35 - "Community 35"
-Cohesion: 0.16
-Nodes (12): BANNED_COMMANDS, BANNED_FLAG_PATTERNS, PendingRequest, PermissionResult, SAFE_COMMANDS, adminCache, adminService, promise (+4 more)
+### Community 36 - "Community 36"
+Cohesion: 0.18
+Nodes (6): multiAgent, DecayResult, DecayStats, memoryDecay, MemoryRecord, buildToolFunctions()
 
 ### Community 37 - "Community 37"
 Cohesion: 0.21
@@ -291,10 +293,6 @@ Nodes (4): ExplicitPlanner, loadJsonLibraries(), PLAN_SCHEMA, planner
 ### Community 40 - "Community 40"
 Cohesion: 0.41
 Nodes (12): execute(), _forgetFact(), getServices(), _listFacts(), _recallFact(), _rememberFact(), _searchLongTermMemory(), _updateScratchpad() (+4 more)
-
-### Community 41 - "Community 41"
-Cohesion: 0.29
-Nodes (12): _checkDeleted(), __dirname, execute(), getServices(), _listDeleted(), _restore(), _setAudioPermission(), _setPvAudio() (+4 more)
 
 ### Community 42 - "Community 42"
 Cohesion: 0.3
@@ -305,18 +303,14 @@ Cohesion: 0.2
 Nodes (5): execute(), init(), mcpClient, McpClientService, McpServerConfig
 
 ### Community 44 - "Community 44"
-Cohesion: 0.21
-Nodes (5): DecayResult, DecayStats, memoryDecay, MemoryDecaySystem, MemoryRecord
+Cohesion: 0.23
+Nodes (5): isStorable(), splitByParagraph(), splitBySentence(), splitMessage(), TOOL_FEEDBACK
 
 ### Community 45 - "Community 45"
 Cohesion: 0.23
-Nodes (5): splitByParagraph(), splitBySentence(), splitMessage(), TOOL_FEEDBACK, extractToolCallsFromText()
-
-### Community 46 - "Community 46"
-Cohesion: 0.23
 Nodes (10): connectToWhatsApp(), creds, filterTerms, options, program, run(), sendAndWaitForResponse(), sessionPath (+2 more)
 
-### Community 47 - "Community 47"
+### Community 46 - "Community 46"
 Cohesion: 0.2
 Nodes (10): connectToWhatsApp(), credsAdmin, credsBot, credsUser, filterTerms, options, program, run() (+2 more)
 
@@ -325,72 +319,72 @@ Cohesion: 0.17
 Nodes (12): code:block10, code:block13 (Goal Suggest articles for a blog about retro games), code:block2 (Goal Parse pizza orders to JSON), code:block3 (Continues next page...), code:block4 (Prompt EXAMPLE:), code:block5 ({), code:block6 (JSON Response:), code:block7 (Table 2. An example of few-shot prompting) (+4 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.24
-Nodes (9): delay(), runTests(), simulateIncomingMessage(), ActionRecord, BotEvent, ContextData, MessageData, ToolCall (+1 more)
-
-### Community 51 - "Community 51"
-Cohesion: 0.22
-Nodes (7): __dirname, __dirname, consciousness, userService, BotProfile, __dirname, PhoneticRule
-
-### Community 52 - "Community 52"
-Cohesion: 0.33
-Nodes (8): chat(), embed(), createIPv4Agent(), DNSConfig, fetchWithIPv4Fallback(), forceIPv4ForUrl(), IPv4Agents, shouldTryIPv4Fallback()
-
-### Community 53 - "Community 53"
 Cohesion: 0.31
 Nodes (9): extractMentions(), findBestMatch(), isPrefixOrNickname(), levenshteinDistance(), MatchResult, Member, normalize(), ResolvedMentions (+1 more)
+
+### Community 50 - "Community 50"
+Cohesion: 0.24
+Nodes (6): config, __dirname, BAILEYS_ERRORS, __dirname, formatToWhatsApp(), sanitizeForWhatsApp()
+
+### Community 51 - "Community 51"
+Cohesion: 0.27
+Nodes (6): moderationActions, configDB, filterDB, warningsDB, whitelistDB, _warnUser()
+
+### Community 52 - "Community 52"
+Cohesion: 0.22
+Nodes (3): FairnessQueue, QueueEvent, __dirname
+
+### Community 53 - "Community 53"
+Cohesion: 0.27
+Nodes (7): inferProviderName(), resolveApiKey(), resolveCredentials(), credentials, resolvedCredentials, resolvedKey, warnSpy
 
 ### Community 54 - "Community 54"
 Cohesion: 0.18
 Nodes (10): cleaned, handler, history, isMentioned, mockDualResult, mockMsg, mockServices, mockSock (+2 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.18
-Nodes (11): Acknowledgements, Engineering, Introduction, LLM output configuration, Output length, Prompt engineering, Putting it all together, Sampling controls (+3 more)
-
-### Community 56 - "Community 56"
-Cohesion: 0.18
-Nodes (11): Automatic Prompt Engineering, Code prompting, code:block1 (Name 1_1_movie_classification), code:block25 (Python), code:block26 (from langchain.agents import load_tools), code:block27 (> Entering new AgentExecutor chain...), code:block28 (Prompt We have a band merchandise t-shirt webshop, and to tr), General prompting / zero shot (+3 more)
+Cohesion: 0.33
+Nodes (8): chat(), embed(), createIPv4Agent(), DNSConfig, fetchWithIPv4Fallback(), forceIPv4ForUrl(), IPv4Agents, shouldTryIPv4Fallback()
 
 ### Community 57 - "Community 57"
 Cohesion: 0.18
-Nodes (11): AI Providers (Smart Router V2), Behavioral Settings, Browser Agent, code:env (SUPABASE_URL=https://your-project.supabase.co), code:env (# Primary key (fallback)), code:env (TZ=Europe/Paris                    # Timezone for scheduler), code:env (AGENT_BROWSER_IDLE_TIMEOUT_MS=300000    # Auto-shutdown afte), ⚙ Configuration (+3 more)
+Nodes (11): Automatic Prompt Engineering, Code prompting, code:block1 (Name 1_1_movie_classification), code:block14 (Goal Write a storyline for a level of a first-person shooter), code:block15 (Prompt Based on popular first-person shooter action games, w), code:block16 (Prompt Context: 5 engaging themes for a first person shooter), code:block28 (Prompt We have a band merchandise t-shirt webshop, and to tr), General prompting / zero shot (+3 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.2
-Nodes (4): parseToolArguments(), ToolCall, ToolCallRaw, ToolCallStats
+Cohesion: 0.18
+Nodes (11): Acknowledgements, Engineering, Introduction, LLM output configuration, Output length, Prompt engineering, Putting it all together, Sampling controls (+3 more)
 
 ### Community 59 - "Community 59"
-Cohesion: 0.33
-Nodes (5): cliTransport, discordTransport, TransportInterface, validateTransport(), telegramTransport
+Cohesion: 0.18
+Nodes (11): AI Providers (Smart Router V2), Behavioral Settings, Browser Agent, code:env (SUPABASE_URL=https://your-project.supabase.co), code:env (# Primary key (fallback)), code:env (TZ=Europe/Paris                    # Timezone for scheduler), code:env (AGENT_BROWSER_IDLE_TIMEOUT_MS=300000    # Auto-shutdown afte), ⚙ Configuration (+3 more)
 
-### Community 60 - "Community 60"
+### Community 61 - "Community 61"
 Cohesion: 0.24
-Nodes (6): buildContext(), agentMemory, __dirname, dreamService, LESSONS_PATH, feedbackService
+Nodes (4): __dirname, GttsTTSAdapter, __dirname, loadCredentials()
 
 ### Community 62 - "Community 62"
 Cohesion: 0.2
 Nodes (9): enqueueSpy, isMentioned, mockMsg, mockServices, mockSock, msg, record, smallHistory (+1 more)
 
-### Community 64 - "Community 64"
+### Community 63 - "Community 63"
 Cohesion: 0.2
-Nodes (9): 🏗 Architecture, code:block1 (┌───────────────────────────────────────────────────────────), code:block9 (HIVE-MIND/), Design Principles, 📄 License, Overview, 📂 Project Structure, 📜 Scripts & Commands (+1 more)
+Nodes (9): Audio & Media, code:block9 (HIVE-MIND/), 📄 License, LLM Providers, Overview, 📂 Project Structure, 📜 Scripts & Commands, 🤖 Supported Providers (+1 more)
 
-### Community 65 - "Community 65"
+### Community 64 - "Community 64"
 Cohesion: 0.2
 Nodes (9): Auto-génération des variantes, Champs obligatoires, code:block1 (persona/), 🔧 Comment changer le nom du bot, ⚙️ Configuration du `profile.json`, ⚠️ IMPORTANT : Le champ `name`, 🎭 Persona Configuration, Personnalisation avancée (+1 more)
 
-### Community 67 - "Community 67"
-Cohesion: 0.58
-Nodes (8): apiFetch(), execute(), handleCrawl(), handleExtract(), handleMap(), handleScrape(), handleSearch(), pollJob()
+### Community 66 - "Community 66"
+Cohesion: 0.28
+Nodes (5): agentMemory, __dirname, dreamService, LESSONS_PATH, feedbackService
 
 ### Community 68 - "Community 68"
 Cohesion: 0.22
 Nodes (3): cases, res, execute()
 
 ### Community 69 - "Community 69"
-Cohesion: 0.28
-Nodes (4): escapeRegExp(), extractId(), formatLineWithHash(), stripHashes()
+Cohesion: 0.31
+Nodes (3): buildDirectorNotes(), __dirname, GeminiTTSAdapter
 
 ### Community 70 - "Community 70"
 Cohesion: 0.22
@@ -401,8 +395,8 @@ Cohesion: 0.36
 Nodes (7): CONTEXT_FILE, __dirname, execute(), loadConversationToken(), saveConversationToken(), searchGoogleAI(), SearchResult
 
 ### Community 72 - "Community 72"
-Cohesion: 0.32
-Nodes (7): CONFIG_DIR, DB_TEXT_DIR, __dirname, __filename, init(), run(), splitByChunks()
+Cohesion: 0.25
+Nodes (5): def, fakeBuffer, STICKER_FILES, TEST_STICKERS_DIR, transport
 
 ### Community 73 - "Community 73"
 Cohesion: 0.25
@@ -416,125 +410,121 @@ Nodes (6): chatEntries, disallowedSmallChatModels, ModelsConfig, Recipe, service
 Cohesion: 0.25
 Nodes (8): Agentic Swarm, code:block2 (Traditional:  LLM → Tool₁ → LLM → Tool₂ → LLM → Tool₃  (6 st), Consciousness Layer (WakeSystem), 🧠 Core Systems, Memory Stack, Programmatic Tool Calling (PTC), ReAct Engine, Smart Router V2 (Zero-429)
 
-### Community 76 - "Community 76"
-Cohesion: 0.38
-Nodes (3): cli, __dirname, ptcExecutor
-
-### Community 78 - "Community 78"
+### Community 79 - "Community 79"
 Cohesion: 0.29
 Nodes (6): args, mockEnd, mockFontSize, mockMoveDown, mockPipe, mockText
 
-### Community 79 - "Community 79"
+### Community 80 - "Community 80"
 Cohesion: 0.29
 Nodes (7): code:block29 (Name 1_bash_rename_files_in_folder), code:block30 (Output ```bash), code:block31 (Table 16. Using Gemini to program code), code:block32 (Output This Bash script performs the following tasks:), code:block33 (- It lists all the files inside the specified folder using t), code:block34 (Output ```py thon), Prompts for writing code
 
-### Community 80 - "Community 80"
+### Community 81 - "Community 81"
 Cohesion: 0.29
 Nodes (7): CLI Mode (No WhatsApp Required), code:bash (# 1. Clone the repository), code:bash (npm run cli), Installation, Prerequisites, 🚀 Quick Start, Required Services (Free Tiers Available)
 
-### Community 81 - "Community 81"
+### Community 82 - "Community 82"
 Cohesion: 0.33
 Nodes (4): App(), AppProps, Message, InkCLIAdapter
 
-### Community 84 - "Community 84"
+### Community 88 - "Community 88"
+Cohesion: 0.33
+Nodes (5): credentials, __dirname, geminiKey, graphMemory, openaiKey
+
+### Community 89 - "Community 89"
 Cohesion: 0.33
 Nodes (5): excludedTypes, keys, rawConfig, rawModels, redis
 
-### Community 85 - "Community 85"
-Cohesion: 0.33
-Nodes (4): AGGREGATED_TOOL_DEFINITIONS, TEXT_MATCHERS, TOOL_ROUTER, tools
-
-### Community 86 - "Community 86"
-Cohesion: 0.33
-Nodes (4): handled, resolverSpy, result, spy
-
-### Community 87 - "Community 87"
+### Community 90 - "Community 90"
 Cohesion: 0.33
 Nodes (5): baseContext, bigOutput, ctx, llmOut, mockShellExecute
 
-### Community 90 - "Community 90"
+### Community 92 - "Community 92"
 Cohesion: 0.33
 Nodes (6): code:toml ([phases.setup]), code:bash (# Check Redis connectivity), 🚢 Deployment, Environment Requirements, Health Monitoring, Railway (Recommended)
 
-### Community 91 - "Community 91"
+### Community 93 - "Community 93"
 Cohesion: 0.33
 Nodes (5): Core Objectives, Current Project State, HIVE-MIND: The Autonomous Hive Meta-Mind, Original Idea & Vision, The Transformation
 
-### Community 92 - "Community 92"
+### Community 94 - "Community 94"
 Cohesion: 0.4
 Nodes (4): dir, filePath, files, sessions
 
-### Community 93 - "Community 93"
+### Community 95 - "Community 95"
 Cohesion: 0.4
 Nodes (4): filePath, files, PROTECTED_FILES, SESSION_DIR
 
-### Community 94 - "Community 94"
+### Community 96 - "Community 96"
 Cohesion: 0.4
 Nodes (4): bashCalls, history, options, toolNames
 
-### Community 95 - "Community 95"
+### Community 97 - "Community 97"
 Cohesion: 0.4
 Nodes (5): code:block21 (Hi,), code:block22 (**Step 1: Identify the purpose of the email.**), code:block23 (**Explanation:**), code:block24 (Output), Self-consistency
 
-### Community 96 - "Community 96"
+### Community 98 - "Community 98"
 Cohesion: 0.4
 Nodes (5): Chain of Thought (CoT), code:block17 (Prompt When I was 3 years old, my partner was 3 times my age), code:block18 (Prompt When I was 3 years old, my partner was 3 times my age), code:block19 (So, my partner is 26 years old.), code:block20 (Prompt Q: When my brother was 2 years old, I was double his )
 
-### Community 97 - "Community 97"
+### Community 99 - "Community 99"
 Cohesion: 0.4
 Nodes (5): Media, 🔌 Plugins, Tools & Utilities, Web & Research, WhatsApp-Specific
 
-### Community 98 - "Community 98"
+### Community 100 - "Community 100"
 Cohesion: 0.4
 Nodes (5): code:block13 (Global Owner  →  Full system control (HITL approvals routed ), Defense-in-Depth Architecture, Key Security Features, Permission Model, 🛡 Security
 
-### Community 101 - "Community 101"
+### Community 103 - "Community 103"
+Cohesion: 0.83
+Nodes (3): delay(), runTests(), simulateIncomingMessage()
+
+### Community 104 - "Community 104"
 Cohesion: 0.5
 Nodes (3): args, context, mockTranslate
 
-### Community 103 - "Community 103"
+### Community 106 - "Community 106"
 Cohesion: 0.5
 Nodes (3): mockUser, resolveMock, updateMock
 
-### Community 105 - "Community 105"
+### Community 108 - "Community 108"
 Cohesion: 0.5
-Nodes (4): code:block14 (Goal Write a storyline for a level of a first-person shooter), code:block15 (Prompt Based on popular first-person shooter action games, w), code:block16 (Prompt Context: 5 engaging themes for a first person shooter), Step-back prompting
+Nodes (4): code:block25 (Python), code:block26 (from langchain.agents import load_tools), code:block27 (> Entering new AgentExecutor chain...), ReAct (reason & act)
 
-### Community 106 - "Community 106"
+### Community 109 - "Community 109"
 Cohesion: 0.5
 Nodes (4): code:bash (# Run all tests), Coverage Targets, Test Stack, 🧪 Testing
 
-### Community 107 - "Community 107"
+### Community 110 - "Community 110"
 Cohesion: 0.5
 Nodes (4): Branch Strategy, Code Standards, 🤝 Contributing, Development Workflow
 
-### Community 115 - "Community 115"
+### Community 117 - "Community 117"
 Cohesion: 0.67
 Nodes (3): code:block11 (Goal Act as travel guide and provide 3 travel suggestions), code:block12 (Prompt I want you to act as a travel guide. I will write to ), Role prompting
 
-### Community 116 - "Community 116"
+### Community 118 - "Community 118"
 Cohesion: 0.67
-Nodes (3): Audio & Media, LLM Providers, 🤖 Supported Providers
+Nodes (3): 🏗 Architecture, code:block1 (┌───────────────────────────────────────────────────────────), Design Principles
 
 ## Knowledge Gaps
-- **503 isolated node(s):** `jestConfig`, `__dirname`, `QueueEvent`, `__dirname`, `__dirname` (+498 more)
+- **515 isolated node(s):** `jestConfig`, `__dirname`, `QueueEvent`, `__dirname`, `__dirname` (+510 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **34 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **39 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `BotCore` connect `Community 16` to `Community 33`, `Community 2`, `Community 4`, `Community 8`, `Community 76`, `Community 45`, `Community 49`, `Community 19`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
-- **Why does `ProviderRouter` connect `Community 1` to `Community 33`, `Community 37`, `Community 8`, `Community 9`, `Community 76`, `Community 18`, `Community 60`?**
-  _High betweenness centrality (0.036) - this node is a cross-community bridge._
-- **Why does `PermissionManager` connect `Community 38` to `Community 32`, `Community 35`, `Community 76`, `Community 51`, `Community 86`, `Community 29`, `Community 63`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `BotCore` connect `Community 15` to `Community 36`, `Community 5`, `Community 103`, `Community 44`, `Community 17`, `Community 18`, `Community 25`, `Community 31`?**
+  _High betweenness centrality (0.039) - this node is a cross-community bridge._
+- **Why does `PermissionManager` connect `Community 2` to `Community 3`, `Community 25`, `Community 27`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
+- **Why does `ProviderRouter` connect `Community 0` to `Community 66`, `Community 36`, `Community 37`, `Community 9`, `Community 19`, `Community 25`?**
+  _High betweenness centrality (0.029) - this node is a cross-community bridge._
 - **What connects `jestConfig`, `__dirname`, `QueueEvent` to the rest of the system?**
-  _503 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _515 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.05 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.05 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.07 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05 - nodes in this community are weakly interconnected._

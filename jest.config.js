@@ -12,6 +12,10 @@ const jestConfig = {
       'ts-jest',
       {
         useESM: true,
+        tsconfig: 'tsconfig.test.json',
+        diagnostics: {
+          ignoreDiagnostics: [1378],
+        },
       },
     ],
   },

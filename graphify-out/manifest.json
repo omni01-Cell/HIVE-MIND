@@ -1,7 +1,7 @@
 {
   "/home/omni/Code/HIVE-MIND-RAILWAY/jest.config.js": {
-    "mtime": 1777549053.4434047,
-    "hash": "bf9d3af446fe5cc6a906274b8e8a5c90"
+    "mtime": 1778680404.8366537,
+    "hash": "5d233ad3e5eeae8b67c726a63770bbe5"
   },
   "/home/omni/Code/HIVE-MIND-RAILWAY/test_live.js": {
     "mtime": 1778036493.1820848,
@@ -211,9 +211,13 @@
     "mtime": 1778108909.5282445,
     "hash": "c358ad568d8003eaffefdd4352497b3c"
   },
+  "/home/omni/Code/HIVE-MIND-RAILWAY/plugins/tools/send_sticker/index.ts": {
+    "mtime": 1778680692.4184852,
+    "hash": "db15d6730f23c78c3eb6300e1e48f7ae"
+  },
   "/home/omni/Code/HIVE-MIND-RAILWAY/plugins/tools/send_email/index.ts": {
-    "mtime": 1778488214.9202373,
-    "hash": "2a39635bbda0e02a99b3977a5cde4405"
+    "mtime": 1778664796.0766659,
+    "hash": "059ad52a12fb3fd683270260d91b4111"
   },
   "/home/omni/Code/HIVE-MIND-RAILWAY/plugins/tools/visual_reporter/index.ts": {
     "mtime": 1778506432.6704552,
@@ -706,6 +710,10 @@
   "/home/omni/Code/HIVE-MIND-RAILWAY/tests/unit/core/compactHistory.test.ts": {
     "mtime": 1777549053.4723487,
     "hash": "386eeea005e26d6187d1b52465cde48b"
+  },
+  "/home/omni/Code/HIVE-MIND-RAILWAY/tests/unit/plugins/sendStickerPlugin.test.ts": {
+    "mtime": 1778679830.0799901,
+    "hash": "f785358724e41e76fec659434427092a"
   },
   "/home/omni/Code/HIVE-MIND-RAILWAY/tests/unit/plugins/SystemScratchpadTool.test.ts": {
     "mtime": 1777549053.4724941,

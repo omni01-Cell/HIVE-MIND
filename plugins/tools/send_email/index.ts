@@ -1,5 +1,4 @@
-// WHY: Email sending via n8n webhook automation (HiveMind-SendEmail workflow).
-// The n8n workflow (Webhook → Send Email) handles SMTP delivery via Gmail.
+// WHY: Email sending via external webhook (SMTP delivery via Gmail).
 
 interface SendEmailArgs {
     email: string;
@@ -18,7 +17,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 export default {
     name: 'send_email',
-    description: 'Sends an email to a recipient via the n8n automation workflow.',
+    description: 'Sends an email to a recipient.',
     version: '2.0.0',
     enabled: true,
 
@@ -26,7 +25,7 @@ export default {
         type: 'function' as const,
         function: {
             name: 'send_email',
-            description: 'Sends an email to a recipient. Supports HTML content in the message body.',
+            description: 'Sends an email to a recipient. The message body supports HTML formatting.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -70,7 +69,7 @@ export default {
         const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
         try {
-            console.log(`[send_email] Sending email to ${email} via n8n webhook...`);
+            console.log(`[send_email] Sending email to ${email}...`);
 
             const response = await fetch(N8N_WEBHOOK_URL, {
                 method: 'POST',
@@ -83,7 +82,7 @@ export default {
                 const errorBody = await response.text();
                 return {
                     success: false,
-                    message: `n8n webhook returned HTTP ${response.status}: ${errorBody}`
+                    message: `Email service returned HTTP ${response.status}: ${errorBody}`
                 };
             }
 
