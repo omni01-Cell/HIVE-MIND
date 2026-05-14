@@ -13,6 +13,12 @@ import SystemScratchpadTool from './SystemScratchpadTool.js';
 import SpawnSubAgentTool from './SpawnSubAgentTool.js';
 import BrowserTools from './BrowserTools.js';
 
+interface DevToolsContext {
+    transport?: any;
+    chatId?: string;
+    [key: string]: any;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // MATCHERS TEXTUELS — Commandes admin rapides (sans LLM)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -88,7 +94,7 @@ export default {
      * @param context    - Contexte (transport, chatId, sender, sourceChannel…)
      * @param toolName   - Nom de l'outil à exécuter
      */
-    async execute(args: any, context: any, toolName: string) {
+    async execute(args: unknown, context: DevToolsContext, toolName: string) {
          // Déstructuration défensive du contexte
          const { transport, chatId } = context || {};
 

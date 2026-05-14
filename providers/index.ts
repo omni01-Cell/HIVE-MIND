@@ -453,101 +453,114 @@ class ProviderRouter {
 
             // Essayer chaque modèle de la famille
             for (const model of modelsToTry) {
-                let keyIndex = 1;
-                try {
-                    // [ZERO-429] Smart Router V2 : Recherche proactive de clé avec multi-rotation
-                    if (quotaManager) {
-                        const bestKeyIndex = await quotaManager.getAvailableKeyForModel(model, family, { rpm: 0.20, tpm: 0.10, rpd: 0.05 });
+                const availableIndices = envResolver.getAvailableKeysForProvider(family);
+                const maxKeyAttempts = availableIndices && availableIndices.length > 0 ? availableIndices.length : 1;
+                let attempt = 0;
+                let modelFailedNonQuota = false;
 
-                        if (bestKeyIndex === null) {
-                            console.log(`[Router] ⏭️ ${model} skipped: Toutes les clés sont épuisées (429 Proactif)`);
-                            continue; // Pas de _recordFailure, on passe au modèle suivant
-                        }
-                        keyIndex = bestKeyIndex;
-                    }
+                while (attempt < maxKeyAttempts) {
+                    attempt++;
+                    let keyIndex = 1;
+                    
+                    try {
+                        // [ZERO-429] Smart Router V2 : Recherche proactive de clé avec multi-rotation
+                        if (quotaManager) {
+                            const bestKeyIndex = await quotaManager.getAvailableKeyForModel(model, family, { rpm: 0.20, tpm: 0.10, rpd: 0.05 });
 
-                    console.log(`[Router] 🚀 Tentative: ${family} → ${model} (Clé ${keyIndex})`);
-                    const result = await adapter.chat(messages, {
-                        ...options,
-                        model,
-                        apiKey: this.getApiKey(family, keyIndex),
-                        keyIndex, // Passer l'index pour que l'adapter puisse incrémenter le bon compteur
-                        familyConfig
-                    });
-
-                    // ✅ SUCCÈS
-                    this._resetCircuit(family);
-
-                    // 💰 [FINOPS] Enregistrer le coût via CostTracker (Kill Switch)
-                    const promptTokens = result.usage?.prompt_tokens || 0;
-                    const completionTokens = result.usage?.completion_tokens || 0;
-                    const usageRecord = costTracker.recordUsage(model, promptTokens, completionTokens);
-
-                    if (!usageRecord.budgetSafe) {
-                        throw new Error('BUDGET_EXCEEDED: Le budget maximum de la session a été atteint. Arrêt de sécurité.');
-                    }
-
-                    // 📊 Enregistrer Usage (QuotaManager) — tokens estimés si usage absent
-                    const estimatedTokens = promptTokens + completionTokens ||
-                        Math.ceil(((messages.map((m: any) => m.content).join(' ').length) + (result.content || '').length) / 4);
-
-                    if (quotaManager) {
-                        await quotaManager.recordUsage(family, model, estimatedTokens, keyIndex);
-                    }
-
-                    return {
-                        ...result,
-                        usedFamily: family,
-                        usedModel: model
-                    };
-
-                } catch (error: any) {
-                    console.warn(`[Router] ⚠️ Échec ${family}/${model} (Clé ${keyIndex || 1}): ${error.message.substring(0, 200)}...`); // Limit length
-                    lastError = error;
-
-                    // Gestion intelligente des Quotas (Smart Circuit Breaker)
-                    const isQuotaError = error.message.toLowerCase().match(/(quota|limit|rate|429|insufficient)/);
-
-                    if (isQuotaError && quotaManager) {
-                        let waitTime = 60; // Défaut 1 minute
-
-                        // Tentative d'extraction du temps d'attente précis
-                        const matchWait = error.message.match(/retry in\s+([\d.]+)\s*s/i) ||
-                            error.message.match(/after\s+([\d.]+)\s*s/i);
-
-                        if (matchWait && matchWait[1]) {
-                            waitTime = Math.ceil(parseFloat(matchWait[1]));
+                            if (bestKeyIndex === null) {
+                                console.log(`[Router] ⏭️ ${model} skipped: Toutes les clés sont épuisées (429 Proactif)`);
+                                break; // Plus aucune clé valide pour ce modèle, on passe au modèle suivant
+                            }
+                            keyIndex = bestKeyIndex;
                         }
 
-                        // On bloque spécifiquement CE modèle, pas toute la famille, et pour cette CLÉ
-                        await quotaManager.recordQuotaExceeded(model, waitTime, keyIndex);
-                        console.log(`[Router] 🛡️ Modèle ${model} (Clé ${keyIndex}) bloqué pour ${waitTime}s (Feedback Temps Réel)`);
-                    } else {
-                        // Erreur non-quota: pénaliser la famille ET le modèle spécifique
-                        this._recordFailure(family, error);
-                        this._recordModelFailure(model);
-                    }
+                        console.log(`[Router] 🚀 Tentative: ${family} → ${model} (Clé ${keyIndex})`);
+                        const result = await adapter.chat(messages, {
+                            ...options,
+                            model,
+                            apiKey: this.getApiKey(family, keyIndex),
+                            keyIndex, // Passer l'index pour que l'adapter puisse incrémenter le bon compteur
+                            familyConfig
+                        });
 
-                    // Si on était en mode "Famille Forcée" (contexte) mais que ça a échoué
-                    // On doit briser le cadenas et permettre d'essayer les autres familles
-                    if (availableFamilies.length === 1 && options.family) {
-                        console.warn(`[Router] 🔓 Échec de la famille forcée (${family}). Activation du FALLBACK d'urgence.`);
+                        // ✅ SUCCÈS
+                        this._resetCircuit(family);
 
-                        // Récupérer toutes les autres familles dispo (CHECK STRICT)
-                        // On doit vérifier chaque modèle de chaque famille maintenant
-                        const allOthers = Object.keys(modelsConfig.familles)
-                            .filter((f: string) => f !== family && this.isAvailable(f)); // Dispo Clé API
+                        // 💰 [FINOPS] Enregistrer le coût via CostTracker (Kill Switch)
+                        const promptTokens = result.usage?.prompt_tokens || 0;
+                        const completionTokens = result.usage?.completion_tokens || 0;
+                        const usageRecord = costTracker.recordUsage(model, promptTokens, completionTokens);
 
-                        // Pour sécuriser, on va relancer chat() sans la contrainte 'family'
-                        if (!options.isFallback) {
-                            console.log(`[Router] 🔄 Redirection vers les autres providers...`);
-                            return this.chat(messages, { ...options, family: undefined, isFallback: true });
+                        if (!usageRecord.budgetSafe) {
+                            throw new Error('BUDGET_EXCEEDED: Le budget maximum de la session a été atteint. Arrêt de sécurité.');
                         }
-                    }
 
-                    if (this._isCooldownActive(family)) break; // Famille morte, suivante
+                        // 📊 Enregistrer Usage (QuotaManager) — tokens estimés si usage absent
+                        const estimatedTokens = promptTokens + completionTokens ||
+                            Math.ceil(((messages.map((m: any) => m.content).join(' ').length) + (result.content || '').length) / 4);
+
+                        if (quotaManager) {
+                            await quotaManager.recordUsage(family, model, estimatedTokens, keyIndex);
+                        }
+
+                        return {
+                            ...result,
+                            usedFamily: family,
+                            usedModel: model
+                        };
+
+                    } catch (error: any) {
+                        console.warn(`[Router] ⚠️ Échec ${family}/${model} (Clé ${keyIndex || 1}): ${error.message.substring(0, 200)}...`); // Limit length
+                        lastError = error;
+
+                        // Gestion intelligente des Quotas (Smart Circuit Breaker)
+                        const isQuotaError = error.message.toLowerCase().match(/(quota|limit|rate|429|insufficient)/);
+
+                        if (isQuotaError && quotaManager) {
+                            let waitTime = 60; // Défaut 1 minute
+
+                            // Tentative d'extraction du temps d'attente précis
+                            const matchWait = error.message.match(/retry in\s+([\d.]+)\s*s/i) ||
+                                error.message.match(/after\s+([\d.]+)\s*s/i);
+
+                            if (matchWait && matchWait[1]) {
+                                waitTime = Math.ceil(parseFloat(matchWait[1]));
+                            }
+
+                            // On bloque spécifiquement CE modèle, pas toute la famille, et pour cette CLÉ
+                            await quotaManager.recordQuotaExceeded(model, waitTime, keyIndex);
+                            console.log(`[Router] 🛡️ Modèle ${model} (Clé ${keyIndex}) bloqué pour ${waitTime}s (Feedback Temps Réel)`);
+                            
+                            // 🔄 INNER RETRY LOOP : Si on a d'autres clés pour CE modèle, on réessaie immédiatement !
+                            if (attempt < maxKeyAttempts) {
+                                console.log(`[Router] 🔄 Basculement transparent sur la clé suivante pour ${model}...`);
+                                continue;
+                            }
+                        } else {
+                            // Erreur non-quota: pénaliser la famille ET le modèle spécifique
+                            this._recordFailure(family, error);
+                            this._recordModelFailure(model);
+                            modelFailedNonQuota = true;
+                        }
+
+                        break; // Sortir de la boucle while et passer au modèle suivant
+                    }
+                } // End while (attempt < maxKeyAttempts)
+
+                if (modelFailedNonQuota && this._isCooldownActive(family)) break; // Famille morte, on sort du for modelsToTry
+                
+                // Si on était en mode "Famille Forcée" (contexte) mais que le modèle a échoué sur toutes les clés
+                // On doit briser le cadenas et permettre d'essayer les autres familles
+                if (availableFamilies.length === 1 && options.family) {
+                    console.warn(`[Router] 🔓 Échec de la famille forcée (${family}). Activation du FALLBACK d'urgence.`);
+
+                    // Pour sécuriser, on va relancer chat() sans la contrainte 'family'
+                    if (!options.isFallback) {
+                        console.log(`[Router] 🔄 Redirection vers les autres providers...`);
+                        return this.chat(messages, { ...options, family: undefined, isFallback: true });
+                    }
                 }
-            }
+            } // End for (const model of modelsToTry)
         }
 
         throw new Error(`[Router] Échec total de la cascade. Dernière erreur: ${lastError?.message}`);

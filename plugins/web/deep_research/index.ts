@@ -1,3 +1,14 @@
+interface DeepResearchContext {
+    chatId?: string;
+    sender?: string;
+    transport?: any;
+    [key: string]: any;
+}
+
+interface StartDeepSearchArgs {
+    topic: string;
+}
+
 export default {
     name: 'deep_research',
     description: 'Autonomous deep research module (Kimi Style) with PDF report generation.',
@@ -24,7 +35,7 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: any) {
+    async execute(args: unknown, context: DeepResearchContext, toolName: string) {
         const { chatId, sender, transport } = context || {};
 
         if (!transport || !chatId) {
@@ -32,7 +43,8 @@ export default {
         }
 
         if (toolName === 'start_deep_search') {
-            const { topic } = args;
+            const searchArgs = args as StartDeepSearchArgs;
+            const { topic } = searchArgs;
 
             // 1. Initial notification
             await transport.sendText(chatId, `🕵️‍♂️ **Mission accepted:** Deep research on "${topic}".\n\nBuckle up, I'm deploying the Kimi agent... (Duration: ~2min)`);

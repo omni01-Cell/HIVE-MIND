@@ -1,5 +1,4 @@
-// @ts-nocheck
-// plugins/admin/index.js
+// plugins/admin/index.ts
 // Admin Plugin - User management (soft delete, restore, etc.)
 // Reserved for global admins
 
@@ -8,6 +7,23 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+interface AdminContext {
+    sender?: string;
+    chatId?: string;
+    isGroup?: boolean;
+    [key: string]: any;
+}
+
+interface AdminSoftDeleteArgs { user_jid: string; reason?: string; }
+interface AdminRestoreArgs { user_jid: string; }
+interface AdminListDeletedArgs { limit?: number; }
+interface AdminCheckDeletedArgs { user_jid: string; }
+interface AdminVoiceModeArgs { mode: string; }
+interface AdminAudioPermArgs { permission: string; }
+interface AdminAntiDeleteArgs { action: string; }
+interface AdminShowDeletedArgs { limit?: number; }
+interface AdminPvAudioArgs { action: string; }
 
 // Lazy loaded services
 const getServices = async () => {
@@ -170,7 +186,7 @@ export default {
     /**
      * Executes an admin command
      */
-    async execute(args: any, context: any, toolName: any) {
+    async execute(args: unknown, context: AdminContext, toolName?: string) {
         // Déstructuration défensive du contexte
         const { sender, chatId, isGroup } = context || {};
 
@@ -192,31 +208,39 @@ export default {
         // Dispatch based on command
         switch (toolName) {
             case 'admin_soft_delete':
-                return await this._softDelete(args.user_jid, args.reason);
+                const softDeleteArgs = args as AdminSoftDeleteArgs;
+                return await this._softDelete(softDeleteArgs.user_jid, softDeleteArgs.reason);
 
             case 'admin_restore':
-                return await this._restore(args.user_jid);
+                const restoreArgs = args as AdminRestoreArgs;
+                return await this._restore(restoreArgs.user_jid);
 
             case 'admin_list_deleted':
-                return await this._listDeleted(args.limit || 20);
+                const listDeletedArgs = args as AdminListDeletedArgs;
+                return await this._listDeleted(listDeletedArgs.limit || 20);
 
             case 'admin_check_deleted':
-                return await this._checkDeleted(args.user_jid);
+                const checkDeletedArgs = args as AdminCheckDeletedArgs;
+                return await this._checkDeleted(checkDeletedArgs.user_jid);
 
             case 'admin_voice_mode':
-                return await this._setVoiceMode(args.mode);
+                const voiceModeArgs = args as AdminVoiceModeArgs;
+                return await this._setVoiceMode(voiceModeArgs.mode);
 
             case 'admin_audio_perm':
-                return await this._setAudioPermission(args.permission, chatId, isGroup);
+                const audioPermArgs = args as AdminAudioPermArgs;
+                return await this._setAudioPermission(audioPermArgs.permission, chatId as string, isGroup as boolean);
 
             case 'admin_antidelete':
-                return await this._toggleAntiDelete(args.action, chatId);
+                const antiDeleteArgs = args as AdminAntiDeleteArgs;
+                return await this._toggleAntiDelete(antiDeleteArgs.action, chatId as string);
 
             case 'admin_show_deleted':
-                return await this._showDeletedMessages(chatId);
+                return await this._showDeletedMessages(chatId as string);
 
             case 'admin_pv_audio':
-                return await this._setPvAudio(args.action, sender);
+                const pvAudioArgs = args as AdminPvAudioArgs;
+                return await this._setPvAudio(pvAudioArgs.action, sender);
 
             default:
                 return { success: false, message: `Unknown command: ${toolName}` };
@@ -226,10 +250,10 @@ export default {
     /**
      * Soft delete a user
      */
-    async _softDelete(userJid: any, reason: any) {
+    async _softDelete(userJid: string, reason?: string) {
         try {
             const { userService } = await getServices();
-            const success = await userService.softDelete(userJid, reason);
+            const success = await userService.softDelete(userJid);
             if (success) {
                 return {
                     success: true,
@@ -249,20 +273,14 @@ export default {
     /**
      * Restores a user
      */
-    async _restore(userJid: any) {
+    async _restore(userJid: string) {
         try {
-            const success = await userService.restore(userJid);
-            if (success) {
-                return {
-                    success: true,
-                    message: `✅ User ${userJid.split('@')[0]} successfully restored.`
-                };
-            } else {
-                return {
-                    success: false,
-                    message: `❌ User not found or was not deleted.`
-                };
-            }
+            // restore is not yet implemented in userService V2 schema
+            // Returning a clear message so the admin knows the limitation
+            return {
+                success: false,
+                message: `⚠️ Restore is not yet supported in the V2 schema. User ${userJid.split('@')[0]} cannot be restored automatically.`
+            };
         } catch (error: any) {
             return { success: false, message: `Error: ${error.message}` };
         }
@@ -271,8 +289,9 @@ export default {
     /**
      * Lists deleted users
      */
-    async _listDeleted(limit: any) {
+    async _listDeleted(limit: number) {
         try {
+            const { userService } = await getServices();
             const deletedUsers = await userService.listDeleted(limit);
 
             if (deletedUsers.length === 0) {
@@ -298,8 +317,9 @@ export default {
     /**
      * Checks if a user is deleted
      */
-    async _checkDeleted(userJid: any) {
+    async _checkDeleted(userJid: string) {
         try {
+            const { userService } = await getServices();
             const isDeleted = await userService.isDeleted(userJid);
             const status = isDeleted ? '🔴 DELETED' : '🟢 ACTIVE';
             return {
@@ -314,7 +334,7 @@ export default {
     /**
      * Changes the voice transcription mode
      */
-    async _setVoiceMode(mode: any) {
+    async _setVoiceMode(mode: string) {
         try {
             const configPath = join(__dirname, '..', '..', 'config', 'config.json');
             const config = JSON.parse(readFileSync(configPath, 'utf-8'));
@@ -364,8 +384,9 @@ export default {
      * @param {string} groupJid - Group JID
      * @param {boolean} isGroup - Is it a group?
      */
-    async _setAudioPermission(permission: any, groupJid: any, isGroup: any) {
+    async _setAudioPermission(permission: string, groupJid: string, isGroup: boolean) {
         try {
+            const { workingMemory } = await getServices();
             // CHECK: This command only works in groups
             if (!isGroup) {
                 return {
@@ -388,7 +409,7 @@ export default {
                 };
                 return {
                     success: true,
-                    message: `🔊 **Audio Permissions (Group)**\n\n${permLabels[currentPerm] || permLabels['all']}\n\n` +
+                    message: `🔊 **Audio Permissions (Group)**\n\n${permLabels[currentPerm as keyof typeof permLabels] || permLabels['all']}\n\n` +
                         `Commands:\n` +
                         `• \`.mute.audio_for_none\` - Block non-admins\n` +
                         `• \`.mute.audio_for_all\` - Block everyone\n` +
@@ -407,7 +428,7 @@ export default {
 
             return {
                 success: true,
-                message: `✅ Audio permission updated\n\n${permLabels[permission]}`
+                message: `✅ Audio permission updated\n\n${permLabels[permission as keyof typeof permLabels]}`
             };
         } catch (error: any) {
             return { success: false, message: `Error: ${error.message}` };
@@ -419,8 +440,9 @@ export default {
      * @param {string} action - 'on' | 'off' | 'status'
      * @param {string} senderJid - Sender JID
      */
-    async _setPvAudio(action: any, senderJid: any) {
+    async _setPvAudio(action: string, senderJid: string) {
         try {
+            const { adminService, workingMemory } = await getServices();
             // Vérifier que c'est un Global Admin
             const isGlobalAdmin = await adminService.isGlobalAdmin(senderJid);
 
@@ -465,8 +487,9 @@ export default {
      * @param {string} action - 'on' | 'off' | 'status'
      * @param {string} chatId - Group JID
      */
-    async _toggleAntiDelete(action: any, chatId: any) {
+    async _toggleAntiDelete(action: string, chatId: string) {
         try {
+            const { workingMemory } = await getServices();
             if (action === 'status') {
                 const isEnabled = await workingMemory.isAntiDeleteEnabled(chatId);
                 return {
@@ -498,8 +521,9 @@ export default {
      * Displays recently deleted messages
      * @param {string} chatId - Group JID
      */
-    async _showDeletedMessages(chatId: any) {
+    async _showDeletedMessages(chatId: string) {
         try {
+            const { workingMemory } = await getServices();
             const deletedMessages = await workingMemory.getDeletedMessages(chatId, 10);
 
             if (deletedMessages.length === 0) {

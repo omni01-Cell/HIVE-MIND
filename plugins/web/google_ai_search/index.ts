@@ -22,6 +22,15 @@ interface SearchResult {
     gracefulDegradation?: boolean;
 }
 
+interface GoogleAiSearchContext {
+    [key: string]: any;
+}
+
+interface GoogleAiSearchArgs {
+    query: string;
+    mode?: 'standard' | 'chat' | 'new';
+}
+
 /**
  * Charge le token de conversation sauvegardé (mode stateful)
  */
@@ -75,8 +84,9 @@ export default {
         }
     },
 
-    async execute(args: any, _context: any, toolName?: string): Promise<SearchResult> {
-        const { query, mode = 'standard' } = args;
+    async execute(args: unknown, _context: GoogleAiSearchContext, toolName?: string): Promise<SearchResult> {
+        const searchArgs = args as GoogleAiSearchArgs;
+        const { query, mode = 'standard' } = searchArgs;
         const context = _context || {};
 
         console.log(`[GoogleAI] 🔍 Recherche Google AI Mode: "${query}" (mode: ${mode})`);

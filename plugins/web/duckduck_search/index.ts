@@ -1,4 +1,9 @@
-// plugins/duckduck_search/index.js
+// plugins/duckduck_search/index.ts
+
+interface DuckDuckSearchArgs {
+    query: string;
+    num_results?: number;
+}
 
 export default {
     name: 'duckduck_search',
@@ -28,8 +33,9 @@ export default {
         }
     },
 
-    async execute(args: any, context: any, toolName?: string) {
-        const { query, num_results = 3 } = args;
+    async execute(args: unknown, context: any, toolName?: string) {
+        const searchArgs = args as DuckDuckSearchArgs;
+        const { query, num_results = 3 } = searchArgs;
         
         console.log(`[DuckDuckSearch] 🦆 DuckDuckGo Search: "${query}"`);
 
@@ -39,7 +45,7 @@ export default {
     /**
      * Search via DuckDuckGo HTML (scraping)
      */
-    async searchDuckDuckGo(query: any, num_results: any) {
+    async searchDuckDuckGo(query: string, num_results: number) {
         try {
             const url = "https://html.duckduckgo.com/html/";
             const body = new URLSearchParams({ q: query, b: "" }); // POST form data

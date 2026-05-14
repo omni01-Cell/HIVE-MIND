@@ -1,5 +1,14 @@
-// @ts-nocheck
+interface CrawlfireContext {
+    transport?: any;
+    chatId?: string;
+    [key: string]: any;
+}
 
+interface FirecrawlScrapeArgs { url: string; }
+interface FirecrawlCrawlArgs { url: string; limit?: number; }
+interface FirecrawlMapArgs { url: string; }
+interface FirecrawlSearchArgs { query: string; limit?: number; }
+interface FirecrawlExtractArgs { urls: string[]; prompt: string; }
 export default {
     name: 'crawlfire_web',
     description: 'Advanced crawling and scraping plugin via Firecrawl (v2). Transforms websites into clean Markdown for LLMs.',
@@ -82,7 +91,7 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: any) {
+    async execute(args: unknown, context: CrawlfireContext, toolName?: string) {
         const { transport, chatId } = context || {};
 
         if (!transport || !chatId) {
@@ -118,15 +127,20 @@ export default {
         try {
             switch (toolName) {
                 case 'firecrawl_scrape':
-                    return await this.handleScrape(args.url, headers, baseUrl);
+                    const scrapeArgs = args as FirecrawlScrapeArgs;
+                    return await this.handleScrape(scrapeArgs.url, headers, baseUrl);
                 case 'firecrawl_crawl':
-                    return await this.handleCrawl(args.url, args.limit || 10, headers, baseUrl, transport, chatId);
+                    const crawlArgs = args as FirecrawlCrawlArgs;
+                    return await this.handleCrawl(crawlArgs.url, crawlArgs.limit || 10, headers, baseUrl, transport, chatId);
                 case 'firecrawl_map':
-                    return await this.handleMap(args.url, headers, baseUrl);
+                    const mapArgs = args as FirecrawlMapArgs;
+                    return await this.handleMap(mapArgs.url, headers, baseUrl);
                 case 'firecrawl_search':
-                    return await this.handleSearch(args.query, args.limit || 3, headers, baseUrl);
+                    const searchArgs = args as FirecrawlSearchArgs;
+                    return await this.handleSearch(searchArgs.query, searchArgs.limit || 3, headers, baseUrl);
                 case 'firecrawl_extract':
-                    return await this.handleExtract(args.urls, args.prompt, headers, baseUrl, transport, chatId);
+                    const extractArgs = args as FirecrawlExtractArgs;
+                    return await this.handleExtract(extractArgs.urls, extractArgs.prompt, headers, baseUrl, transport, chatId);
                 default:
                     return { success: false, message: `Unknown Firecrawl tool: ${toolName}` };
             }
@@ -136,7 +150,7 @@ export default {
         }
     },
 
-    async apiFetch(url: any, options: any) {
+    async apiFetch(url: string, options: any) {
         const res = await fetch(url, options);
         const contentType = res.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
@@ -145,7 +159,7 @@ export default {
         return await res.json();
     },
 
-    async handleScrape(url: any, headers: any, baseUrl: any) {
+    async handleScrape(url: string, headers: any, baseUrl: string) {
         console.log(`[CrawlFire] 📄 Scraping: ${url}`);
         const json = await this.apiFetch(`${baseUrl}/scrape`, {
             method: 'POST',
@@ -164,7 +178,7 @@ export default {
         };
     },
 
-    async handleCrawl(url: any, limit: any, headers: any, baseUrl: any, transport: any, chatId: any) {
+    async handleCrawl(url: string, limit: number, headers: any, baseUrl: string, transport: any, chatId?: string) {
         console.log(`[CrawlFire] 🕸️ Crawling: ${url} (limit: ${limit})`);
         if (transport) await transport.sendText(chatId, `🕸️ Starting crawl on ${url}...`);
 
@@ -179,7 +193,7 @@ export default {
         return await this.pollJob(jobId, 'crawl', headers, baseUrl, transport, chatId);
     },
 
-    async handleMap(url: any, headers: any, baseUrl: any) {
+    async handleMap(url: string, headers: any, baseUrl: string) {
         console.log(`[CrawlFire] 🗺️ Mapping: ${url}`);
         const json = await this.apiFetch(`${baseUrl}/map`, {
             method: 'POST',
@@ -203,7 +217,7 @@ export default {
         return { success: true, message: msg };
     },
 
-    async handleSearch(query: any, limit: any, headers: any, baseUrl: any) {
+    async handleSearch(query: string, limit: number, headers: any, baseUrl: string) {
         console.log(`[CrawlFire] 🔍 Searching: ${query}`);
         const json = await this.apiFetch(`${baseUrl}/search`, {
             method: 'POST',
@@ -224,7 +238,7 @@ export default {
         return { success: true, message: `🔍 Firecrawl results for "${query}":\n\n${results}` };
     },
 
-    async handleExtract(urls: any, prompt: any, headers: any, baseUrl: any, transport: any, chatId: any) {
+    async handleExtract(urls: string[], prompt: string, headers: any, baseUrl: string, transport: any, chatId?: string) {
         console.log(`[CrawlFire] 🧪 Extracting from ${urls?.length} URLs`);
         if (transport) await transport.sendText(chatId, `🧪 Extracting structured data...`);
 
@@ -242,7 +256,7 @@ export default {
         return await this.pollJob(json.id, 'extract', headers, baseUrl, transport, chatId);
     },
 
-    async pollJob(jobId: any, type: any, headers: any, baseUrl: any, transport: any, chatId: any) {
+    async pollJob(jobId: string, type: string, headers: any, baseUrl: string, transport: any, chatId?: string) {
         let attempts = 0;
         const maxAttempts = 30; // 5 mins max
 

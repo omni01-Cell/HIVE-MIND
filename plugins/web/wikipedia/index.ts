@@ -1,5 +1,16 @@
 // Wikipedia search plugin
 
+interface WikipediaContext {
+    transport?: any;
+    chatId?: string;
+    [key: string]: any;
+}
+
+interface WikipediaArgs {
+    query: string;
+    lang?: string;
+}
+
 export default {
     name: 'search_wikipedia',
     description: 'Searches for information on Wikipedia.',
@@ -38,8 +49,9 @@ export default {
         }
     },
 
-    async execute(args: any, context: any, toolName?: string) {
-        const { query, lang = 'en' } = args;
+    async execute(args: unknown, context: WikipediaContext, toolName?: string) {
+        const searchArgs = args as WikipediaArgs;
+        const { query, lang = 'en' } = searchArgs;
         const { transport, chatId } = context || {};
 
         if (!query) {

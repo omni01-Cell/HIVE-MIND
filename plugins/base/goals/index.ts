@@ -1,5 +1,31 @@
 // Plugin for managing autonomous goals
 
+interface GoalsContext {
+    chatId?: string;
+    [key: string]: any;
+}
+
+interface CreateGoalArgs {
+    title: string;
+    description: string;
+    executeIn?: string;
+    waitForUser?: string;
+    waitForKeyword?: string;
+}
+
+interface ListGoalsArgs {
+    status?: 'pending' | 'in_progress' | 'completed' | 'all';
+}
+
+interface CompleteGoalArgs {
+    goalId: string;
+    result?: string;
+}
+
+interface CancelGoalArgs {
+    goalId: string;
+}
+
 export default {
     name: 'goals',
     description: 'Autonomous goal management',
@@ -97,7 +123,7 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: string) {
+    async execute(args: unknown, context: GoalsContext, toolName: string) {
         // Defensive destructuring of context
         const { chatId } = context || {};
 
@@ -110,7 +136,8 @@ export default {
 
         switch (toolName) {
         case 'create_goal': {
-            const { title, description, executeIn = '1h', waitForUser, waitForKeyword } = args;
+            const createArgs = args as CreateGoalArgs;
+            const { title, description, executeIn = '1h', waitForUser, waitForKeyword } = createArgs;
 
             // Determine trigger type
             let triggerType = 'TIME';
@@ -158,7 +185,8 @@ export default {
         }
 
         case 'list_goals': {
-            const { status = 'all' } = args;
+            const listArgs = args as ListGoalsArgs;
+            const { status = 'all' } = listArgs;
             const allGoals = await goalsService.getChatGoals(chatId);
 
             const filtered = status === 'all'
@@ -183,7 +211,8 @@ export default {
         }
 
         case 'complete_goal': {
-            const { goalId, result } = args;
+            const completeArgs = args as CompleteGoalArgs;
+            const { goalId, result } = completeArgs;
             await goalsService.completeGoal(goalId, result);
 
             return {
@@ -193,7 +222,8 @@ export default {
         }
 
         case 'cancel_goal': {
-            const { goalId } = args;
+            const cancelArgs = args as CancelGoalArgs;
+            const { goalId } = cancelArgs;
             await goalsService.cancelGoal(goalId);
 
             return {

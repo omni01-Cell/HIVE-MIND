@@ -463,6 +463,10 @@ export const factsMemory = {
 export const workspaceMemory = {
     async write(chatId: any, key: any, content: any, tags: any[] = []) {
         if (!supabase) return false;
+        if (!key) {
+            console.error('[Workspace] Erreur write: key est vide ou non défini');
+            return false;
+        }
 
         let contextId = chatId;
         try {

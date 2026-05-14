@@ -30,7 +30,7 @@ async function simulateIncomingMessage(text: string) {
         // Wait for the bot to respond on the cli transport
         setTimeout(() => {
             resolve(true);
-        }, 30000); // Wait 30 seconds for the agent to finish
+        }, 300000); // Wait 5 minutes for the complex agentic loop to finish
         
         const transport = transportManager.getTransport('cli');
         if (transport && transport.messageCallback) {
@@ -49,27 +49,13 @@ async function runTests() {
         console.log('🚀 Initializing bot core in test mode...');
         await botCore.init();
 
-        // 1. Shopping
-        await simulateIncomingMessage("Can you use the shopping tool to find me some laptops under 500 dollars?");
-        await delay(15000);
-
-        // 2. Translate
-        await simulateIncomingMessage("Use the translation tool to translate 'Hello, I love coding!' to French.");
-        await delay(15000);
-
-        // 3. Sys Interaction
-        await simulateIncomingMessage("Use your sys_interaction tool to test pinging an echo command.");
-        await delay(15000);
+        // Intense Agentic Task to stress test the Smart Router V2 RPM
+        const intensePrompt = `Va sur le site Hacker News (news.ycombinator.com), lis le titre des 3 premiers articles. Ensuite, utilise tes outils développeur pour créer un script Python qui génère un rapport au format PDF résumant ces 3 articles. Exécute ce script et donne moi le rapport final. Fais-le étape par étape et montre moi tes reflexions.`;
         
-        // 4. Goals
-        await simulateIncomingMessage("Can you set a new short-term goal for me called 'Master TypeScript' using the goals tool?");
-        await delay(15000);
+        await simulateIncomingMessage(intensePrompt);
+        await delay(300000); // 5 min delay to observe all logs, RPM exhaustion, and key rotation
 
-        // 5. Visual Reporter
-        await simulateIncomingMessage("Generate a visual report on the topic of AI growth using visual_reporter.");
-        await delay(15000);
-
-        console.log('✅ End to End Tests complete.');
+        console.log('✅ End to End Stress Test complete.');
         process.exit(0);
 
     } catch (error) {

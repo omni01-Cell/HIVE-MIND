@@ -190,18 +190,29 @@ async function run() {
     startRailwayLogs();
 
     try {
-        // Test: Demander un voice note LONG au bot pour voir l'indicateur "recording" et waveform
-        console.log('[TEST-RUNNER] 📤 Sending text message asking for LONG voice note...');
+        // Test: Tâche agentique complexe pour saturer le Smart Router (RPM)
+        // Implique: web browsing, script dev (python), file generation, et >5 itérations
+        console.log('[TEST-RUNNER] 📤 Sending intense agentic task to stress test Smart Router...');
+        
+        const intensePrompt = `Va sur le site Hacker News (news.ycombinator.com), lis le titre des 3 premiers articles. Ensuite, utilise tes outils développeur pour créer un script Python qui génère un rapport au format PDF résumant ces 3 articles. Exécute ce script et envoie-moi le PDF final en pièce jointe. Fais-le étape par étape.`;
+
         await sendAndWaitForResponse(
             sock, targetJID,
-            'réponds par vocal: dis moi une blague longue et marrante en français, fais un vocal d au moins 30 secondes',
+            intensePrompt,
             (msg) => {
-                const hasVoiceNote = !!msg.message?.audioMessage;
+                const hasDocument = !!msg.message?.documentMessage;
                 const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-                console.log(`\n[TEST-RUNNER] 🤖 Bot replied: [VoiceNote: ${hasVoiceNote}] [Text: ${text}]`);
-                return hasVoiceNote; // Stop when we receive a voice note
+                
+                if (hasDocument) {
+                    console.log(`\n[TEST-RUNNER] 🎯 Bot sent a document: ${msg.message?.documentMessage?.fileName}`);
+                } else if (text) {
+                    console.log(`\n[TEST-RUNNER] 🤖 Bot thinking/replying: ${text}`);
+                }
+                
+                // Stop when we receive the PDF document
+                return hasDocument && msg.message?.documentMessage?.mimetype?.includes('pdf') === true;
             },
-            120000 // 120 seconds timeout for longer audio
+            420000 // 7 minutes timeout (agentic loops can be very long)
         );
 
     } catch (error) {

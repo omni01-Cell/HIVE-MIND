@@ -11,6 +11,22 @@ const getServices = async () => {
     return { factsMemory, workspaceMemory, semanticMemory, workingMemory };
 };
 
+interface MemoryContext {
+    chatId?: string;
+    sender?: string;
+    [key: string]: any;
+}
+
+interface RememberFactArgs { key: string; value: string; }
+interface RecallFactArgs { key: string; }
+interface ForgetFactArgs { key: string; }
+interface WorkspaceWriteArgs { key: string; content: string; tags?: string[]; }
+interface WorkspaceReadArgs { key: string; }
+interface WorkspaceSearchArgs { query: string; tags?: string[]; }
+interface WorkspaceDeleteArgs { key: string; }
+interface UpdateScratchpadArgs { text: string; }
+interface SearchLongTermMemoryArgs { query: string; }
+
 export default {
     name: 'memory',
     description: 'Persistent memory management - memorize, recall, and list facts about users',
@@ -178,11 +194,11 @@ export default {
 
     /**
      * Executes memory tool
-     * @param {Object} args - Tool arguments
-     * @param {Object} context - Context (transport, message, chatId, sender)
+     * @param {unknown} args - Tool arguments
+     * @param {MemoryContext} context - Context (transport, message, chatId, sender)
      * @param {string} toolName - Called tool name
      */
-    async execute(args: any, context: any, toolName: any) {
+    async execute(args: unknown, context: MemoryContext, toolName?: string) {
         // Defensive destructuring of context
         const { chatId, sender } = context || {};
 
@@ -195,34 +211,43 @@ export default {
 
         switch (toolName) {
             case 'remember_fact':
-                return await this._rememberFact(factsChatId, args.key, args.value);
+                const rememberArgs = args as RememberFactArgs;
+                return await this._rememberFact(factsChatId as string, rememberArgs.key, rememberArgs.value);
 
             case 'recall_fact':
-                return await this._recallFact(factsChatId, args.key);
+                const recallArgs = args as RecallFactArgs;
+                return await this._recallFact(factsChatId as string, recallArgs.key);
 
             case 'list_facts':
-                return await this._listFacts(factsChatId);
+                return await this._listFacts(factsChatId as string);
 
             case 'forget_fact':
-                return await this._forgetFact(factsChatId, args.key);
+                const forgetArgs = args as ForgetFactArgs;
+                return await this._forgetFact(factsChatId as string, forgetArgs.key);
 
             case 'workspace_write':
-                return await this._workspaceWrite(factsChatId, args.key, args.content, args.tags);
+                const writeArgs = args as WorkspaceWriteArgs;
+                return await this._workspaceWrite(factsChatId as string, writeArgs.key, writeArgs.content, writeArgs.tags);
 
             case 'workspace_read':
-                return await this._workspaceRead(factsChatId, args.key);
+                const readArgs = args as WorkspaceReadArgs;
+                return await this._workspaceRead(factsChatId as string, readArgs.key);
 
             case 'workspace_search':
-                return await this._workspaceSearch(factsChatId, args.query, args.tags);
+                const searchArgs = args as WorkspaceSearchArgs;
+                return await this._workspaceSearch(factsChatId as string, searchArgs.query, searchArgs.tags);
 
             case 'workspace_delete':
-                return await this._workspaceDelete(factsChatId, args.key);
+                const deleteArgs = args as WorkspaceDeleteArgs;
+                return await this._workspaceDelete(factsChatId as string, deleteArgs.key);
 
             case 'update_scratchpad':
-                return await this._updateScratchpad(chatId, args.text);
+                const updateArgs = args as UpdateScratchpadArgs;
+                return await this._updateScratchpad(chatId as string, updateArgs.text);
 
             case 'search_long_term_memory':
-                return await this._searchLongTermMemory(chatId, args.query);
+                const ltmArgs = args as SearchLongTermMemoryArgs;
+                return await this._searchLongTermMemory(chatId as string, ltmArgs.query);
 
             default:
                 return { success: false, message: `Unknown tool: ${toolName}` };
@@ -232,7 +257,7 @@ export default {
     /**
      * Memorizes a fact
      */
-    async _rememberFact(chatId: any, key: any, value: any) {
+    async _rememberFact(chatId: string, key: string, value: string) {
         try {
             const { factsMemory } = await getServices();
             // Normalize the key (lowercase, underscores)
@@ -256,7 +281,7 @@ export default {
     /**
      * Recalls a fact
      */
-    async _recallFact(chatId: any, key: any) {
+    async _recallFact(chatId: string, key: string) {
         try {
             const { factsMemory } = await getServices();
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
@@ -285,7 +310,7 @@ export default {
     /**
      * Lists all facts
      */
-    async _listFacts(chatId: any) {
+    async _listFacts(chatId: string) {
         try {
             const { factsMemory } = await getServices();
             const facts = await factsMemory.getAll(chatId);
@@ -318,7 +343,7 @@ export default {
     /**
      * Forgets a fact
      */
-    async _forgetFact(chatId: any, key: any) {
+    async _forgetFact(chatId: string, key: string) {
         try {
             const { factsMemory } = await getServices();
             const normalizedKey = key.toLowerCase().replace(/\s+/g, '_');
@@ -350,8 +375,14 @@ export default {
     /**
      * Workspace Write
      */
-    async _workspaceWrite(chatId: any, key: any, content: any, tags: any) {
+    async _workspaceWrite(chatId: string, key: string, content: string, tags?: string[]) {
         try {
+            if (!key) {
+                return { success: false, message: 'WORKSPACE_ERROR: Le paramètre "key" (identifiant unique du document) est obligatoire.' };
+            }
+            if (!content) {
+                return { success: false, message: 'WORKSPACE_ERROR: Le paramètre "content" est obligatoire.' };
+            }
             const { workspaceMemory } = await getServices();
             const success = await workspaceMemory.write(chatId, key, content, tags || []);
             if (success) {
@@ -366,7 +397,7 @@ export default {
     /**
      * Workspace Read
      */
-    async _workspaceRead(chatId: any, key: any) {
+    async _workspaceRead(chatId: string, key: string) {
         try {
             const { workspaceMemory } = await getServices();
             const doc = await workspaceMemory.read(chatId, key);
@@ -382,7 +413,7 @@ export default {
     /**
      * Workspace Search
      */
-    async _workspaceSearch(chatId: any, query: any, tags: any) {
+    async _workspaceSearch(chatId: string, query: string, tags?: string[]) {
         try {
             const { workspaceMemory } = await getServices();
             const results = await workspaceMemory.search(chatId, query, tags || []);
@@ -399,7 +430,7 @@ export default {
     /**
      * Workspace Delete
      */
-    async _workspaceDelete(chatId: any, key: any) {
+    async _workspaceDelete(chatId: string, key: string) {
         try {
             const { workspaceMemory } = await getServices();
             const success = await workspaceMemory.delete(chatId, key);
@@ -418,7 +449,7 @@ export default {
      * Updates the L1 Redis scratchpad (GCC). Content will appear in the
      * agent's <scratchpad> block at the next turn.
      */
-    async _updateScratchpad(chatId: any, text: any) {
+    async _updateScratchpad(chatId: string, text: string) {
         try {
             const { workingMemory } = await getServices();
             if (!text || typeof text !== 'string') {
@@ -440,7 +471,7 @@ export default {
      * Pull-based RAG search. The agent calls this when it needs deep context
      * that is NOT present in its L1 hot cache.
      */
-    async _searchLongTermMemory(chatId: any, query: any) {
+    async _searchLongTermMemory(chatId: string, query: string) {
         try {
             const { semanticMemory } = await getServices();
             if (!query || typeof query !== 'string') {

@@ -1,6 +1,22 @@
 import path from 'path';
 
-// plugins/sys_interaction/index.js
+// plugins/sys_interaction/index.ts
+
+interface SysInteractionContext {
+    transport?: any;
+    message?: { raw?: { key?: any }; sender?: string; [key: string]: any };
+    chatId?: string;
+    sourceChannel?: string;
+    [key: string]: any;
+}
+
+interface ReactToMessageArgs { emoji?: string; reaction?: string; target_channel?: string; }
+interface CreatePollArgs { title: string; options: string[]; allowMultipleAnswers?: boolean; target_channel?: string; target_chat_id?: string; }
+interface SendContactArgs { name: string; phone: string; target_channel?: string; target_chat_id?: string; }
+interface SendMessageArgs { text: string; target_channel?: string; target_chat_id?: string; }
+interface SendFileArgs { filePath: string; caption?: string; target_channel?: string; target_chat_id?: string; }
+interface UseToolArgs { tool_name: string; args: Record<string, unknown>; }
+
 export default {
     name: 'sys_interaction',
     description: 'Management of advanced human interactions (Reactions, Polls, Contacts)',
@@ -134,7 +150,7 @@ export default {
     /**
      * Exécution des outils
      */
-    async execute(args: any, context: any, toolName: any) {
+    async execute(args: unknown, context: SysInteractionContext, toolName?: string) {
         // Import dynamique pour éviter les cycles
         const { pluginLoader } = await import('../../loader.js');
         const { transport, message, chatId } = context || {};
@@ -183,13 +199,14 @@ export default {
                         data: { plugins, tools: tools.map((t: any) => t.function.name).concat(ptcEnabled ? ['code_execution'] : []) }
                     };
 
-                case 'react_to_message':
-                    const emoji = args.emoji || args.reaction;
+                case 'react_to_message': {
+                    const reactArgs = args as ReactToMessageArgs;
+                    const emoji = reactArgs.emoji || reactArgs.reaction;
                     if (!emoji || emoji.length > 5) return { success: false, message: 'Invalid emoji.' };
 
-                    const targetKey = message.raw?.key; // Message actuel par défaut
+                    const targetKey = message?.raw?.key; // Message actuel par défaut
                     if (targetKey) {
-                        const targetChannel = args.target_channel || context.sourceChannel;
+                        const targetChannel = reactArgs.target_channel || context.sourceChannel;
                         await transport.sendReaction(chatId, targetKey, emoji, targetChannel);
 
                         // [VIBE CODING] Trigger émotionnel
@@ -209,45 +226,53 @@ export default {
                         return { success: true, message: `[ACTION] Reaction ${emoji} added on ${targetChannel}.` };
                     }
                     return { success: false, message: 'No target message.' };
+                }
 
-                case 'create_poll':
-                    const { title, options, allowMultipleAnswers } = args;
+                case 'create_poll': {
+                    const pollArgs = args as CreatePollArgs;
+                    const { title, options, allowMultipleAnswers } = pollArgs;
                     const selectableCount = allowMultipleAnswers ? options.length : 1;
-                    const pollTargetChannel = args.target_channel || context.sourceChannel;
-                    const pollTargetChatId = args.target_chat_id || chatId;
+                    const pollTargetChannel = pollArgs.target_channel || context.sourceChannel;
+                    const pollTargetChatId = pollArgs.target_chat_id || chatId;
 
                     await transport.sendPoll(pollTargetChatId, title, options, selectableCount, pollTargetChannel);
                     return { success: true, message: `[ACTION] Poll "${title}" created on ${pollTargetChannel} in chat ${pollTargetChatId}.` };
+                }
 
-                case 'send_contact':
-                    const { name, phone } = args;
+                case 'send_contact': {
+                    const contactArgs = args as SendContactArgs;
+                    const { name, phone } = contactArgs;
                     // Nettoyage sommaire du numéro
                     const cleanPhone = phone.replace(/\+/g, '').replace(/\s/g, '');
-                    const contactTargetChannel = args.target_channel || context.sourceChannel;
-                    const contactTargetChatId = args.target_chat_id || chatId;
+                    const contactTargetChannel = contactArgs.target_channel || context.sourceChannel;
+                    const contactTargetChatId = contactArgs.target_chat_id || chatId;
 
                     await transport.sendContact(contactTargetChatId, name, cleanPhone, contactTargetChannel);
                     return { success: true, message: `[ACTION] Contact ${name} (${cleanPhone}) sent on ${contactTargetChannel}.` };
+                }
 
-                case 'send_message':
-                    const { text } = args;
+                case 'send_message': {
+                    const msgArgs = args as SendMessageArgs;
+                    const { text } = msgArgs;
                     if (!text) return { success: false, message: 'Empty text.' };
                     
-                    const msgTargetChannel = args.target_channel || context.sourceChannel;
-                    const msgTargetChatId = args.target_chat_id || chatId;
+                    const msgTargetChannel = msgArgs.target_channel || context.sourceChannel;
+                    const msgTargetChatId = msgArgs.target_chat_id || chatId;
 
                     // Send directly via transport
                     // Use sendText to benefit from auto formatting and splitting
                     await transport.sendText(msgTargetChatId, text, {}, msgTargetChannel);
                     return { success: true, message: `[ACTION] Message sent on ${msgTargetChannel} to chat ${msgTargetChatId}.` };
+                }
 
                 case 'send_file':
                 case 'send_files': {
-                    const { filePath, caption } = args;
+                    const fileArgs = args as SendFileArgs;
+                    const { filePath, caption } = fileArgs;
                     if (!filePath) return { success: false, message: 'File path (filePath) required.' };
 
-                    const fileTargetChannel = args.target_channel || context.sourceChannel;
-                    const fileTargetChatId = args.target_chat_id || chatId;
+                    const fileTargetChannel = fileArgs.target_channel || context.sourceChannel;
+                    const fileTargetChatId = fileArgs.target_chat_id || chatId;
 
                     const isUrl = filePath.startsWith('http://') || filePath.startsWith('https://');
                     let finalPath = filePath;

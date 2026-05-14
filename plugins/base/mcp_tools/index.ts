@@ -1,3 +1,9 @@
+interface McpToolsContext {
+    transport?: any;
+    chatId?: string;
+    [key: string]: any;
+}
+
 export default {
     name: 'mcp_tools',
     description: 'Provide tools dynamically loaded from connected MCP Servers.',
@@ -18,7 +24,7 @@ export default {
             console.error('[MCP Plugin] Failed to initialize tools:', e.message);
         }
     },
-    async execute(args: any, context: any, toolName: string) {
+    async execute(args: unknown, context: McpToolsContext, toolName: string) {
         const { transport, chatId } = context || {};
         
         // toolName format: mcp__SERVERNAME__TOOLNAME
@@ -29,7 +35,7 @@ export default {
             
             console.log(`[MCP Plugin] Executing ${mcpToolName} on server ${serverName}`);
             const { default: mcpClient } = await import('../../../services/mcpClient.js');
-            const result = await mcpClient.callTool(serverName, mcpToolName, args);
+            const result = await mcpClient.callTool(serverName, mcpToolName, args as Record<string, unknown>);
             
             return {
                 success: result.success,

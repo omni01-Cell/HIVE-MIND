@@ -1,13 +1,24 @@
-// @ts-nocheck
-// plugins/system/index.js
-// System Plugin - Process & OS Management
-// CRITICAL PERMISSIONS: Reserved for Super-Admins / Global Admins
-
 import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+
+interface SystemContext {
+    transport?: any;
+    message?: any;
+    sender?: string;
+    chatId?: string;
+    [key: string]: any;
+}
+
+interface OsShutdownArgs {
+    reason: string;
+    restart?: boolean;
+}
+
+interface OsUpdatePullArgs {}
+interface OsSystemInfoArgs {}
 
 export default {
     name: 'system',
@@ -56,7 +67,7 @@ export default {
             pattern: /^\.(shutdown|stop)\b/i,
             handler: 'os_shutdown',
             description: 'Stop the bot',
-            extractArgs: (match, message, text) => {
+            extractArgs: (match: any, message: any, text: string) => {
                 const reason = text.replace(/^\.(shutdown|stop)\s*/i, '').trim();
                 return { reason: reason || 'Manual command', restart: false };
             }
@@ -65,7 +76,7 @@ export default {
             pattern: /^\.(restart|reboot)\b/i,
             handler: 'os_shutdown', // Use shutdown with restart=true
             description: 'Restart the bot',
-            extractArgs: (match, message, text) => {
+            extractArgs: (match: any, message: any, text: string) => {
                 return { reason: 'Manual restart', restart: true };
             }
         },
@@ -80,8 +91,8 @@ export default {
     /**
      * Exécution des outils
      */
-    async execute(args: any, context: any, toolName: any) {
-        const { transport, message, sender } = context || {};
+    async execute(args: unknown, context: SystemContext, toolName?: string) {
+        const { transport, message, sender, chatId } = context || {};
 
         if (!transport) {
             return { success: false, message: 'Transport not available' };
@@ -105,10 +116,11 @@ export default {
                 return this._getSystemInfo();
 
             case 'os_shutdown':
-                return this._shutdown(args, transport, chatId); // chatId is missing in destructuring above
+                const shutdownArgs = args as OsShutdownArgs;
+                return this._shutdown(shutdownArgs, transport, chatId as string);
 
             case 'os_update_pull':
-                return this._gitPull();
+                return await this._gitPull();
 
             default:
                 return { success: false, message: `Unknown command: ${toolName}` };
@@ -142,7 +154,7 @@ export default {
     /**
      * Shutdown / Restart
      */
-    async _shutdown(args: any, transport: any, chatId: any) {
+    async _shutdown(args: OsShutdownArgs, transport: any, chatId: string) {
         // Need chatId passed correctly. 
         // Note: The execute method didn't extract chatId. Fixing logic here assuming context availability issues.
 
