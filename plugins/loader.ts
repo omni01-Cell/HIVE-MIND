@@ -372,7 +372,7 @@ class PluginLoader {
                 'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
                 'code_execution',
                 'get_file_skeleton', 'get_function', 'edit_file', 'read_file',
-                'workspace_read', 'workspace_write', 'workspace_search', 'workspace_delete',
+                'db_document_read', 'db_document_save', 'db_document_search', 'db_document_delete',
                 'google_ai_search'
             ];
 

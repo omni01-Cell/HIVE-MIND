@@ -18,7 +18,7 @@ const KNOWN_TOOL_PREFIXES = [
     'browser_screenshot', 'browser_open', 'browser_snapshot',
     'browser_click', 'browser_fill', 'browser_eval',
     'send_message', 'send_file', 'send_sticker',
-    'workspace_write', 'workspace_read', 'workspace_search',
+    'db_document_save', 'db_document_read', 'db_document_search',
     'read_file', 'edit_file', 'grep_search',
     'google_ai_search', 'firecrawl_scrape',
     'get_file_skeleton', 'get_function',

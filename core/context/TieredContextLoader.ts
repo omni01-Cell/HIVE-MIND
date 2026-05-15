@@ -316,7 +316,7 @@ export class TieredContextLoader {
 
         block += `### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the \`get_my_capabilities\` tool**.\n`;
 
-        block += `\n### 📂 EXECUTION ENVIRONMENT (FILESYSTEM)\nYou have **universal read access** to the entire filesystem — use \`read_file\`, \`list_directory\`, and \`grep_search\` on ANY path (e.g., \`/home\`, \`/etc\`, project root, etc.).\n**Write access** is restricted to your authorized zones:\n- **Code Sandbox** (for scripts/code execution): \`${permissionManager.sandboxDir}\`\n- **File Storage** (for persistent files): \`${permissionManager.storageDir}\`\nFor file write operations, use only these directories. (Note: These are physical folders. Do NOT confuse them with your \`workspace_write\` database tools).\n`;
+        block += `\n### 📂 EXECUTION ENVIRONMENT (FILESYSTEM)\nYou have **universal read access** to the entire filesystem — use \`read_file\`, \`list_directory\`, and \`grep_search\` on ANY path (e.g., \`/home\`, \`/etc\`, project root, etc.).\n**Write access** is restricted to your authorized zones:\n- **Code Sandbox** (for scripts/code execution): \`${permissionManager.sandboxDir}\`\n- **File Storage** (for persistent files): \`${permissionManager.storageDir}\`\nFor file write operations, use only these directories. (Note: These are physical folders. Do NOT confuse them with your \`db_document_save\` database tools).\n`;
 
         block += `\n### ⚡ EXECUTION DIRECTIVES (MANDATORY)\n`;
         block += `- **Actionable request → act NOW in this turn.** Never announce an action if you can execute it directly.\n`;

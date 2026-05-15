@@ -124,22 +124,32 @@ export default {
             "Content-Type": "application/json"
         };
 
+        const ensureAbsoluteUrl = (u: unknown) => {
+            if (typeof u === 'string' && u && !/^https?:\/\//i.test(u)) {
+                throw new Error(`The URL "${u}" is invalid. You MUST provide an absolute URL starting with http:// or https:// (e.g. https://example.com${u.startsWith('/') ? u : '/' + u}).`);
+            }
+        };
+
         try {
             switch (toolName) {
                 case 'firecrawl_scrape':
                     const scrapeArgs = args as FirecrawlScrapeArgs;
+                    ensureAbsoluteUrl(scrapeArgs.url);
                     return await this.handleScrape(scrapeArgs.url, headers, baseUrl);
                 case 'firecrawl_crawl':
                     const crawlArgs = args as FirecrawlCrawlArgs;
+                    ensureAbsoluteUrl(crawlArgs.url);
                     return await this.handleCrawl(crawlArgs.url, crawlArgs.limit || 10, headers, baseUrl, transport, chatId);
                 case 'firecrawl_map':
                     const mapArgs = args as FirecrawlMapArgs;
+                    ensureAbsoluteUrl(mapArgs.url);
                     return await this.handleMap(mapArgs.url, headers, baseUrl);
                 case 'firecrawl_search':
                     const searchArgs = args as FirecrawlSearchArgs;
                     return await this.handleSearch(searchArgs.query, searchArgs.limit || 3, headers, baseUrl);
                 case 'firecrawl_extract':
                     const extractArgs = args as FirecrawlExtractArgs;
+                    if (extractArgs.urls) extractArgs.urls.forEach(ensureAbsoluteUrl);
                     return await this.handleExtract(extractArgs.urls, extractArgs.prompt, headers, baseUrl, transport, chatId);
                 default:
                     return { success: false, message: `Unknown Firecrawl tool: ${toolName}` };

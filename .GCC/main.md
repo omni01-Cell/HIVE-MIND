@@ -187,14 +187,16 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
 - [2026-05-15] [BROWSER] Added `full_page: boolean` option to the `browser_screenshot` tool, allowing the agent to capture the entire scrollable content of a page.
 - [2026-05-15] [TESTING] Validated `browser_screenshot` dual-mode via CLI E2E (`scripts/test_full_page_screenshot.ts`): viewport (1280×577, 116KB) and full-page (1265×1179, 221KB) both generated from Hacker News. Agent correctly dispatched `full_page: true` for the full capture and omitted it for viewport. Both files exist on disk, dimensions prove full-page captures ~2× the vertical content.
 - [2026-05-15] [CORE] Implemented a 2-Layer Response Defense System (`utils/responseSanitizer.ts`) against weak model hallucinations (e.g., `flash-lite`). Layer 1 (In-Loop): detects missing `<thought>` tags, leaked tool calls, or raw code dominance and forces a retry (max 2) with explicit correction instructions. Layer 2 (Post-Loop): a final safety net that strips any remaining leaked tool calls, orphan code blocks, or JSON tool objects before sending the text to the user. Validated with 15/15 unit tests.
-- [2026-05-15] [CORE] Extended Global Tool Retry System coverage: Extracted validation logic to `utils/toolValidator.ts` and successfully integrated it into Gemini Live (`_executeLiveTool`) and the PTC `code_execution` fallback mechanism. All AI-driven tool calls (both text and Voice-to-Voice) are now strictly guarded against missing required parameters.
+- [2026-05-15] [TESTING] Stabilized E2E Agent Automation Battery (7 Priorities): Blocked false Planner success claims via strict prompt and short-circuit guard. Disambiguated storage tools by renaming `workspace_*` to `db_document_*`. Fixed `code_execution` routing within the Planner via PTC integration. Prevented `unknown_tool` infinite loops in replanning by enforcing available tools. Hardened parameter validation against malformed JSON. Isolated CLI E2E test runner streams by `chatId` and increased async drain timeouts. Structured test verdicts.
+- [2026-05-15] [CORE] Centralized code_execution into `_executePtcCode` to unify the Global Tool Retry System across both the standard ReAct loop and the Planner execution paths. Ensures identical Layer C validation (malformed JSON catching) and `PTC_SINGLE_TOOL` Layer B fallback validation across all paths.
+- [2026-05-15] [WEB] Fixed `firecrawl_scrape` hallucinatory relative URLs failure. Added `ensureAbsoluteUrl` to force the agent to use `http://` or `https://` absolute URLs, preventing cryptic API failures.
 
 ### 🔄 In progress & ⏳ Pending
-- 🔄 In progress: Relancer la batterie de tests E2E locale (`run_cli_battery.ts`) avec le Global Retry System actif.
+- 🔄 In progress: Batterie de tests E2E locale (`run_cli_battery.ts`) en cours d'exécution. Stabilisation itérative pour atteindre les 100% de succès.
 - ⏳ Pending (POSTPONED): Test fonctionnel global en conditions réelles (Validation TUI vs Headless) — En attente d'ajout de clés API (Quota Exceeded).
 
 ## Next action
-- Relancer la batterie E2E (`run_cli_battery.ts`) pour valider définitivement le comportement du Retry System.
+- Analyser les échecs restants du `run_cli_battery.ts` (comme le bug Firecrawl) pour itérer vers un score de réussite de 10/10.
 
 ## Abandoned branches
 - None.

@@ -169,7 +169,7 @@ export class BotCore {
     }
 
     async _executeLiveTool(name: string, args: any, message: any, availableTools: any[], authority: any) {
-        // [GLOBAL RETRY] Pre-execution argument validation (Layer A)
+        // [GLOBAL RETRY AND DEFENSE SYSTEM] Pre-execution argument validation (Layer A)
         const validation = validateToolArgs(name, JSON.stringify(args || {}), availableTools);
         if (!validation.valid) {
             console.warn(`[GeminiLive] ⚠️ Missing required params for "${name}": [${validation.missing.join(', ')}]`);
@@ -1109,7 +1109,7 @@ export class BotCore {
             // 3. Collector for action trace (saved to Redis L1 after response)
             const toolsUsedThisTurn: Array<{name: string, args_summary: string, result_summary: string}> = [];
 
-            // [GLOBAL RETRY] Per-tool retry counter — prevents infinite loops when the LLM
+            // [GLOBAL RETRY AND DEFENSE SYSTEM] Per-tool retry counter — prevents infinite loops when the LLM
             // omits required parameters. Scoped to the entire ReAct turn (not per-iteration)
             // so a tool that fails 3 times across iterations 2, 4, 6 still hits the limit.
             const toolRetryCount = new Map<string, number>();
@@ -1175,22 +1175,59 @@ export class BotCore {
                         });
                         const analysis = await planner.review(executionLog);
 
-                        // [BUG #6 FIX] usedFamily est null ici (ReAct loop pas encore exécutée)
-                        // Utiliser category: 'AGENTIC' pour la résolution via Smart Router
-                        try {
-                            const summaryPrompt = `Le plan d'action a été exécuté.\nObjectif: ${(plan as any).goal}\nRésultats: ${JSON.stringify((executionLog as any).results).substring(0, 1000)}\n\nGénère une réponse conversationnelle résumant ce qui a été fait.`;
-                            const summaryResponse = await providerRouter.chat([
-                                ...history,
-                                { role: 'user', content: summaryPrompt }
-                            ], { category: 'AGENTIC' });
+                        // [PRIORITY 1 FIX] Honest plan summary — block false success claims
+                        const successCount = (executionLog as any).completed?.length || 0;
+                        const failCount = (executionLog as any).failed?.length || 0;
+                        const totalSteps = (plan as any).steps?.length || 1;
+                        const successRate = Math.round((successCount / totalSteps) * 100);
 
-                            finalResponse = summaryResponse.content;
-                        } catch (summaryErr: any) {
-                            // [BUG #7 FIX] Ne jamais laisser l'utilisateur sans réponse
-                            console.error('[Planner] ❌ Échec génération résumé:', summaryErr.message);
-                            const successCount = (executionLog as any).completed?.length || 0;
-                            const failCount = (executionLog as any).failed?.length || 0;
-                            finalResponse = `✅ Plan exécuté (${successCount} étapes réussies, ${failCount} échouées). Je n'ai pas pu générer un résumé détaillé, mais les actions ont été traitées.`;
+                        // Build factual step-by-step status
+                        const stepStatuses = ((plan as any).steps || []).map((s: any) => {
+                            const succeeded = (executionLog as any).completed?.includes(s.id);
+                            const failed = (executionLog as any).failed?.includes(s.id);
+                            const status = succeeded ? '✅' : failed ? '❌' : '⏭️ skipped';
+                            const result = (executionLog as any).results?.[s.id];
+                            const resultSummary = result
+                                ? (result.error ? `Error: ${result.message || 'unknown'}` : 'OK')
+                                : 'not executed';
+                            return `Step ${s.id} [${status}]: ${s.action} → ${resultSummary}`;
+                        }).join('\n');
+
+                        // If success rate is below 50%, skip LLM call — return factual report directly
+                        if (successRate < 50) {
+                            console.warn(`[Planner] ⚠️ Low success rate (${successRate}%). Returning factual report instead of LLM summary.`);
+                            finalResponse = `⚠️ Plan partially failed (${successCount}/${totalSteps} steps completed, ${successRate}% success rate).\n\n${stepStatuses}`;
+                        } else {
+                            try {
+                                const summaryPrompt = `<plan_execution_report>
+Objective: ${(plan as any).goal}
+Result: ${successCount}/${totalSteps} steps completed (${successRate}% success rate)
+${failCount > 0 ? `⚠️ ${failCount} steps FAILED.` : ''}
+
+Step-by-step status:
+${stepStatuses}
+</plan_execution_report>
+
+<instructions>
+Generate an HONEST conversational summary of what happened.
+RULES:
+- If steps failed, you MUST mention the failures explicitly.
+- NEVER claim a file was created if the step that creates it failed or was skipped.
+- NEVER claim success if the success rate is below 80%.
+- If the overall result is a failure, say so clearly and explain what went wrong.
+- Do NOT invent outcomes that are not in the report above.
+</instructions>`;
+                                const summaryResponse = await providerRouter.chat([
+                                    ...history,
+                                    { role: 'user', content: summaryPrompt }
+                                ], { category: 'AGENTIC' });
+
+                                finalResponse = summaryResponse.content;
+                            } catch (summaryErr: any) {
+                                // [BUG #7 FIX] Never leave the user without a response
+                                console.error('[Planner] ❌ Échec génération résumé:', summaryErr.message);
+                                finalResponse = `Plan executed (${successCount}/${totalSteps} steps, ${successRate}% success).\n\n${stepStatuses}`;
+                            }
                         }
                         await this.actionMemory.completeAction(chatId, { success: (analysis as any).success });
 
@@ -1337,7 +1374,7 @@ export class BotCore {
                     const executeAndRecord = async (toolCall: any) => {
                         const toolName = toolCall.function.name;
                         try {
-                            // ── [GLOBAL RETRY] Pre-execution argument validation ──
+                            // ── [GLOBAL RETRY AND DEFENSE SYSTEM] Pre-execution argument validation ──
                             // WHY: The LLM frequently omits required params (e.g., `name` for
                             // browser_screenshot, `key` for workspace_write). Without this check,
                             // the tool fails silently and the LLM doesn't self-correct.
@@ -1377,114 +1414,17 @@ export class BotCore {
                             // [PTC] Route spéciale pour le meta-tool code_execution
                             if (toolName === 'code_execution') {
                                 console.log('[PTC] ⚡ Exécution programmatique déclenchée par le LLM');
-                                const codeArgs = JSON.parse(toolCall.function.arguments || '{}');
-
-                                // Construire les fonctions tool pour le sandbox
-                                const toolFns = buildToolFunctions(
-                                    relevantTools,
-                                    (name: string, args: any, ctx: any) => pluginLoader.execute(name, args, ctx),
-                                    {
-                                        transport: this.transport,
-                                        message,
-                                        chatId,
-                                        sender: message.sender,
-                                        sourceChannel: message.sourceChannel,
-                                        onProgress: (status: string) => {
-                                            eventBus.publish(BotEvents.TOOL_PROGRESS, { tool: 'code_execution', status, chatId });
-                                        },
-                                    }
-                                );
-
-                                try {
-                                    // Construire le bridge HIVE pour ce chatId (WakeSystem)
-                                    const hiveBridge = hiveWakeSystem.buildHiveBridge(chatId);
-
-                                    // Enregistrer le callback de réveil spécifique à ce chatId
-                                    hiveWakeSystem.registerWakeCallback(chatId, async (wakeEvent) => {
-                                        console.log(`[WakeSystem] ⏰ Réveil contextuel pour chatId=${chatId}`);
-                                        await this._onMessage({
-                                            chatId: wakeEvent.chatId,
-                                            sender: 'system@wake',
-                                            senderName: 'WAKE_SYSTEM',
-                                            text: `[WAKE_EVENT] ${wakeEvent.prompt}`,
-                                            isGroup: wakeEvent.chatId?.endsWith('@g.us') ?? false,
-                                            isSystem: true,
-                                            sourceChannel: 'internal',
-                                        } as any);
-                                    });
-
-                                    // Exécuter le code dans le sandbox VM (avec bridge HIVE)
-                                    const ptcResult = await ptcExecutor.execute(codeArgs.code, toolFns, hiveBridge);
-
-                                    // [SLEEP_SCHEDULED] Si le script a planifié un réveil, ne PAS
-                                    // renvoyer le résultat brut au LLM — c'est un signal interne.
-                                    // Le WakeSystem se chargera de relancer la boucle au bon moment.
-                                    if (ptcResult.metadata.sleepScheduled) {
-                                        const sleep = ptcResult.metadata.sleepScheduled;
-                                        console.log(`[PTC] 💤 SLEEP_SCHEDULED — id=${sleep.wakeEventId}, réveil dans ${Math.round((sleep.wakeAtMs - Date.now()) / 1000)}s`);
-                                        // Informer le LLM de manière concise (pas le résultat brut)
-                                        toolResult = {
-                                            success: true,
-                                            type: 'SLEEP_SCHEDULED',
-                                            message: sleep.message,
-                                            wakeEventId: sleep.wakeEventId,
-                                            wakeAtMs: sleep.wakeAtMs,
-                                        };
-                                    } else {
-                                        toolResult = ptcResult;
-                                    }
-
-                                    console.log(`[PTC] 📊 ${ptcResult.metadata.toolCallCount} tools exécutés, ~${ptcResult.metadata.totalTokensSaved} tokens économisés`);
-                                } catch (ptcErr: any) {
-                                    // [FALLBACK] Si PTC refuse (1 seul outil), exécuter via tool calling natif
-                                    if (ptcErr.message?.startsWith('PTC_SINGLE_TOOL')) {
-                                        console.log('[PTC] ⏭️ Fallback tool calling natif (1 seul outil détecté)');
-                                        // Extraire le nom de l'outil et les args du code généré
-                                        const singleToolMatch = codeArgs.code?.match(/(?:await\s+)?(\w+)\s*\(\s*(\{[\s\S]*?\})\s*\)/);
-                                        if (singleToolMatch) {
-                                            const [, extractedTool, extractedArgs] = singleToolMatch;
-
-                                            // [GLOBAL RETRY] Validation du fallback (Layer B)
-                                            const validation = validateToolArgs(extractedTool, extractedArgs, relevantTools);
-                                            if (!validation.valid) {
-                                                console.warn(`[PTC→Native] ⚠️ Missing required params for "${extractedTool}": [${validation.missing.join(', ')}]`);
-                                                toolResult = {
-                                                    success: false,
-                                                    error: 'MISSING_REQUIRED_PARAMETERS',
-                                                    message: `TOOL_CALL_REJECTED: Tool "${extractedTool}" is missing required parameters: [${validation.missing.join(', ')}]. `
-                                                        + `You MUST retry this tool call immediately with ALL required parameters filled. `
-                                                        + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
-                                                    missing_params: validation.missing
-                                                };
-                                            } else {
-                                                try {
-                                                    const parsedArgs = JSON.parse(extractedArgs);
-                                                    toolResult = await pluginLoader.execute(extractedTool, parsedArgs, {
-                                                        transport: this.transport,
-                                                        message,
-                                                        chatId,
-                                                        sender: message.sender,
-                                                        isGroup: message.isGroup,
-                                                        authorityLevel: (fullContext as any).authorityLevel || fullContext.authority?.level,
-                                                        isSuperUser: fullContext.authority?.isSuperUser,
-                                                        isGlobalAdmin: fullContext.authority?.isGlobalAdmin,
-                                                        sourceChannel: message.sourceChannel,
-                                                    });
-                                                    console.log(`[PTC→Native] ✅ Exécuté ${extractedTool} via fallback natif`);
-                                                } catch {
-                                                    // L'extraction des args a échoué → renvoyer l'erreur au LLM
-                                                    toolResult = { success: false, error: `PTC fallback: impossible d'extraire les arguments pour ${extractedTool}` };
-                                                }
-                                            }
-                                        } else {
-                                            toolResult = { success: false, error: ptcErr.message };
-                                        }
-                                    } else {
-                                        // Autre erreur PTC (SafeScript, timeout, etc.) → renvoyer au LLM
-                                        console.error('[PTC] ❌ Erreur:', ptcErr.message);
-                                        toolResult = { success: false, error: ptcErr.message };
-                                    }
-                                }
+                                toolResult = await this._executePtcCode(toolCall, message, chatId, relevantTools, {
+                                    transport: this.transport,
+                                    message,
+                                    chatId,
+                                    sender: message.sender,
+                                    isGroup: message.isGroup,
+                                    authorityLevel: (fullContext as any).authorityLevel || fullContext.authority?.level,
+                                    isSuperUser: fullContext.authority?.isSuperUser,
+                                    isGlobalAdmin: fullContext.authority?.isGlobalAdmin,
+                                    sourceChannel: message.sourceChannel,
+                                });
                             } else {
                                 // [CLASSIQUE] _safeExecuteTool pour les appels normaux
                                 toolResult = await this._safeExecuteTool(toolCall, {
@@ -1954,6 +1894,26 @@ export class BotCore {
                 }
             }
 
+            // [PRIORITY 3 FIX] Route code_execution through PTC executor
+            // WHY: code_execution is a meta-tool handled specially by PTC, not a plugin.
+            // The Planner calls _safeExecuteTool which would hit pluginLoader.execute()
+            // and fail with "Plugin not found". This intercept routes it correctly.
+            if (toolName === 'code_execution') {
+                console.log('[PTC] ⚡ Exécution programmatique via Planner path (_safeExecuteTool)');
+                const relevantToolDefs = pluginLoader.getToolDefinitions();
+                return await this._executePtcCode(toolCall, message, chatId, relevantToolDefs, {
+                    transport: this.transport,
+                    message,
+                    chatId,
+                    sender: message.sender,
+                    isGroup: message.isGroup,
+                    authorityLevel: authorityLevel || 'MEMBRE (Standard)',
+                    isSuperUser: isSuperUser,
+                    isGlobalAdmin: isGlobalAdmin,
+                    sourceChannel: message.sourceChannel,
+                });
+            }
+
             // EXÉCUTION RÉELLE
             const toolResult = await this._executeTool(toolCall, message);
 
@@ -2005,6 +1965,118 @@ export class BotCore {
                 success: false,
                 error: true,
                 message: `Tool Execution Failed: ${execErr.message}. Please analyze the error, self-correct your parameters or strategy, and try again.`
+            };
+        }
+    }
+
+    /**
+     * Executes the 'code_execution' meta-tool via the PTC sandbox.
+     * Centralized defensive execution path used by both ReAct and Planner.
+     */
+    async _executePtcCode(toolCall: any, message: any, chatId: string, relevantTools: any[], contextParams: any) {
+        let codeArgs: any;
+        try {
+            codeArgs = JSON.parse(toolCall.function.arguments || '{}');
+        } catch (parseErr: any) {
+            // [GLOBAL RETRY AND DEFENSE SYSTEM] Catch malformed JSON from LLM (Layer C: Safety Net)
+            return {
+                success: false,
+                error: 'MALFORMED_JSON_ARGUMENTS',
+                message: `Your tool call arguments are malformed JSON: "${parseErr.message}". Please retry with valid JSON containing a "code" string parameter.`
+            };
+        }
+
+        if (!codeArgs.code || typeof codeArgs.code !== 'string') {
+            return { success: false, error: true, message: 'code_execution requires a string "code" argument.' };
+        }
+
+        // Construire les fonctions tool pour le sandbox
+        const toolFns = buildToolFunctions(
+            relevantTools,
+            (name: string, args: any, ctx: any) => pluginLoader.execute(name, args, ctx),
+            {
+                ...contextParams,
+                onProgress: (status: string) => {
+                    eventBus.publish(BotEvents.TOOL_PROGRESS, { tool: 'code_execution', status, chatId });
+                },
+            }
+        );
+
+        try {
+            // Construire le bridge HIVE pour ce chatId (WakeSystem)
+            const hiveBridge = hiveWakeSystem.buildHiveBridge(chatId);
+
+            // Enregistrer le callback de réveil spécifique à ce chatId
+            hiveWakeSystem.registerWakeCallback(chatId, async (wakeEvent) => {
+                console.log(`[WakeSystem] ⏰ Réveil contextuel pour chatId=${chatId}`);
+                await this._onMessage({
+                    chatId: wakeEvent.chatId,
+                    sender: 'system@wake',
+                    senderName: 'WAKE_SYSTEM',
+                    text: `[WAKE_EVENT] ${wakeEvent.prompt}`,
+                    isGroup: wakeEvent.chatId?.endsWith('@g.us') ?? false,
+                    isSystem: true,
+                    sourceChannel: 'internal',
+                } as any);
+            });
+
+            // Exécuter le code dans le sandbox VM (avec bridge HIVE)
+            const ptcResult = await ptcExecutor.execute(codeArgs.code, toolFns, hiveBridge);
+
+            // [SLEEP_SCHEDULED]
+            if (ptcResult.metadata?.sleepScheduled) {
+                const sleep = ptcResult.metadata.sleepScheduled;
+                console.log(`[PTC] 💤 SLEEP_SCHEDULED — id=${sleep.wakeEventId}, réveil dans ${Math.round((sleep.wakeAtMs - Date.now()) / 1000)}s`);
+                return {
+                    success: true,
+                    type: 'SLEEP_SCHEDULED',
+                    message: sleep.message,
+                    wakeEventId: sleep.wakeEventId,
+                    wakeAtMs: sleep.wakeAtMs,
+                };
+            }
+
+            console.log(`[PTC] 📊 ${ptcResult.metadata?.toolCallCount || 0} tools exécutés, ~${ptcResult.metadata?.totalTokensSaved || 0} tokens économisés`);
+            return ptcResult;
+
+        } catch (ptcErr: any) {
+            // [FALLBACK] Si PTC refuse (1 seul outil), exécuter via tool calling natif
+            if (ptcErr.message?.startsWith('PTC_SINGLE_TOOL')) {
+                console.log('[PTC] ⏭️ Fallback tool calling natif (1 seul outil détecté)');
+                const singleToolMatch = codeArgs.code?.match(/(?:await\s+)?(\w+)\s*\(\s*(\{[\s\S]*?\})\s*\)/);
+                if (singleToolMatch) {
+                    const [, extractedTool, extractedArgs] = singleToolMatch;
+
+                    // [GLOBAL RETRY AND DEFENSE SYSTEM] Validation du fallback (Layer B)
+                    const validation = validateToolArgs(extractedTool, extractedArgs, relevantTools);
+                    if (!validation.valid) {
+                        console.warn(`[PTC→Native] ⚠️ Missing required params for "${extractedTool}": [${validation.missing.join(', ')}]`);
+                        return {
+                            success: false,
+                            error: 'MISSING_REQUIRED_PARAMETERS',
+                            message: `TOOL_CALL_REJECTED: Tool "${extractedTool}" is missing required parameters: [${validation.missing.join(', ')}]. `
+                                + `You MUST retry this tool call immediately with ALL required parameters filled. `
+                                + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
+                            missing_params: validation.missing
+                        };
+                    }
+
+                    try {
+                        const parsedArgs = JSON.parse(extractedArgs);
+                        console.log(`[PTC→Native] ✅ Exécuté ${extractedTool} via fallback natif`);
+                        return await pluginLoader.execute(extractedTool, parsedArgs, contextParams);
+                    } catch (err: any) {
+                        return { success: false, error: `PTC fallback: impossible d'extraire les arguments pour ${extractedTool}` };
+                    }
+                } else {
+                    return { success: false, error: ptcErr.message };
+                }
+            }
+            console.error('[PTC] ❌ Erreur sandbox:', ptcErr);
+            return {
+                success: false,
+                error: true,
+                message: ptcErr.message || 'PTC execution failed'
             };
         }
     }

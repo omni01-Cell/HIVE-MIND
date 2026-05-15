@@ -204,11 +204,12 @@ export class ExplicitPlanner {
                 .map((step: any, index: any) => ({
                     id: Number(step.id) || index + 1,
                     action: String(step.action || 'unknown_action'),
-                    tool: String(step.tool || 'unknown_tool'),
+                    tool: step.tool ? String(step.tool) : null,
                     params: step.params || {},
                     estimated_time: Number(step.estimated_time) || 0,
                     depends_on: Array.isArray(step.depends_on) ? step.depends_on.map(Number) : []
-                }));
+                }))
+                .filter((step: any) => step.tool !== null);
             
             // S'assurer qu'il y a au moins une étape
             if (corrected.steps.length === 0) {
@@ -472,8 +473,15 @@ Plan:`;
 
             // Exécuter l'étape
             try {
-                // [BUG #9 FIX] Sécurité si tool est manquant
-                const toolName = step.tool || 'unknown_tool';
+                // [PRIORITY 4 FIX] Skip steps with no valid tool instead of executing 'unknown_tool'
+                const toolName = step.tool;
+                if (!toolName || toolName === 'unknown_tool') {
+                    console.warn(`[Planner] ⚠️ Étape ${step.id} ignorée: outil manquant ou invalide ("${toolName || 'null'}")`);
+                    executionLog.failed.push(step.id);
+                    executionLog.results[step.id] = { error: true, message: `Step skipped: no valid tool (was "${toolName || 'null'}")` };
+                    await actionMemory.updateStep(context.chatId, `⏭️ Étape ${step.id}: ${step.action} - outil manquant`);
+                    continue;
+                }
                 
                 // Construire le toolCall format
                 const toolCall = {
@@ -589,7 +597,20 @@ Plan:`;
      * Replanifie après échec
      */
     async _replan(originalPlan: any, executionLog: any, context: any) {
+        // [PRIORITY 4 FIX] Anti-rebounce guard — replan only once
+        if ((executionLog as any)._replanAttempt) {
+            console.warn('[Planner] 🛑 Replan already attempted, aborting to prevent infinite loop.');
+            return { ...executionLog, replanFailed: true };
+        }
+        (executionLog as any)._replanAttempt = true;
+
         console.log('[Planner] 🔄 Replanification...');
+
+        // Build available tools list for the LLM
+        const availableToolNames = (context.tools || [])
+            .map((t: any) => t.function?.name || t.name)
+            .filter(Boolean)
+            .join(', ');
 
         const replanPrompt = `<role>
 You are HIVE-MIND's adaptive PLANNER recovering from execution failure.
@@ -605,11 +626,16 @@ Completed steps: ${executionLog.completed.join(', ') || 'none'}
 Failed steps: ${executionLog.failed.join(', ')}
 </execution_results>
 
+<available_tools>
+${availableToolNames || 'No tool list provided'}
+</available_tools>
+
 <replanning_strategy>
 1. Analyze WHY failures occurred
 2. Propose alternative approach avoiding same errors
-3. Consider:
-   - Different tool selection
+3. CRITICAL: You MUST ONLY use tools from the <available_tools> list above. Do NOT invent tool names.
+4. Consider:
+   - Different tool selection from the available list
    - Modified parameters
    - Alternative step ordering
    - Simpler intermediate goals
@@ -639,9 +665,21 @@ New plan:`;
             const newPlanText = response.content.replace(/```json|```/g, '').trim();
             const newPlan = JSON.parse(newPlanText);
 
+            // Validate that all tools in the new plan actually exist
+            const validToolNames = new Set((context.tools || []).map((t: any) => t.function?.name || t.name));
+            const invalidSteps = (newPlan.steps || []).filter((s: any) => s.tool && !validToolNames.has(s.tool));
+            if (invalidSteps.length > 0) {
+                console.warn(`[Planner] ⚠️ Replan contains ${invalidSteps.length} invalid tool(s): ${invalidSteps.map((s: any) => s.tool).join(', ')}. Filtering out.`);
+                newPlan.steps = (newPlan.steps || []).filter((s: any) => !s.tool || validToolNames.has(s.tool));
+            }
+
+            if (!newPlan.steps || newPlan.steps.length === 0) {
+                throw new Error('Replan produced no valid steps');
+            }
+
             console.log('[Planner] ✅ Nouveau plan créé, réexécution...');
 
-            // Réexécuter avec le nouveau plan
+            // Execute with the new plan (guard flag already set, so no recursive replan)
             return await this.execute({ ...originalPlan, steps: newPlan.steps }, context);
 
         } catch (e: any) {

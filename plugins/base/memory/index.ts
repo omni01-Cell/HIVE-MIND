@@ -105,8 +105,8 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'workspace_write',
-                description: 'Saves or updates a document in your active workspace (Epistemic Memory / Supabase Database). IMPORTANT: This writes to the internal database ONLY. It DOES NOT create physical files (e.g. .md, .txt) on the disk in the storage_hm folder. If the user asks you to create a physical file on the disk, DO NOT use this tool; use a file editing or code execution tool instead.',
+                name: 'db_document_save',
+                description: 'Saves a document to your INTERNAL DATABASE (Supabase Epistemic Memory). ⚠️ WARNING: This does NOT create any file on disk. This is NOT equivalent to mkdir, writeFile, or echo. For creating physical files (.md, .txt, .html, etc.) on disk, use execute_bash_command (echo/cat/tee) or code_execution. This tool stores structured knowledge in a key-value database for long-term recall only.',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -121,8 +121,8 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'workspace_read',
-                description: 'Reads the complete content of a specific document from your active workspace.',
+                name: 'db_document_read',
+                description: 'Reads the complete content of a specific document from your internal database (Epistemic Memory). This reads from the Supabase database, NOT from the filesystem.',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -135,8 +135,8 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'workspace_search',
-                description: 'Semantically searches through all your workspace documents (Epistemic Memory) to find similar concepts.',
+                name: 'db_document_search',
+                description: 'Semantically searches through all your database documents (Epistemic Memory) to find similar concepts. This searches the Supabase database, NOT the filesystem.',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -150,8 +150,8 @@ export default {
         {
             type: 'function',
             function: {
-                name: 'workspace_delete',
-                description: 'Deletes an obsolete document from your workspace.',
+                name: 'db_document_delete',
+                description: 'Deletes an obsolete document from your internal database (Epistemic Memory).',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -166,7 +166,7 @@ export default {
             type: 'function',
             function: {
                 name: 'update_scratchpad',
-                description: 'Overwrites your L1 working memory (GCC Scratchpad visible in your prompt at every turn). Use for short-term state tracking between turns: ongoing task status, waiting conditions, key decisions. For long-term documents, use workspace_write instead. Max 500 chars.',
+                description: 'Overwrites your L1 working memory (GCC Scratchpad visible in your prompt at every turn). Use for short-term state tracking between turns: ongoing task status, waiting conditions, key decisions. For long-term documents, use db_document_save instead. Max 500 chars.',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -225,19 +225,19 @@ export default {
                 const forgetArgs = args as ForgetFactArgs;
                 return await this._forgetFact(factsChatId as string, forgetArgs.key);
 
-            case 'workspace_write':
+            case 'db_document_save':
                 const writeArgs = args as WorkspaceWriteArgs;
                 return await this._workspaceWrite(factsChatId as string, writeArgs.key, writeArgs.content, writeArgs.tags);
 
-            case 'workspace_read':
+            case 'db_document_read':
                 const readArgs = args as WorkspaceReadArgs;
                 return await this._workspaceRead(factsChatId as string, readArgs.key);
 
-            case 'workspace_search':
+            case 'db_document_search':
                 const searchArgs = args as WorkspaceSearchArgs;
                 return await this._workspaceSearch(factsChatId as string, searchArgs.query, searchArgs.tags);
 
-            case 'workspace_delete':
+            case 'db_document_delete':
                 const deleteArgs = args as WorkspaceDeleteArgs;
                 return await this._workspaceDelete(factsChatId as string, deleteArgs.key);
 

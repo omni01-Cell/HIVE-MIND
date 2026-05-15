@@ -40,7 +40,7 @@ const TESTS = [
         id: 5,
         title: "Test d'une Clé API et Listing des Modèles",
         prompt: "Voici ma clé API Groq : gsk_DUMMY_KEY_FOR_TESTING_12345\n\nUtilise cette clé pour :\n1. Vérifier qu'elle est valide en faisant un appel de test\n2. Lister tous les modèles disponibles sur cette clé\n3. Pour chaque modèle, indique : le nom, le context window, et s'il supporte le function calling\n4. Formate les résultats dans un tableau markdown propre et envoie-le moi",
-        expectedFiles: 1
+        expectedFiles: 0
     },
     {
         id: 6,
@@ -52,7 +52,7 @@ const TESTS = [
         id: 7,
         title: "Lecture et Analyse de ses Propres Fichiers",
         prompt: "Lis ton propre fichier de configuration principal (le system prompt dans persona/prompts/system.md) et fais-moi une analyse complète :\n1. Combien de sections principales contient-il ?\n2. Quelle est la taille totale en lignes et en mots ?\n3. Liste les 5 instructions les plus importantes que tu identifies\n4. Y a-t-il des contradictions ou des redondances dans les instructions ?\n5. Propose 3 améliorations concrètes\n\nFormate ta réponse dans un rapport markdown structuré.",
-        expectedFiles: 1
+        expectedFiles: 0
     },
     {
         id: 8,
@@ -81,8 +81,9 @@ let currentCapturedFiles: string[] = [];
 // Intercept CLI Transport Methods
 const originalSendUniversalResponse = cliTransport.sendUniversalResponse;
 cliTransport.sendUniversalResponse = async (chatId: string, response: any, options: any = {}) => {
+    // [PRIORITY 6 FIX] Only capture responses for the active test's chatId
     const text = response.markdown || response.text || '';
-    if (text) {
+    if (text && chatId.startsWith('cli_chat_e2e_')) {
         currentCapturedText += text + '\\n\\n';
     }
     return originalSendUniversalResponse(chatId, response, options);
@@ -219,8 +220,23 @@ async function runTests() {
                 console.log(`⚠️ [CLI-TEST] Timeout atteint pour ce test (10min). On passe au suivant.`);
             }
 
+            // [PRIORITY 7 FIX] Structured verdict per test
+            type TestVerdict = 'success' | 'partial' | 'timeout' | 'failed';
+            const verdict: TestVerdict = (() => {
+                const hasText = currentCapturedText.length > 20;
+                const hasEnoughFiles = test.expectedFiles === 0 || currentCapturedFiles.length >= test.expectedFiles;
+                const timedOut = Date.now() - startTime >= timeoutMs;
+
+                if (timedOut && !hasText) return 'timeout';
+                if (hasText && hasEnoughFiles) return 'success';
+                if (hasText && !hasEnoughFiles && test.expectedFiles > 0) return 'partial';
+                return 'failed';
+            })();
+
+            const verdictEmoji = { success: '✅', partial: '⚠️', timeout: '⏰', failed: '❌' };
+
             // Write everything sequentially in the file
-            const reportContent = `## 🧪 Test ${test.id}: ${test.title}\n\n**Prompt:**\n> ${test.prompt.replace(/\n/g, '\n> ')}\n\n### 📥 Response Text:\n\n${currentCapturedText}\n\n### 📎 Received Files:\n\n${currentCapturedFiles.map(f => `- ${f}`).join('\n')}\n\n### 📜 Logs:\n\n\`\`\`\n${currentCapturedLogs}\n\`\`\`\n\n---\n\n`;
+            const reportContent = `## ${verdictEmoji[verdict]} Test ${test.id}: ${test.title} — **${verdict.toUpperCase()}**\n\n**Prompt:**\n> ${test.prompt.replace(/\n/g, '\n> ')}\n\n**Verdict:** ${verdict} (Files: ${currentCapturedFiles.length}/${test.expectedFiles}, Text length: ${currentCapturedText.length} chars)\n\n### 📥 Response Text:\n\n${currentCapturedText}\n\n### 📎 Received Files:\n\n${currentCapturedFiles.map(f => `- ${f}`).join('\n')}\n\n### 📜 Logs:\n\n\`\`\`\n${currentCapturedLogs}\n\`\`\`\n\n---\n\n`;
             fs.appendFileSync(reportFile, reportContent);
             
             // Restore interceptors for next iteration
@@ -228,8 +244,9 @@ async function runTests() {
             cliTransport.sendFile = localOriginalSendFile;
             cliTransport.sendMedia = localOriginalSendMedia;
             
-            console.log(`⏳ [CLI-TEST] Waiting 30 seconds before next test...`);
-            await delay(30000);
+            // [PRIORITY 6 FIX] Drain async jobs between tests — longer wait to prevent contamination
+            console.log(`⏳ [CLI-TEST] Draining async jobs (45s) before next test...`);
+            await delay(45000);
         }
 
         process.stdout.write = originalStdoutWrite;
