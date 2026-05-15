@@ -14,6 +14,8 @@ import { providerRouter } from '../providers/index.js';
 import { scheduler } from '../scheduler/index.js';
 import { extractToolCallsFromText, parseToolArguments } from '../utils/toolCallExtractor.js';
 import { isStorable } from '../utils/helpers.js';
+import { detectResponseDefects, sanitizeResponse } from '../utils/responseSanitizer.js';
+import { validateToolArgs } from '../utils/toolValidator.js';
 
 // [PTC] Programmatic Tool Calling — Pilier D AION
 import { ptcExecutor, buildToolFunctions } from '../services/ptc/index.js';
@@ -167,6 +169,20 @@ export class BotCore {
     }
 
     async _executeLiveTool(name: string, args: any, message: any, availableTools: any[], authority: any) {
+        // [GLOBAL RETRY] Pre-execution argument validation (Layer A)
+        const validation = validateToolArgs(name, JSON.stringify(args || {}), availableTools);
+        if (!validation.valid) {
+            console.warn(`[GeminiLive] ⚠️ Missing required params for "${name}": [${validation.missing.join(', ')}]`);
+            return {
+                success: false,
+                error: 'MISSING_REQUIRED_PARAMETERS',
+                message: `TOOL_CALL_REJECTED: Tool "${name}" is missing required parameters: [${validation.missing.join(', ')}]. `
+                    + `You MUST retry this tool call immediately with ALL required parameters filled. `
+                    + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
+                missing_params: validation.missing
+            };
+        }
+
         if (name === 'code_execution') {
             console.log('[PTC] ⚡ Exécution programmatique déclenchée via Gemini Live');
             const code = args?.code;
@@ -1099,6 +1115,9 @@ export class BotCore {
             const toolRetryCount = new Map<string, number>();
             const MAX_TOOL_RETRIES = 2;
 
+            let responseDefectRetries = 0;
+            const MAX_DEFECT_RETRIES = 2;
+
             let finalResponse: any = null;
             let keepThinking = true;
             let iterations = 0;
@@ -1324,47 +1343,33 @@ export class BotCore {
                             // the tool fails silently and the LLM doesn't self-correct.
                             // This validates against the JSON Schema `required` array and returns
                             // a structured error that guides the LLM to retry with correct params.
-                            const toolDef = relevantTools.find((t: any) => t.function?.name === toolName);
-                            if (toolDef?.function?.parameters?.required) {
-                                const requiredParams: string[] = toolDef.function.parameters.required;
-                                let parsedArgs: Record<string, unknown> = {};
-                                try {
-                                    parsedArgs = JSON.parse(toolCall.function.arguments || '{}');
-                                } catch {
-                                    // JSON parse failure handled separately below in _executeTool
+                            const validation = validateToolArgs(toolName, toolCall.function.arguments || '{}', relevantTools);
+                            if (!validation.valid) {
+                                const retryKey = `${toolName}:${toolCall.id}`;
+                                const currentRetries = toolRetryCount.get(retryKey) || 0;
+
+                                if (currentRetries < MAX_TOOL_RETRIES) {
+                                    toolRetryCount.set(retryKey, currentRetries + 1);
+                                    console.warn(`[ToolValidator] ⚠️ Missing required params for "${toolName}": [${validation.missing.join(', ')}] (retry ${currentRetries + 1}/${MAX_TOOL_RETRIES})`);
+
+                                    // Return structured error that guides the LLM to self-correct
+                                    return {
+                                        role: 'tool' as const,
+                                        tool_call_id: toolCall.id,
+                                        name: toolName,
+                                        content: JSON.stringify({
+                                            success: false,
+                                            error: 'MISSING_REQUIRED_PARAMETERS',
+                                            message: `TOOL_CALL_REJECTED: Tool "${toolName}" is missing required parameters: [${validation.missing.join(', ')}]. `
+                                                + `You MUST retry this tool call immediately with ALL required parameters filled. `
+                                                + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
+                                            missing_params: validation.missing,
+                                            retry: currentRetries + 1,
+                                            maxRetries: MAX_TOOL_RETRIES
+                                        })
+                                    };
                                 }
-
-                                const missingParams = requiredParams.filter(param =>
-                                    parsedArgs[param] === undefined || parsedArgs[param] === null || parsedArgs[param] === ''
-                                );
-
-                                if (missingParams.length > 0) {
-                                    const retryKey = `${toolName}:${toolCall.id}`;
-                                    const currentRetries = toolRetryCount.get(retryKey) || 0;
-
-                                    if (currentRetries < MAX_TOOL_RETRIES) {
-                                        toolRetryCount.set(retryKey, currentRetries + 1);
-                                        console.warn(`[ToolValidator] ⚠️ Missing required params for "${toolName}": [${missingParams.join(', ')}] (retry ${currentRetries + 1}/${MAX_TOOL_RETRIES})`);
-
-                                        // Return structured error that guides the LLM to self-correct
-                                        return {
-                                            role: 'tool' as const,
-                                            tool_call_id: toolCall.id,
-                                            name: toolName,
-                                            content: JSON.stringify({
-                                                success: false,
-                                                error: 'MISSING_REQUIRED_PARAMETERS',
-                                                message: `TOOL_CALL_REJECTED: Tool "${toolName}" is missing required parameters: [${missingParams.join(', ')}]. `
-                                                    + `You MUST retry this tool call immediately with ALL required parameters filled. `
-                                                    + `Expected schema: ${JSON.stringify(toolDef.function.parameters, null, 0)}`,
-                                                missing_params: missingParams,
-                                                retry: currentRetries + 1,
-                                                maxRetries: MAX_TOOL_RETRIES
-                                            })
-                                        };
-                                    }
-                                    console.error(`[ToolValidator] ❌ Max retries (${MAX_TOOL_RETRIES}) exceeded for "${toolName}". Proceeding with invalid args.`);
-                                }
+                                console.error(`[ToolValidator] ❌ Max retries (${MAX_TOOL_RETRIES}) exceeded for "${toolName}". Proceeding with invalid args.`);
                             }
 
                             let toolResult: any;
@@ -1438,23 +1443,38 @@ export class BotCore {
                                         const singleToolMatch = codeArgs.code?.match(/(?:await\s+)?(\w+)\s*\(\s*(\{[\s\S]*?\})\s*\)/);
                                         if (singleToolMatch) {
                                             const [, extractedTool, extractedArgs] = singleToolMatch;
-                                            try {
-                                                const parsedArgs = JSON.parse(extractedArgs);
-                                                toolResult = await pluginLoader.execute(extractedTool, parsedArgs, {
-                                                    transport: this.transport,
-                                                    message,
-                                                    chatId,
-                                                    sender: message.sender,
-                                                    isGroup: message.isGroup,
-                                                    authorityLevel: (fullContext as any).authorityLevel || fullContext.authority?.level,
-                                                    isSuperUser: fullContext.authority?.isSuperUser,
-                                                    isGlobalAdmin: fullContext.authority?.isGlobalAdmin,
-                                                    sourceChannel: message.sourceChannel,
-                                                });
-                                                console.log(`[PTC→Native] ✅ Exécuté ${extractedTool} via fallback natif`);
-                                            } catch {
-                                                // L'extraction des args a échoué → renvoyer l'erreur au LLM
-                                                toolResult = { success: false, error: `PTC fallback: impossible d'extraire les arguments pour ${extractedTool}` };
+
+                                            // [GLOBAL RETRY] Validation du fallback (Layer B)
+                                            const validation = validateToolArgs(extractedTool, extractedArgs, relevantTools);
+                                            if (!validation.valid) {
+                                                console.warn(`[PTC→Native] ⚠️ Missing required params for "${extractedTool}": [${validation.missing.join(', ')}]`);
+                                                toolResult = {
+                                                    success: false,
+                                                    error: 'MISSING_REQUIRED_PARAMETERS',
+                                                    message: `TOOL_CALL_REJECTED: Tool "${extractedTool}" is missing required parameters: [${validation.missing.join(', ')}]. `
+                                                        + `You MUST retry this tool call immediately with ALL required parameters filled. `
+                                                        + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
+                                                    missing_params: validation.missing
+                                                };
+                                            } else {
+                                                try {
+                                                    const parsedArgs = JSON.parse(extractedArgs);
+                                                    toolResult = await pluginLoader.execute(extractedTool, parsedArgs, {
+                                                        transport: this.transport,
+                                                        message,
+                                                        chatId,
+                                                        sender: message.sender,
+                                                        isGroup: message.isGroup,
+                                                        authorityLevel: (fullContext as any).authorityLevel || fullContext.authority?.level,
+                                                        isSuperUser: fullContext.authority?.isSuperUser,
+                                                        isGlobalAdmin: fullContext.authority?.isGlobalAdmin,
+                                                        sourceChannel: message.sourceChannel,
+                                                    });
+                                                    console.log(`[PTC→Native] ✅ Exécuté ${extractedTool} via fallback natif`);
+                                                } catch {
+                                                    // L'extraction des args a échoué → renvoyer l'erreur au LLM
+                                                    toolResult = { success: false, error: `PTC fallback: impossible d'extraire les arguments pour ${extractedTool}` };
+                                                }
                                             }
                                         } else {
                                             toolResult = { success: false, error: ptcErr.message };
@@ -1546,9 +1566,39 @@ export class BotCore {
                     // 4. L'IA n'a plus d'outils à appeler
                     console.log(`[Agent] 🏁 Fin de réflexion à l'étape ${iterations}.`);
 
-                    // [CoT] Détection pensée-seulement : si le contenu est uniquement des tags <thought>,
-                    // forcer une itération supplémentaire pour obtenir une vraie réponse.
                     const contentStr = response.content || '';
+                    
+                    // [LAYER 1 DEFENSE] In-loop validation to catch hallucinations before they reach the user
+                    const defects = detectResponseDefects(contentStr);
+
+                    if (defects.defectCount > 0 && responseDefectRetries < MAX_DEFECT_RETRIES && iterations < MAX_ITERATIONS) {
+                        responseDefectRetries++;
+                        console.warn(`[Agent] ⚠️ Response defect detected (retry ${responseDefectRetries}/${MAX_DEFECT_RETRIES}): ${defects.details.join(', ')}`);
+                        
+                        history.push({
+                            role: 'assistant',
+                            content: contentStr
+                        });
+
+                        let retryInstruction = '';
+                        if (defects.hasNoThoughts) {
+                            retryInstruction = 'Tu as oublié d\'utiliser tes balises obligatoires <thought>. Tu dois TOUJOURS réfléchir à voix haute dans des balises <thought> avant de répondre. Recommence.';
+                        } else if (defects.hasLeakedToolCalls) {
+                            retryInstruction = 'ERREUR CRITIQUE: Tu as écrit la syntaxe d\'un appel d\'outil (ex: tool_code_execution) directement dans le texte de ta réponse. Tu dois utiliser l\'API d\'appel d\'outils structurée fournie par le système. Ne jamais écrire le code de l\'outil en texte brut. Corrige ton erreur immédiatement.';
+                        } else if (defects.hasRawCodeDominance) {
+                            retryInstruction = 'ERREUR: Ta réponse contient uniquement du code brut. Si tu veux exécuter ce code, utilise l\'outil structuré `code_execution`. Ne le renvoie pas directement à l\'utilisateur sous forme de texte brut.';
+                        } else if (defects.hasJsonToolObject) {
+                            retryInstruction = 'ERREUR: Tu as renvoyé un objet JSON d\'appel d\'outil dans le texte. Tu dois utiliser l\'API d\'appel d\'outils structurée. Recommence.';
+                        }
+
+                        history.push({
+                            role: 'user',
+                            content: `[SYSTEM ERROR] ${retryInstruction}`
+                        });
+                        continue; // Force une itération supplémentaire
+                    }
+
+                    // Fallback for thoughts-only (if it passed the defect check but still is practically empty)
                     const thoughtOnlyCheck = contentStr
                         .replace(/<(think|thought|thinking)>([\s\S]*?)<\/\1>/gi, '')
                         .replace(/^([\s\S]*?)<\/(think|thought|thinking)>/gi, '')
@@ -1721,6 +1771,14 @@ export class BotCore {
                         return;
                     }
                 }
+            }
+
+            // [LAYER 2 DEFENSE] Final Post-Loop Sanitization (Last Line of Defense)
+            // Catch anything that slipped through the Layer 1 retries
+            const sanitized = sanitizeResponse(finalResponse);
+            if (sanitized.wasModified) {
+                console.warn(`[Sanitizer] 🛡️ Stripped ${sanitized.strippedItems.length} leaked item(s): ${sanitized.strippedItems.join(', ')}`);
+                finalResponse = sanitized.cleaned;
             }
 
             // [FIX] Detecter et corriger le format <send_message>JSON</send_message>

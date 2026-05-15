@@ -9,34 +9,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 
-// WHY: validateToolArgs is inlined in core/index.ts (inside executeAndRecord).
-// We extract the pure logic here for isolated testing without bootstrapping
-// the entire agent. The implementation in core/index.ts uses identical logic.
-function validateToolArgs(
-    toolCall: { function: { name: string; arguments: string } },
-    toolDefs: Array<{ function?: { name?: string; parameters?: { required?: string[]; properties?: Record<string, unknown> } } }>
-): { valid: boolean; missing: string[]; schema: unknown } {
-    const toolName = toolCall.function.name;
-    const toolDef = toolDefs.find((t) => t.function?.name === toolName);
-
-    if (!toolDef?.function?.parameters?.required) {
-        return { valid: true, missing: [], schema: null };
-    }
-
-    let parsedArgs: Record<string, unknown> = {};
-    try {
-        parsedArgs = JSON.parse(toolCall.function.arguments || '{}');
-    } catch {
-        return { valid: false, missing: ['(unparseable JSON)'], schema: toolDef.function.parameters };
-    }
-
-    const required: string[] = toolDef.function.parameters.required;
-    const missing = required.filter(param =>
-        parsedArgs[param] === undefined || parsedArgs[param] === null || parsedArgs[param] === ''
-    );
-
-    return { valid: missing.length === 0, missing, schema: toolDef.function.parameters };
-}
+import { validateToolArgs } from '../../../utils/toolValidator.js';
 
 // ─── Test Data ───
 
@@ -114,7 +87,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(true);
@@ -131,7 +104,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(true);
@@ -148,7 +121,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(true);
@@ -165,7 +138,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(true);
@@ -184,7 +157,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(false);
@@ -202,7 +175,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(false);
@@ -219,7 +192,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(false);
@@ -238,7 +211,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(false);
@@ -255,7 +228,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(false);
@@ -274,7 +247,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             expect(result.valid).toBe(false);
@@ -292,7 +265,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, ALL_TOOLS);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
             // Empty string -> JSON.parse('{}') -> missing 'code'
@@ -322,7 +295,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, [boolToolDef]);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, [boolToolDef]);
 
             // Assert — false is a valid value, not missing
             expect(result.valid).toBe(true);
@@ -349,7 +322,7 @@ describe('validateToolArgs', () => {
             };
 
             // Act
-            const result = validateToolArgs(toolCall, [numToolDef]);
+            const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, [numToolDef]);
 
             // Assert — 0 is a valid value, not missing
             expect(result.valid).toBe(true);
