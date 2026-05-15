@@ -45,9 +45,9 @@
         },
         "service_recipes": {
             "EXECUTOR": {
-                "family": "gemini",
-                "model": "gemini-3.1-flash-lite-preview",
-                "fallback": "moonshotai/kimi-k2.6",
+                "family": "nvidia",
+                "model": "moonshotai/kimi-k2.6",
+                "fallback": "gemini-3.1-flash-lite-preview",
                 "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.7
             },
@@ -66,9 +66,9 @@
                 "temperature": 0.1
             },
             "PLANNER": {
-                "family": "gemini",
-                "model": "gemini-3.1-flash-lite-preview",
-                "fallback": "z-ai/glm-5.1",
+                "family": "nvidia",
+                "model": "moonshotai/kimi-k2.6",
+                "fallback": "gemini-3.1-flash-lite-preview",
                 "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.5
             },
@@ -142,8 +142,8 @@
                     "description": "Analyse d'images, OCR, génération visuelle"
                 },
                 "AGENTIC": {
-                    "primary": "gemini-3.1-flash-lite-preview",
-                    "fallback": "moonshotai/kimi-k2.6",
+                    "primary": "moonshotai/kimi-k2.6",
+                    "fallback": "gemini-3.1-flash-lite-preview",
                     "description": "Tâches agentic complexes, function calling et raisonnement"
                 },
                 "CREATIVITY": {

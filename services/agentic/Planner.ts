@@ -256,7 +256,7 @@ Your estimate determines if multi-step planning is needed.
 </user_request>
 
 <available_tools>
-${tools.slice(0, 10).map((t: any) => t.function?.name || t.name).join(', ')}...
+${tools.map((t: any) => t.function?.name || t.name).join(', ')}
 </available_tools>
 
 <estimation_criteria>
@@ -311,7 +311,7 @@ ${goal}
 </goal>
 
 <available_tools>
-${context.tools.slice(0, 15).map((t: any) => `- ${t.function?.name || t.name}: ${t.function?.description || t.description}`).join('\n')}
+${context.tools.map((t: any) => `- ${t.function?.name || t.name}: ${t.function?.description || t.description}`).join('\n')}
 </available_tools>
 
 <planning_instructions>
@@ -323,6 +323,7 @@ ${context.tools.slice(0, 15).map((t: any) => `- ${t.function?.name || t.name}: $
    - Time estimate (realistic, in seconds)
 3. Order steps by dependencies (prerequisites first)
 4. Validate each step can be executed with available tools
+5. CRITICAL: ONLY use tools EXACTLY as named in the available list. NEVER hallucinate tools (e.g. do NOT use 'execute_bash_command', use 'run_scratchpad' or 'code_execution' instead).
 </planning_instructions>
 
 <output_format>
@@ -480,6 +481,24 @@ Plan:`;
                     executionLog.failed.push(step.id);
                     executionLog.results[step.id] = { error: true, message: `Step skipped: no valid tool (was "${toolName || 'null'}")` };
                     await actionMemory.updateStep(context.chatId, `⏭️ Étape ${step.id}: ${step.action} - outil manquant`);
+                    continue;
+                }
+
+                // [GLOBAL TOOL RETRY SYSTEM] Pre-execution parameter validation
+                // WHY: The Planner bypassed the ReAct loop's validateToolArgs check,
+                // causing crashes when LLMs omit required params (e.g., file_path, instructions).
+                // This applies the same validation the ReAct path uses, preventing crashes.
+                const { validateToolArgs } = await import('../../utils/toolValidator.js');
+                const validation = validateToolArgs(toolName, JSON.stringify(step.params || {}), context.tools || []);
+                if (!validation.valid) {
+                    console.warn(`[Planner] ⚠️ Étape ${step.id}: paramètres manquants pour "${toolName}": [${validation.missing.join(', ')}]`);
+                    executionLog.failed.push(step.id);
+                    executionLog.results[step.id] = { 
+                        error: true, 
+                        success: false, 
+                        message: `Missing required parameters: [${validation.missing.join(', ')}]. Expected: ${JSON.stringify(validation.schema, null, 0)}` 
+                    };
+                    await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - params manquants: ${validation.missing.join(', ')}`);
                     continue;
                 }
                 

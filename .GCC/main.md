@@ -190,13 +190,16 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
 - [2026-05-15] [TESTING] Stabilized E2E Agent Automation Battery (7 Priorities): Blocked false Planner success claims via strict prompt and short-circuit guard. Disambiguated storage tools by renaming `workspace_*` to `db_document_*`. Fixed `code_execution` routing within the Planner via PTC integration. Prevented `unknown_tool` infinite loops in replanning by enforcing available tools. Hardened parameter validation against malformed JSON. Isolated CLI E2E test runner streams by `chatId` and increased async drain timeouts. Structured test verdicts.
 - [2026-05-15] [CORE] Centralized code_execution into `_executePtcCode` to unify the Global Tool Retry System across both the standard ReAct loop and the Planner execution paths. Ensures identical Layer C validation (malformed JSON catching) and `PTC_SINGLE_TOOL` Layer B fallback validation across all paths.
 - [2026-05-15] [WEB] Fixed `firecrawl_scrape` hallucinatory relative URLs failure. Added `ensureAbsoluteUrl` to force the agent to use `http://` or `https://` absolute URLs, preventing cryptic API failures.
+- [2026-05-15] [CORE] Fixed Planner Limitation (15 tool cap on prompt LLM) preventing the use of standard file IO / system tools. Systematically injected `execute_bash_command`, `run_scratchpad`, `list_directory` and `grep_search` into `CORE_TOOLS` in `plugins/loader.ts`.
+- [2026-05-15] [CORE] Fixed JSON.parse error unhandled in `_safeExecuteTool` line 1928 for Observer multiAgent coherence evaluation. Wrapped it in a try-catch to prevent execution crashing if LLM outputs malformed args.
+- [2026-05-15] [CORE/PTC] Fixed LLM hallucinating API return format inside `code_execution` scripts (TypeError reading 'data'). Added `llmOutput` and `userOutput` to the `extractText` defensive helper in `SandboxHelpers.ts`, and updated the `code_execution` tool description in `ProgrammaticExecutor.ts` to explicitly warn the LLM that tools return `{ success, llmOutput }`.
 
 ### 🔄 In progress & ⏳ Pending
 - 🔄 In progress: Batterie de tests E2E locale (`run_cli_battery.ts`) en cours d'exécution. Stabilisation itérative pour atteindre les 100% de succès.
 - ⏳ Pending (POSTPONED): Test fonctionnel global en conditions réelles (Validation TUI vs Headless) — En attente d'ajout de clés API (Quota Exceeded).
 
 ## Next action
-- Analyser les échecs restants du `run_cli_battery.ts` (comme le bug Firecrawl) pour itérer vers un score de réussite de 10/10.
+- Attendre la fin de l'exécution de la batterie de tests E2E pour valider l'impact complet des corrections des outils natifs et PTC (Programmatic Tool Calling).
 
 ## Abandoned branches
-- None.
+- [2026-05-15] Utilisation exclusive de getRelevantTools pour les outils système (abandonné, on les force dans CORE_TOOLS pour s'assurer que le Planner / ReAct y ont toujours accès) -> see .GCC/branches/attempt_core_tools_failed.md

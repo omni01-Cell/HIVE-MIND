@@ -108,6 +108,12 @@ export default {
 
                 case 'grep_search': {
                     const { query, search_path } = args;
+                    if (!query || typeof query !== 'string') {
+                        return { success: false, message: `TOOL_ERROR: grep_search requires a valid "query" parameter (got ${typeof query}).` };
+                    }
+                    if (!search_path || typeof search_path !== 'string') {
+                        return { success: false, message: `TOOL_ERROR: grep_search requires a valid "search_path" parameter (got ${typeof search_path}).` };
+                    }
                     if (!(await checkReadAccess(search_path)).granted) {
                         return { success: false, message: 'Permission denied for searching outside sandbox.' };
                     }
@@ -140,6 +146,12 @@ export default {
 
                 case 'read_file': {
                     const { file_path, start_line = 1, end_line } = args;
+                    // WHY: The Planner sometimes passes undefined file_path when the LLM
+                    // omits required params. path.resolve(cwd, undefined) crashes with
+                    // "paths[1] must be of type string". Fail closed with a clear error.
+                    if (!file_path || typeof file_path !== 'string') {
+                        return { success: false, message: `TOOL_ERROR: read_file requires a valid "file_path" parameter (got ${typeof file_path}). Please provide the file path as a string.` };
+                    }
                     if (!(await checkReadAccess(file_path)).granted) {
                         return { success: false, message: 'Permission denied for reading outside sandbox.' };
                     }

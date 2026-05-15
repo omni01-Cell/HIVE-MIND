@@ -35,6 +35,15 @@ export default {
         if (toolName !== 'run_scratchpad') return null;
 
         const { instructions } = args;
+        // WHY: The Planner sometimes omits required params, causing SubAgentEngine.run(undefined)
+        // to crash with "Cannot read properties of undefined (reading 'substring')".
+        // Fail closed with a structured error the LLM can act on.
+        if (!instructions || typeof instructions !== 'string') {
+            return {
+                success: false,
+                message: `TOOL_ERROR: run_scratchpad requires an "instructions" parameter (string). Got ${typeof instructions}. Please retry with a detailed instructions string.`
+            };
+        }
 
         const scratchpadEngine = new SubAgentEngine({
             name: 'SystemScratchpad',

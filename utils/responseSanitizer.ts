@@ -100,6 +100,18 @@ export function detectResponseDefects(text: string | null | undefined): Response
         defects.details.push('JSON tool call object in response text');
     }
 
+    // 5. Check for XML-style tool invocation tags (<tool_code>, <code_execution>)
+    // WHY: gemini-3.1-flash-lite sometimes wraps tool calls in XML tags instead
+    // of using the structured tool API. These leak into user-facing text.
+    const xmlToolTagPattern = /<(?:tool_code|code_execution|tool_call)\b[^>]*>[\s\S]*?<\/(?:tool_code|code_execution|tool_call)>/i;
+    if (xmlToolTagPattern.test(text)) {
+        defects.hasLeakedToolCalls = true;
+        if (!defects.details.includes('Leaked tool call syntax in text')) {
+            defects.defectCount++;
+            defects.details.push('XML tool invocation tags in text');
+        }
+    }
+
     return defects;
 }
 
@@ -169,6 +181,15 @@ export function sanitizeResponse(text: string | null | undefined): SanitizeResul
                 cleaned = nonCodeText;
             }
         }
+    }
+
+    // 6. Strip XML-style tool invocation tags: <tool_code>...</tool_code>, <code_execution>...</code_execution>
+    // WHY: gemini-3.1-flash-lite wraps tool calls in XML tags that leak to the user.
+    const xmlToolTagStripPattern = /<(?:tool_code|code_execution|tool_call)\b[^>]*>[\s\S]*?<\/(?:tool_code|code_execution|tool_call)>/gi;
+    const xmlMatches = cleaned.match(xmlToolTagStripPattern);
+    if (xmlMatches) {
+        strippedItems.push(`xml_tool_tags(${xmlMatches.length})`);
+        cleaned = cleaned.replace(xmlToolTagStripPattern, '');
     }
 
     // Final cleanup: collapse excessive whitespace

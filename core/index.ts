@@ -1923,9 +1923,15 @@ RULES:
                 const agentMemory = this.agentMemory;
                 const recentActions = await agentMemory.getRecentActions(chatId, 5);
 
+                let parsedParams = {};
+                try {
+                    parsedParams = JSON.parse(toolCall.function.arguments || '{}');
+                } catch (e) {
+                    // Ignore JSON parse error for Observer
+                }
                 const coherence: any = await multiAgent.observe({
                     tool: toolName,
-                    params: JSON.parse(toolCall.function.arguments || '{}')
+                    params: parsedParams
                 }, recentActions);
 
                 if (!coherence.coherent) {

@@ -80,7 +80,7 @@ const extractData = (response) => {
 const extractText = (response, defaultValue = '') => {
     if (!response) return defaultValue;
     if (typeof response === 'string') return response;
-    const textProps = ['text', 'output', 'stdout', 'content', 'markdown', 'result', 'data', 'value', 'message'];
+    const textProps = ['llmOutput', 'userOutput', 'text', 'output', 'stdout', 'content', 'markdown', 'result', 'data', 'value', 'message'];
     for (const prop of textProps) {
         if (typeof response[prop] === 'string' && response[prop]) {
             return response[prop];

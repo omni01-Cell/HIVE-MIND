@@ -370,10 +370,18 @@ class PluginLoader {
             // 3. Merge with CORE TOOLS (Always available tools)
             let CORE_TOOLS = [
                 'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
-                'code_execution',
+                'code_execution', 'execute_bash_command', 'run_scratchpad',
                 'get_file_skeleton', 'get_function', 'edit_file', 'read_file',
+                'list_directory', 'grep_search',
                 'db_document_read', 'db_document_save', 'db_document_search', 'db_document_delete',
-                'google_ai_search'
+                'google_ai_search',
+                // WHY: Browser tools must always be available for the Planner.
+                // RAG non-determinism causes these to be missing in ~30% of calls,
+                // which makes the Planner delete browser-related steps as "hallucinated".
+                'browser_screenshot', 'browser_snapshot',
+                'browser_open', 'browser_click', 'browser_fill', 'browser_eval',
+                'firecrawl_scrape', 'firecrawl_search',
+                'start_deep_search', 'spawn_sub_agent'
             ];
 
             // [SENTIENCE] If AI is angry, arm the system (with renamed tools)
