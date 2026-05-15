@@ -2,6 +2,8 @@ import { browserService } from '../../../services/browser/BrowserService.js';
 
 const MAX_SNAPSHOT_LENGTH = 50000;
 
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 export default {
     name: 'dev_tools_browser',
     description: 'SOTA web navigation tools (agent-browser). Allows navigating, clicking, filling forms, and extracting content.',
@@ -84,12 +86,15 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_screenshot',
-                description: 'Captures a screenshot of the current page.',
+                description: 'Captures a screenshot of the current page. You MUST provide a descriptive filename (e.g. "hacker_news_home", "github_trending").',
                 parameters: {
                     type: 'object',
                     properties: {
-                        name: { type: 'string', description: 'Optional filename.' }
-                    }
+                        name: { type: 'string', description: 'Descriptive filename for the screenshot (without extension).' },
+                        url: { type: 'string', description: 'Optional URL to navigate to before taking the screenshot. Very useful if you haven\'t opened the page yet.' },
+                        full_page: { type: 'boolean', description: 'If true, takes a full-page screenshot capturing the entire scrollable content.' }
+                    },
+                    required: ['name']
                 }
             }
         },
@@ -196,6 +201,10 @@ export default {
             switch (toolName) {
                 case 'browser_open':
                     result = await browserService.open(args.url, session);
+                    if (result.success) {
+                        // Implicitly wait for SPA rendering
+                        await delay(3000);
+                    }
                     break;
                 case 'browser_snapshot':
                     result = await browserService.snapshot(session, args.interactive_only ?? true);
@@ -210,7 +219,34 @@ export default {
                     result = await browserService.type(args.selector, args.text, session);
                     break;
                 case 'browser_screenshot':
-                    result = await browserService.screenshot(session, args.name);
+                    // Auto-navigate if URL is provided
+                    if (args.url) {
+                        const openRes = await browserService.open(args.url, session);
+                        if (openRes.success) {
+                            await delay(3000);
+                        }
+                    }
+
+                    // Wait for any pending animations or lazy-loaded content
+                    await delay(2000);
+                    
+                    // Prevent transparent backgrounds from rendering as black
+                    await browserService.evaluate('if(!document.body.style.backgroundColor) document.body.style.backgroundColor = "white";', session);
+                    
+                    let baseName = args.name;
+                    if (!baseName) {
+                        try {
+                            const titleResult = await browserService.evaluate('document.title', session);
+                            if (titleResult && titleResult.success && titleResult.data && titleResult.data.result) {
+                                baseName = titleResult.data.result.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 30);
+                            }
+                        } catch(e) {}
+                        if (!baseName) baseName = "page_capture";
+                    }
+
+                    const fileName = `screenshot_${baseName}_${Date.now()}.png`;
+                    
+                    result = await browserService.screenshot(session, fileName, args.full_page);
                     break;
                 case 'browser_get_text':
                     result = await browserService.getText(args.selector, session);

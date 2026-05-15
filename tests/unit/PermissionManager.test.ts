@@ -1,25 +1,27 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { PermissionManager } from '../../core/security/PermissionManager.js';
-import { transportManager } from '../../core/transport/TransportManager.js';
-import { adminService } from '../../services/adminService.js';
+import type { PermissionManager as PermissionManagerType } from '../../core/security/PermissionManager.js';
 import * as path from 'path';
 
-// Mocks explicites
-jest.mock('../../core/transport/TransportManager.js', () => ({
+// Mocks explicites (ESM)
+jest.unstable_mockModule('../../core/transport/TransportManager.js', () => ({
     transportManager: {
         sendText: jest.fn(() => Promise.resolve(true))
     }
 }));
 
-jest.mock('../../services/adminService.js', () => ({
+jest.unstable_mockModule('../../services/adminService.js', () => ({
     adminService: {
         isSuperUser: jest.fn(),
         getOwnerJid: jest.fn()
     }
 }));
 
+const { PermissionManager } = await import('../../core/security/PermissionManager.js');
+const { transportManager } = await import('../../core/transport/TransportManager.js');
+const { adminService } = await import('../../services/adminService.js');
+
 describe('PermissionManager', () => {
-    let permissionManager: PermissionManager;
+    let permissionManager: PermissionManagerType;
 
     beforeEach(() => {
         jest.clearAllMocks();

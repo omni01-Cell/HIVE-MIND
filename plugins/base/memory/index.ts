@@ -106,7 +106,7 @@ export default {
             type: 'function',
             function: {
                 name: 'workspace_write',
-                description: 'Saves or updates a document in your active workspace (Epistemic Memory). Use for planning, summarizing, or maintaining persistent state.',
+                description: 'Saves or updates a document in your active workspace (Epistemic Memory / Supabase Database). IMPORTANT: This writes to the internal database ONLY. It DOES NOT create physical files (e.g. .md, .txt) on the disk in the storage_hm folder. If the user asks you to create a physical file on the disk, DO NOT use this tool; use a file editing or code execution tool instead.',
                 parameters: {
                     type: 'object',
                     properties: {

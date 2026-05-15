@@ -144,11 +144,17 @@ export class BrowserService {
         return this.exec(['type', selector, text], { session });
     }
 
-    public async screenshot(session?: string, name?: string): Promise<ScreenshotResult> {
+    public async screenshot(session?: string, name?: string, fullPage?: boolean): Promise<ScreenshotResult> {
         const fileName = name || `screenshot-${Date.now()}.png`;
         const filePath = join(this.screenshotDir, fileName);
         
-        const result = await this.exec(['screenshot', filePath], { session });
+        const args = ['screenshot'];
+        if (fullPage) {
+            args.push('--full');
+        }
+        args.push(filePath);
+        
+        const result = await this.exec(args, { session });
         if (!result.success) return result as ScreenshotResult;
 
         return {

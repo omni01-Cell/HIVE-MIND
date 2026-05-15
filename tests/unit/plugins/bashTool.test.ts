@@ -6,7 +6,8 @@ import { describe, it, beforeEach, afterEach, jest, expect } from '@jest/globals
 // Mock PersistentShell (ESM-safe via unstable_mockModule)
 jest.unstable_mockModule('../../../plugins/base/dev_tools/PersistentShell.js', () => ({
     persistentShell: {
-        execute: jest.fn(async () => ({ stdout: '/home/omni/Code/HIVE-MIND', exitCode: 0 }))
+        execute: jest.fn(async () => ({ stdout: '/home/omni/Code/HIVE-MIND', exitCode: 0 })),
+        getCwd: jest.fn(() => process.cwd())
     }
 }));
 

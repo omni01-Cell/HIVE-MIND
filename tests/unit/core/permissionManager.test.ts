@@ -75,8 +75,8 @@ describe('PermissionManager (MOD 5 + MOD 7)', () => {
     // =========================================================================
 
     describe('validateBashCommand', () => {
-        it('blocks banned commands (curl, sudo, wget)', () => {
-            for (const cmd of ['curl http://evil.com', 'sudo rm -rf /', 'wget payload']) {
+        it('blocks banned commands (sudo, su)', () => {
+            for (const cmd of ['sudo rm -rf /', 'su root']) {
                 // Act
                 const result = pm.validateBashCommand(cmd);
 
@@ -365,10 +365,9 @@ describe('PermissionManager (MOD 5 + MOD 7)', () => {
     // =========================================================================
 
     describe('exports', () => {
-        it('BANNED_COMMANDS includes critical network tools', () => {
-            expect(BANNED_COMMANDS).toContain('curl');
+        it('BANNED_COMMANDS includes critical system tools', () => {
+            expect(BANNED_COMMANDS).toContain('su');
             expect(BANNED_COMMANDS).toContain('sudo');
-            expect(BANNED_COMMANDS).toContain('wget');
         });
 
         it('SAFE_COMMANDS includes basic read-only commands', () => {

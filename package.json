@@ -17,7 +17,7 @@
         "repair": "tsx scripts/repair-session.ts",
         "audit:group": "tsx scripts/audit-group.ts",
         "fix:usernames": "tsx scripts/fix-missing-usernames.ts",
-        "test": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest",
+        "test": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest --forceExit",
         "test:unit": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/unit",
         "test:integration": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/integration",
         "test:e2e": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/e2e",

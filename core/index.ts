@@ -1093,6 +1093,12 @@ export class BotCore {
             // 3. Collector for action trace (saved to Redis L1 after response)
             const toolsUsedThisTurn: Array<{name: string, args_summary: string, result_summary: string}> = [];
 
+            // [GLOBAL RETRY] Per-tool retry counter — prevents infinite loops when the LLM
+            // omits required parameters. Scoped to the entire ReAct turn (not per-iteration)
+            // so a tool that fails 3 times across iterations 2, 4, 6 still hits the limit.
+            const toolRetryCount = new Map<string, number>();
+            const MAX_TOOL_RETRIES = 2;
+
             let finalResponse: any = null;
             let keepThinking = true;
             let iterations = 0;
@@ -1312,6 +1318,55 @@ export class BotCore {
                     const executeAndRecord = async (toolCall: any) => {
                         const toolName = toolCall.function.name;
                         try {
+                            // ── [GLOBAL RETRY] Pre-execution argument validation ──
+                            // WHY: The LLM frequently omits required params (e.g., `name` for
+                            // browser_screenshot, `key` for workspace_write). Without this check,
+                            // the tool fails silently and the LLM doesn't self-correct.
+                            // This validates against the JSON Schema `required` array and returns
+                            // a structured error that guides the LLM to retry with correct params.
+                            const toolDef = relevantTools.find((t: any) => t.function?.name === toolName);
+                            if (toolDef?.function?.parameters?.required) {
+                                const requiredParams: string[] = toolDef.function.parameters.required;
+                                let parsedArgs: Record<string, unknown> = {};
+                                try {
+                                    parsedArgs = JSON.parse(toolCall.function.arguments || '{}');
+                                } catch {
+                                    // JSON parse failure handled separately below in _executeTool
+                                }
+
+                                const missingParams = requiredParams.filter(param =>
+                                    parsedArgs[param] === undefined || parsedArgs[param] === null || parsedArgs[param] === ''
+                                );
+
+                                if (missingParams.length > 0) {
+                                    const retryKey = `${toolName}:${toolCall.id}`;
+                                    const currentRetries = toolRetryCount.get(retryKey) || 0;
+
+                                    if (currentRetries < MAX_TOOL_RETRIES) {
+                                        toolRetryCount.set(retryKey, currentRetries + 1);
+                                        console.warn(`[ToolValidator] ⚠️ Missing required params for "${toolName}": [${missingParams.join(', ')}] (retry ${currentRetries + 1}/${MAX_TOOL_RETRIES})`);
+
+                                        // Return structured error that guides the LLM to self-correct
+                                        return {
+                                            role: 'tool' as const,
+                                            tool_call_id: toolCall.id,
+                                            name: toolName,
+                                            content: JSON.stringify({
+                                                success: false,
+                                                error: 'MISSING_REQUIRED_PARAMETERS',
+                                                message: `TOOL_CALL_REJECTED: Tool "${toolName}" is missing required parameters: [${missingParams.join(', ')}]. `
+                                                    + `You MUST retry this tool call immediately with ALL required parameters filled. `
+                                                    + `Expected schema: ${JSON.stringify(toolDef.function.parameters, null, 0)}`,
+                                                missing_params: missingParams,
+                                                retry: currentRetries + 1,
+                                                maxRetries: MAX_TOOL_RETRIES
+                                            })
+                                        };
+                                    }
+                                    console.error(`[ToolValidator] ❌ Max retries (${MAX_TOOL_RETRIES}) exceeded for "${toolName}". Proceeding with invalid args.`);
+                                }
+                            }
+
                             let toolResult: any;
 
                             // [PTC] Route spéciale pour le meta-tool code_execution

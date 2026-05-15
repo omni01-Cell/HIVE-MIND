@@ -1,19 +1,22 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { moralCompass } from '../../services/moralCompass.js';
-import { providerRouter } from '../../providers/index.js';
-import * as fs from 'fs';
 
-// Mocks explicites
-jest.mock('../../providers/index.js', () => ({
+// Mocks explicites (ESM)
+jest.unstable_mockModule('fs', () => ({
+    readFileSync: jest.fn().mockReturnValue('<priority_2_security_boundaries>Mock Boundaries</priority_2_security_boundaries>')
+}));
+
+jest.unstable_mockModule('../../providers/index.js', () => ({
     providerRouter: {
         callServiceRecipe: jest.fn()
     }
 }));
 
+const { moralCompass } = await import('../../services/moralCompass.js');
+const { providerRouter } = await import('../../providers/index.js');
+
 describe('moralCompass', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        jest.spyOn(fs, 'readFileSync').mockReturnValue('<priority_2_security_boundaries>Mock Boundaries</priority_2_security_boundaries>');
     });
 
     it('cas nominal — contourne le LLM (FAST PATH) et autorise un outil sûr', async () => {
