@@ -9,6 +9,8 @@ import { cliTransport } from '../core/transport/cli.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { persistentShell } from '../plugins/base/dev_tools/PersistentShell.js';
+
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 const TESTS = [
@@ -245,6 +247,14 @@ async function runTests() {
             // [PRIORITY 6 FIX] Drain async jobs between tests — longer wait to prevent contamination
             console.log(`⏳ [CLI-TEST] Draining async jobs (45s) before next test...`);
             await delay(45000);
+
+            // [ANTI-POLLUTION FIX] Reset the persistent shell CWD to project root to avoid nested folders (like storage_hm/storage_hm/)
+            try {
+                await persistentShell.execute('cd ' + process.cwd());
+                console.log(`🧹 [CLI-TEST] Reset PersistentShell CWD to ${process.cwd()}`);
+            } catch (e) {
+                console.error(`⚠️ [CLI-TEST] Failed to reset PersistentShell CWD:`, e);
+            }
         }
 
         process.stdout.write = originalStdoutWrite;

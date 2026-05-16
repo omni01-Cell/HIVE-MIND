@@ -47,6 +47,7 @@ session/creds.json
 # Generated test artifacts
 Sandbox1/
 TEST_RESULT/
+e2e_battery_report.md
 storage_hm/benchmark_test/
 storage_hm/portfolio_site/
 storage_hm/screenshots/*.png

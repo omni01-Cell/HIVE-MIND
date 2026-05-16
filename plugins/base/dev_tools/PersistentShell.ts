@@ -59,9 +59,11 @@ class PersistentShell extends EventEmitter {
             const output = parts[0].trim();
             const remainder = parts[1] || '';
             
-            // Extract exit code (format: __SENTINEL__127)
-            const exitCodeMatch = remainder.match(/^(\d+)/);
+            // Extract exit code and pwd (format: __SENTINEL__127|/path/to/cwd)
+            const exitCodeMatch = remainder.match(/^(\d+)\|(.+)/);
             const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1]) : 0;
+            const newCwd = exitCodeMatch ? exitCodeMatch[2].trim() : this.currentCwd;
+            this.currentCwd = newCwd;
             
             // Clean buffer for next execution
             this.outputBuffer = '';
@@ -106,9 +108,9 @@ class PersistentShell extends EventEmitter {
                 }
             }, timeoutMs);
 
-            // Inject command + sentinel echo with exit code
+            // Inject command + sentinel echo with exit code and pwd
             // We use ';' to ensure echo runs even if the command fails
-            const fullCommand = `${command}\necho "${this.sentinel}$?"\n`;
+            const fullCommand = `${command}\necho "${this.sentinel}$?|$(pwd)"\n`;
             this.shell?.stdin.write(fullCommand);
         });
     }
