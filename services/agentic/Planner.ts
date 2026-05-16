@@ -323,7 +323,9 @@ ${context.tools.map((t: any) => `- ${t.function?.name || t.name}: ${t.function?.
    - Time estimate (realistic, in seconds)
 3. Order steps by dependencies (prerequisites first)
 4. Validate each step can be executed with available tools
-5. CRITICAL: ONLY use tools EXACTLY as named in the available list. NEVER hallucinate tools (e.g. do NOT use 'execute_bash_command', use 'run_scratchpad' or 'code_execution' instead).
+5. CRITICAL: ONLY use tools EXACTLY as named in the available list. NEVER hallucinate tools.
+6. Use \`execute_bash_command\` for terminal commands, npm installs, Node scripts, and filesystem file creation.
+7. Use \`code_execution\` only for sandboxed JavaScript that orchestrates 2+ existing HIVE tools. Never use it for require/import, npm packages, shell commands, or local file writes.
 </planning_instructions>
 
 <output_format>

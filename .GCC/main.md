@@ -208,12 +208,23 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
   - P3: Added activeChatId reset before drain in E2E runner
   - Verified: tsc 0 errors, 32/32 suites, 251/251 tests passed
 
+- [2026-05-16] [TESTING & PATH FIX] Fixed recursive path pollution in `storage_hm/` during E2E tests. Implemented explicit `cd process.cwd()` hook in `run_cli_battery.ts` to clear bash state between tests.
+- [2026-05-16] [SECURITY & SANDBOX] Fixed critical sandbox validation bypass in `PersistentShell.ts`. Updated the script to explicitly echo and parse `pwd` from the bash shell sentinel, ensuring `getCwd()` reflects the real internal shell directory instead of statically pointing to `Sandbox1`.
+- [2026-05-16] [CORE/PTC] Fixed SafeScript syntax regression caused by Planner selecting `code_execution` for npm/Node/filesystem tasks. Removed the stale Planner instruction discouraging `execute_bash_command`, added explicit Planner routing guidance, and added a PTC tool-description guard to keep `code_execution` limited to sandboxed multi-tool orchestration. Verified with targeted unit tests, TypeScript build, and Graphify refresh/query/path.
+- [2026-05-16] [BROWSER/E2E] Analyzed battery report/logs. Provider quotas/timeouts dominate the failures, but one local context-pressure bug was confirmed: `browser_snapshot` allowed 50k-char outputs, matching ContextManager saturation logs and contributing to `MAX_ITERATIONS`. Reduced snapshot cap to 12k and added unit coverage.
+
 ### Current status
 - ✅ Done: All 7 remediation items implemented and verified
+- ✅ Done: storage_hm path pollution fixed, PersistentShell CWD tracking corrected
+- ✅ Done: Switched gemini-3.1-pro-preview to gemini-3.1-flash-lite-preview globally
+- ✅ Done: Planner/PTC routing fixed for npm/Node/filesystem tasks that previously triggered SafeScript `Unexpected token (17:50)`
+- ✅ Done: Browser snapshot context pressure reduced after E2E battery log analysis
+- 🔄 In progress: E2E CLI battery background run stopped, awaiting next steps
+- ⏳ Pending: Re-run a clean E2E CLI battery on 2026-05-18 and compare against the 2026-05-16 partial report
 - ⏳ Pending (POSTPONED): Test fonctionnel global en conditions reelles — En attente de cles API
 
 ## Next action
-- Run full E2E CLI battery to validate end-to-end agent behavior with all 7 remediation fixes applied.
+- On 2026-05-18, re-run the full E2E CLI battery with fresh provider quotas/keys, then verify the PDF extraction scenario and browser-heavy scenarios.
 
 ## Abandoned branches
 - [2026-05-15] Utilisation exclusive de getRelevantTools pour les outils systeme -> see .GCC/branches/attempt_core_tools_failed.md

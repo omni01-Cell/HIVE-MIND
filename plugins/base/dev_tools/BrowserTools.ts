@@ -1,6 +1,6 @@
 import { browserService } from '../../../services/browser/BrowserService.js';
 
-const MAX_SNAPSHOT_LENGTH = 50000;
+const MAX_SNAPSHOT_LENGTH = 12000;
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
