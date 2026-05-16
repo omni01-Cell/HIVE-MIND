@@ -74,37 +74,27 @@ const TESTS = [
     }
 ];
 
-// Global interceptors
+// WHY: Save real originals ONCE. Per-test wrappers delegate directly to these.
+// No global wrapping for sendUniversalResponse/sendFile/sendMedia to avoid
+// double-counting when per-test wrappers stack on top.
 let currentCapturedText = '';
 let currentCapturedFiles: string[] = [];
 
-// Intercept CLI Transport Methods
 const originalSendUniversalResponse = cliTransport.sendUniversalResponse;
-cliTransport.sendUniversalResponse = async (chatId: string, response: any, options: any = {}) => {
-    // [PRIORITY 6 FIX] Only capture responses for the active test's chatId
-    const text = response.markdown || response.text || '';
-    if (text && chatId.startsWith('cli_chat_e2e_')) {
-        currentCapturedText += text + '\\n\\n';
-    }
-    return originalSendUniversalResponse(chatId, response, options);
-};
-
-const originalSendText = cliTransport.sendText;
-cliTransport.sendText = async (chatId: string, text: string, options: any = {}) => {
-    currentCapturedText += text + '\\n\\n';
-    return originalSendText(chatId, text, options);
-};
-
 const originalSendFile = cliTransport.sendFile;
-cliTransport.sendFile = async (chatId: string, filePath: string, fileName: string) => {
-    currentCapturedFiles.push(fileName || 'fichier_inconnu');
-    return originalSendFile(chatId, filePath, fileName);
-};
-
 const originalSendMedia = cliTransport.sendMedia;
-cliTransport.sendMedia = async (chatId: string, media: any, options: any = {}) => {
-    currentCapturedFiles.push(options.caption || 'media_inconnu');
-    return originalSendMedia(chatId, media, options);
+
+// sendText: global wrapper only (no per-test equivalent, single layer)
+const originalSendText = cliTransport.sendText;
+// WHY: activeChatId tracks the exact chatId of the current test to prevent
+// async responses from a previous test polluting the current test's captures.
+let activeChatId = '';
+
+cliTransport.sendText = async (chatId: string, text: string, options: any = {}) => {
+    if (chatId === activeChatId) {
+        currentCapturedText += text + '\n\n';
+    }
+    return originalSendText.call(cliTransport, chatId, text, options);
 };
 
 async function simulateIncomingMessage(text: string, testId: number) {
@@ -120,7 +110,7 @@ async function simulateIncomingMessage(text: string, testId: number) {
         raw: { text },
         authorityLevel: 'DIVIN (SuperUser)'
     };
-    
+
     if (cliTransport.messageCallback) {
         cliTransport.messageCallback(messageObj);
     }
@@ -138,13 +128,13 @@ async function runTests() {
         const originalStdoutWrite = process.stdout.write;
         const originalStderrWrite = process.stderr.write;
 
-        const hookStdout = function(chunk: any, encoding?: any, cb?: any) {
+        const hookStdout = function (chunk: any, encoding?: any, cb?: any) {
             if (typeof chunk === 'string') currentCapturedLogs += chunk;
             else if (Buffer.isBuffer(chunk)) currentCapturedLogs += chunk.toString('utf8');
             return originalStdoutWrite.apply(process.stdout, arguments as any);
         } as any;
 
-        const hookStderr = function(chunk: any, encoding?: any, cb?: any) {
+        const hookStderr = function (chunk: any, encoding?: any, cb?: any) {
             if (typeof chunk === 'string') currentCapturedLogs += chunk;
             else if (Buffer.isBuffer(chunk)) currentCapturedLogs += chunk.toString('utf8');
             return originalStderrWrite.apply(process.stderr, arguments as any);
@@ -157,39 +147,42 @@ async function runTests() {
             console.log(`\n==========================================`);
             console.log(`🚀 STARTING TEST ${test.id}: ${test.title}`);
             console.log(`==========================================\n`);
-            
+
             // Reset interceptors
             currentCapturedText = '';
             currentCapturedFiles = [];
             currentCapturedLogs = '';
-            
+            activeChatId = `cli_chat_e2e_${test.id}`;
+
             let lastActivityTime = Date.now();
-            
-            const localOriginalSendUniversalResponse = cliTransport.sendUniversalResponse;
+
+            // WHY: Delegate directly to saved originals (not cliTransport.send*)
+            // to avoid stacking with any previous wrapper layer.
             cliTransport.sendUniversalResponse = async (chatId: string, response: any, options: any = {}) => {
+                if (chatId !== activeChatId) return originalSendUniversalResponse.call(cliTransport, chatId, response, options);
                 const text = response.markdown || response.text || '';
                 if (text) currentCapturedText += text + '\n\n';
                 lastActivityTime = Date.now();
-                return localOriginalSendUniversalResponse.call(cliTransport, chatId, response, options);
+                return originalSendUniversalResponse.call(cliTransport, chatId, response, options);
             };
 
-            const localOriginalSendFile = cliTransport.sendFile;
             cliTransport.sendFile = async (chatId: string, filePath: string, fileName: string) => {
+                if (chatId !== activeChatId) return originalSendFile.call(cliTransport, chatId, filePath, fileName);
                 currentCapturedFiles.push(fileName || 'fichier_inconnu');
                 lastActivityTime = Date.now();
-                return localOriginalSendFile.call(cliTransport, chatId, filePath, fileName);
+                return originalSendFile.call(cliTransport, chatId, filePath, fileName);
             };
 
-            const localOriginalSendMedia = cliTransport.sendMedia;
             cliTransport.sendMedia = async (chatId: string, media: any, options: any = {}) => {
+                if (chatId !== activeChatId) return originalSendMedia.call(cliTransport, chatId, media, options);
                 currentCapturedFiles.push(options.caption || 'media_inconnu');
                 lastActivityTime = Date.now();
-                return localOriginalSendMedia.call(cliTransport, chatId, media, options);
+                return originalSendMedia.call(cliTransport, chatId, media, options);
             };
 
             // Dispatch message
             await simulateIncomingMessage(test.prompt, test.id);
-            
+
             // Loop wait condition
             const timeoutMs = 600000; // 10 minutes hard limit
             const startTime = Date.now();
@@ -197,9 +190,9 @@ async function runTests() {
 
             while (Date.now() - startTime < timeoutMs) {
                 await delay(2000);
-                
+
                 const timeSinceLastActivity = Date.now() - lastActivityTime;
-                
+
                 if (test.expectedFiles > 0 && currentCapturedFiles.length >= test.expectedFiles) {
                     // Don't break! The agent still needs to send the text summary.
                     // Just log it once if we haven't already.
@@ -208,10 +201,11 @@ async function runTests() {
                         completed = true; // Use this flag to avoid logging this repeatedly
                     }
                 }
-                
+
                 // If 30 seconds have passed with no new text or files, assume the agent is done
                 if (timeSinceLastActivity > 30000 && currentCapturedText.length > 20) {
                     console.log(`⏳ [CLI-TEST] Inactivité détectée pendant 30s. Fin du test.`);
+                    completed = true;
                     break;
                 }
             }
@@ -238,12 +232,16 @@ async function runTests() {
             // Write everything sequentially in the file
             const reportContent = `## ${verdictEmoji[verdict]} Test ${test.id}: ${test.title} — **${verdict.toUpperCase()}**\n\n**Prompt:**\n> ${test.prompt.replace(/\n/g, '\n> ')}\n\n**Verdict:** ${verdict} (Files: ${currentCapturedFiles.length}/${test.expectedFiles}, Text length: ${currentCapturedText.length} chars)\n\n### 📥 Response Text:\n\n${currentCapturedText}\n\n### 📎 Received Files:\n\n${currentCapturedFiles.map(f => `- ${f}`).join('\n')}\n\n### 📜 Logs:\n\n\`\`\`\n${currentCapturedLogs}\n\`\`\`\n\n---\n\n`;
             fs.appendFileSync(reportFile, reportContent);
-            
-            // Restore interceptors for next iteration
-            cliTransport.sendUniversalResponse = localOriginalSendUniversalResponse;
-            cliTransport.sendFile = localOriginalSendFile;
-            cliTransport.sendMedia = localOriginalSendMedia;
-            
+
+            // Restore real originals for next iteration
+            cliTransport.sendUniversalResponse = originalSendUniversalResponse;
+            cliTransport.sendFile = originalSendFile;
+            cliTransport.sendMedia = originalSendMedia;
+
+            // [P3 FIX] Clear activeChatId before drain to prevent async responses
+            // from this test being captured into the next test's data
+            activeChatId = '';
+
             // [PRIORITY 6 FIX] Drain async jobs between tests — longer wait to prevent contamination
             console.log(`⏳ [CLI-TEST] Draining async jobs (45s) before next test...`);
             await delay(45000);

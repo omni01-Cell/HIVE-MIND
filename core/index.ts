@@ -979,11 +979,11 @@ export class BotCore {
                 try {
                     console.log(`[Core] 📁 Téléchargement fichier temporaire (${message.mediaType})...`);
                     const buffer = await this.transport.downloadMedia(message);
-                    
+
                     // Extraire le vrai nom du fichier
                     let originalFileName = '';
                     const rawMsg = message.raw?.message || message.raw;
-                    
+
                     // Tenter de récupérer le nom original tel qu'affiché dans l'UI WhatsApp
                     if (rawMsg?.documentMessage?.fileName) {
                         originalFileName = rawMsg.documentMessage.fileName;
@@ -1001,20 +1001,20 @@ export class BotCore {
 
                     const fs = await import('fs');
                     const path = await import('path');
-                    
+
                     // Stockage temporaire structuré
                     const downloadDir = path.join(process.cwd(), 'hm_storage', 'tmp_download');
                     if (!fs.existsSync(downloadDir)) {
                         fs.mkdirSync(downloadDir, { recursive: true });
                     }
-                    
+
                     // Nettoyer le nom pour la sécurité système
                     const safeFileName = path.basename(originalFileName).replace(/[^a-zA-Z0-9.\-_ \(\)]/g, '_');
                     const filePath = path.join(downloadDir, safeFileName);
-                    
+
                     fs.writeFileSync(filePath, buffer);
                     console.log(`[Core] ✅ Fichier téléchargé: ${filePath}`);
-                    
+
                     // Planifier la suppression automatique (10 minutes)
                     setTimeout(() => {
                         fs.unlink(filePath, (err) => {
@@ -1025,11 +1025,11 @@ export class BotCore {
                             }
                         });
                     }, 10 * 60 * 1000); // 10 minutes
-                    
+
                     // Information enrichie pour l'IA
                     const timeString = new Date().toLocaleString('fr-FR');
                     const fileNotice = `\n\n[SYSTÈME ALERTE FICHIER : \n- Expéditeur : @${senderName}\n- Date : ${timeString}\n- Fichier reçu : "${originalFileName}"\n- Type : ${message.mediaType}\n- Emplacement temporaire : ${filePath}\n\nATTENTION : Ce fichier est stocké dans un répertoire temporaire et SERA SUPPRIMÉ AUTOMATIQUEMENT dans 10 minutes. Si ce fichier est important et que vous devez le conserver, vous DEVEZ utiliser vos outils pour le copier ou le déplacer vers un stockage permanent avant de faire autre chose. Vous pouvez lire son contenu avec read_file si nécessaire.]`;
-                    
+
                     if (Array.isArray(userContent)) {
                         const textBlock = userContent.find((b: any) => b.type === 'text');
                         if (textBlock) textBlock.text += fileNotice;
@@ -1107,7 +1107,7 @@ export class BotCore {
             history.push({ role: 'user', content: userContent });
 
             // 3. Collector for action trace (saved to Redis L1 after response)
-            const toolsUsedThisTurn: Array<{name: string, args_summary: string, result_summary: string}> = [];
+            const toolsUsedThisTurn: Array<{ name: string, args_summary: string, result_summary: string }> = [];
 
             // [GLOBAL RETRY AND DEFENSE SYSTEM] Per-tool retry counter — prevents infinite loops when the LLM
             // omits required parameters. Scoped to the entire ReAct turn (not per-iteration)
@@ -1170,6 +1170,7 @@ export class BotCore {
                                     authority: (fullContext as any).authority // Capture du contexte d'autorité
                                 });
                             },
+                            tools: relevantTools,
                             chatId,
                             message
                         });
@@ -1376,7 +1377,7 @@ RULES:
                         try {
                             // ── [GLOBAL RETRY AND DEFENSE SYSTEM] Pre-execution argument validation ──
                             // WHY: The LLM frequently omits required params (e.g., `name` for
-                            // browser_screenshot, `key` for workspace_write). Without this check,
+                            // browser_screenshot, `key` for db_document_save). Without this check,
                             // the tool fails silently and the LLM doesn't self-correct.
                             // This validates against the JSON Schema `required` array and returns
                             // a structured error that guides the LLM to retry with correct params.
@@ -1411,28 +1412,14 @@ RULES:
 
                             let toolResult: any;
 
-                            // [PTC] Route spéciale pour le meta-tool code_execution
-                            if (toolName === 'code_execution') {
-                                console.log('[PTC] ⚡ Exécution programmatique déclenchée par le LLM');
-                                toolResult = await this._executePtcCode(toolCall, message, chatId, relevantTools, {
-                                    transport: this.transport,
-                                    message,
-                                    chatId,
-                                    sender: message.sender,
-                                    isGroup: message.isGroup,
-                                    authorityLevel: (fullContext as any).authorityLevel || fullContext.authority?.level,
-                                    isSuperUser: fullContext.authority?.isSuperUser,
-                                    isGlobalAdmin: fullContext.authority?.isGlobalAdmin,
-                                    sourceChannel: message.sourceChannel,
-                                });
-                            } else {
-                                // [CLASSIQUE] _safeExecuteTool pour les appels normaux
-                                toolResult = await this._safeExecuteTool(toolCall, {
-                                    chatId,
-                                    message,
-                                    authority: fullContext.authority
-                                });
-                            }
+                            // WHY: ALL tools (including code_execution) route through _safeExecuteTool
+                            // for full security pipeline (MultiAgent critique, MoralCompass, Observer, DB logging).
+                            // _safeExecuteTool internally detects code_execution and routes to _executePtcCode.
+                            toolResult = await this._safeExecuteTool(toolCall, {
+                                chatId,
+                                message,
+                                authority: fullContext.authority
+                            });
 
                             // --- LE DOUBLE RENDU (DUAL RENDERING) ---
 
@@ -1507,14 +1494,14 @@ RULES:
                     console.log(`[Agent] 🏁 Fin de réflexion à l'étape ${iterations}.`);
 
                     const contentStr = response.content || '';
-                    
+
                     // [LAYER 1 DEFENSE] In-loop validation to catch hallucinations before they reach the user
                     const defects = detectResponseDefects(contentStr);
 
                     if (defects.defectCount > 0 && responseDefectRetries < MAX_DEFECT_RETRIES && iterations < MAX_ITERATIONS) {
                         responseDefectRetries++;
                         console.warn(`[Agent] ⚠️ Response defect detected (retry ${responseDefectRetries}/${MAX_DEFECT_RETRIES}): ${defects.details.join(', ')}`);
-                        
+
                         history.push({
                             role: 'assistant',
                             content: contentStr
@@ -1659,7 +1646,7 @@ RULES:
             // Supporte <think>, <thought>, <thinking> (DeepSeek, Gemini, etc.)
             const thoughts: string[] = [];
             const originalResponseForLog = finalResponse;
-            
+
             // 1. Properly enclosed tags
             const enclosedRegex = /<(think|thought|thinking)>([\s\S]*?)<\/\1>/gi;
             // 2. Unclosed opening tag (from tag to the end)
@@ -1668,25 +1655,25 @@ RULES:
             const unopenedRegex = /^([\s\S]*?)<\/(think|thought|thinking)>/gi;
 
             let thoughtMatch;
-            
+
             // Extract properly enclosed thoughts
             while ((thoughtMatch = enclosedRegex.exec(finalResponse)) !== null) {
                 thoughts.push(thoughtMatch[2].trim());
             }
             finalResponse = finalResponse.replace(enclosedRegex, '');
-            
+
             // Extract unopened closing tag (the LLM forgot to open)
             while ((thoughtMatch = unopenedRegex.exec(finalResponse)) !== null) {
                 thoughts.push(thoughtMatch[1].trim());
             }
             finalResponse = finalResponse.replace(unopenedRegex, '');
-            
+
             // Extract unclosed opening tag (the LLM forgot to close)
             while ((thoughtMatch = unclosedRegex.exec(finalResponse)) !== null) {
                 thoughts.push(thoughtMatch[2].trim());
             }
             finalResponse = finalResponse.replace(unclosedRegex, '');
-            
+
             // Fallback: remove any stray unopened or unclosed tags
             finalResponse = finalResponse.replace(/<\/?(think|thought|thinking)>/gi, '').trim();
 
@@ -1829,12 +1816,12 @@ RULES:
      * Exécute un outil de manière sécurisée (avec Critique et Boussole Morale)
      * Utiliser cette méthode au lieu de _executeTool direct pour le Planner
      */
-    async _safeExecuteTool(toolCall: any, context: any) {
+    async _safeExecuteTool(toolCall: any, context: any): Promise<any> {
         const { db } = this;
         const toolName = toolCall.function.name;
 
         const { chatId, message, authority } = context;
-        
+
         // [AUDIT M3] Extraction robuste de l'autorité
         const isSuperUser = authority?.isSuperUser || context.isSuperUser || false;
         const isGlobalAdmin = authority?.isGlobalAdmin || context.isGlobalAdmin || false;
@@ -1917,18 +1904,21 @@ RULES:
             // EXÉCUTION RÉELLE
             const toolResult = await this._executeTool(toolCall, message);
 
+            // [P0 FIX] Parse tool args once, reuse for Observer + ActionEvaluator
+            // WHY: Prevents a second unguarded JSON.parse that could convert a successful
+            // tool execution into a post-action failure.
+            let parsedParams: Record<string, unknown> = {};
+            try {
+                parsedParams = JSON.parse(toolCall.function.arguments || '{}');
+            } catch {
+                // Malformed JSON — use empty object for Observer/Evaluator
+            }
+
             // [LEVEL 5] Observer Integration: Vérifier la cohérence après exécution
             try {
                 const { multiAgent } = await import('../services/agentic/MultiAgent.js');
                 const agentMemory = this.agentMemory;
                 const recentActions = await agentMemory.getRecentActions(chatId, 5);
-
-                let parsedParams = {};
-                try {
-                    parsedParams = JSON.parse(toolCall.function.arguments || '{}');
-                } catch (e) {
-                    // Ignore JSON parse error for Observer
-                }
                 const coherence: any = await multiAgent.observe({
                     tool: toolName,
                     params: parsedParams
@@ -1951,7 +1941,7 @@ RULES:
                 actionEvaluator.evaluate({
                     id: actionLog.id,
                     tool: toolName,
-                    params: JSON.parse(toolCall.function.arguments),
+                    params: parsedParams,
                     result: toolResult,
                     duration_ms: 0,
                     chatId,
@@ -1979,7 +1969,7 @@ RULES:
      * Executes the 'code_execution' meta-tool via the PTC sandbox.
      * Centralized defensive execution path used by both ReAct and Planner.
      */
-    async _executePtcCode(toolCall: any, message: any, chatId: string, relevantTools: any[], contextParams: any) {
+    async _executePtcCode(toolCall: any, message: any, chatId: string, relevantTools: any[], contextParams: any): Promise<any> {
         let codeArgs: any;
         try {
             codeArgs = JSON.parse(toolCall.function.arguments || '{}');
@@ -2068,9 +2058,26 @@ RULES:
                     }
 
                     try {
-                        const parsedArgs = JSON.parse(extractedArgs);
-                        console.log(`[PTC→Native] ✅ Exécuté ${extractedTool} via fallback natif`);
-                        return await pluginLoader.execute(extractedTool, parsedArgs, contextParams);
+                        // WHY: Route through _safeExecuteTool for full security pipeline
+                        // (MultiAgent critique, MoralCompass, Observer, DB action logging)
+                        // instead of pluginLoader.execute() which bypasses all security checks.
+                        const fallbackToolCall = {
+                            id: toolCall.id || `ptc_fallback_${Date.now()}`,
+                            function: {
+                                name: extractedTool,
+                                arguments: extractedArgs
+                            }
+                        };
+                        console.log(`[PTC→Native] 🛡️ Routing ${extractedTool} through _safeExecuteTool`);
+                        return await this._safeExecuteTool(fallbackToolCall, {
+                            chatId,
+                            message,
+                            authority: {
+                                isSuperUser: contextParams.isSuperUser,
+                                isGlobalAdmin: contextParams.isGlobalAdmin,
+                                level: contextParams.authorityLevel
+                            }
+                        });
                     } catch (err: any) {
                         return { success: false, error: `PTC fallback: impossible d'extraire les arguments pour ${extractedTool}` };
                     }

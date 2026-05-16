@@ -1,18 +1,24 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { BrowserService } from '../../services/browser/BrowserService.js';
-import * as child_process from 'child_process';
 
-// Mocks explicites
-jest.mock('child_process', () => ({
-    execFile: jest.fn((file: any, args: any, options: any, cb: any) => cb(null, { stdout: JSON.stringify({ success: true, data: {} }), stderr: '' }))
+// ESM-safe mocking: MUST come before any dynamic import
+jest.unstable_mockModule('child_process', () => ({
+    execFile: jest.fn((file: any, args: any, options: any, cb: any) => cb(null, {
+        stdout: JSON.stringify({ success: true, data: {} }),
+        stderr: ''
+    }))
 }));
 
+const { BrowserService } = await import('../../services/browser/BrowserService.js');
+
 describe('BrowserService', () => {
-    let browserService: BrowserService;
+    // WHY: BrowserService has a private constructor (singleton). Cast through `any` for test access.
+    let browserService: any;
 
     beforeEach(() => {
         jest.clearAllMocks();
         // @ts-ignore: Accès au singleton pour le test
+        // WHY: Reset singleton to ensure clean state between tests
+        (BrowserService as any).instance = null;
         browserService = (BrowserService as any).getInstance();
     });
 

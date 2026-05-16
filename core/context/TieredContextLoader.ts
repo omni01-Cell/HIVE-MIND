@@ -12,7 +12,7 @@
 //   5. CHAT HISTORY    (~300 tokens, L1 Redis last 5 messages)
 //
 // RAG, Facts, and Workspace are NOT pushed into the prompt.
-// The agent PULLS them via tools: search_long_term_memory, workspace_read.
+// The agent PULLS them via tools: search_long_term_memory, db_document_read.
 // ============================================================================
 
 import { container } from '../ServiceContainer.js';

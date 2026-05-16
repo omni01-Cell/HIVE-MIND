@@ -28,10 +28,10 @@ const BROWSER_SCREENSHOT_DEF = {
     }
 };
 
-const WORKSPACE_WRITE_DEF = {
+const DB_DOCUMENT_SAVE_DEF = {
     function: {
-        name: 'workspace_write',
-        description: 'Write to Epistemic Memory',
+        name: 'db_document_save',
+        description: 'Save to Epistemic Memory',
         parameters: {
             type: 'object',
             properties: {
@@ -71,7 +71,7 @@ const CODE_EXECUTION_DEF = {
     }
 };
 
-const ALL_TOOLS = [BROWSER_SCREENSHOT_DEF, WORKSPACE_WRITE_DEF, SEND_MESSAGE_DEF, CODE_EXECUTION_DEF];
+const ALL_TOOLS = [BROWSER_SCREENSHOT_DEF, DB_DOCUMENT_SAVE_DEF, SEND_MESSAGE_DEF, CODE_EXECUTION_DEF];
 
 // ─── Tests ───
 
@@ -98,7 +98,7 @@ describe('validateToolArgs', () => {
             // Arrange
             const toolCall = {
                 function: {
-                    name: 'workspace_write',
+                    name: 'db_document_save',
                     arguments: JSON.stringify({ key: 'notes', content: 'hello', extra: true })
                 }
             };
@@ -169,7 +169,7 @@ describe('validateToolArgs', () => {
             // Arrange
             const toolCall = {
                 function: {
-                    name: 'workspace_write',
+                    name: 'db_document_save',
                     arguments: JSON.stringify({})
                 }
             };
@@ -186,7 +186,7 @@ describe('validateToolArgs', () => {
             // Arrange
             const toolCall = {
                 function: {
-                    name: 'workspace_write',
+                    name: 'db_document_save',
                     arguments: JSON.stringify({ key: 'my_key' })
                 }
             };

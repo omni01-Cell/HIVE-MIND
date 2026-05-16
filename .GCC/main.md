@@ -193,13 +193,27 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
 - [2026-05-15] [CORE] Fixed Planner Limitation (15 tool cap on prompt LLM) preventing the use of standard file IO / system tools. Systematically injected `execute_bash_command`, `run_scratchpad`, `list_directory` and `grep_search` into `CORE_TOOLS` in `plugins/loader.ts`.
 - [2026-05-15] [CORE] Fixed JSON.parse error unhandled in `_safeExecuteTool` line 1928 for Observer multiAgent coherence evaluation. Wrapped it in a try-catch to prevent execution crashing if LLM outputs malformed args.
 - [2026-05-15] [CORE/PTC] Fixed LLM hallucinating API return format inside `code_execution` scripts (TypeError reading 'data'). Added `llmOutput` and `userOutput` to the `extractText` defensive helper in `SandboxHelpers.ts`, and updated the `code_execution` tool description in `ProgrammaticExecutor.ts` to explicitly warn the LLM that tools return `{ success, llmOutput }`.
+- [2026-05-15] [SECURITY] Fixed PTC_SINGLE_TOOL privileged shortcut: the fallback path called `pluginLoader.execute()` directly, bypassing MultiAgent critique, MoralCompass, Observer, and DB action logging. Now routes through `_safeExecuteTool()`. Also unified ReAct loop: `code_execution` no longer special-cased — it goes through `_safeExecuteTool` which internally routes to `_executePtcCode` after security checks.
+- [2026-05-15] [TESTING] Fixed CLI battery double-counting bug: global wrappers for `sendFile`/`sendMedia`/`sendUniversalResponse` stacked with per-test wrappers, causing every file/media send to increment `currentCapturedFiles` twice. Removed global wrappers; per-test wrappers now delegate directly to saved originals. `hasEnoughFiles` verdict is now trustworthy.
+- [2026-05-15] [CORE] Fixed TS7023 circular inference: added explicit `Promise<any>` return types to `_safeExecuteTool` and `_executePtcCode` to break the recursive type chain. `npx tsc --noEmit` → 0 errors, 0 warnings.
+- [2026-05-15] [TESTING] Fixed CLI battery cross-test pollution: introduced `activeChatId` (exact match `cli_chat_e2e_${test.id}`) across all per-test wrappers (sendUniversalResponse, sendFile, sendMedia, sendText) to prevent async responses from previous tests contaminating current test captures.
+- [2026-05-15] [TESTING] Fixed false timeout log for file-less tests (5, 7): inactivity break now sets `completed = true`, preventing the misleading "Timeout atteint" message from printing when the test actually finished normally.
+- [2026-05-16] [SYSTEM AUDIT REMEDIATION] Implemented all 7 priority items from system_audit_remediation_plan.md:
+  - P0: Restored Planner tool-context propagation (`tools: relevantTools` in `planner.execute()`)
+  - P0: Guarded post-action JSON.parse — hoisted `parsedParams` for Observer+ActionEvaluator reuse
+  - P1: Completed workspace to db_document migration (system.md, moralCompass SAFE_TOOLS, toolValidator tests, comments)
+  - P1: Replaced all `gemini-3.1-flash-lite-preview` fallbacks with `gemma-4-31b-it`
+  - P2: Fixed BashTool test contract drift (French to English assertions)
+  - P2: Rewrote BrowserService.test.ts with ESM-safe jest.unstable_mockModule
+  - P3: Added activeChatId reset before drain in E2E runner
+  - Verified: tsc 0 errors, 32/32 suites, 251/251 tests passed
 
-### 🔄 In progress & ⏳ Pending
-- 🔄 In progress: Batterie de tests E2E locale (`run_cli_battery.ts`) en cours d'exécution. Stabilisation itérative pour atteindre les 100% de succès.
-- ⏳ Pending (POSTPONED): Test fonctionnel global en conditions réelles (Validation TUI vs Headless) — En attente d'ajout de clés API (Quota Exceeded).
+### Current status
+- ✅ Done: All 7 remediation items implemented and verified
+- ⏳ Pending (POSTPONED): Test fonctionnel global en conditions reelles — En attente de cles API
 
 ## Next action
-- Attendre la fin de l'exécution de la batterie de tests E2E pour valider l'impact complet des corrections des outils natifs et PTC (Programmatic Tool Calling).
+- Run full E2E CLI battery to validate end-to-end agent behavior with all 7 remediation fixes applied.
 
 ## Abandoned branches
-- [2026-05-15] Utilisation exclusive de getRelevantTools pour les outils système (abandonné, on les force dans CORE_TOOLS pour s'assurer que le Planner / ReAct y ont toujours accès) -> see .GCC/branches/attempt_core_tools_failed.md
+- [2026-05-15] Utilisation exclusive de getRelevantTools pour les outils systeme -> see .GCC/branches/attempt_core_tools_failed.md

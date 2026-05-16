@@ -96,7 +96,7 @@ describe('BashTool (MOD 3 + MOD 7 + MOD 8)', () => {
 
         expect(baseContext.onProgress).toHaveBeenCalledTimes(2);
         expect(baseContext.onProgress).toHaveBeenCalledWith(expect.stringContaining('pwd'));
-        expect(baseContext.onProgress).toHaveBeenCalledWith(expect.stringContaining('Terminé'));
+        expect(baseContext.onProgress).toHaveBeenCalledWith(expect.stringContaining('Finished'));
     });
 
     it('does not crash if onProgress is undefined', async () => {
@@ -161,7 +161,7 @@ describe('BashTool (MOD 3 + MOD 7 + MOD 8)', () => {
 
         expect(result).not.toBeNull();
         const llmOut = result!.llmOutput as { stdout: string; exitCode: number };
-        expect(llmOut.stdout).toContain('tronqués');
+        expect(llmOut.stdout).toContain('truncated');
         expect(llmOut.stdout.length).toBeLessThan(35000);
     });
 

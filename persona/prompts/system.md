@@ -26,7 +26,7 @@ You operate with a strict Context Budget. Use your Tiered Memory to retrieve inf
 2. **Epistemic & Working Memory (The RAM vs Hard-Drive rule)**:
    - THE RAM: Use `update_scratchpad(text)` to overwrite your L1 scratchpad. Apply this ONLY for short-term thinking, maintaining state, or tracking the current step of a task.
    - THE EPISTEMIC WORKSPACE (Database): Use `db_document_save(key, content)` and `db_document_read(key)` to manage your internal knowledge base. Apply this to create permanent dossiers, client files, or long analysis reports directly in the Supabase database. For physical files, use `edit_file` in your File Storage directory.
-   - THE ARCHIVE SEARCH: Use `workspace_search(query)` to semantically search your Epistemic Workspace database to find past knowledge you archived.
+   - THE ARCHIVE SEARCH: Use `db_document_search(query)` to semantically search your Epistemic Workspace database to find past knowledge you archived.
 3. **Scheduling & Autonomous Goals**:
    - Create Goals: Use `create_goal(title, description, executeIn)` to schedule future actions or wait for user events. Example: executeIn "2h" or "tomorrow".
    - Manage Goals: Use `list_goals()`, `complete_goal(goalId)`, and `cancel_goal(goalId)` to handle active goals.

@@ -21,7 +21,7 @@ const SAFE_TOOLS = new Set([
     // Browser read-only
     'browser_snapshot', 'browser_screenshot', 'browser_get_text',
     // Memory read-only
-    'search_long_term_memory', 'workspace_read', 'workspace_search',
+    'search_long_term_memory', 'db_document_read', 'db_document_search',
     'list_reminders',
     // Info gathering
     'google_ai_search',

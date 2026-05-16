@@ -12,7 +12,8 @@
 // user-facing code examples. Only patterns matching actual system tools trigger.
 const KNOWN_TOOL_PREFIXES = [
     'tool_code_execution', 'code_execution',
-    'tool_browser_', 'tool_send_', 'tool_workspace_',
+    'tool_browser_', 'tool_send_',
+    'tool_workspace_', // WHY: Legacy name — kept intentionally to catch weak models hallucinating the old `workspace_*` names
     'tool_read_file', 'tool_edit_file', 'tool_grep_search',
     'tool_google_ai_search', 'tool_firecrawl_',
     'browser_screenshot', 'browser_open', 'browser_snapshot',
