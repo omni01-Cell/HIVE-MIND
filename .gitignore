@@ -50,3 +50,4 @@ TEST_RESULT/
 storage_hm/benchmark_test/
 storage_hm/portfolio_site/
 storage_hm/screenshots/*.png
+AGENTS.md
