@@ -61,11 +61,11 @@ jest.unstable_mockModule('../../services/redisClient.js', () => ({
     }
 }));
 
-const { redis } = await import('../../services/redisClient.js');
-const { userService } = await import('../../services/userService.js');
-const { StateManager } = await import('../../services/state/StateManager.js');
-const { runtime } = await import('../../services/runtime/RuntimeInfrastructure.js');
-const { default: db } = await import('../../services/supabase.js');
+const { redis } = await import('../../services/redisClient.js') as any;
+const { userService } = await import('../../services/userService.js') as any;
+const { StateManager } = await import('../../services/state/StateManager.js') as any;
+const { runtime } = await import('../../services/runtime/RuntimeInfrastructure.js') as any;
+const { default: db } = await import('../../services/supabase.js') as any;
 
 describe('Services Integration (Phase 4 MODs)', () => {
     const testJid = '12345@s.whatsapp.net';
