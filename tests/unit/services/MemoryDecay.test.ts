@@ -28,7 +28,7 @@ describe('MemoryDecay unit tests', () => {
   beforeAll(async () => {
     // Import redis client and mock connect immediately
     const redisModule = await import('../../../services/redisClient.js');
-    jest.spyOn(redisModule.redis, 'connect').mockImplementation(async () => {});
+    jest.spyOn(redisModule.redis as any, 'connect').mockImplementation(async () => redisModule.redis as any);
 
     // Import the services
     const mdModule = await import('../../../services/memory/MemoryDecay.js');
