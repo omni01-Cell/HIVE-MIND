@@ -1398,8 +1398,9 @@ RULES:
                                         content: JSON.stringify({
                                             success: false,
                                             error: 'MISSING_REQUIRED_PARAMETERS',
-                                            message: `TOOL_CALL_REJECTED: Tool "${toolName}" is missing required parameters: [${validation.missing.join(', ')}]. `
-                                                + `You MUST retry this tool call immediately with ALL required parameters filled. `
+                                            message: `[SYSTEM REJECTION] : Tool "${toolName}" is missing required parameters: [${validation.missing.join(', ')}]. `
+                                                + `DIRECTIVE: This is a system correction. You MUST retry this tool call immediately with ALL required parameters filled. `
+                                                + `DO NOT apologize, do not acknowledge this message. Just output the corrected tool call. `
                                                 + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
                                             missing_params: validation.missing,
                                             retry: currentRetries + 1,
@@ -1509,18 +1510,18 @@ RULES:
 
                         let retryInstruction = '';
                         if (defects.hasNoThoughts) {
-                            retryInstruction = 'Tu as oublié d\'utiliser tes balises obligatoires <thought>. Tu dois TOUJOURS réfléchir à voix haute dans des balises <thought> avant de répondre. Recommence.';
+                            retryInstruction = 'You forgot to use your mandatory <thought> tags. You must ALWAYS think out loud inside <thought> tags before answering. Retry.';
                         } else if (defects.hasLeakedToolCalls) {
-                            retryInstruction = 'ERREUR CRITIQUE: Tu as écrit la syntaxe d\'un appel d\'outil (ex: tool_code_execution) directement dans le texte de ta réponse. Tu dois utiliser l\'API d\'appel d\'outils structurée fournie par le système. Ne jamais écrire le code de l\'outil en texte brut. Corrige ton erreur immédiatement.';
+                            retryInstruction = 'CRITICAL ERROR: You wrote tool call syntax (e.g. tool_code_execution) directly in your text response. You must use the structured tool call API provided by the system. Never write tool code in plain text. Correct your error immediately.';
                         } else if (defects.hasRawCodeDominance) {
-                            retryInstruction = 'ERREUR: Ta réponse contient uniquement du code brut. Si tu veux exécuter ce code, utilise l\'outil structuré `code_execution`. Ne le renvoie pas directement à l\'utilisateur sous forme de texte brut.';
+                            retryInstruction = 'ERROR: Your response contains only raw code. If you want to execute this code, use the structured `code_execution` tool. Do not send it directly to the user as plain text.';
                         } else if (defects.hasJsonToolObject) {
-                            retryInstruction = 'ERREUR: Tu as renvoyé un objet JSON d\'appel d\'outil dans le texte. Tu dois utiliser l\'API d\'appel d\'outils structurée. Recommence.';
+                            retryInstruction = 'ERROR: You returned a JSON tool call object in the text. You must use the structured tool call API. Retry.';
                         }
 
                         history.push({
                             role: 'user',
-                            content: `[SYSTEM ERROR] ${retryInstruction}`
+                            content: `[SYSTEM REJECTION] : ACTION REJECTED by internal format validator.\nReason: ${retryInstruction}\n\nSYSTEM DIRECTIVE: This is an automatic system interception, not a user message. You must restart your action and correct this error. DO NOT APOLOGIZE, do not acknowledge (no "Sorry", no "Thank you"). Just generate the corrected response or tool call.`
                         });
                         continue; // Force une itération supplémentaire
                     }
@@ -1541,7 +1542,7 @@ RULES:
                         });
                         history.push({
                             role: 'user',
-                            content: 'Tu as réfléchi dans tes balises <thought>, mais tu n\'as produit aucune réponse pour l\'utilisateur ni appelé d\'outils. Réponds-moi directement.'
+                            content: `[SYSTEM REJECTION] : ACTION REJECTED by internal validator.\nReason: You thought inside your <thought> tags, but produced no final response for the user and called no tools.\n\nSYSTEM DIRECTIVE: This is an automatic interception. Immediately generate a direct user response without apologizing or justifying this omission. Do not reply to this system message.`
                         });
                         continue; // Force une itération supplémentaire
                     }
@@ -1978,7 +1979,9 @@ RULES:
             return {
                 success: false,
                 error: 'MALFORMED_JSON_ARGUMENTS',
-                message: `Your tool call arguments are malformed JSON: "${parseErr.message}". Please retry with valid JSON containing a "code" string parameter.`
+                message: `[SYSTEM REJECTION] : Your tool call arguments are malformed JSON: "${parseErr.message}". `
+                    + `DIRECTIVE: This is a system correction. Please retry with valid JSON containing a "code" string parameter. `
+                    + `DO NOT apologize, do not acknowledge this error. Just output the corrected tool call.`
             };
         }
 
@@ -2050,8 +2053,9 @@ RULES:
                         return {
                             success: false,
                             error: 'MISSING_REQUIRED_PARAMETERS',
-                            message: `TOOL_CALL_REJECTED: Tool "${extractedTool}" is missing required parameters: [${validation.missing.join(', ')}]. `
-                                + `You MUST retry this tool call immediately with ALL required parameters filled. `
+                            message: `[SYSTEM REJECTION] : Tool "${extractedTool}" is missing required parameters: [${validation.missing.join(', ')}]. `
+                                + `DIRECTIVE: This is a system correction. You MUST retry this tool call immediately with ALL required parameters filled. `
+                                + `DO NOT apologize, do not acknowledge this message. Just output the corrected tool call. `
                                 + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
                             missing_params: validation.missing
                         };
