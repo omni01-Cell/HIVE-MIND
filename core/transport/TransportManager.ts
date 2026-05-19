@@ -14,6 +14,26 @@ export class TransportManager {
         this.register('cli', cliTransport);
         this.register('discord', discordTransport);
         this.register('telegram', telegramTransport);
+        
+        // Register a dummy transport for 'internal' to support system conscious pulse and silent events
+        const internalTransport = {
+            connect: async () => {},
+            disconnect: async () => {},
+            sendText: async () => ({}),
+            sendMedia: async () => ({}),
+            sendVoiceNote: async () => ({}),
+            sendFile: async () => ({}),
+            sendSticker: async () => ({}),
+            getGroupMetadata: async () => ({}),
+            downloadMedia: async () => Buffer.from(''),
+            onMessage: () => {},
+            onGroupEvent: () => {},
+            setPresence: async () => {},
+            sendUniversalResponse: async () => ({}),
+            isAdmin: async () => false,
+            sendReaction: async () => true
+        };
+        this.register('internal', internalTransport);
     }
 
     /**
