@@ -10,6 +10,7 @@ import { db } from '../../services/supabase.js';
 import { eventInboxService } from '../../services/events/EventInboxService.js';
 import { actionMemory } from '../../services/memory/ActionMemory.js';
 import { hiveWakeSystem } from '../../services/ptc/WakeSystem.js';
+import { redis } from '../../services/redisClient.js';
 
 /**
  * Gestionnaire des jobs planifiés
@@ -502,10 +503,48 @@ ${textToAnalyze}
     }
 
     async _handleConsciousPulse() {
-        console.log('[Watchdog] 💓 Audit système (Inbox, Crash Recovery, WakeEvents)...');
+        console.log('[Watchdog] 💓 Audit système (Inbox, Crash Recovery, WakeEvents, MAPLE)...');
         try {
+            // 0. MAPLE: Détecter les sessions terminées pour l'apprentissage
+            try {
+                const inactiveGroups = await workingMemory.getInactiveGroups(15);
+                for (const chatId of inactiveGroups) {
+                    const lockKey = `maple_lock:${chatId}`;
+                    if (redis.isOpen && !(await redis.get(lockKey))) {
+                        await eventInboxService.pushEvent('trigger_learning', 'watchdog', { chatId });
+                        await redis.set(lockKey, '1', { EX: 3600 }); // Lock 1h
+                    }
+                }
+            } catch (err: any) {
+                console.error('[Watchdog] Erreur scan MAPLE inactifs:', err.message);
+            }
+
             // 1. Check Inbox
-            const unreadEvents = await eventInboxService.getUnreadEvents(10);
+            let unreadEvents = await eventInboxService.getUnreadEvents(10);
+
+            // MAPLE learning events processing (without triggering main LLM mind)
+            const learningEvents = unreadEvents.filter(e => e.type === 'trigger_learning');
+            if (learningEvents.length > 0) {
+                try {
+                    const { learningEngine } = await import('../../services/learning/LearningEngine.js');
+                    for (const evt of learningEvents) {
+                        const chatId = (evt.payload as any)?.chatId;
+                        if (chatId) {
+                            learningEngine.extractInsights(chatId).catch(err => {
+                                console.error('[Watchdog] learningEngine error:', err.message);
+                            });
+                        }
+                        // Remove from inbox list so it's not shown in wakeupPrompt
+                        if (redis.isOpen) {
+                            await redis.lRem('hive:event_inbox', 0, JSON.stringify(evt));
+                        }
+                    }
+                    // Reload unreadEvents to exclude the processed learning events
+                    unreadEvents = await eventInboxService.getUnreadEvents(10);
+                } catch (err: any) {
+                    console.error('[Watchdog] Erreur traitement evenements MAPLE:', err.message);
+                }
+            }
             
             // 2. Check Zombies (tâches inactives depuis > 5 minutes)
             const stalledActions = await actionMemory.getStalledActions(5 * 60 * 1000);

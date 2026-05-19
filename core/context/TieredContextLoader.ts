@@ -137,14 +137,15 @@ export class TieredContextLoader {
         ]);
 
         // ── HYDRATE SYSTEM PROMPT TEMPLATE ──
-        const systemPrompt = this._hydrateTemplate({
+        const systemPrompt = await this._hydrateTemplate({
             channel: message.sourceChannel || 'whatsapp',
-            passport: this.workingMemory.formatPassport(passport),
+            passport,
             scratchpad: scratchpad || '(Empty. Use update_scratchpad to write here.)',
             actionHistory: this.workingMemory.formatActionHistory(actionHistory),
             userSnapshot,
             authority,
             groupBasics,
+            chatId
         });
 
         const context = {
@@ -180,14 +181,18 @@ export class TieredContextLoader {
             const profile = await this.userService.getProfile(sender);
             const name = profile?.names?.[0] || 'Unknown';
 
-            // Extract top 4 facts for the passport
-            let topFacts: string[] = [];
+            const maple = { facts: [] as string[], prefs: [] as string[], goals: [] as string[] };
             try {
                 const allFacts = await this.factsMemory.getAll(sender);
-                const entries = Object.entries(allFacts);
-                topFacts = entries
-                    .slice(0, 4)
-                    .map(([key, value]) => `${key}: ${value}`);
+                for (const [key, value] of Object.entries(allFacts)) {
+                    if (key.startsWith('fact:')) maple.facts.push(value as string);
+                    else if (key.startsWith('pref:')) maple.prefs.push(value as string);
+                    else if (key.startsWith('goal:')) maple.goals.push(value as string);
+                    else {
+                        // Fallback/Legacy facts
+                        maple.facts.push(`${key}: ${value}`);
+                    }
+                }
             } catch {
                 // Facts unavailable — non-blocking
             }
@@ -196,7 +201,8 @@ export class TieredContextLoader {
                 name,
                 lang: profile?.language || 'auto',
                 tz: profile?.timezone || 'auto',
-                topFacts
+                topFacts: [...maple.facts, ...maple.prefs, ...maple.goals].slice(0, 4),
+                maple
             };
 
             // Cache in Redis L1 (1h TTL)
@@ -204,7 +210,7 @@ export class TieredContextLoader {
             return passport;
         } catch (e: any) {
             console.warn('[TieredContext] Passport build failed:', e.message);
-            return { name: 'Unknown', lang: 'auto', tz: 'auto', topFacts: [] };
+            return { name: 'Unknown', lang: 'auto', tz: 'auto', topFacts: [], maple: { facts: [], prefs: [], goals: [] } };
         }
     }
 
@@ -279,15 +285,16 @@ export class TieredContextLoader {
      * Hydrates the system.md template by replacing {{PLACEHOLDERS}} and
      * appending the execution engine block.
      */
-    _hydrateTemplate(data: {
+    async _hydrateTemplate(data: {
         channel: string;
-        passport: string;
+        passport: any;
         scratchpad: string;
         actionHistory: string;
         userSnapshot: any;
         authority: any;
         groupBasics: any;
-    }): string {
+        chatId: string;
+    }): Promise<string> {
         const now = new Date();
 
         let prompt = this.localCache.systemPromptTemplate;
@@ -295,17 +302,65 @@ export class TieredContextLoader {
         // 1. Replace dynamic context placeholders
         prompt = prompt.replace('{{CURRENT_CHANNEL}}', data.channel);
         prompt = prompt.replace('{{CURRENT_TIMESTAMP}}', now.toISOString());
-        prompt = prompt.replace('{{USER_PASSPORT}}', data.passport);
+        prompt = prompt.replace('{{USER_PASSPORT}}', this.workingMemory.formatPassport(data.passport));
         prompt = prompt.replace('{{SCRATCHPAD}}', data.scratchpad);
         prompt = prompt.replace('{{ACTION_HISTORY}}', data.actionHistory);
 
-        // 2. Append execution engine (injected after the template)
+        // 2. Build user model XML (Anthropic V3 user passport)
+        const userModel = `
+<user_model>
+  <name>${data.userSnapshot.name}</name>
+  <facts>${data.passport.maple?.facts.join(' | ') || 'None'}</facts>
+  <preferences>${data.passport.maple?.prefs.join(' | ') || 'None'}</preferences>
+  <active_goals>${data.passport.maple?.goals.join(' | ') || 'None'}</active_goals>
+</user_model>
+`;
+
+        // 3. Build task harness context
+        const harness = await this._buildHarnessContext(data.chatId);
+
+        // 4. Append execution engine
         const executionBlock = this._buildExecutionBlock(data);
 
-        // 3. Append social context
+        // 5. Append social context
         const socialBlock = this._buildSocialContext(data);
 
-        return `${prompt}\n${socialBlock}\n${executionBlock}`;
+        return `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}`;
+    }
+
+    /**
+     * Builds execution harness for ongoing actions and tasks.
+     */
+    async _buildHarnessContext(chatId: string): Promise<string> {
+        try {
+            const { actionMemory } = await import('../../services/memory/ActionMemory.js');
+            let harness = "";
+            
+            // 1. Carnet de bord (Scratchpad)
+            const scratchpad = await this.workingMemory.getScratchpad(chatId);
+            if (scratchpad) {
+                harness += `<scratchpad>\n${scratchpad}\n</scratchpad>\n`;
+            }
+            
+            // 2. Tâche longue en cours (ActionMemory)
+            const activeAction = await actionMemory.getActiveAction(chatId);
+            if (activeAction) {
+                const steps = activeAction.steps.map((s: any) => `- ${s.step}`).join('\n');
+                harness += `
+<execution_harness>
+  <ongoing_goal>${activeAction.goal}</ongoing_goal>
+  <completed_steps>
+${steps || 'None yet'}
+  </completed_steps>
+  <directive>You are resuming an ongoing background task. Resume work immediately. Do not apologize. Use your tools to advance the goal.</directive>
+</execution_harness>\n`;
+            }
+            
+            return harness;
+        } catch (e: any) {
+            console.error('[TieredContext] Error building harness context:', e.message);
+            return '';
+        }
     }
 
     /**

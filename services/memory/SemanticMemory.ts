@@ -19,6 +19,7 @@ export interface SemanticMemoryDependencies {
 }
 
 export interface MemoryRecord {
+  id?: number;
   content: string;
   role: string;
   similarity: number;
@@ -109,11 +110,29 @@ export class SemanticMemory {
 
       if (error) throw error;
 
-      return (data as any[]).map((m: any) => ({
+      const results = (data as any[]).map((m: any) => ({
+        id: m.id,
         content: m.content,
         role: m.role,
         similarity: m.similarity
       }));
+
+      // [CMA] RETRIEVAL-DRIVEN MUTATION (NON-BLOQUANT)
+      if (results.length > 0) {
+        const idsToBoost = results.map(r => r.id).filter(id => id !== undefined && id !== null);
+        if (idsToBoost.length > 0) {
+          setImmediate(async () => {
+            try {
+              await this.supabase.rpc('cma_boost_memory', { memory_ids: idsToBoost });
+              this.logger?.debug('memory', `[CMA] Renforcement de ${idsToBoost.length} souvenirs.`);
+            } catch (e: any) {
+              this.logger?.error(`[CMA] Error boosting memories: ${e.message}`);
+            }
+          });
+        }
+      }
+
+      return results;
 
     } catch (error: any) {
       this.logger?.error(`[Memory] Recall Error: ${error.message}`);

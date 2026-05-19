@@ -15,3 +15,6 @@ scratch/
 sandbox*/
 iterations/
 audit/
+session_test_admin/
+session_test_user/
+package-lock.json

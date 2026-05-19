@@ -20,6 +20,7 @@ export { redis, ensureConnected } from './redisClient.js';
 export { consciousness } from './consciousnessService.js';
 export { dreamService } from './dreamService.js';
 export { feedbackService } from './feedbackService.js';
+export { learningEngine } from './learning/LearningEngine.js';
 
 // =================== AGENTS & PROACTIVITÉ ===================
 export { agentMemory } from './agentMemory.js';

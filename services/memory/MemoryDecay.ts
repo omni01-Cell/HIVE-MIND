@@ -9,7 +9,7 @@ import { supabase } from '../supabase.js';
 
 export interface MemoryRecord {
   id: string;
-  chat_id: string;
+  context_id: string;
   content: string;
   created_at: string;
   role: string;
@@ -100,11 +100,16 @@ export class MemoryDecaySystem {
     try {
       if (!supabase) throw new Error("Supabase client not initialized");
 
+      // 0. Resolve Omni-Channel UUID
+      const { default: db } = await import('../supabase.js');
+      const resolved = await db.resolveContextFromLegacyId(chatId);
+      const contextId = resolved ? resolved.context_id : chatId; // Fallback if already context_id or not found
+
       // 1. Get all memories for the chat
       const { data: memories, error } = await supabase
         .from('memories')
         .select('*')
-        .eq('chat_id', chatId)
+        .eq('context_id', contextId)
         .eq('role', 'assistant') // Decay bot responses to manage brain weight
         .is('archived_at', null);
 
@@ -116,6 +121,7 @@ export class MemoryDecaySystem {
 
       let archivedCount = 0;
       let keptCount = 0;
+      const memoriesToArchive: MemoryRecord[] = [];
 
       // 2. Score and archive if necessary
       for (const memory of memories as MemoryRecord[]) {
@@ -132,6 +138,7 @@ export class MemoryDecaySystem {
             .eq('id', memory.id);
 
           archivedCount++;
+          memoriesToArchive.push(memory);
           console.log(`[MemoryDecay] ⚰️ Archived: ID ${memory.id} (age=${ageHours}h, score=${score.toFixed(2)})`);
         } else {
           // Just update the score
@@ -146,6 +153,13 @@ export class MemoryDecaySystem {
 
       console.log(`[MemoryDecay] ✅ ${chatId}: ${archivedCount} archived, ${keptCount} kept (${memories.length} total)`);
 
+      // [CMA] CONSOLIDATION & DREAMS: If we archived multiple memories, synthesize them into a "Gist"
+      if (memoriesToArchive.length >= 5) {
+        setImmediate(() => {
+          this._consolidateMemories(chatId, memoriesToArchive);
+        });
+      }
+
       return {
         processed: memories.length,
         archived: archivedCount,
@@ -155,6 +169,34 @@ export class MemoryDecaySystem {
     } catch (error: any) {
       console.error('[MemoryDecay] Error:', error.message);
       return { processed: 0, archived: 0, kept: 0, error: error.message };
+    }
+  }
+
+  /**
+   * Consolidates archived memories into a high-level dense Gist.
+   */
+  private async _consolidateMemories(chatId: string, oldMemories: MemoryRecord[]): Promise<void> {
+    console.log(`[CMA] 💤 Consolidation de ${oldMemories.length} souvenirs archivés pour ${chatId}...`);
+    const transcript = oldMemories.map(m => m.content).join('\n---\n');
+    
+    const prompt = `Synthesize these old, archived memories into ONE dense, high-level factual statement (a "Gist") about the user or session. Discard conversational noise, pleasantries, and logs. Max 2 sentences.\n\nMemories to consolidate:\n${transcript}`;
+    
+    try {
+      const { providerRouter } = await import('../../providers/index.js');
+      const response = await providerRouter.chat([
+        { role: 'system', content: 'You are a high-level cognitive synthesizer. Output only the consolidated gist.' },
+        { role: 'user', content: prompt }
+      ], { category: 'FAST_CHAT', temperature: 0.2 });
+      
+      if (response && response.content) {
+        const { default: memoryService } = await import('./memory.js');
+        const semanticMemory = memoryService.semanticMemory;
+        
+        await semanticMemory.store(chatId, `[CONSOLIDATED GIST] ${response.content}`, 'system');
+        console.log(`[CMA] 🌠 Gist créé et stocké : ${response.content.substring(0, 80)}...`);
+      }
+    } catch (e: any) {
+      console.error('[CMA] Erreur lors de la consolidation des souvenirs :', e.message);
     }
   }
 
@@ -172,22 +214,22 @@ export class MemoryDecaySystem {
 
       const { data: activeChats, error } = await supabase
         .from('memories')
-        .select('chat_id')
+        .select('context_id')
         .gte('created_at', sevenDaysAgo)
         .is('archived_at', null);
 
       if (error) throw error;
 
-      // Deduplicate chat IDs
-      const uniqueChats = [...new Set(activeChats.map((m: any) => m.chat_id))];
+      // Deduplicate context IDs
+      const uniqueContexts = [...new Set(activeChats.map((m: any) => m.context_id).filter(id => id !== null && id !== undefined))];
 
-      console.log(`[MemoryDecay] ${uniqueChats.length} active chats detected`);
+      console.log(`[MemoryDecay] ${uniqueContexts.length} active contexts detected`);
 
       let totalArchived = 0;
       let totalKept = 0;
 
-      for (const chatId of uniqueChats) {
-        const result = await this.decay(chatId);
+      for (const contextId of uniqueContexts) {
+        const result = await this.decay(contextId);
         totalArchived += result.archived;
         totalKept += result.kept;
       }
@@ -195,7 +237,7 @@ export class MemoryDecaySystem {
       console.log(`[MemoryDecay] ✅ Global cycle completed: ${totalArchived} archived, ${totalKept} kept`);
 
       return {
-        chats: uniqueChats.length,
+        chats: uniqueContexts.length,
         archived: totalArchived,
         kept: totalKept
       };
@@ -219,7 +261,10 @@ export class MemoryDecaySystem {
         .select('decay_score, archived_at, created_at');
 
       if (chatId) {
-        query = query.eq('chat_id', chatId);
+        const { default: db } = await import('../supabase.js');
+        const resolved = await db.resolveContextFromLegacyId(chatId);
+        const contextId = resolved ? resolved.context_id : chatId;
+        query = query.eq('context_id', contextId);
       }
 
       const { data: memories } = await query;

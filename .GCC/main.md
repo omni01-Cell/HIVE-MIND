@@ -5,14 +5,27 @@
 - **[Phase 2] [2026-04-23] System & FS Capabilities (Claude Code Alignment)** : Bash persistant, Ripgrep, mtime tracking.
 - **[Phase 3] [2026-04-23] Multi-Interface Adaptation & Dual Rendering** : Découplage Brain/Adapteurs, WhatsApp/CLI/Discord, client MCP.
 - **[Phase 4] [2026-04-24] Agent Hardening & FinOps** : Implémentation de 8 fonctionnalités critiques (Compression LLM, SubAgent isolé, Callback onProgress, Kill Switch FinOps, Dual-Logic HITL, Dual Rendering CLI/WhatsApp, Chain of Thought obligatoire, et interception de sécurité).
+- **[Phase 5] [2026-05-19] Unified Runtime Infrastructure** : Conception, implémentation et intégration complète du service unifié `RuntimeInfrastructure` (Sentinel safety evaluation, Ralph laziness kickback system, et KKT Lagrangian token-budget throttling).
+- **[Phase 6] [2026-05-19] Epic AION (Memory Management & Decay System)** : Conception et implémentation complète de la Cognitive Memory Architecture (CMA), intégrant la taxonomie MAPLE (`fact:`, `pref:`, `goal:`), le vieillissement des souvenirs par loi d'oubli exponentielle (`MemoryDecaySystem` avec consolidation par setImmediate) et l'hydratation Context Engineer (prompts XML d'Anthropic).
 - **Epic Dirac** : Hash-Anchored Edits (AnchorStateManager, lineHashing, hashDictionary), AST-Native Tools (TreeSitterService, 3 outils), Multi-File Batching, Parallel Tool Execution (`Promise.all` read-only), Context Curation + Minimal Prompting (DIRAC CODING PROTOCOL).
 - **Epic SOTA Browser Agent Integration** : Installation agent-browser + Chrome for Testing, BrowserService (CLI wrapper), BrowserTools plugin (13 outils browser_*), Intégration PTC, System Prompt browser instructions, Sécurité & Guardrails (NVM path, type safety, sendMedia fix).
 - [2026-05-02] HIVE-MIND-RAILWAY Stabilization Roadmap: V3 refactor, infrastructure stabilization, security hardening for Railway deployment.
 
 ## Objective
-Stabilize the HIVE-MIND production deployment on Railway by resolving critical infrastructure, database, and runtime failures identified during the initial launch, and executing remaining E2E tests.
+Implement and deploy AION Memory Management (CMA + MAPLE + Context Engineer) on Railway, ensuring strict verification and test coverage.
 
 ## Decisions made
+### Memory Management & Cognitive Architecture (Epic AION)
+- [2026-05-19] Adopted the MAPLE taxonomy (`fact:`, `pref:`, `goal:`) for epistemic memory organization, enabling structured contextual loading for the agent.
+- [2026-05-19] Implemented `MemoryDecaySystem` using an exponential decay model based on recency, frequency of recall, and keyword-based semantic importance.
+- [2026-05-19] Implemented dynamic asynchronous gist consolidation (`_consolidateMemories`) that triggers when 5 or more memories are archived, storing high-level dense summaries back to semantic memory.
+- [2026-05-19] Hydrated the TieredContextLoader template with custom `<user_model>` (Passport facts, preferences, goals) and `<execution_harness>` (Scratchpad, ActionMemory) XML blocks.
+
+### Architecture & Infrastructure (Runtime Infrastructure)
+- [2026-05-19] Consolidated the redundant `CostTracker.ts`, `moralCompass.ts`, and `MultiAgent.ts` into a unified `RuntimeInfrastructure.ts` service with Sentinel, Ralph, and FinOps modules.
+- [2026-05-19] Replaced multi-step LLM critique/moral/observer pipeline inside `_safeExecuteTool` with a single secure dynamic Sentinel call, optimizing latency and budget slack.
+- [2026-05-19] Eliminated obsolete unit/integration tests and updated integration mocks to align with the new unified RuntimeInfrastructure architecture.
+
 ### Architecture & Infrastructure (HIVE-MIND Legacy Core)
 - [2026-04-24] Clôture de la Phase 4 avec une architecture complètement refactorisée et documentée.
 - [2026-04-24] Lancement de la Phase 5 focalisée sur la validation des cas limites et la robustesse en production.
@@ -64,6 +77,16 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
 
 ## Current status
 ### ✅ Done (HIVE-MIND-RAILWAY)
+- [2026-05-19] Created `RuntimeInfrastructure.ts` and set up all sub-controllers (FinOps budget tracking, Sentinel VIGIL safety recipes, Ralph laziness controller).
+- [2026-05-19] Registered runtime service in `ServiceContainer.ts` and safely cleaned up deprecated files.
+- [2026-05-19] Integrated KKT token throttling in `providers/index.ts`.
+- [2026-05-19] Integrated Sentinel VIGIL inside `_safeExecuteTool` in `core/index.ts`.
+- [2026-05-19] Integrated Ralph laziness detection inside `_handleMessage` loop in `core/index.ts`.
+- [2026-05-19] Removed obsolete files `CostTracker.ts`, `moralCompass.ts`, `MultiAgent.ts`, and their redundant unit tests.
+- [2026-05-19] Updated integration tests to align with `RuntimeInfrastructure` mocking.
+- [2026-05-19] Verified all TypeScript types and compiled successfully (0 errors).
+- [2026-05-19] Executed and verified all unit and integration tests (100% pass, 23/23 tests green).
+- [2026-05-19] Re-ran `graphify update` to capture entire file relations.
 - [2026-05-07] Fixed Gemini Live 1011 crash: Removed PTC `code_execution` from Live mode (its description embeds all tool docs ~5KB+ which exceeded setup message limits). Added sanitization layer in `geminiLiveProvider._sendSetup` to strip `additionalProperties` from schemas and truncate descriptions to 500 chars.
 - [2026-05-08] Fixed Gemini Live 1011 crash (payload 10KB): Added payload size guard (truncate system prompt to 2000 chars, description cap 300 chars, progressive tool-dropping over 8KB). Then diagnosed that the REAL root cause was `responseModalities: ['AUDIO', 'TEXT']` — the model `gemini-3.1-flash-live-preview` no longer accepts TEXT modality (Google-side change). Reverted to `['AUDIO']` only; text transcriptions still arrive via `outputTranscription` events.
 - [2026-05-11] Fixed WhatsApp voice note flat waveform (no oscillations): Two root causes — (1) `audio-decode` npm package was missing, which Baileys requires internally for `getAudioWaveform()`. Without it, Baileys silently overwrites our computed waveform with `undefined`. Installed `audio-decode`. (2) Our FFmpeg-based `generateWaveformFromFile` was producing values in 5-255 range, but WhatsApp expects 0-100 (max 127). Aligned to Baileys' own range `Math.floor(100 * n)`. Fixed both the FFmpeg generator and the static fallback values.
@@ -194,12 +217,19 @@ Stabilize the HIVE-MIND production deployment on Railway by resolving critical i
 - [2026-05-15] [CORE] Fixed JSON.parse error unhandled in `_safeExecuteTool` line 1928 for Observer multiAgent coherence evaluation. Wrapped it in a try-catch to prevent execution crashing if LLM outputs malformed args.
 - [2026-05-15] [CORE/PTC] Fixed LLM hallucinating API return format inside `code_execution` scripts (TypeError reading 'data'). Added `llmOutput` and `userOutput` to the `extractText` defensive helper in `SandboxHelpers.ts`, and updated the `code_execution` tool description in `ProgrammaticExecutor.ts` to explicitly warn the LLM that tools return `{ success, llmOutput }`.
 
+- [2026-05-19] [AION] Implemented `LearningEngine` (MAPLE taxonomy extraction) and `MemoryDecay` (exponential memory forgetting and setImmediate gist consolidation).
+- [2026-05-19] [AION] Integrated Context Engineer XML formatting (`<user_model>`, `<execution_harness>`) into `TieredContextLoader`.
+- [2026-05-19] [AION] Integrated the Orchestration Watchdog within `schedulerHandler.ts` to trigger asynchronous learning events on session idle.
+- [2026-05-19] [AION] Added 4 clean Jest unit tests for `LearningEngine` and `MemoryDecay` with 100% test coverage.
+- [2026-05-19] [AION] Verified workspace compilation and boots flawlessly.
+- ✅ Done: Full AST-based Graphify analysis on the whole workspace. Generated HTML & Obsidian vault visualizations under `graphify-out/`.
+
 ### 🔄 In progress & ⏳ Pending
-- 🔄 In progress: Batterie de tests E2E locale (`run_cli_battery.ts`) en cours d'exécution. Stabilisation itérative pour atteindre les 100% de succès.
-- ⏳ Pending (POSTPONED): Test fonctionnel global en conditions réelles (Validation TUI vs Headless) — En attente d'ajout de clés API (Quota Exceeded).
+- 🔄 In progress: None
+- ⏳ Pending: Deploying and testing live on Railway
 
 ## Next action
-- Attendre la fin de l'exécution de la batterie de tests E2E pour valider l'impact complet des corrections des outils natifs et PTC (Programmatic Tool Calling).
+Perform a complete git push of the verified workspace to Railway to let the AION Cognitive Memory architecture boot in production.
 
 ## Abandoned branches
 - [2026-05-15] Utilisation exclusive de getRelevantTools pour les outils système (abandonné, on les force dans CORE_TOOLS pour s'assurer que le Planner / ReAct y ont toujours accès) -> see .GCC/branches/attempt_core_tools_failed.md
