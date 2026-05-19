@@ -90,6 +90,9 @@ export const BotEvents = {
     MEMORY_STORED: 'memory:stored',
     MEMORY_RECALLED: 'memory:recalled',
 
+    // Événements asynchrones externes (Inbox)
+    EVENT_INBOX: 'event:inbox',
+
     // Système (Kill Switch, erreurs critiques)
     SYSTEM_ERROR: 'system:error'
 };

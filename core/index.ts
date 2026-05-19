@@ -21,6 +21,7 @@ import { validateToolArgs } from '../utils/toolValidator.js';
 import { ptcExecutor, buildToolFunctions } from '../services/ptc/index.js';
 // [WAKE] WakeSystem — Push-based long-running agent tasks (OpenClaw Heartbeat pattern)
 import { hiveWakeSystem } from '../services/ptc/WakeSystem.js';
+import { mailboxWatcher } from '../services/events/MailboxWatcher.js';
 import { startupDisplay } from '../utils/startup.js';
 
 import { botIdentity } from '../utils/botIdentity.js';
@@ -116,6 +117,7 @@ export class BotCore {
     get semanticMemory() { return container.get('memory'); }
     get voiceProvider() { return container.get('voiceProvider'); }
     get quotaManager() { return container.get('quotaManager'); }
+    get runtime() { return container.get('runtime'); }
 
     async _getLiveAudioTools() {
         // Gemini Live API crashes (1011) when setup payload exceeds ~10KB.
@@ -368,6 +370,8 @@ export class BotCore {
 
         // [WAKE] Démarrer le WakeSystem (Heartbeat 5s pour tâches longue durée)
         hiveWakeSystem.start();
+        // Démarrer la surveillance de la boîte de réception d'événements
+        mailboxWatcher.start();
         // Enregistrer le callback global : quand un Wake Event expire, re-injecter
         // le prompt dans la boucle comme si c'était un nouveau message entrant.
         hiveWakeSystem.on('wake', async (event: any) => {
@@ -1117,6 +1121,8 @@ export class BotCore {
 
             let responseDefectRetries = 0;
             const MAX_DEFECT_RETRIES = 2;
+            let ralphRetries = 0;
+            const MAX_RALPH_RETRIES = 1;
 
             let finalResponse: any = null;
             let keepThinking = true;
@@ -1526,6 +1532,35 @@ RULES:
                         continue; // Force une itération supplémentaire
                     }
 
+                    // [RUNTIME: RALPH LOOP]
+                    // On évalue la paresse agentique uniquement si l'agent a fait au moins 1 action (itérations > 1) 
+                    // et a produit un texte final.
+                    if (iterations > 1 && contentStr && iterations < MAX_ITERATIONS) {
+                        const runtime = container.get('runtime');
+                        // Extraire le but initial depuis userContent (qui peut être un string ou un array multimodal)
+                        const initialGoal = typeof userContent === 'string' ? userContent : JSON.stringify(userContent);
+                        
+                        const ralphEval = await runtime.ralph.verifyCompletion(initialGoal, contentStr);
+                        
+                        if (!ralphEval.is_complete && ralphEval.laziness_detected) {
+                            console.warn(`[Runtime:RALPH] 🥾 Agent paresseux détecté. Injection du kickback prompt.`);
+                            
+                            // On sauvegarde la réponse paresseuse dans l'historique
+                            history.push({
+                                role: 'assistant',
+                                content: contentStr
+                            });
+                            
+                            // On force la boucle à continuer avec l'intervention de RALPH
+                            history.push({
+                                role: 'user',
+                                content: `[SYSTEM SUPERVISOR: RALPH] ${ralphEval.kickback_message}`
+                            });
+                            
+                            continue; // 🔄 DÉCLENCHE UNE NOUVELLE ITÉRATION ReAct
+                        }
+                    }
+
                     // Fallback for thoughts-only (if it passed the defect check but still is practically empty)
                     const thoughtOnlyCheck = contentStr
                         .replace(/<(think|thought|thinking)>([\s\S]*?)<\/\1>/gi, '')
@@ -1545,6 +1580,31 @@ RULES:
                             content: `[SYSTEM REJECTION] : ACTION REJECTED by internal validator.\nReason: You thought inside your <thought> tags, but produced no final response for the user and called no tools.\n\nSYSTEM DIRECTIVE: This is an automatic interception. Immediately generate a direct user response without apologizing or justifying this omission. Do not reply to this system message.`
                         });
                         continue; // Force une itération supplémentaire
+                    }
+
+                    let lazyDetected = false;
+                    if (this.runtime?.ralph) {
+                        const initialGoal = typeof userContent === 'string' ? userContent : text;
+                        const ralphResult = await this.runtime.ralph.verifyCompletion(initialGoal, contentStr);
+                        if (ralphResult.laziness_detected && ralphRetries < MAX_RALPH_RETRIES && iterations < MAX_ITERATIONS) {
+                            ralphRetries++;
+                            lazyDetected = true;
+                            console.warn(`[Agent:RALPH] 🚨 Laziness detected! Initiating kickback (retry ${ralphRetries}/${MAX_RALPH_RETRIES}).`);
+                            
+                            history.push({
+                                role: 'assistant',
+                                content: contentStr
+                            });
+                            
+                            history.push({
+                                role: 'user',
+                                content: `[SYSTEM REJECTION] : ACTION REJECTED by Ralph Completion & Quality Controller.\nReason: ${ralphResult.kickback_message}\n\nSYSTEM DIRECTIVE: This is an automatic system interception, not a user message. You must resume work immediately, address all omissions, and complete the goal. DO NOT APOLOGIZE, do not acknowledge. Just complete the remaining steps.`
+                            });
+                        }
+                    }
+
+                    if (lazyDetected) {
+                        continue; // Force re-iteration
                     }
 
                     finalResponse = response.content;
@@ -1831,53 +1891,34 @@ RULES:
 
         console.log(`[SafeExecute] 🛡️ Exécution sécurisée demandée: ${toolName} (Level: ${authorityLevel})`);
 
+        if (chatId) {
+            await this.actionMemory.pulseAction(chatId);
+        }
+
         try {
-            // [MULTI-AGENT] Critique pour actions critiques
-            const { multiAgent } = await import('../services/agentic/MultiAgent.js');
-            if (multiAgent.needsCritique(toolCall, { ...context, isSuperUser, isGlobalAdmin, authorityLevel })) {
-                console.log(`[MultiAgent] 🕵️ Action critique détectée: ${toolName}`);
-                const critique: any = await multiAgent.critique(toolCall, {
-                    chatId,
-                    sender: message.sender,
-                    senderName: message.senderName,
-                    isGroup: message.isGroup,
-                    authorityLevel: authorityLevel
-                });
+            // [LEVEL 5] AIRuntimeInfrastructure: Sentinel VIGIL safety & coherence evaluation
+            const runtime = container.get('runtime');
+            if (runtime) {
+                const agentMemory = this.agentMemory;
+                const recentActions = chatId ? await agentMemory.getRecentActions(chatId, 5) : [];
+                
+                const evalResult = await runtime.sentinel.evaluate(toolCall, {
+                    senderName: message?.senderName || 'Anonymous',
+                    authorityLevel: authorityLevel,
+                    isGroup: message?.isGroup || false,
+                    chatId: chatId || 'unknown'
+                }, recentActions);
 
-                if (!critique.approved) {
-                    console.warn(`[MultiAgent] 🛑 Action refusée par Critic: ${critique.concerns.join('. ')}`);
+                if (!evalResult.allowed) {
+                    console.warn(`[Runtime:VIGIL] 🛑 Action blocked by Sentinel: ${evalResult.reason} (risk: ${evalResult.risk_level})`);
                     return {
                         success: false,
                         error: true,
-                        message: `ACTION_REFUSÉE_PAR_CRITIC: ${critique.concerns.join('. ')}. Alternative suggérée: ${critique.alternative || 'aucune'}`
-                    };
-                }
-            }
-
-            // [LEVEL 5] Boussole Morale Dynamique
-            const moralCompass = container.get('moralCompass');
-            if (moralCompass) {
-                console.log(`[MoralCompass] 🧭 Évaluation de l'action: ${toolName}`);
-                const evaluation = await moralCompass.evaluate(toolCall, {
-                    chatId,
-                    sender: message.sender,
-                    senderName: message.senderName,
-                    isGroup: message.isGroup,
-                    authorityLevel: authorityLevel || 'MEMBRE (Standard)'
-                });
-
-                if (!evaluation.allowed) {
-                    console.warn(`[MoralCompass] 🛑 Action refusée: ${evaluation.reason} (risk: ${evaluation.risk_level})`);
-                    // WHY: Structured refusal lets the LLM understand WHY it was blocked,
-                    // self-correct its approach, or inform the user with context.
-                    return {
-                        success: false,
-                        error: true,
-                        message: `TOOL_BLOCKED_BY_SECURITY_POLICY:\n`
+                        message: `TOOL_BLOCKED_BY_RUNTIME_SENTINEL:\n`
                             + `Tool: ${toolName}\n`
-                            + `Risk Level: ${evaluation.risk_level}\n`
-                            + `Reason: ${evaluation.reason}\n`
-                            + `Action Required: Inform the user of this limitation, or try an alternative approach that stays within your security boundaries.`
+                            + `Risk Level: ${evalResult.risk_level}\n`
+                            + `Reason: ${evalResult.reason}\n`
+                            + `Action Required: ${evalResult.intervention_prompt || 'Inform the user of this limitation, or try an alternative approach.'}`
                     };
                 }
             }
@@ -1913,23 +1954,6 @@ RULES:
                 parsedParams = JSON.parse(toolCall.function.arguments || '{}');
             } catch {
                 // Malformed JSON — use empty object for Observer/Evaluator
-            }
-
-            // [LEVEL 5] Observer Integration: Vérifier la cohérence après exécution
-            try {
-                const { multiAgent } = await import('../services/agentic/MultiAgent.js');
-                const agentMemory = this.agentMemory;
-                const recentActions = await agentMemory.getRecentActions(chatId, 5);
-                const coherence: any = await multiAgent.observe({
-                    tool: toolName,
-                    params: parsedParams
-                }, recentActions);
-
-                if (!coherence.coherent) {
-                    console.warn(`[MultiAgent] ⚠️ Incohérence détectée: ${coherence.warning} (${coherence.severity})`);
-                }
-            } catch (obsErr: any) {
-                console.warn('[Core] Erreur Observer:', obsErr.message);
             }
 
             // [EPISODIC MEMORY] Log de l'action réussie
@@ -2794,6 +2818,7 @@ ${textToCompress}`
         setTimeout(() => {
             // [WAKE] Arrêter proprement le heartbeat pour permettre un shutdown clean
             hiveWakeSystem.stop();
+            mailboxWatcher.stop();
             console.log('🛑 Arrêt du processus.');
             process.exit(0);
         }, 2000);

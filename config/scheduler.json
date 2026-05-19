@@ -111,6 +111,12 @@
             "cron": "0 2 * * 0",
             "enabled": true,
             "comment": "Exécuté tous les dimanches à 2h du matin"
+        },
+        {
+            "name": "consciousPulse",
+            "description": "True Heartbeat: Watchdog des actions en cours et relance du réveil.",
+            "cron": "*/5 * * * *",
+            "enabled": true
         }
     ],
     "triggers": {

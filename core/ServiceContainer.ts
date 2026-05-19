@@ -153,15 +153,15 @@ export class ServiceContainer {
         const { GeminiLiveProvider } = await import('../services/audio/geminiLiveProvider.js');
         this.register('geminiLiveProvider', new GeminiLiveProvider({ apiKey: geminiKey || '' }));
 
-        // 7. Reflection
+        // 7. Reflection & Runtime Infrastructure
         // WHY: These MUST be awaited. Fire-and-forget .then() caused a race condition
-        // where container.get('moralCompass') could throw if called before import resolved.
-        const [dreamModule, compassModule] = await Promise.all([
+        // where container.get('moralCompass')/('runtime') could throw if called before import resolved.
+        const [dreamModule, runtimeModule] = await Promise.all([
             import('../services/dreamService.js'),
-            import('../services/moralCompass.js'),
+            import('../services/runtime/RuntimeInfrastructure.js'),
         ]);
         this.register('dream', dreamModule.dreamService);
-        this.register('moralCompass', compassModule.moralCompass);
+        this.register('runtime', () => new runtimeModule.AIRuntimeInfrastructure(), { singleton: true });
 
         const { factsMemory, workspaceMemory } = await import('../services/memory.js');
         this.register('facts', factsMemory);

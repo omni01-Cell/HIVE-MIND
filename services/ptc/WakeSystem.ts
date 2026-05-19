@@ -19,6 +19,7 @@
  */
 
 import { EventEmitter } from 'node:events';
+import { redis, ensureConnected } from '../redisClient.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -70,7 +71,6 @@ export type WakeCallback = (event: WakeEvent) => Promise<void>;
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class HiveWakeSystem extends EventEmitter {
-    private readonly pendingEvents = new Map<string, WakeEvent>();
     private heartbeatInterval: NodeJS.Timeout | null = null;
     private readonly heartbeatIntervalMs: number;
     private wakeCallbacks = new Map<string, WakeCallback>();
@@ -95,7 +95,9 @@ export class HiveWakeSystem extends EventEmitter {
         if (this.heartbeatInterval) {
             return; // Déjà démarré
         }
-        this.heartbeatInterval = setInterval(() => this.tick(), this.heartbeatIntervalMs);
+        this.heartbeatInterval = setInterval(() => {
+            this.tick().catch(err => console.error('[WakeSystem] Heartbeat tick failed:', err));
+        }, this.heartbeatIntervalMs);
         console.log(`[WakeSystem] ✅ Heartbeat démarré (intervalle: ${this.heartbeatIntervalMs}ms)`);
     }
 
@@ -114,7 +116,7 @@ export class HiveWakeSystem extends EventEmitter {
      * Enregistre un Wake Event. Retourne son ID.
      * Utilisé par le script PTC via l'API `HIVE.sleepAndWake()`.
      */
-    scheduleWake(chatId: string, delayMs: number, prompt: string, backgroundCommandId?: string, checkEveryMs?: number): SleepResult {
+    async scheduleWake(chatId: string, delayMs: number, prompt: string, backgroundCommandId?: string, checkEveryMs?: number): Promise<SleepResult> {
         const id = `wake_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         const now = Date.now();
         const wakeAtMs = now + delayMs;
@@ -129,19 +131,48 @@ export class HiveWakeSystem extends EventEmitter {
             checkEveryMs,
         };
 
-        this.pendingEvents.set(id, event);
-
-        console.log(
-            `[WakeSystem] 📅 Wake Event programmé: id=${id}, chatId=${chatId}, ` +
-            `dans ${Math.round(delayMs / 1000)}s, prompt="${prompt.slice(0, 60)}..."`
-        );
+        await ensureConnected();
+        if (redis.isOpen) {
+            await redis.hSet('hive:wake_events', id, JSON.stringify(event));
+            console.log(
+                `[WakeSystem] 📅 Wake Event programmé (Redis): id=${id}, chatId=${chatId}, ` +
+                `dans ${Math.round(delayMs / 1000)}s, prompt="${prompt.slice(0, 60)}..."`
+            );
+        } else {
+            console.error('[WakeSystem] Redis not open. Wake event scheduling failed.');
+        }
 
         return {
             type: 'SLEEP_SCHEDULED',
             wakeEventId: id,
             wakeAtMs,
-            message: `Wake event enregistré. HIVE-MIND se réveillera automatiquement dans ${Math.round(delayMs / 1000)} secondes et injectera le prompt: "${prompt}"`,
+            message: `Wake event enregistré dans la DB. Réveil dans ${Math.round(delayMs / 1000)}s.`,
         };
+    }
+
+    /**
+     * Retrieves wake events that have passed their wake time, deleting them from Redis.
+     */
+    async getMissedWakes(): Promise<WakeEvent[]> {
+        await ensureConnected();
+        if (!redis.isOpen) return [];
+        const eventsObj = await redis.hGetAll('hive:wake_events');
+        const now = Date.now();
+        const missed: WakeEvent[] = [];
+
+        for (const [id, eventStr] of Object.entries(eventsObj)) {
+            try {
+                const event = JSON.parse(eventStr) as WakeEvent;
+                if (event.wakeAtMs <= now) {
+                    missed.push(event);
+                    await redis.hDel('hive:wake_events', id);
+                }
+            } catch (e: any) {
+                console.error('[WakeSystem] Error parsing wake event:', e.message);
+                await redis.hDel('hive:wake_events', id); // Clean invalid data
+            }
+        }
+        return missed;
     }
 
     /**
@@ -179,23 +210,32 @@ export class HiveWakeSystem extends EventEmitter {
                 }
                 // Plafonner à 24h pour éviter les oublis
                 const clampedDelay = Math.min(delayMs, 24 * 60 * 60 * 1000);
-                return self.scheduleWake(chatId, clampedDelay, wakePrompt);
+                return await self.scheduleWake(chatId, clampedDelay, wakePrompt);
             },
 
             async waitForBackground(commandId: string, checkEveryMs: number = 10_000, wakePrompt: string): Promise<SleepResult> {
                 // Programme un premier check après checkEveryMs.
                 // Le tick() vérifiera le commandId et re-planifiera si toujours en cours.
                 const clampedInterval = Math.max(checkEveryMs, 3_000); // Min 3s
-                return self.scheduleWake(chatId, clampedInterval, wakePrompt, commandId, clampedInterval);
+                return await self.scheduleWake(chatId, clampedInterval, wakePrompt, commandId, clampedInterval);
             },
         };
     }
 
     /**
-     * Retourne le nombre de wake events en attente.
+     * Retourne le nombre de wake events en attente (legacy getter).
      */
     get pendingCount(): number {
-        return this.pendingEvents.size;
+        return 0;
+    }
+
+    /**
+     * Retourne le nombre de wake events en attente depuis Redis.
+     */
+    async getPendingCount(): Promise<number> {
+        await ensureConnected();
+        if (!redis.isOpen) return 0;
+        return await redis.hLen('hive:wake_events');
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -206,20 +246,12 @@ export class HiveWakeSystem extends EventEmitter {
      * Tick du heartbeat. Appelé toutes les `heartbeatIntervalMs` ms.
      * Vérifie les events expirés et les dispatch aux callbacks enregistrés.
      */
-    private tick(): void {
-        if (this.pendingEvents.size === 0) return;
+    private async tick(): Promise<void> {
+        await ensureConnected();
+        if (!redis.isOpen) return;
 
-        const now = Date.now();
-        const toFire: WakeEvent[] = [];
-
-        for (const [id, event] of this.pendingEvents) {
-            if (event.wakeAtMs <= now) {
-                toFire.push(event);
-                this.pendingEvents.delete(id);
-            }
-        }
-
-        for (const event of toFire) {
+        const missed = await this.getMissedWakes();
+        for (const event of missed) {
             this.fireWakeEvent(event);
         }
     }

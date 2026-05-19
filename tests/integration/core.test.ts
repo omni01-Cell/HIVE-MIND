@@ -37,14 +37,21 @@ jest.unstable_mockModule('../../core/transport/baileys.js', () => ({
     }
 }));
 
-// Mock CostTracker to prevent budget from interfering with integration tests
-jest.unstable_mockModule('../../services/finops/CostTracker.js', () => ({
-    costTracker: {
-        recordUsage: jest.fn(() => ({ budgetSafe: true, totalCost: 0, sessionTotal: 0 })),
-        getSessionCost: jest.fn(() => 0),
-        reset: jest.fn()
-    },
-    CostTracker: jest.fn()
+// Mock RuntimeInfrastructure to prevent budget and sentinel from interfering with integration tests
+jest.unstable_mockModule('../../services/runtime/RuntimeInfrastructure.js', () => ({
+    runtime: {
+        finOps: {
+            recordUsage: jest.fn(() => ({ budgetSafe: true, totalCost: 0, sessionTotal: 0 })),
+            calculateLambda: jest.fn(() => 0),
+            getSessionCost: jest.fn(() => 0)
+        },
+        sentinel: {
+            evaluate: jest.fn(async () => ({ allowed: true, risk_level: 'low', reason: 'mock' }))
+        },
+        ralph: {
+            verifyCompletion: jest.fn(async () => ({ is_complete: true, laziness_detected: false, kickback_message: null }))
+        }
+    }
 }));
 
 // Mock PermissionManager to auto-approve in tests
@@ -105,7 +112,20 @@ jest.spyOn(container, 'get').mockImplementation((name: string) => {
         actionMemory: { getResumableActions: jest.fn(async () => []) },
         facts: {},
         voiceProvider: {},
-        quotaManager: {}
+        quotaManager: {},
+        runtime: {
+            finOps: {
+                recordUsage: jest.fn(() => ({ budgetSafe: true, totalCost: 0, sessionTotal: 0 })),
+                calculateLambda: jest.fn(() => 0),
+                getSessionCost: jest.fn(() => 0)
+            },
+            sentinel: {
+                evaluate: jest.fn(async () => ({ allowed: true, risk_level: 'low', reason: 'mock' }))
+            },
+            ralph: {
+                verifyCompletion: jest.fn(async () => ({ is_complete: true, laziness_detected: false, kickback_message: null }))
+            }
+        }
     };
     return mockServices[name] || {};
 });
@@ -164,11 +184,11 @@ describe('BotCore Integration (Phase 4 MODs)', () => {
         expect(typeof permissionManager.handleAdminCommand).toBe('function');
     });
 
-    // ── MOD 4: CostTracker integrated in provider call ──
+    // ── MOD 4: RuntimeFinOps integrated in provider call ──
 
-    it('CostTracker mock returns budgetSafe=true during integration', async () => {
-        const { costTracker } = await import('../../services/finops/CostTracker.js');
-        const record = costTracker.recordUsage('gpt-4o-mini', 1000, 500);
+    it('RuntimeFinOps mock returns budgetSafe=true during integration', async () => {
+        const runtime = container.get('runtime') as any;
+        const record = runtime.finOps.recordUsage('gpt-4o-mini', 1000, 500);
         expect(record.budgetSafe).toBe(true);
     });
 

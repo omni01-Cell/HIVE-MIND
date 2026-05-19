@@ -18,9 +18,9 @@ jest.unstable_mockModule('../../services/supabase.js', () => ({
     }
 }));
 
-// Mock CostTracker
-jest.unstable_mockModule('../../services/finops/CostTracker.js', () => ({
-    costTracker: {
+// Mock RuntimeInfrastructure
+const mockRuntime = {
+    finOps: {
         recordUsage: jest.fn((model: string, pt: number, ct: number) => ({
             model,
             promptTokens: pt,
@@ -31,10 +31,16 @@ jest.unstable_mockModule('../../services/finops/CostTracker.js', () => ({
             sessionTotal: 0,
             budgetSafe: true
         })),
-        getSessionCost: jest.fn(() => 0),
-        reset: jest.fn()
-    },
-    CostTracker: class {}
+        calculateLambda: jest.fn(() => 0),
+        getSessionCost: jest.fn(() => 0)
+    }
+};
+
+jest.unstable_mockModule('../../services/runtime/RuntimeInfrastructure.js', () => ({
+    runtime: mockRuntime,
+    AIRuntimeInfrastructure: class {
+        finOps = mockRuntime.finOps;
+    }
 }));
 
 // Mock redis
@@ -58,7 +64,7 @@ jest.unstable_mockModule('../../services/redisClient.js', () => ({
 const { redis } = await import('../../services/redisClient.js');
 const { userService } = await import('../../services/userService.js');
 const { StateManager } = await import('../../services/state/StateManager.js');
-const { costTracker } = await import('../../services/finops/CostTracker.js');
+const { runtime } = await import('../../services/runtime/RuntimeInfrastructure.js');
 const { default: db } = await import('../../services/supabase.js');
 
 describe('Services Integration (Phase 4 MODs)', () => {
@@ -131,16 +137,16 @@ describe('Services Integration (Phase 4 MODs)', () => {
         expect(result).toBeNull();
     });
 
-    // ── MOD 4: CostTracker session integration ──
+    // ── MOD 4: RuntimeFinOps session integration ──
 
-    it('costTracker.recordUsage returns budgetSafe=true for free models', () => {
-        const record = costTracker.recordUsage('qwen/qwen3-32b', 10000, 5000);
+    it('runtime.finOps.recordUsage returns budgetSafe=true for free models', () => {
+        const record = runtime.finOps.recordUsage('qwen/qwen3-32b', 10000, 5000);
         expect(record.totalCost).toBe(0);
         expect(record.budgetSafe).toBe(true);
     });
 
-    it('costTracker.getSessionCost returns a number', () => {
-        expect(typeof costTracker.getSessionCost()).toBe('number');
+    it('runtime.finOps.getSessionCost returns a number', () => {
+        expect(typeof runtime.finOps.getSessionCost()).toBe('number');
     });
 
     // ── MOD 9: StateManager UUID-based cache key ──

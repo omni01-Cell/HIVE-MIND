@@ -7,6 +7,9 @@ import { eventBus, BotEvents } from '../events.js';
 import { container } from '../ServiceContainer.js';
 import { workingMemory } from '../../services/workingMemory.js';
 import { db } from '../../services/supabase.js';
+import { eventInboxService } from '../../services/events/EventInboxService.js';
+import { actionMemory } from '../../services/memory/ActionMemory.js';
+import { hiveWakeSystem } from '../../services/ptc/WakeSystem.js';
 
 /**
  * Gestionnaire des jobs planifiés
@@ -94,6 +97,10 @@ export class SchedulerHandler {
 
             case 'dbCleanup':
                 await this._handleDBCleanup();
+                break;
+
+            case 'consciousPulse':
+                await this._handleConsciousPulse();
                 break;
 
             default:
@@ -491,6 +498,75 @@ ${textToAnalyze}
             await cleanupOldData();
         } catch (e: any) {
             console.error('[Scheduler] Erreur dbCleanup:', e.message);
+        }
+    }
+
+    async _handleConsciousPulse() {
+        console.log('[Watchdog] 💓 Audit système (Inbox, Crash Recovery, WakeEvents)...');
+        try {
+            // 1. Check Inbox
+            const unreadEvents = await eventInboxService.getUnreadEvents(10);
+            
+            // 2. Check Zombies (tâches inactives depuis > 5 minutes)
+            const stalledActions = await actionMemory.getStalledActions(5 * 60 * 1000);
+            for (const action of stalledActions) {
+                console.log(`[Watchdog] 🧟 Zombie détecté : ${action.type} (Chat: ${action.chatId})`);
+                await actionMemory.interruptAction(action.chatId, "TIMEOUT: Action stalled for more than 5 minutes.");
+                
+                if (this.transport && typeof this.transport.sendText === 'function') {
+                    await this.transport.sendText(action.chatId, `⚠️ **Action Interrompue** : L'action \`${action.type}\` a été stoppée car elle ne répondait plus depuis 5 minutes.`);
+                }
+            }
+            
+            // 3. Check Wake Events échus
+            const missedWakes = await hiveWakeSystem.getMissedWakes();
+            
+            // 4. Si rien, on ne réveille pas le LLM
+            if (unreadEvents.length === 0 && stalledActions.length === 0 && missedWakes.length === 0) {
+                return;
+            }
+            
+            console.log(`[Watchdog] ⚠️ Réveil requis : ${unreadEvents.length} events, ${stalledActions.length} crashs, ${missedWakes.length} réveils.`);
+            
+            let wakeupPrompt = `[SYSTEM WATCHDOG & RECOVERY PROTOCOL]\nTu as été réveillé par le Heartbeat du système.\n\n`;
+            
+            if (unreadEvents.length > 0) {
+                wakeupPrompt += `📥 NOUVEAUX ÉVÉNEMENTS:\nTu as ${unreadEvents.length} événements dans ton Inbox. Utilise l'outil \`read_event_inbox\` pour les lire, traite-les, puis utilise \`clear_event_inbox\`.\n\n`;
+            }
+            
+            if (missedWakes.length > 0) {
+                wakeupPrompt += `⏰ RAPPELS / TÂCHES DE FOND (WakeSystem):\n`;
+                missedWakes.forEach(w => {
+                    wakeupPrompt += `- Contexte/Chat: ${w.chatId} | Consigne: "${w.prompt}"\n`;
+                });
+                wakeupPrompt += `Exécute ces consignes maintenant (utilise send_message pour notifier l'utilisateur concerné si nécessaire).\n\n`;
+            }
+            
+            if (stalledActions.length > 0) {
+                wakeupPrompt += `🚨 TÂCHES INTERROMPUES (CRASH RECOVERY):\n`;
+                stalledActions.forEach(a => {
+                    wakeupPrompt += `- Chat: ${a.chatId} | Outil: ${a.type} | Objectif: "${a.goal}"\n`;
+                });
+                wakeupPrompt += `Il semble que tu aies crashé pendant ces tâches. Analyse la situation et reprends l'exécution si possible.\n\n`;
+            }
+            
+            wakeupPrompt += `DIRECTIVE: Gère cette file d'attente. Une fois terminé ou si tu n'as rien de concret à faire, réponds UNIQUEMENT par le token "__HIVE_SILENT_7f3a__" pour te rendormir silencieusement.`;
+            
+            if (this.messageHandler) {
+                await this.messageHandler({
+                    data: {
+                        isGroup: false,
+                        chatId: 'system_internal_mind',
+                        text: wakeupPrompt,
+                        senderName: "SYSTEM_WATCHDOG",
+                        sender: "system@internal",
+                        isSystem: true,
+                        sourceChannel: 'internal'
+                    }
+                });
+            }
+        } catch (e: any) {
+            console.error('[Scheduler] Erreur consciousPulse:', e.message);
         }
     }
 }

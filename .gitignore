@@ -52,3 +52,4 @@ storage_hm/benchmark_test/
 storage_hm/portfolio_site/
 storage_hm/screenshots/*.png
 AGENTS.md
+analysis_results.txt\nanalyze_graph.py

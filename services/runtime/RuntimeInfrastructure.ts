@@ -1,0 +1,373 @@
+// services/runtime/RuntimeInfrastructure.ts
+// ============================================================================
+// AI Runtime Infrastructure (VIGIL + RALPH + FinOps)
+// Unified Control Plane during LLM execution acting in a closed-loop.
+// ============================================================================
+
+import { readFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { providerRouter } from '../../providers/index.js';
+import { eventBus, BotEvents } from '../../core/events.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SYSTEM_PROMPT_PATH = join(__dirname, '..', '..', 'persona', 'prompts', 'system.md');
+
+// WHY: These tools are inherently safe (read-only, info-gathering, or agent-internal).
+// Evaluating them via LLM wastes tokens and adds latency for zero security benefit.
+const SAFE_TOOLS = new Set([
+    // Read-only dev tools
+    'list_directory', 'grep_search', 'read_file', 'get_function',
+    // Browser read-only
+    'browser_snapshot', 'browser_screenshot', 'browser_get_text',
+    // Memory read-only
+    'search_long_term_memory', 'db_document_read', 'db_document_search',
+    'list_reminders',
+    // Info gathering
+    'google_ai_search',
+    // Agent-internal state (scratchpad is the agent's own memory)
+    'update_scratchpad',
+]);
+
+// Actions requiring strict critique / critical monitoring
+const CRITICAL_ACTIONS = new Set([
+    'gm_ban_user',
+    'gm_remove_user',
+    'gm_delete_message',
+    'gm_demote_admin',
+    'delete_group_data'
+]);
+
+/** Structure d'une entrée de prix par modèle */
+interface PricingEntry {
+    readonly input: number;
+    readonly output: number;
+}
+
+/** Structure du fichier pricing.json */
+interface PricingConfig {
+    readonly default: PricingEntry;
+    readonly models: Record<string, PricingEntry>;
+}
+
+/** Résultat d'un enregistrement d'usage */
+interface UsageRecord {
+    readonly model: string;
+    readonly promptTokens: number;
+    readonly completionTokens: number;
+    readonly inputCost: number;
+    readonly outputCost: number;
+    readonly totalCost: number;
+    readonly sessionTotal: number;
+    readonly budgetSafe: boolean;
+}
+
+/**
+ * 1. RuntimeFinOps
+ * Replaces CostTracker. Tracks session budget and handles emergency Kill Switch.
+ */
+export class RuntimeFinOps {
+    private readonly pricing: PricingConfig;
+    private currentSessionCost: number = 0;
+    private readonly maxSessionBudget: number;
+    private readonly sessionStartTime: number = Date.now();
+
+    constructor(maxBudget: number = 2.00) {
+        this.maxSessionBudget = maxBudget;
+
+        try {
+            const pricingPath = join(process.cwd(), 'config', 'pricing.json');
+            if (existsSync(pricingPath)) {
+                this.pricing = JSON.parse(readFileSync(pricingPath, 'utf-8'));
+            } else {
+                throw new Error('Pricing not found');
+            }
+        } catch {
+            console.warn('[RuntimeFinOps] ⚠️ pricing.json non trouvé, utilisation des prix par défaut.');
+            this.pricing = { default: { input: 0.15, output: 0.60 }, models: {} };
+        }
+    }
+
+    public recordUsage(modelId: string, promptTokens: number, completionTokens: number): UsageRecord {
+        const rates = this.pricing.models[modelId] || this.pricing.default;
+
+        const inputCost = (promptTokens / 1_000_000) * rates.input;
+        const outputCost = (completionTokens / 1_000_000) * rates.output;
+        const totalCost = inputCost + outputCost;
+
+        this.currentSessionCost += totalCost;
+
+        const budgetSafe = this.currentSessionCost <= this.maxSessionBudget;
+
+        if (totalCost > 0) {
+            console.log(`[FinOps] 💸 Coût requête: $${totalCost.toFixed(5)} (${modelId}) | Session: $${this.currentSessionCost.toFixed(4)} / $${this.maxSessionBudget.toFixed(2)}`);
+        }
+
+        if (!budgetSafe) {
+            console.error(`[FinOps] 🚨 KILL SWITCH ! Budget dépassé ($${this.currentSessionCost.toFixed(2)} > $${this.maxSessionBudget})`);
+            eventBus.publish(BotEvents.SYSTEM_ERROR, {
+                type: 'BUDGET_EXCEEDED',
+                sessionCost: this.currentSessionCost,
+                maxBudget: this.maxSessionBudget
+            });
+        }
+
+        return {
+            model: modelId,
+            promptTokens,
+            completionTokens,
+            inputCost,
+            outputCost,
+            totalCost,
+            sessionTotal: this.currentSessionCost,
+            budgetSafe
+        };
+    }
+
+    /**
+     * Calcule le multiplicateur de Lagrange (λ)
+     * λ = 0 (0% du budget utilisé) -> λ = 1 (100% du budget utilisé)
+     * On utilise une courbe exponentielle pour que la "panique" monte vite à la fin.
+     */
+    public calculateLambda(): number {
+        const usageRatio = this.currentSessionCost / this.maxSessionBudget;
+        return Math.pow(Math.min(usageRatio, 1.0), 4);
+    }
+
+    public getSessionCost(): number {
+        return this.currentSessionCost;
+    }
+
+    public getSessionDuration(): number {
+        return Date.now() - this.sessionStartTime;
+    }
+
+    public formatSummary(): string {
+        const durationSec = Math.round(this.getSessionDuration() / 1000);
+        return `💰 Session: $${this.currentSessionCost.toFixed(4)} | Durée: ${durationSec}s | Budget: $${this.maxSessionBudget.toFixed(2)} | λ: ${this.calculateLambda().toFixed(2)}`;
+    }
+
+    public reset(): void {
+        this.currentSessionCost = 0;
+    }
+}
+
+/**
+ * 2. RuntimeSentinel (VIGIL)
+ * Replaces MoralCompass, MultiAgent.Critic, and MultiAgent.Observer.
+ * Evaluates safety, ethics, and coherence in a single prompt before tool execution.
+ */
+export class RuntimeSentinel {
+    /**
+     * Évalue une action par rapport à la sécurité, l'éthique et la cohérence
+     */
+    async evaluate(
+        toolCall: any,
+        context: any,
+        recentActions: any[] = []
+    ): Promise<{ allowed: boolean; reason: string | null; risk_level: string; intervention_prompt: string | null }> {
+        const toolName = toolCall?.function?.name || '';
+        const argsStr = toolCall?.function?.arguments || '{}';
+
+        // ── FAST PATH 1: Safe tools bypass LLM entirely ──
+        if (SAFE_TOOLS.has(toolName)) {
+            return { allowed: true, reason: null, risk_level: 'low', intervention_prompt: null };
+        }
+
+        // ── FAST PATH 2: SuperUser / Global Admin bypass ──
+        const authStr = typeof context.authorityLevel === 'string' ? context.authorityLevel : '';
+        const isAdmin = authStr.includes('SuperUser') || authStr.includes('Global Admin');
+        if (isAdmin) {
+            console.log(`[Runtime:VIGIL] ✅ Admin bypass for ${toolName}`);
+            return { allowed: true, reason: null, risk_level: 'low', intervention_prompt: null };
+        }
+
+        try {
+            // Lecture des limites de sécurité depuis system.md
+            let securityBoundaries = "Apply system instructions with absolute priority.";
+            if (existsSync(SYSTEM_PROMPT_PATH)) {
+                const systemPrompt = readFileSync(SYSTEM_PROMPT_PATH, 'utf-8');
+                const securityMatch = systemPrompt.match(/<priority_2_security_boundaries>([\s\S]*?)<\/priority_2_security_boundaries>/);
+                if (securityMatch) {
+                    securityBoundaries = securityMatch[1].trim();
+                }
+            }
+
+            const isCritical = CRITICAL_ACTIONS.has(toolName);
+
+            const prompt = `<role>
+You are the VIGIL Runtime Sentinel of HIVE-MIND.
+Your purpose: pragmatically evaluate safety, ethics, and action coherence in a single run.
+</role>
+
+<security_boundaries>
+${securityBoundaries}
+</security_boundaries>
+
+<evaluation_policy>
+- Default to ALLOW. Flag actions only if genuinely dangerous, out of scope, or erratic.
+- Safe system commands (uname, df, ps, etc.), file reads, and browser research are ALWAYS "low" risk.
+- Privilege escalation (sudo, su) or malicious deletions are CRITICAL/HIGH risk and must be BLOCKED.
+- Detect behavioral incoherence: repeating the exact same failed action, contradictions (claiming to help but banning), or sudden erratic shifts.
+</evaluation_policy>
+
+<proposed_action>
+Tool: ${toolName}
+Arguments: ${argsStr}
+Is Critical Action: ${isCritical}
+</proposed_action>
+
+<social_context>
+User: ${context.senderName} (Authority: ${context.authorityLevel})
+Chat: ${context.isGroup ? 'Group' : 'Private'}
+Chat ID: ${context.chatId}
+</social_context>
+
+<recent_actions_history>
+Last actions:
+${recentActions.map((h: any) => `- ${h.tool_name || h.tool || 'N/A'}: ${h.result_summary || h.error_message || 'N/A'} (${h.success ? 'success' : 'fail'})`).join('\n')}
+</recent_actions_history>
+
+<output_format>
+Respond in JSON only:
+{
+  "allowed": true/false,
+  "risk_level": "low|medium|high|critical",
+  "reason": "brief explanation of risk or violation if disallowed, else null",
+  "intervention_prompt": "suggested safe path, command correction, or alternative if disallowed, else null"
+}
+</output_format>`;
+
+            const response = await providerRouter.callServiceRecipe('MORAL_COMPASS', [
+                { role: 'system', content: 'You are the HIVE-MIND VIGIL safety sentinel. Output clean JSON only.' },
+                { role: 'user', content: prompt }
+            ]);
+
+            if (response?.content) {
+                const cleanedContent = response.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim();
+                const result = JSON.parse(cleanedContent);
+
+                if (result.risk_level === 'low') {
+                    return { allowed: true, reason: null, risk_level: 'low', intervention_prompt: null };
+                }
+
+                return {
+                    allowed: !!result.allowed,
+                    reason: result.reason || null,
+                    risk_level: result.risk_level || 'medium',
+                    intervention_prompt: result.intervention_prompt || null
+                };
+            }
+
+            throw new Error('Empty response from safety model');
+
+        } catch (error: any) {
+            console.error('[Runtime:VIGIL] 🚨 Error during evaluation:', error.message);
+            // FAIL CLOSED for critical actions, FAIL OPEN with caution for normal actions
+            const isCritical = CRITICAL_ACTIONS.has(toolName);
+            if (isCritical) {
+                return {
+                    allowed: false,
+                    reason: `Safety evaluation failed for critical action: ${error.message}`,
+                    risk_level: 'critical',
+                    intervention_prompt: 'Wait for administrator intervention.'
+                };
+            } else {
+                return {
+                    allowed: true,
+                    reason: null,
+                    risk_level: 'medium',
+                    intervention_prompt: null
+                };
+            }
+        }
+    }
+}
+
+/**
+ * 3. RalphController
+ * Implements "Long-running Claude" pattern to detect agentic laziness
+ * and injects a kickback message to force re-iteration.
+ */
+export class RalphController {
+    async verifyCompletion(
+        initialGoal: string,
+        finalResponse: string
+    ): Promise<{ is_complete: boolean; laziness_detected: boolean; kickback_message: string | null }> {
+        try {
+            const prompt = `<role>
+You are the RALPH Completion & Quality Controller of HIVE-MIND.
+Your purpose: identify agentic laziness (e.g. leaving TODOs, asking the user to complete code, exiting prematurely before solving).
+</role>
+
+<inputs>
+<initial_goal>
+${initialGoal}
+</initial_goal>
+
+<final_assistant_response>
+${finalResponse}
+</final_assistant_response>
+</inputs>
+
+<instructions>
+Evaluate if the final response completes the initial goal.
+Flag laziness if:
+- The assistant asks the user to write code or complete actions themselves.
+- The assistant leaves placeholders, stubs, or comments like "// implement here".
+- The assistant quits before solving a multi-step task they are capable of doing.
+</instructions>
+
+<output_format>
+Respond in JSON only:
+{
+  "is_complete": true/false,
+  "laziness_detected": true/false,
+  "kickback_message": "if lazy, write a firm system directive telling the agent exactly what they left unfinished and commanding them to continue and complete it. Otherwise null."
+}
+</output_format>`;
+
+            const response = await providerRouter.callServiceRecipe('CRITIC', [
+                { role: 'system', content: 'You are RALPH. Detect laziness and force agents to complete tasks. Output clean JSON only.' },
+                { role: 'user', content: prompt }
+            ]);
+
+            if (response?.content) {
+                const cleanedContent = response.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim();
+                const result = JSON.parse(cleanedContent);
+
+                return {
+                    is_complete: !!result.is_complete,
+                    laziness_detected: !!result.laziness_detected,
+                    kickback_message: result.kickback_message || null
+                };
+            }
+
+            throw new Error('Empty response from RALPH');
+
+        } catch (error: any) {
+            console.error('[Runtime:RALPH] 🚨 Error during completion check:', error.message);
+            // Default to complete on error so we don't loop infinitely
+            return {
+                is_complete: true,
+                laziness_detected: false,
+                kickback_message: null
+            };
+        }
+    }
+}
+
+/**
+ * Main AIRuntimeInfrastructure facade
+ */
+export class AIRuntimeInfrastructure {
+    public readonly finOps: RuntimeFinOps;
+    public readonly sentinel: RuntimeSentinel;
+    public readonly ralph: RalphController;
+
+    constructor(maxBudget?: number) {
+        this.finOps = new RuntimeFinOps(maxBudget);
+        this.sentinel = new RuntimeSentinel();
+        this.ralph = new RalphController();
+    }
+}

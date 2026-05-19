@@ -8,9 +8,23 @@ import { fileURLToPath, pathToFileURL } from 'url';
 // LLM classifier permanently disabled — category is now always
 // provided by the caller (e.g. category: 'AGENTIC') or defaults to AGENTIC.
 import { envResolver } from '../services/envResolver.js';
-import { costTracker } from '../services/finops/CostTracker.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+let activeRuntime: any = null;
+async function getRuntime() {
+    if (activeRuntime) return activeRuntime;
+    try {
+        const { container } = await import('../core/ServiceContainer.js');
+        if (container.has('runtime')) {
+            activeRuntime = container.get('runtime');
+            return activeRuntime;
+        }
+    } catch {}
+    const { AIRuntimeInfrastructure } = await import('../services/runtime/RuntimeInfrastructure.js');
+    activeRuntime = new AIRuntimeInfrastructure();
+    return activeRuntime;
+}
 
 // Charger les configurations
 let modelsConfig: any, credentials: any;
@@ -474,9 +488,20 @@ class ProviderRouter {
                             keyIndex = bestKeyIndex;
                         }
 
+                        // ── KKT Lagrangian Throttling ──
+                        const runtimeInstance = await getRuntime();
+                        const lambda = runtimeInstance.finOps.calculateLambda();
+                        let activeOptions = { ...options };
+                        if (lambda > 0.05) {
+                            const baseMaxTokens = options.max_tokens || 4096;
+                            const throttledMaxTokens = Math.max(200, Math.floor(baseMaxTokens * (1 - lambda)));
+                            activeOptions.max_tokens = throttledMaxTokens;
+                            console.log(`[Router:KKT] ⚠️ Budget Slack depletion detected (λ = ${lambda.toFixed(2)}). Throttling max_tokens: ${baseMaxTokens} → ${throttledMaxTokens}`);
+                        }
+
                         console.log(`[Router] 🚀 Tentative: ${family} → ${model} (Clé ${keyIndex})`);
                         const result = await adapter.chat(messages, {
-                            ...options,
+                            ...activeOptions,
                             model,
                             apiKey: this.getApiKey(family, keyIndex),
                             keyIndex, // Passer l'index pour que l'adapter puisse incrémenter le bon compteur
@@ -486,10 +511,10 @@ class ProviderRouter {
                         // ✅ SUCCÈS
                         this._resetCircuit(family);
 
-                        // 💰 [FINOPS] Enregistrer le coût via CostTracker (Kill Switch)
+                        // 💰 [FINOPS] Enregistrer le coût via AIRuntimeInfrastructure (Kill Switch)
                         const promptTokens = result.usage?.prompt_tokens || 0;
                         const completionTokens = result.usage?.completion_tokens || 0;
-                        const usageRecord = costTracker.recordUsage(model, promptTokens, completionTokens);
+                        const usageRecord = runtimeInstance.finOps.recordUsage(model, promptTokens, completionTokens);
 
                         if (!usageRecord.budgetSafe) {
                             throw new Error('BUDGET_EXCEEDED: Le budget maximum de la session a été atteint. Arrêt de sécurité.');

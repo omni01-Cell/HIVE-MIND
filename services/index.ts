@@ -19,7 +19,6 @@ export { redis, ensureConnected } from './redisClient.js';
 // =================== CONSCIENCE & RÉFLEXION ===================
 export { consciousness } from './consciousnessService.js';
 export { dreamService } from './dreamService.js';
-export { moralCompass } from './moralCompass.js';
 export { feedbackService } from './feedbackService.js';
 
 // =================== AGENTS & PROACTIVITÉ ===================

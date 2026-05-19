@@ -427,6 +427,45 @@ ${stepsText}
       return false;
     }
   }
+
+  /**
+   * Updates the heartbeat (pulse) of an ongoing action.
+   */
+  async pulseAction(chatId: string): Promise<void> {
+    try {
+      const key = `${this.keyPrefix}${chatId}`;
+      await redis.hSet(key, 'updatedAt', Date.now().toString());
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[ActionMemory] pulseAction error:', msg);
+    }
+  }
+
+  /**
+   * Retrieves actions that haven't pulsed recently (Crashed/Stalled).
+   */
+  async getStalledActions(stalledThresholdMs: number = 5 * 60 * 1000): Promise<Record<string, string>[]> {
+    try {
+      const keys = await redis.keys('action:*');
+      const stalled: Record<string, string>[] = [];
+      const now = Date.now();
+      
+      for (const key of keys) {
+        const data = await redis.hGetAll(key);
+        if (data && data.status === 'active') {
+          const lastUpdate = parseInt(data.updatedAt || data.startedAt);
+          if (now - lastUpdate > stalledThresholdMs) {
+            stalled.push(data);
+          }
+        }
+      }
+      return stalled;
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[ActionMemory] getStalledActions error:', msg);
+      return [];
+    }
+  }
 }
 
 export const actionMemory = new ActionMemory();

@@ -58,6 +58,7 @@ const { eventBus, BotEvents } = await import('../../core/events.js');
 const { permissionManager } = await import('../../core/security/PermissionManager.js');
 const { scheduler } = await import('../../scheduler/index.js');
 const { hiveWakeSystem } = await import('../../services/ptc/WakeSystem.js');
+const { mailboxWatcher } = await import('../../services/events/MailboxWatcher.js');
 const { disconnect: disconnectRedis } = await import('../../services/redisClient.js');
 
 describe('Bot E2E Flow (Phase 4 MODs)', () => {
@@ -123,6 +124,9 @@ describe('Bot E2E Flow (Phase 4 MODs)', () => {
         }
         if (hiveWakeSystem) {
             hiveWakeSystem.stop();
+        }
+        if (mailboxWatcher) {
+            mailboxWatcher.stop();
         }
         await disconnectRedis();
     });
