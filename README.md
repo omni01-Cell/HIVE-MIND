@@ -23,7 +23,6 @@
   <img src="https://img.shields.io/badge/Version-3.5.0-0D1117?style=flat-square&labelColor=0D1117&color=3FB950" alt="Version" />
   <img src="https://img.shields.io/badge/TypeScript-Strict-0D1117?style=flat-square&labelColor=0D1117&color=3178C6&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/License-MIT-0D1117?style=flat-square&labelColor=0D1117&color=F0883E" alt="License" />
-  <img src="https://img.shields.io/badge/Autonomy-Level_5-0D1117?style=flat-square&labelColor=0D1117&color=A371F7" alt="Autonomy" />
   <img src="https://img.shields.io/badge/Node.js-18+-0D1117?style=flat-square&labelColor=0D1117&color=3FB950&logo=node.js&logoColor=white" alt="Node.js" />
 </p>
 
