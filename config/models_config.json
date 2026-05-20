@@ -118,11 +118,11 @@
             "categories": {
                 "CODING": {
                     "primary": "moonshotai/kimi-k2.6",
-                    "fallback": "gemini-3.1-pro-preview",
+                    "fallback": "gemini-3.5-flash",
                     "description": "Code complexe, algorithmes, debugging"
                 },
                 "REASONING": {
-                    "primary": "gemini-3.1-pro-preview",
+                    "primary": "gemini-3.5-flash",
                     "fallback": "openai/gpt-oss-120b",
                     "description": "Logique, mathématiques, raisonnement profond"
                 },
@@ -132,12 +132,12 @@
                     "description": "Salutations, questions simples, chat rapide sans petit modèle"
                 },
                 "MULTIMODAL": {
-                    "primary": "gemini-3.1-pro-preview",
+                    "primary": "gemini-3.5-flash",
                     "fallback": "gemini-2.5-flash",
                     "description": "Texte + Image + Audio combinés"
                 },
                 "VISION": {
-                    "primary": "gemini-3.1-pro-preview",
+                    "primary": "gemini-3.5-flash",
                     "fallback": "gemini-2.5-flash",
                     "description": "Analyse d'images, OCR, génération visuelle"
                 },
@@ -187,7 +187,7 @@
                 ],
                 "primary_strength": "Expert code + analyse risques"
             },
-            "gemini-3.1-pro-preview": {
+            "gemini-3.5-flash": {
                 "service_roles": [
                     "EXECUTOR",
                     "PLANNER",
@@ -197,9 +197,11 @@
                     "REASONING",
                     "MULTIMODAL",
                     "VISION",
-                    "AGENTIC"
+                    "AGENTIC",
+                    "CODING",
+                    "FAST_CHAT"
                 ],
-                "primary_strength": "Modèle Gemini Pro le plus performant vérifié sur la clé locale"
+                "primary_strength": "Dernier modèle Gemini 3.5 Flash ultra-rapide et ultra-performant pour le codage et les tâches agentiques."
             },
             "openai/gpt-oss-120b": {
                 "service_roles": [
@@ -263,6 +265,23 @@
         "gemini": {
             "nom_affiche": "Google Gemini",
             "modeles": [
+                {
+                    "id": "gemini-3.5-flash",
+                    "description": "Gemini 3.5 Flash: Modèle SOTA ultra-rapide et ultra-performant pour le codage et les tâches agentiques (AI Studio Free Tier).",
+                    "types": [
+                        "agentic",
+                        "chat",
+                        "reasoning",
+                        "coding",
+                        "vision"
+                    ],
+                    "quota": {
+                        "rpm": 5,
+                        "tpm": 250000,
+                        "rpd": 20
+                    },
+                    "ptc_tier": "S"
+                },
                 {
                     "id": "gemini-3.1-pro-preview",
                     "description": "Gemini 3.1 Pro Preview: modèle Pro le plus performant accessible via la clé Gemini locale.",
