@@ -1,11 +1,15 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/HIVE--MIND-V3-0D1117?style=for-the-badge&labelColor=0D1117&color=58A6FF&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQyIDAtOC0zLjU4LTgtOHMzLjU4LTggOC04IDggMy41OCA4IDgtMy41OCA4LTggOHptLTItM2g0di0ySDEwdjJ6bTAtNGg0VjdoLTR2NnoiLz48L3N2Zz4=" alt="HIVE-MIND V3" />
+  <img src="assets/logo.jpeg" alt="HIVE-MIND Logo" width="180" style="border-radius: 12px;" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/HIVE--MIND-V3-0D1117?style=for-the-badge&labelColor=0D1117&color=58A6FF&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQyIDAtOC0zLjU4LTgtOHMzLjU4LTggOC04IDggMy41OCA4IDgtMy41OCA0LTggOHptLTItM2g0di0ySDEwdjJ6bTAtNGg0VjdoLTR2NnoiLz48L3N2Zz4=" alt="HIVE-MIND V3" />
 </p>
 
 <h1 align="center">HIVE-MIND</h1>
 
 <p align="center">
-  <strong>Autonomous AI Agent Framework — Omni-Channel, Multi-Provider, Agentic</strong>
+  <strong>Autonomous AI Agent Framework</strong>
 </p>
 
 <p align="center">
@@ -16,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-3.0.0-0D1117?style=flat-square&labelColor=0D1117&color=3FB950" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-3.5.0-0D1117?style=flat-square&labelColor=0D1117&color=3FB950" alt="Version" />
   <img src="https://img.shields.io/badge/TypeScript-Strict-0D1117?style=flat-square&labelColor=0D1117&color=3178C6&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/License-MIT-0D1117?style=flat-square&labelColor=0D1117&color=F0883E" alt="License" />
   <img src="https://img.shields.io/badge/Autonomy-Level_5-0D1117?style=flat-square&labelColor=0D1117&color=A371F7" alt="Autonomy" />
@@ -27,17 +31,20 @@
 
 ## Overview
 
-HIVE-MIND is a production-grade **Autonomous AI Agent** framework built in strict TypeScript. Unlike conventional chatbots that react to commands, HIVE-MIND operates as a **Level 5 Autonomous Agent** — it reasons, plans, executes multi-step tasks, orchestrates sub-agents, and proactively engages across multiple communication channels simultaneously.
+HIVE-MIND is a production-grade **Autonomous AI Agent Framework** built in strict TypeScript. It features a cognitive architecture driven by declarative blueprints, motivation drives, and a closed-loop security manifold.
+
+The agent reasons, plans, executes multi-step tasks, orchestrates sub-agents, manages its own memory lifecycle, and proactively engages across multiple communication channels — all governed by strict budget, safety, and behavioral constraints.
 
 **Key differentiators:**
 
-- 🧠 **Agentic Reasoning** — ReAct loop with planning, tool calling, and self-correction
+- 🧠 **Cognitive Memory Architecture** — Proactive motivation drives, user preference profiling, memory decay & consolidation
+- 📐 **Blueprint-Driven Governance** — Declarative agent blueprints, constraint manifold tool pruning, Zod-validated schemas
+- 🛡️ **Runtime Infrastructure** — Input/output safety validation, completeness checking, budget throttling
 - 🌐 **Omni-Channel** — WhatsApp · Discord · Telegram · CLI with unified identity
 - 🔀 **Smart Router V2** — Multi-key rotation across 10+ AI providers with zero-429 quota management
-- 🐝 **Swarm Architecture** — Dynamic sub-agent orchestration for complex tasks
+- 🐝 **Swarm Architecture** — Dynamic sub-agent orchestration with ephemeral blueprints
 - ⚡ **Programmatic Tool Calling (PTC)** — AST-validated JS execution in a sandboxed VM
 - 🎙️ **Native Audio** — Voice-to-voice via Gemini Live, TTS via Gemini/Minimax
-- 🛡️ **Defense-in-Depth Security** — MoralCompass, SafeScript AST validator, Permission Manager
 
 ---
 
@@ -62,7 +69,7 @@ HIVE-MIND is a production-grade **Autonomous AI Agent** framework built in stric
 
 ## 🏗 Architecture
 
-HIVE-MIND follows a strict **layered architecture** with one-way dependency flow:
+HIVE-MIND follows a strict **layered architecture** with one-way dependency flow, governed by a declarative blueprint system and a cognitive layer:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -78,21 +85,30 @@ HIVE-MIND follows a strict **layered architecture** with one-way dependency flow
 │  │ Engine   │  │ V2 (Zero-429) │  │ Manager    │  │ Queue       │  │
 │  └──────────┘  └───────────────┘  └────────────┘  └─────────────┘  │
 │  ┌──────────┐  ┌───────────────┐  ┌────────────────────────────┐   │
-│  │ Context  │  │ Tool Call     │  │ Service Container (DI)     │   │
-│  │ Loader   │  │ Extractor     │  │                            │   │
+│  │ Context  │  │ Blueprint     │  │ Service Container (DI)     │   │
+│  │ Loader   │  │ Manager       │  │                            │   │
 │  └──────────┘  └───────────────┘  └────────────────────────────┘   │
 └──────────────────────────────┬──────────────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        SERVICE LAYER                                │
+│                     RUNTIME INFRASTRUCTURE                          │
+│  ┌──────────────┐  ┌───────────────┐  ┌────────────────────────┐   │
+│  │ Safety       │  │ Task Checker  │  │ Budget Throttle        │   │
+│  │ Guard        │  │               │  │                        │   │
+│  └──────────────┘  └───────────────┘  └────────────────────────┘   │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         COGNITIVE LAYER                             │
 │  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │ Memory   │  │ Agentic   │  │ PTC &    │  │ Voice & Audio    │   │
-│  │ Stack    │  │ Swarm     │  │ Sandbox  │  │ Pipeline         │   │
+│  │ Memory   │  │ Learning  │  │ Driver   │  │ Consciousness    │   │
+│  │          │  │ Engine    │  │ System   │  │ (WakeSystem)     │   │
 │  └──────────┘  └───────────┘  └──────────┘  └──────────────────┘   │
 │  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌──────────────────┐   │
-│  │ Browser  │  │ Moral     │  │ FinOps   │  │ Consciousness    │   │
-│  │ Agent    │  │ Compass   │  │ Tracker  │  │ (WakeSystem)     │   │
+│  │ Agentic  │  │ PTC &     │  │ Browser  │  │ Voice & Audio    │   │
+│  │ Swarm    │  │ Sandbox   │  │ Agent    │  │ Pipeline         │   │
 │  └──────────┘  └───────────┘  └──────────┘  └──────────────────┘   │
 └──────────────────────────────┬──────────────────────────────────────┘
                                │
@@ -109,10 +125,11 @@ HIVE-MIND follows a strict **layered architecture** with one-way dependency flow
 | Principle | Implementation |
 |-----------|----------------|
 | **SOLID** | Service Container with dependency injection, single-responsibility modules |
-| **Strict Typing** | TypeScript strict mode, Zod validation on external payloads |
+| **Strict Typing** | TypeScript strict mode, Zod validation on external payloads and blueprints |
 | **Immutability** | Spread-only state updates, read-only properties |
-| **Fail-Closed Security** | MoralCompass rejects by default, explicit allow-listing |
-| **Event-Driven** | Core EventBus for decoupled inter-module communication |
+| **Fail-Closed Security** | Safety guard rejects by default, tool pruning filters forbidden tools |
+| **Event-Driven** | Core EventBus + Redis EventInbox for decoupled inter-module communication |
+| **Declarative Governance** | Agent behavior defined by JSON blueprints, not hardcoded logic |
 
 ---
 
@@ -122,10 +139,85 @@ HIVE-MIND follows a strict **layered architecture** with one-way dependency flow
 
 The central reasoning loop follows the **ReAct** pattern (Reasoning + Acting):
 
-1. **Perceive** — Multi-channel input analysis with context hydration (GWT)
-2. **Think** — Internal reasoning via `<think>` blocks and monologue
-3. **Act** — Tool execution, PTC batching, or Swarm delegation
-4. **Observe** — Result analysis with automatic error recovery and retry
+1. **Perceive** — Multi-channel input analysis with context hydration (Thought Stream)
+2. **Think** — Internal reasoning via `<thought>` blocks with chain-of-thought protocol
+3. **Act** — Tool execution with Constraint Manifold pruning, PTC batching, or Swarm delegation
+4. **Observe** — Result analysis with automatic error recovery, retry, and task completion verification
+
+### Blueprint-Driven Governance
+
+Agent behavior is defined by **Blueprints** (`config/blueprints/*.json`) validated with Zod:
+
+```json
+{
+  "metadata": { "id": "hive_main", "name": "HIVE-MIND Core", "version": "1.0.0" },
+  "mind": {
+    "drives": ["Maintain system health", "Engage user proactively", "Learn from interactions"]
+  },
+  "action_space": {
+    "allowed_tools": ["google_ai_search", "code_execution", "read_file", "..."]
+  },
+  "constraints": {
+    "read_only_fs": false,
+    "max_budget_usd": 1.0,
+    "max_iterations": 15
+  }
+}
+```
+
+- **Constraint Manifold** — `projectActionSpace()` physically removes unauthorized tools from the LLM's action space before each API call, achieving `P(forbidden_action) = 0`
+- **Ephemeral Blueprints** — Sub-agents receive dynamically generated blueprints in RAM, validated by the same Zod schema, and garbage-collected after completion
+
+### Runtime Infrastructure
+
+Unified control plane replacing the legacy CostTracker, MoralCompass, and MultiAgent services:
+
+| Module | Role | Mechanism |
+|--------|------|-----------|
+| **Safety Guard** | Safety evaluation | Blueprint whitelist → Read-only FS check → LLM safety review (3-layer cascade) |
+| **Task Checker** | Anti-laziness | Detects premature closure ("I've finished" without evidence) → forces kickback with correction prompt |
+| **Budget Throttling** | Budget control | Dynamic budget throttling, physical `max_tokens` reduction |
+
+### Cognitive Layer
+
+#### Memory Stack
+
+| Layer | Backend | Purpose | Latency |
+|-------|---------|---------|---------|
+| **L0 — Working Memory** | In-process | Current conversation turn | ~0ms |
+| **L1 — Context Cache** | Redis | Passport, Scratchpad, Action History (5 msgs) | ~2ms |
+| **L2 — Semantic Memory** | Supabase pgvector | Long-term recall via RAG embeddings + boost | ~50ms |
+| **L3 — Persistent Store** | Supabase PostgreSQL | User profiles, goals, graph relations, facts | ~30ms |
+
+**Memory Boost:** Every RAG recall triggers an asynchronous database RPC that strengthens the retrieved memory's score, implementing a "use it or lose it" principle.
+
+#### Memory Decay System
+
+Exponential forgetting based on `exp(-ageHours / τ)`:
+- **Recency** — Older memories decay faster
+- **Frequency** — Frequently recalled memories resist decay
+- **Importance** — Keyword-based semantic importance scoring
+- **Consolidation** — When ≥ 5 memories are archived, a background gist synthesis creates a dense summary and stores it back
+
+#### User Profile Learning Engine
+
+Asynchronous extraction of structured knowledge from conversations:
+- `fact:` — Static facts about the user ("Developer", "Lives in Paris")
+- `pref:` — Behavioral preferences ("Prefers concise answers", "Uses Python")
+- `goal:` — Active objectives ("Deploy web app by Friday")
+
+Injected into the Thought Stream as `<user_model>` XML blocks.
+
+#### DriverSystem (Proactive Motivation)
+
+Blueprint-defined "drives" (motivations) that trigger autonomous behavior during idle periods:
+
+1. Scheduler fires `consciousPulse` on cron
+2. DriverSystem loads blueprint drives and selects one via round-robin
+3. A `spontaneous_thought` event is pushed to the Redis EventInbox
+4. The ReAct engine processes the thought and takes proactive action
+
+Redis `driver_lock` with 1h TTL prevents spam.
 
 ### Smart Router V2 (Zero-429)
 
@@ -134,25 +226,16 @@ Intelligent multi-provider routing with proactive quota management:
 - **Multi-Key Rotation** — Up to 7 API keys per provider with granular Redis-tracked quotas
 - **Tiered Fallback** — S → A → B → C tier cascade across providers
 - **Zero-429 Strategy** — Proactive key rotation before rate limits hit
-- **Real-Time Metrics** — Per-key usage tracking and automatic cooldown
-
-### Memory Stack
-
-| Layer | Backend | Purpose | Latency |
-|-------|---------|---------|---------|
-| **L0 — Working Memory** | In-process | Current conversation turn | ~0ms |
-| **L1 — Context Cache** | Redis | Recent messages, session state | ~2ms |
-| **L2 — Semantic Memory** | Supabase pgvector | Long-term recall via RAG embeddings | ~50ms |
-| **L3 — Persistent Store** | Supabase PostgreSQL | User profiles, goals, graph relations | ~30ms |
+- **Inner Retry Loop** — On 429, transparently pivots to the next key for the same model
+- **Real-Time Metrics** — Per-key usage tracking with L0 in-memory cache (2s TTL)
 
 ### Agentic Swarm
 
 Dynamic multi-agent orchestration for complex tasks:
 
-- **Planner** — Decomposes goals into executable sub-tasks
-- **SubAgentEngine** — Spawns specialized agents (Shopping, Deep Research, etc.)
-- **ActionEvaluator** — Validates and scores action outcomes
-- **MultiAgent** — Coordinates parallel agent execution
+- **Planner** — Decomposes goals into executable sub-tasks with tool validation
+- **SubAgentEngine** — Spawns specialized agents with isolated ReAct loops and tool whitelists
+- **SpawnSubAgentTool** — LLM-facing tool that constructs ephemeral blueprints at runtime
 
 ### Programmatic Tool Calling (PTC)
 
@@ -167,15 +250,45 @@ Security enforced via **SafeScript** AST validation:
 - Static analysis with `acorn` parser
 - Blocked patterns: `process.exit`, `require`, `eval`, `__proto__`
 - Sandboxed execution in Node.js `vm` with timeout
+- Model classification: Tier S (full PTC) → Tier C (disabled)
 
 ### Consciousness Layer (WakeSystem)
 
 Background autonomous loop that enables proactive behavior:
 
-- **Inner Monologue** — Silent background thinking with `SILENT_HM` tags
-- **Goal Tracking** — Self-assigned objectives with progress monitoring
-- **Social Cue Watcher** — Detects conversation patterns to intervene naturally
-- **Dream Service** — Offline memory consolidation and knowledge weaving
+- **Watchdog Scheduler** — Fires `consciousPulse`, `memoryDecay`, `dbMonitoring` on cron
+- **EventInbox** — Redis-backed async event queue with `read_event_inbox` / `clear_event_inbox` tools
+- **MailboxWatcher** — Polls the EventInbox and triggers the ReAct engine on new events
+- **ActionMemory** — Tracks long-running tasks with zombie detection (`getStalledActions`) and heartbeat (`pulseAction`)
+- **WakeSystem** — `HIVE.sleepAndWake(delayMs, prompt)` bridge for deferred autonomous actions
+
+### Context Engineering (Thought Stream)
+
+The `TieredContextLoader` hydrates the `system.md` template into a structured XML prompt:
+
+```xml
+<system_prompt>
+  <core_identity>...</core_identity>
+  <motivation_drives>- Maintain system health\n- Engage user...</motivation_drives>
+  <user_model>
+    <facts>Developer | Lives in Paris</facts>
+    <preferences>Concise answers | Python</preferences>
+    <active_goals>Deploy web app</active_goals>
+  </user_model>
+  <execution_harness>
+    <scratchpad>Current task state...</scratchpad>
+    <ongoing_goal>Scan network</ongoing_goal>
+  </execution_harness>
+  <economic_constraint>
+    <max_budget_usd>1.0</max_budget_usd>
+    <max_iterations>15</max_iterations>
+  </economic_constraint>
+  <current_consciousness_state>...</current_consciousness_state>
+  <execution_engine>...</execution_engine>
+</system_prompt>
+```
+
+Dynamic blueprint resolution per group: each WhatsApp group can have its own `blueprintId` in the database, overriding the default `hive_main`.
 
 ---
 
@@ -183,34 +296,51 @@ Background autonomous loop that enables proactive behavior:
 
 ### LLM Providers
 
-| Provider | Models | Tier | Use Case |
-|----------|--------|------|----------|
-| **Google** | Gemini 3.1 Flash, Flash-Lite | S | Primary agentic reasoning |
-| **Minimax** | m2.5 | S | PTC execution, Swarm |
-| **Groq** | LLaMA, Whisper v3 | A | Fast inference, STT |
-| **Anthropic** | Claude 3.5 Sonnet | A | Complex reasoning |
-| **OpenAI** | GPT-4o | A | General purpose |
-| **Mistral** | Mistral Large | B | European alternative |
-| **NVIDIA** | Kimi K2.5 | B | Specialized tasks |
-| **OpenRouter** | 200+ models | B | Gateway fallback |
-| **Kimi/Moonshot** | Kimi, Moonshot | C | Budget fallback |
-| **HuggingFace** | Open-source models | C | Experimental |
+| Provider | Key Models | PTC Tier | Use Case |
+|----------|-----------|----------|----------|
+| **Google** | Gemini 3.5 Flash, 3.1 Pro, Gemma 4 31B | S | **Primary** — reasoning, coding, vision, multimodal |
+| **Anthropic** | Claude 4.5 Opus, Sonnet | S | Complex reasoning |
+| **OpenAI** | GPT-5.2, GPT-5 Mini | S | General purpose |
+| **Mistral** | Mistral Large, Codestral | A | European alternative, coding |
+| **Kimi** | Kimi K2.6 (via NVIDIA NIM) | S | Coding specialist |
+| **Groq** | LLaMA 3.3 70B, GPT-OSS 120B, Qwen3 32B, Whisper v3 | A-B | Fast inference, STT |
+| **GitHub** | DeepSeek R1/V3, LLaMA 3.3, Phi-4 | A-C | Free-tier models |
+| **NVIDIA** | Kimi K2.6, GLM 5.1, Minimax M2.7 | S-C | NIM inference |
+| **OpenRouter** | Minimax M2.5, GLM 4.5 Air (free) | S-B | Gateway fallback |
+| **HuggingFace** | LLaMA 3 8B, Kimi K2 | B-C | Experimental |
+| **Moonshot** | Moonshot v1 (8k/32k/128k) | C | Budget fallback |
 
 ### Audio & Media
 
 | Capability | Provider | Details |
 |-----------|----------|---------|
-| **Voice-to-Voice** | Gemini Live 2.5 | Native bidirectional audio streaming |
-| **Text-to-Speech** | Gemini TTS / Minimax | Director's Chair persona voices |
-| **Speech-to-Text** | Groq Whisper v3 | Ultra-fast transcription |
+| **Voice-to-Voice** | Gemini Live | Native bidirectional audio streaming via WebSocket |
+| **Text-to-Speech** | Gemini TTS / Minimax | Director's Chair persona voices (Kore, Erina-clone) |
+| **Speech-to-Text** | Groq Whisper v3 Turbo | Ultra-fast transcription |
 | **Web Search** | SerpApi | Google AI Search (Standard, Chat, News) |
-| **Browser Agent** | Playwright | Headless Chromium with screenshot capture |
+| **Browser Agent** | Playwright | Headless Chromium with viewport & full-page screenshots |
 
 ---
 
 ## 🔌 Plugins
 
-HIVE-MIND uses a modular plugin architecture with auto-discovery:
+HIVE-MIND uses a modular plugin architecture with auto-discovery. Every plugin returns a standardized `{ success: boolean, message: string }` signature.
+
+### Base (Core Agent Tools)
+| Plugin | Description |
+|--------|-------------|
+| `memory` | `remember_fact`, `recall_fact`, `search_long_term_memory`, `update_scratchpad` |
+| `goals` | `create_goal`, `list_goals`, `complete_goal`, `cancel_goal` — autonomous scheduling |
+| `sys_interaction` | `send_message`, `send_file`, `send_contact`, `create_poll` — omni-channel |
+| `system` | `get_my_capabilities`, `get_time`, `get_bot_info` |
+| `admin` | User management, plugin control, system administration |
+| `dev_tools` | `spawn_sub_agent`, `execute_bash_command`, `run_scratchpad`, AST tools |
+| `mcp_tools` | MCP client bridge for external tool servers |
+
+### System
+| Plugin | Description |
+|--------|-------------|
+| `event_manager` | `read_event_inbox`, `clear_event_inbox` — async event processing |
 
 ### Web & Research
 | Plugin | Description |
@@ -225,7 +355,8 @@ HIVE-MIND uses a modular plugin architecture with auto-discovery:
 | Plugin | Description |
 |--------|-------------|
 | `shopping` | Product search and comparison |
-| `send_email` | Email composition and dispatch |
+| `send_email` | Email composition and dispatch via n8n webhook |
+| `send_sticker` | Mood-based sticker selection from `storage_hm/stickers/` |
 | `translate` | Multi-language translation |
 | `daily_pulse` | Daily briefing and news aggregation |
 | `visual_reporter` | PDF report generation with PDFKit |
@@ -234,14 +365,12 @@ HIVE-MIND uses a modular plugin architecture with auto-discovery:
 | Plugin | Description |
 |--------|-------------|
 | `sticker` | Sticker creation from images |
-| `group_manager` | Group administration (ban, promote, settings) |
+| `group_manager` | Group administration (ban, promote, keyword filters) |
 
 ### Media
 | Plugin | Description |
 |--------|-------------|
-| `tts` | Text-to-speech audio generation |
-
-> **Plugin SDK:** Each plugin is a self-contained directory under `plugins/` with a standardized `{ success: boolean, message: string }` return signature. See `plugins/base/` for the plugin interface.
+| `tts` | Text-to-speech audio generation (Gemini TTS / Minimax / gTTS fallback) |
 
 ---
 
@@ -261,7 +390,7 @@ HIVE-MIND uses a modular plugin architecture with auto-discovery:
 |---------|---------|---------|
 | **Supabase** | Database & Vector memory | [supabase.com](https://supabase.com) |
 | **Redis (Upstash)** | Cache & Ephemeral context | [upstash.com](https://upstash.com) |
-| **Google AI Studio** | Primary AI provider | [aistudio.google.com](https://aistudio.google.com) |
+| **Google AI Studio** | Primary AI provider (Gemini 3.5 Flash) | [aistudio.google.com](https://aistudio.google.com) |
 
 ### Installation
 
@@ -314,8 +443,8 @@ REDIS_URL=redis://default:password@host:port
 HIVE-MIND supports **multi-key rotation** — up to 7 keys per provider for zero-downtime:
 
 ```env
-# Primary key (fallback)
-${GEMINI_KEY}=your-gemini-api-key
+# Primary key
+GEMINI_KEY=your-gemini-api-key
 
 # Rotation keys (optional, improves quota resilience)
 GEMINI_KEY_1=your-first-key
@@ -323,7 +452,9 @@ GEMINI_KEY_2=your-second-key
 # ... up to GEMINI_KEY_7
 ```
 
-Same pattern applies to: `GROQ`, `MISTRAL`, `MOONSHOT`, `MINIMAX`, `HF`, `NVIDIA`, `OPENROUTER`.
+Same pattern applies to: `GROQ_KEY`, `MISTRAL_KEY`, `MOONSHOT_KEY`, `MINIMAX_KEY`, `HF_KEY`, `NVIDIA_KEY`, `OPENROUTER_KEY`.
+
+> **Note:** Legacy `VOTRE_CLE_*` environment variable names are no longer supported. Use the strict `PROVIDER_KEY` / `PROVIDER_KEY_N` format.
 
 #### Behavioral Settings
 ```env
@@ -345,9 +476,11 @@ AGENT_BROWSER_IDLE_TIMEOUT_MS=300000    # Auto-shutdown after 5min idle
 | File | Purpose |
 |------|---------|
 | `config/config.json` | Backlog protection, voice transcription mode |
-| `config/models_config.json` | Model definitions, tiers, capabilities |
+| `config/models_config.json` | Model families, tiers, PTC capabilities |
 | `config/pricing.json` | Per-model cost tracking |
-| `config/scheduler.json` | Cron jobs and scheduled tasks |
+| `config/scheduler.json` | Cron jobs (`consciousPulse`, `memoryDecay`, `dbMonitoring`) |
+| `config/blueprints/hive_main.json` | Primary agent blueprint (drives, tools, constraints) |
+| `config/blueprints/deep_researcher.json` | Deep research sub-agent blueprint |
 
 ---
 
@@ -357,68 +490,82 @@ AGENT_BROWSER_IDLE_TIMEOUT_MS=300000    # Auto-shutdown after 5min idle
 HIVE-MIND/
 ├── bin/                    # CLI entrypoint (hive-mind.ts)
 ├── core/                   # Orchestration layer
-│   ├── index.ts            # Main ReAct engine & message loop
+│   ├── index.ts            # Main ReAct engine & message loop (~2200 lines)
 │   ├── orchestrator.ts     # High-level orchestration
 │   ├── ServiceContainer.ts # Dependency injection container
 │   ├── FairnessQueue.ts    # Per-user message queuing
-│   ├── context/            # GWT context loading & prompt assembly
-│   ├── handlers/           # Message & event handlers
+│   ├── blueprint/          # Declarative blueprints (Zod schema, BlueprintManager)
+│   ├── context/            # TieredContextLoader (Thought Stream hydration)
+│   ├── handlers/           # schedulerHandler (consciousPulse, memoryDecay)
 │   ├── security/           # PermissionManager (RBAC)
 │   ├── transport/          # Omni-channel adapters
 │   │   ├── baileys.ts      # WhatsApp (Baileys)
-│   │   ├── discord.ts      # Discord self-bot
+│   │   ├── discord.ts      # Discord
 │   │   ├── telegram.ts     # Telegram
 │   │   ├── cli.ts          # Terminal CLI
 │   │   └── ink/            # Ink TUI components
 │   └── types/              # Core type definitions
 ├── services/               # Domain services
-│   ├── agentic/            # Swarm: Planner, SubAgentEngine, MultiAgent
-│   ├── ptc/                # PTC: Executor, SafeScript, WakeSystem
-│   ├── memory/             # Memory consolidation & retrieval
-│   ├── browser/            # Playwright-based browser agent
-│   ├── voice/              # TTS providers (Minimax, Gemini)
-│   ├── audio/              # Audio conversion & Gemini Live
-│   ├── finops/             # Cost tracking per-model
+│   ├── runtime/            # RuntimeInfrastructure (Safety, Verification, Budget)
+│   ├── mindos/             # Motivation DriverSystem (proactive motivations)
+│   ├── memory/             # SemanticMemory, MemoryDecay, ActionMemory
+│   ├── learning/           # LearningEngine (User preference extraction)
+│   ├── events/             # EventInboxService, MailboxWatcher
+│   ├── agentic/            # SubAgentEngine, Planner
+│   ├── ptc/                # PTC Executor, SafeScript, WakeSystem, HIVE bridge
+│   ├── browser/            # Playwright-based browser agent (BrowserService)
+│   ├── voice/              # TTS providers (Minimax, Gemini TTS, gTTS)
+│   ├── audio/              # Audio conversion & Gemini Live WebSocket
+│   ├── ast/                # TreeSitter service (AST-native code tools)
+│   ├── anchor/             # Hash-Anchored edit system (Hash-anchored protocol)
 │   ├── monitoring/         # Database health monitoring
+│   ├── state/              # StateManager, IdentityMap (UUID-based)
 │   ├── memory.ts           # Supabase memory operations
 │   ├── workingMemory.ts    # Redis working memory (L1)
 │   ├── redisClient.ts      # Redis connection management
 │   ├── supabase.ts         # Supabase client & queries
-│   ├── moralCompass.ts     # Ethical guardrails
-│   ├── quotaManager.ts     # Smart Router quota tracking
-│   └── ...                 # User, group, admin, feedback services
+│   ├── quotaManager.ts     # Smart Router V2 quota tracking
+│   └── ...                 # User, group, admin, feedback, goals services
 ├── plugins/                # Modular plugin system
-│   ├── base/               # Plugin interface & types
-│   ├── loader.ts           # Auto-discovery & registration
-│   ├── tools/              # Utility plugins
-│   ├── web/                # Web & research plugins
-│   ├── media/              # Media processing plugins
-│   └── whatsapp/           # WhatsApp-specific plugins
+│   ├── loader.ts           # Auto-discovery & registration (CORE_TOOLS injection)
+│   ├── base/               # Core plugins (memory, admin, goals, dev_tools, system, mcp)
+│   ├── system/             # System plugins (event_manager)
+│   ├── tools/              # Utility plugins (shopping, email, sticker, translate, ...)
+│   ├── web/                # Web & research plugins (google, duckduck, crawlfire, wiki)
+│   ├── media/              # Media plugins (tts)
+│   └── whatsapp/           # WhatsApp-specific plugins (sticker, group_manager)
 ├── providers/              # AI provider adapters
-│   ├── index.ts            # Smart Router V2 (provider selection)
-│   ├── geminiLive.ts       # Gemini Live audio streaming
-│   └── adapters/           # Individual provider implementations
+│   ├── index.ts            # Smart Router V2 (provider selection, budget throttle)
+│   └── adapters/           # 15 provider implementations
 │       ├── gemini.ts       # Google Gemini
+│       ├── geminiLive.ts   # Gemini Live audio streaming
+│       ├── geminiTTS.ts    # Gemini TTS
 │       ├── groq.ts         # Groq
 │       ├── anthropic.ts    # Anthropic Claude
 │       ├── openai.ts       # OpenAI
 │       ├── mistral.ts      # Mistral AI
+│       ├── nvidia.ts       # NVIDIA NIM
+│       ├── kimi.ts         # Kimi
+│       ├── moonshot.ts     # Moonshot
 │       ├── openrouter.ts   # OpenRouter gateway
-│       └── ...             # NVIDIA, Kimi, Moonshot, HuggingFace
+│       ├── github.ts       # GitHub Models
+│       ├── huggingface.ts  # HuggingFace
+│       ├── minimaxTTS.ts   # Minimax TTS
+│       └── gttsTTS.ts      # Google TTS (gTTS) fallback
 ├── config/                 # Configuration files
-├── persona/                # Agent personality & GWT prompts
-├── scheduler/              # Cron job definitions & DB monitoring
+│   └── blueprints/         # AgenticFormat blueprints (hive_main, deep_researcher)
+├── persona/                # Agent personality & system prompt template (system.md)
 ├── scripts/                # Utility & diagnostic scripts
+│   ├── test_cli_e2e.ts     # Local CLI E2E test runner
+│   └── test_wa_e2e.ts      # Production WhatsApp E2E test runner
 ├── supabase/               # Database schema (SQL)
 ├── tests/                  # Test suites
 │   ├── unit/               # Unit tests
-│   ├── integration/        # Integration tests
-│   └── e2e/                # End-to-end tests
+│   └── integration/        # Integration tests
 ├── types/                  # Global TypeScript declarations
-├── utils/                  # Shared utilities
-├── docs/                   # Extended documentation
+├── utils/                  # Shared utilities (responseSanitizer, helpers)
 ├── Sandbox1/               # PTC sandboxed execution environment
-└── storage_hm/             # Persistent agent data (screenshots, files)
+└── storage_hm/             # Persistent agent data (screenshots, stickers, files)
 ```
 
 ---
@@ -445,7 +592,9 @@ HIVE-MIND/
 
 ## 🧪 Testing
 
-HIVE-MIND follows a **TDD workflow** with three test tiers:
+HIVE-MIND follows a **TDD workflow** with a two-tier E2E strategy:
+
+### Test Tiers
 
 ```bash
 # Run all tests
@@ -454,10 +603,12 @@ npm test
 # Run specific tier
 npm run test:unit
 npm run test:integration
-npm run test:e2e
 
-# Full E2E with real services (requires configured .env)
+# Local CLI E2E (real Supabase, Redis, AI)
 npx tsx scripts/test_cli_e2e.ts
+
+# Production WhatsApp E2E (against live Railway deployment)
+npx tsx scripts/test_wa_e2e.ts --account user
 ```
 
 ### Test Stack
@@ -466,15 +617,14 @@ npx tsx scripts/test_cli_e2e.ts
 |------|---------|---------|
 | **Jest** | 30.x | Test runner & assertions |
 | **ts-jest** | 29.x | TypeScript transformer |
-| **VM Modules** | Experimental | ESM support in tests |
+| **VM Modules** | `--experimental-vm-modules` | ESM support in tests |
 
-### Coverage Targets
+### E2E Strategy
 
-| Layer | Target | Focus |
-|-------|--------|-------|
-| Unit | > 80% | Pure logic, validators, utilities |
-| Integration | > 60% | Service interactions, DB queries |
-| E2E | Critical paths | Full ReAct loop, tool execution |
+| Level | Script | Environment | Purpose |
+|-------|--------|-------------|---------|
+| **Local CLI** | `scripts/test_cli_e2e.ts` | Local (real services) | Validate features before pushing |
+| **Production WA** | `scripts/test_wa_e2e.ts` | Live Railway | Validate production (voice, media, permissions) |
 
 ---
 
@@ -512,27 +662,27 @@ cmds = ["npm run build"]
 ### Health Monitoring
 
 ```bash
-# Check Redis connectivity
-npx tsx scripts/check-redis.ts
+# Stream live production logs
+railway logs --tail
 
-# Full health check (DB + Redis + Providers)
-npx tsx scripts/health-check.ts
+# Last 5 minutes
+railway logs --tail --since 5m
 ```
 
 ---
 
 ## 🛡 Security
 
-### Defense-in-Depth Architecture
+### Defense-in-Depth Architecture (6 Layers)
 
 | Layer | Component | Strategy |
 |-------|-----------|----------|
 | **L1 — Input** | Permission Manager | RBAC with Super-Admin, Admin, User roles |
-| **L2 — Reasoning** | MoralCompass | Ethical guardrails with fail-closed defaults |
-| **L3 — Execution** | SafeScript (AST) | Static analysis blocking dangerous patterns |
-| **L4 — Runtime** | VM Sandbox | Isolated execution with timeout enforcement |
-| **L5 — Network** | Browser Blacklist | Domain-based blocking (open-by-default) |
-| **L6 — System** | Banned Commands | VM escape prevention (no `process.exit`, `rm -rf /`) |
+| **L2 — Governance** | Constraint Manifold | Blueprint `allowed_tools` whitelist prunes the action space before API calls |
+| **L3 — Safety** | Safety Guard | 3-layer cascade: blueprint check → destructive tool guard → LLM safety review |
+| **L4 — Execution** | SafeScript (AST) + VM Sandbox | Static acorn analysis blocking dangerous patterns, isolated execution with timeout |
+| **L5 — Budget** | Budget Control | Dynamic budget throttling, physical `max_tokens` reduction, kill switch on budget exceeded |
+| **L6 — Behavior** | Task Checker | Completeness verification ensuring the agent completes tasks before closing |
 
 ### Permission Model
 
@@ -545,10 +695,12 @@ User          →  Standard interaction
 
 ### Key Security Features
 
-- **Human-in-the-Loop (HITL)** — Dangerous operations require explicit owner approval
+- **Human-in-the-Loop (HITL)** — Dangerous operations require explicit owner approval (dual-logic: Admin Hub + In-Band escalation)
 - **Universal Read / Restricted Write** — Agent can read system files but writes are sandboxed to `Sandbox1/` and `storage_hm/`
+- **Constraint Manifold** — Tools not in the blueprint's `allowed_tools` are physically removed from the LLM's action space (`P(action) = 0`)
 - **AST Validation** — Every PTC script is parsed and analyzed before execution
 - **Automatic Cooldown** — Rate limiting and backlog protection prevent abuse
+- **2-Layer Response Defense** — Detects missing `<thought>` tags, leaked tool calls, and raw code dominance; forces retry or strips before sending
 
 > ⚠️ **Important:** Configure your Super-Admin users in the Supabase `users` table before deploying to production. Unconfigured instances default to open access.
 
@@ -566,11 +718,12 @@ User          →  Standard interaction
 
 ### Code Standards
 
-- TypeScript strict mode — no `any`, explicit return types
+- TypeScript strict mode — no `any` (use `unknown`), explicit return types
 - Functions: max 20 lines, max 2 parameters (use objects beyond)
 - Naming: intent-revealing, no abbreviations, booleans use verbs (`isLoading`)
 - Error handling: `Result<T, Error>` pattern or explicit throws — never silent `null`
 - Comments explain **why**, not **how**
+- Zero TODO comments in source — future work tracked in `.GCC/afaire.md`
 
 ### Branch Strategy
 
@@ -586,5 +739,5 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 <p align="center">
-  <sub>Built by <a href="https://github.com/leandre755">Christ-Leandre</a> — HIVE-MIND V3</sub>
+  <sub>Built by <a href="https://github.com/leandre755">Christ-Leandre</a> — HIVE-MIND V3.5</sub>
 </p>
