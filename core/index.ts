@@ -46,6 +46,7 @@ import { SchedulerHandler, GroupHandler } from './handlers/index.js';
 // [V3] Unified Context Engineering
 import { tieredContextLoader } from './context/TieredContextLoader.js';
 import { permissionManager } from './security/PermissionManager.js';
+import { blueprintManager, AgentBlueprint } from './blueprint/AgentBlueprint.js';
 
 // DTC Phase 1: Les admins globaux sont maintenant dans Supabase via adminService
 // Le chargement se fait de manière asynchrone dans init()
@@ -88,10 +89,24 @@ export class BotCore {
     QUICK_ACKNOWLEDGMENTS: string[];
     schedulerHandler: any;
     groupHandler: any;
+    currentBlueprint: AgentBlueprint;
 
     constructor() {
         this.transport = transportManager;
         this.isReady = false;
+
+        // Load blueprint with fallback
+        try {
+            this.currentBlueprint = blueprintManager.loadBlueprint('hive_main');
+        } catch (e: any) {
+            console.warn('[Core] Failed loading hive_main blueprint, using safe fallback:', e.message);
+            this.currentBlueprint = {
+                metadata: { id: 'fallback', name: 'Safe Fallback', version: '0.1.0' },
+                mindos: { drives: [] },
+                action_space: { allowed_tools: ['send_message', 'read_file'] },
+                constraints: { read_only_fs: false, max_budget_usd: 1.0, max_iterations: 10 }
+            };
+        }
 
         // [FEEDBACK FIRST] Constantes pour réponse rapide < 30s
         this.FEEDBACK_TIMEOUT_MS = 25000; // 25 secondes max avant accusé de réception
@@ -1101,6 +1116,7 @@ export class BotCore {
 
             // 1. Load unified context (L1 Hot Cache — Passport + Scratchpad + ActionHistory + Chat)
             const fullContext = await tieredContextLoader.load(chatId, message);
+            const activeBlueprint = (fullContext as any).blueprint || this.currentBlueprint;
 
             // 2. Build LLM history
             const systemPrompt = fullContext.systemPrompt;
@@ -1121,8 +1137,8 @@ export class BotCore {
 
             let responseDefectRetries = 0;
             const MAX_DEFECT_RETRIES = 2;
-            let ralphRetries = 0;
-            const MAX_RALPH_RETRIES = 1;
+
+
 
             let finalResponse: any = null;
             let keepThinking = true;
@@ -1139,7 +1155,13 @@ export class BotCore {
 
             // [FIX] Récupération des outils pour l'Agentic Path
             // On utilise le mode 'forceModeration' si nécessaire, ou standard
-            const relevantTools = await pluginLoader.getRelevantTools(text, 5, 10);
+            let relevantTools = await pluginLoader.getRelevantTools(text, 5, 10);
+
+            // [CONSTRAINT MANIFOLD] Pruning : Ne garder que les outils autorisés par le blueprint
+            if (this.runtime?.sentinel) {
+                relevantTools = this.runtime.sentinel.projectActionSpace(relevantTools, activeBlueprint);
+                console.log(`[Manifold:Pruner] 🎯 Action space projected down to ${relevantTools.length} tools`);
+            }
 
             // [PTC] Injecter le meta-tool code_execution — TOUJOURS disponible (CORE TOOL)
             // Sa description liste dynamiquement les outils RAG sélectionnés ci-dessus,
@@ -1173,7 +1195,8 @@ export class BotCore {
                                 return await this._safeExecuteTool(toolCall, {
                                     chatId,
                                     message: msg,
-                                    authority: (fullContext as any).authority // Capture du contexte d'autorité
+                                    authority: (fullContext as any).authority, // Capture du contexte d'autorité
+                                    blueprint: activeBlueprint
                                 });
                             },
                             tools: relevantTools,
@@ -1420,12 +1443,13 @@ RULES:
                             let toolResult: any;
 
                             // WHY: ALL tools (including code_execution) route through _safeExecuteTool
-                            // for full security pipeline (MultiAgent critique, MoralCompass, Observer, DB logging).
+                            // for full security pipeline (Sentinel VIGIL safety, Ralph laziness, FinOps, DB logging).
                             // _safeExecuteTool internally detects code_execution and routes to _executePtcCode.
                             toolResult = await this._safeExecuteTool(toolCall, {
                                 chatId,
                                 message,
-                                authority: fullContext.authority
+                                authority: fullContext.authority,
+                                blueprint: activeBlueprint
                             });
 
                             // --- LE DOUBLE RENDU (DUAL RENDERING) ---
@@ -1582,30 +1606,7 @@ RULES:
                         continue; // Force une itération supplémentaire
                     }
 
-                    let lazyDetected = false;
-                    if (this.runtime?.ralph) {
-                        const initialGoal = typeof userContent === 'string' ? userContent : text;
-                        const ralphResult = await this.runtime.ralph.verifyCompletion(initialGoal, contentStr);
-                        if (ralphResult.laziness_detected && ralphRetries < MAX_RALPH_RETRIES && iterations < MAX_ITERATIONS) {
-                            ralphRetries++;
-                            lazyDetected = true;
-                            console.warn(`[Agent:RALPH] 🚨 Laziness detected! Initiating kickback (retry ${ralphRetries}/${MAX_RALPH_RETRIES}).`);
-                            
-                            history.push({
-                                role: 'assistant',
-                                content: contentStr
-                            });
-                            
-                            history.push({
-                                role: 'user',
-                                content: `[SYSTEM REJECTION] : ACTION REJECTED by Ralph Completion & Quality Controller.\nReason: ${ralphResult.kickback_message}\n\nSYSTEM DIRECTIVE: This is an automatic system interception, not a user message. You must resume work immediately, address all omissions, and complete the goal. DO NOT APOLOGIZE, do not acknowledge. Just complete the remaining steps.`
-                            });
-                        }
-                    }
 
-                    if (lazyDetected) {
-                        continue; // Force re-iteration
-                    }
 
                     finalResponse = response.content;
                     keepThinking = false;
@@ -1901,13 +1902,14 @@ RULES:
             if (runtime) {
                 const agentMemory = this.agentMemory;
                 const recentActions = chatId ? await agentMemory.getRecentActions(chatId, 5) : [];
+                const activeBlueprint = context.blueprint || this.currentBlueprint;
                 
                 const evalResult = await runtime.sentinel.evaluate(toolCall, {
                     senderName: message?.senderName || 'Anonymous',
                     authorityLevel: authorityLevel,
                     isGroup: message?.isGroup || false,
                     chatId: chatId || 'unknown'
-                }, recentActions);
+                }, recentActions, activeBlueprint);
 
                 if (!evalResult.allowed) {
                     console.warn(`[Runtime:VIGIL] 🛑 Action blocked by Sentinel: ${evalResult.reason} (risk: ${evalResult.risk_level})`);
@@ -2087,7 +2089,7 @@ RULES:
 
                     try {
                         // WHY: Route through _safeExecuteTool for full security pipeline
-                        // (MultiAgent critique, MoralCompass, Observer, DB action logging)
+                        // (Sentinel VIGIL safety, Ralph laziness, FinOps, DB action logging)
                         // instead of pluginLoader.execute() which bypasses all security checks.
                         const fallbackToolCall = {
                             id: toolCall.id || `ptc_fallback_${Date.now()}`,

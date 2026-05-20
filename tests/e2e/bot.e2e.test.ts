@@ -28,14 +28,6 @@ jest.unstable_mockModule('../../core/transport/baileys.js', () => ({
     }
 }));
 
-jest.unstable_mockModule('../../services/finops/CostTracker.js', () => ({
-    costTracker: {
-        recordUsage: jest.fn(() => ({ budgetSafe: true, totalCost: 0, sessionTotal: 0 })),
-        getSessionCost: jest.fn(() => 0),
-        reset: jest.fn()
-    },
-    CostTracker: class {}
-}));
 
 jest.unstable_mockModule('../../core/security/PermissionManager.js', () => ({
     permissionManager: {

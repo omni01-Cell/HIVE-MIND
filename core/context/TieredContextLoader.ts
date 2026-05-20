@@ -21,6 +21,7 @@ import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { permissionManager } from '../security/PermissionManager.js';
+import { blueprintManager } from '../blueprint/AgentBlueprint.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -136,6 +137,27 @@ export class TieredContextLoader {
             isGroup ? this._getGroupBasics(chatId) : Promise.resolve(null)
         ]);
 
+        // Resolve blueprint (with fallback to hive_main)
+        let blueprintId = 'hive_main';
+        if (groupBasics?.blueprintId) {
+            blueprintId = groupBasics.blueprintId;
+        }
+        let blueprint;
+        try {
+            blueprint = blueprintManager.loadBlueprint(blueprintId);
+        } catch {
+            try {
+                blueprint = blueprintManager.loadBlueprint('hive_main');
+            } catch {
+                blueprint = {
+                    metadata: { id: 'fallback', name: 'Safe Fallback', version: '0.1.0' },
+                    mindos: { drives: [] },
+                    action_space: { allowed_tools: [] },
+                    constraints: { read_only_fs: false, max_budget_usd: 1.0, max_iterations: 10 }
+                };
+            }
+        }
+
         // ── HYDRATE SYSTEM PROMPT TEMPLATE ──
         const systemPrompt = await this._hydrateTemplate({
             channel: message.sourceChannel || 'whatsapp',
@@ -145,7 +167,8 @@ export class TieredContextLoader {
             userSnapshot,
             authority,
             groupBasics,
-            chatId
+            chatId,
+            blueprint
         });
 
         const context = {
@@ -158,6 +181,7 @@ export class TieredContextLoader {
             authority,
             userSnapshot,
             groupBasics,
+            blueprint,
             mode: 'UNIFIED' // No more FAST/AGENTIC distinction
         };
 
@@ -268,7 +292,8 @@ export class TieredContextLoader {
                     name: groupContext.group.name,
                     description: groupContext.group.description || '',
                     memberCount: groupContext.group.member_count || 0,
-                    botMission: groupContext.group.bot_mission || ''
+                    botMission: groupContext.group.bot_mission || '',
+                    blueprintId: groupContext.group.blueprint_id || groupContext.group.blueprintId || ''
                 };
             }
             return null;
@@ -294,6 +319,7 @@ export class TieredContextLoader {
         authority: any;
         groupBasics: any;
         chatId: string;
+        blueprint?: any;
     }): Promise<string> {
         const now = new Date();
 
@@ -325,7 +351,19 @@ export class TieredContextLoader {
         // 5. Append social context
         const socialBlock = this._buildSocialContext(data);
 
-        return `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}`;
+        // 6. Build MindOS Drives and Economic Constraints XML blocks
+        let mindosDrives = '';
+        if (data.blueprint && data.blueprint.mindos?.drives && data.blueprint.mindos.drives.length > 0) {
+            mindosDrives = `\n<mindos_drives>\n${data.blueprint.mindos.drives.map((d: string) => `- ${d}`).join('\n')}\n</mindos_drives>\n`;
+        }
+
+        let economicConstraint = '';
+        if (data.blueprint && data.blueprint.constraints) {
+            const c = data.blueprint.constraints;
+            economicConstraint = `\n<economic_constraint>\n  <read_only_fs>${c.read_only_fs}</read_only_fs>\n  <max_budget_usd>${c.max_budget_usd}</max_budget_usd>\n  <max_iterations>${c.max_iterations}</max_iterations>\n</economic_constraint>\n`;
+        }
+
+        return `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}${mindosDrives}${economicConstraint}`;
     }
 
     /**
@@ -335,13 +373,13 @@ export class TieredContextLoader {
         try {
             const { actionMemory } = await import('../../services/memory/ActionMemory.js');
             let harness = "";
-            
+
             // 1. Carnet de bord (Scratchpad)
             const scratchpad = await this.workingMemory.getScratchpad(chatId);
             if (scratchpad) {
                 harness += `<scratchpad>\n${scratchpad}\n</scratchpad>\n`;
             }
-            
+
             // 2. Tâche longue en cours (ActionMemory)
             const activeAction = await actionMemory.getActiveAction(chatId);
             if (activeAction) {
@@ -355,7 +393,7 @@ ${steps || 'None yet'}
   <directive>You are resuming an ongoing background task. Resume work immediately. Do not apologize. Use your tools to advance the goal.</directive>
 </execution_harness>\n`;
             }
-            
+
             return harness;
         } catch (e: any) {
             console.error('[TieredContext] Error building harness context:', e.message);

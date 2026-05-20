@@ -155,7 +155,7 @@ export class ServiceContainer {
 
         // 7. Reflection & Runtime Infrastructure
         // WHY: These MUST be awaited. Fire-and-forget .then() caused a race condition
-        // where container.get('moralCompass')/('runtime') could throw if called before import resolved.
+        // where container.get('runtime') could throw if called before import resolved.
         const [dreamModule, runtimeModule] = await Promise.all([
             import('../services/dreamService.js'),
             import('../services/runtime/RuntimeInfrastructure.js'),

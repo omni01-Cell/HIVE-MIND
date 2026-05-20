@@ -9,9 +9,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { providerRouter } from '../../providers/index.js';
 import { eventBus, BotEvents } from '../../core/events.js';
+import { AgentBlueprint } from '../../core/blueprint/AgentBlueprint.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SYSTEM_PROMPT_PATH = join(__dirname, '..', '..', 'persona', 'prompts', 'system.md');
+const localDirname = dirname(fileURLToPath(import.meta.url));
+const SYSTEM_PROMPT_PATH = join(localDirname, '..', '..', 'persona', 'prompts', 'system.md');
 
 // WHY: These tools are inherently safe (read-only, info-gathering, or agent-internal).
 // Evaluating them via LLM wastes tokens and adds latency for zero security benefit.
@@ -159,15 +160,52 @@ export class RuntimeFinOps {
  */
 export class RuntimeSentinel {
     /**
+     * Projects action space based on blueprint tool whitelist (Deterministic Pruning)
+     */
+    public projectActionSpace(tools: any[], blueprint?: AgentBlueprint): any[] {
+        if (!blueprint) return tools;
+        return tools.filter(tool => {
+            const name = tool.function?.name;
+            return name && blueprint.action_space.allowed_tools.includes(name);
+        });
+    }
+
+    /**
      * Évalue une action par rapport à la sécurité, l'éthique et la cohérence
      */
     async evaluate(
         toolCall: any,
         context: any,
-        recentActions: any[] = []
+        recentActions: any[] = [],
+        blueprint?: AgentBlueprint
     ): Promise<{ allowed: boolean; reason: string | null; risk_level: string; intervention_prompt: string | null }> {
         const toolName = toolCall?.function?.name || '';
         const argsStr = toolCall?.function?.arguments || '{}';
+
+        // ── CONSTRAINT MANIFOLD: Whitelist check ──
+        if (blueprint && !blueprint.action_space.allowed_tools.includes(toolName)) {
+            console.warn(`[Runtime:VIGIL] 🛑 [Blueprint Block] Tool "${toolName}" is not whitelisted in the active blueprint.`);
+            return {
+                allowed: false,
+                reason: `Tool "${toolName}" is not permitted by the agent blueprint constraints.`,
+                risk_level: 'critical',
+                intervention_prompt: 'Select an authorized tool from your action space instead.'
+            };
+        }
+
+        // ── CONSTRAINT MANIFOLD: Read-only FS restriction ──
+        if (blueprint && blueprint.constraints.read_only_fs) {
+            const writeTools = new Set(['edit_file', 'execute_bash_command', 'code_execution', 'db_document_save', 'db_document_delete']);
+            if (writeTools.has(toolName)) {
+                console.warn(`[Runtime:VIGIL] 🛑 [Blueprint Block] Write-attempt blocked for tool "${toolName}" (Read-Only FS restriction active).`);
+                return {
+                    allowed: false,
+                    reason: `FileSystem write operations (tool: "${toolName}") are restricted by read-only constraints.`,
+                    risk_level: 'high',
+                    intervention_prompt: 'Do not attempt to write to the file system. Use read-only operations instead.'
+                };
+            }
+        }
 
         // ── FAST PATH 1: Safe tools bypass LLM entirely ──
         if (SAFE_TOOLS.has(toolName)) {

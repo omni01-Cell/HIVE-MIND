@@ -519,6 +519,17 @@ ${textToAnalyze}
                 console.error('[Watchdog] Erreur scan MAPLE inactifs:', err.message);
             }
 
+            // 0.5. MindOS Drives : Évaluation des motivations proactives dans les groupes actifs
+            try {
+                const { driverSystem } = await import('../../services/mindos/DriverSystem.js');
+                const activeChats = await workingMemory.getActiveGroups(120);
+                for (const chatId of activeChats) {
+                    await driverSystem.evaluateDrives(chatId, 'hive_main');
+                }
+            } catch (err: any) {
+                console.error('[Watchdog] Erreur évaluation MindOS Drives:', err.message);
+            }
+
             // 1. Check Inbox
             let unreadEvents = await eventInboxService.getUnreadEvents(10);
 
