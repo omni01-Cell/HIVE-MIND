@@ -10,6 +10,120 @@ import { providerRouter } from '../../providers/index.js';
 import { actionMemory } from '../memory/ActionMemory.js';
 import { supabase } from '../supabase.js';
 
+// ============================================================================
+// STEP VARIABLES INTERPOLATION UTILITIES
+// ============================================================================
+
+function extractValueFromStepResult(result: any, placeholderName: string): string {
+    if (!result) return '';
+    
+    // Extract output payload
+    let output = result.llmOutput;
+    if (output === undefined) {
+        output = result.data;
+    }
+    if (output === undefined) {
+        output = result;
+    }
+    
+    const isPathPlaceholder = placeholderName.toLowerCase().includes('path');
+    const isUrlPlaceholder = placeholderName.toLowerCase().includes('url');
+
+    // Recursive object traversal to search key patterns
+    const findKey = (obj: any, keys: string[]): any => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        for (const key of keys) {
+            if (key in obj) return obj[key];
+        }
+        for (const k in obj) {
+            const found = findKey(obj[k], keys);
+            if (found !== undefined) return found;
+        }
+        return undefined;
+    };
+
+    if (typeof output === 'object' && output !== null) {
+        if (isPathPlaceholder) {
+            const pathKeys = ['filePath', 'path', 'fileName', 'file', 'filepath'];
+            const foundPath = findKey(output, pathKeys);
+            if (foundPath) return String(foundPath);
+        }
+        if (isUrlPlaceholder) {
+            const urlKeys = ['url', 'href', 'link', 'result'];
+            const foundUrl = findKey(output, urlKeys);
+            if (foundUrl) return String(foundUrl);
+        }
+        
+        // General common keys
+        const generalKeys = ['result', 'data', 'text', 'value', 'filePath', 'path', 'url'];
+        const foundGeneral = findKey(output, generalKeys);
+        if (foundGeneral !== undefined) {
+            if (typeof foundGeneral === 'object') {
+                return JSON.stringify(foundGeneral);
+            }
+            return String(foundGeneral);
+        }
+        
+        // Default properties fallback
+        if (output.result !== undefined) {
+            return typeof output.result === 'object' ? JSON.stringify(output.result) : String(output.result);
+        }
+        if (output.data !== undefined) {
+            if (typeof output.data === 'object' && output.data.result !== undefined) {
+                return String(output.data.result);
+            }
+            return typeof output.data === 'object' ? JSON.stringify(output.data) : String(output.data);
+        }
+        
+        return JSON.stringify(output);
+    }
+    
+    return String(output);
+}
+
+function interpolateParams(params: any, stepResults: any): any {
+    if (!params) return params;
+    
+    if (typeof params === 'string') {
+        // Match {{xxx_from_step_X}}
+        return params.replace(/\{\{([a-zA-Z0-9_]+)_from_step_(\d+)\}\}/g, (match, name, stepIdStr) => {
+            const stepId = parseInt(stepIdStr, 10);
+            const result = stepResults[stepId];
+            if (result) {
+                const val = extractValueFromStepResult(result, name);
+                console.log(`[Planner] 🔄 Interpolation placeholder: "${match}" -> "${val}"`);
+                return val;
+            }
+            console.warn(`[Planner] ⚠️ Impossible d'interpoler ${match}: aucun résultat pour l'étape ${stepId}`);
+            return match;
+        }).replace(/\{\{step_(\d+)(?:_([a-zA-Z0-9_]+))?\}\}/g, (match, stepIdStr, propName) => {
+            const stepId = parseInt(stepIdStr, 10);
+            const result = stepResults[stepId];
+            if (result) {
+                const val = extractValueFromStepResult(result, propName || 'result');
+                console.log(`[Planner] 🔄 Interpolation placeholder: "${match}" -> "${val}"`);
+                return val;
+            }
+            console.warn(`[Planner] ⚠️ Impossible d'interpoler ${match}: aucun résultat pour l'étape ${stepId}`);
+            return match;
+        });
+    }
+    
+    if (Array.isArray(params)) {
+        return params.map(item => interpolateParams(item, stepResults));
+    }
+    
+    if (typeof params === 'object' && params !== null) {
+        const interpolated: any = {};
+        for (const key in params) {
+            interpolated[key] = interpolateParams(params[key], stepResults);
+        }
+        return interpolated;
+    }
+    
+    return params;
+}
+
 // 🛡️ Parsing JSON robuste - bibliothèques externes
 // Ces imports seront dynamiques pour éviter les erreurs si non installées
 let json5, jsonRepair, Ajv;
@@ -476,6 +590,11 @@ Plan:`;
 
             // Exécuter l'étape
             try {
+                // Interpoler les paramètres avec les résultats des étapes précédentes
+                if (step.params) {
+                    step.params = interpolateParams(step.params, executionLog.results);
+                }
+
                 // [PRIORITY 4 FIX] Skip steps with no valid tool instead of executing 'unknown_tool'
                 const toolName = step.tool;
                 if (!toolName || toolName === 'unknown_tool') {
@@ -520,12 +639,13 @@ Plan:`;
 
                 // [BUG #8 FIX] Vérifier si l'outil a réellement réussi
                 if (result && (result.error === true || result.success === false)) {
-                    console.warn(`[Planner] ⚠️ Étape ${step.id} échouée (outil): ${result.message || 'erreur inconnue'}`);
+                    const errorMessage = result.message || result.error || (typeof result.llmOutput === 'string' ? result.llmOutput : '') || 'erreur inconnue';
+                    console.warn(`[Planner] ⚠️ Étape ${step.id} échouée (outil): ${errorMessage}`);
                     executionLog.failed.push(step.id);
-                    await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - ${result.message || 'erreur'}`);
+                    await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - ${errorMessage}`);
 
                     // Analyser si échec critique
-                    if (this._isCriticalFailure(step, new Error(result.message || 'tool_error'))) {
+                    if (this._isCriticalFailure(step, new Error(errorMessage || 'tool_error'))) {
                         console.warn(`[Planner] 🛑 Échec critique détecté, replanification...`);
                         return await this._replan(plan, executionLog, context);
                     }

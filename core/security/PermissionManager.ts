@@ -2,18 +2,18 @@
 // ============================================================================
 // Human-in-the-Loop (HITL) — Dual Logic Permission System
 //
-// LOGIQUE 1 (Primary — Out-of-Band): Admin Hub
-//   Envoie toutes les requêtes de sécurité vers un canal dédié
+// LOGIC 1 (Primary — Out-of-Band): Admin Hub
+//   Sends all security requests to a dedicated channel
 //   (Discord #bot-approvals, Telegram group, WhatsApp group).
-//   Admins répondent avec .approve <ID> ou .reject <ID> [feedback].
+//   Admins respond with .approve <ID> or .reject <ID> [feedback].
 //
-// LOGIQUE 2 (Fallback — In-Band): Approbation Contextuelle avec Escalade
-//   Si l'utilisateur est SuperAdmin → demande dans le chat actuel.
-//   Si non-admin ou tâche de fond → escalade en DM au Créateur.
-//   Timeout de 10 minutes pour chaque logique.
+// LOGIC 2 (Fallback — In-Band): Contextual Approval with Escalation
+//   If the user is SuperAdmin → asks in the current chat.
+//   If non-admin or background task → escalates via DM to the Creator.
+//   10-minute timeout for each logic.
 // ============================================================================
 
-import { resolve, isAbsolute } from 'path';
+import { resolve, isAbsolute, basename } from 'path';
 import * as fs from 'fs';
 import { transportManager } from '../transport/TransportManager.js';
 import { adminService } from '../../services/adminService.js';
@@ -40,14 +40,14 @@ export const SAFE_COMMANDS = new Set([
     'pwd', 'tree', 'date', 'which', 'ls', 'echo', 'cat', 'node --version', 'npm --version'
 ]);
 
-/** Résultat enrichi d'une demande de permission (HITL) */
+/** Enriched result of a permission request (HITL) */
 export interface PermissionResult {
     readonly granted: boolean;
-    /** Instruction corrective de l'humain (ex: "utilise npm run build à la place") */
+    /** Corrective instruction from the human (e.g. "use npm run build instead") */
     readonly feedback?: string;
 }
 
-/** Métadonnées internes d'une requête de permission en attente */
+/** Internal metadata for a pending permission request */
 interface PendingRequest {
     readonly id: string;
     readonly numericId: number;
@@ -75,13 +75,13 @@ export class PermissionManager {
 
     // ===== Configuration (via process.env) =====
 
-    /** Canal dédié Admin Hub (LOGIQUE 1) — ex: group WhatsApp ID, channel Discord */
+    /** Dedicated Admin Hub channel (LOGIC 1) — e.g. WhatsApp group ID, Discord channel */
     private readonly SECURITY_HUB_ID = process.env.SECURITY_HUB_ID || '';
-    /** Transport pour le Hub (whatsapp, telegram, discord) */
+    /** Transport for the Hub (whatsapp, telegram, discord) */
     private readonly SECURITY_TRANSPORT = process.env.SECURITY_TRANSPORT || 'whatsapp';
-    /** Timeout In-Band (LOGIQUE 2) — 10 minutes */
+    /** Timeout In-Band (LOGIC 2) — 10 minutes */
     private readonly INBAND_TIMEOUT_MS = 10 * 60 * 1000;
-    /** Timeout Admin Hub (LOGIQUE 1) — 10 minutes avant fallback vers LOGIQUE 2 */
+    /** Timeout Admin Hub (LOGIC 1) — 10 minutes before fallback to LOGIC 2 */
     private readonly HUB_TIMEOUT_MS = 10 * 60 * 1000;
 
     constructor() {
@@ -89,25 +89,51 @@ export class PermissionManager {
         this.sandboxDir = process.env.SANDBOX_DIR 
             ? resolve(process.env.SANDBOX_DIR) 
             : resolve(this.originalCwd, 'Sandbox1');
-            
+
+        // WHY: storage_hm lives physically inside Sandbox1/ for containment,
+        // but the agent sees it as a separate top-level "disk" via a symlink
+        // at project root (storage_hm → Sandbox1/storage_hm).
+        // storageDir resolves through the symlink so path checks work transparently.
         this.storageDir = process.env.STORAGE_DIR
             ? resolve(process.env.STORAGE_DIR)
             : resolve(this.originalCwd, 'storage_hm');
 
+        // 1. Create physical sandbox directory
         if (!fs.existsSync(this.sandboxDir)) {
             fs.mkdirSync(this.sandboxDir, { recursive: true });
         }
-        if (!fs.existsSync(this.storageDir)) {
-            fs.mkdirSync(this.storageDir, { recursive: true });
+
+        // 2. Create physical storage inside sandbox
+        const physicalStoragePath = resolve(this.sandboxDir, 'storage_hm');
+        if (!fs.existsSync(physicalStoragePath)) {
+            fs.mkdirSync(physicalStoragePath, { recursive: true });
+        }
+
+        // 3. Create/verify symlink at project root for agent transparency
+        //    The agent navigates via storage_hm/ and never discovers it lives in Sandbox1/
+        const symlinkPath = resolve(this.originalCwd, 'storage_hm');
+        try {
+            const stats = fs.lstatSync(symlinkPath);
+            if (!stats.isSymbolicLink() && stats.isDirectory()) {
+                // A real directory exists at root (legacy layout) — remove and replace with symlink
+                const entries = fs.readdirSync(symlinkPath);
+                if (entries.length === 0) {
+                    fs.rmdirSync(symlinkPath);
+                    fs.symlinkSync(physicalStoragePath, symlinkPath);
+                }
+                // If non-empty real dir, leave it alone to avoid data loss
+            }
+        } catch {
+            // Path does not exist — create symlink
+            fs.symlinkSync(physicalStoragePath, symlinkPath);
         }
         
         this.allowedDirectories.add(this.sandboxDir);
         this.allowedDirectories.add(this.storageDir);
-        this.allowedDirectories.add(this.originalCwd);
     }
 
     // =========================================================================
-    // SANDBOX VALIDATION (inchangé)
+    // SANDBOX VALIDATION
     // =========================================================================
 
     isInSandbox(targetPath: string, currentCwd: string = this.originalCwd): boolean {
@@ -121,16 +147,18 @@ export class PermissionManager {
     }
 
     /**
-     * Génère un message d'aide lisible par le LLM listant les zones autorisées.
-     * Injecté dans chaque message d'erreur pour permettre l'auto-correction.
+     * Generates a human-readable hint for the LLM listing authorized write zones.
+     * Injected into every error message to enable self-correction.
      *
-     * Zones autorisées :
-     * - storage_hm/ → Stockage persistant libre de l'agent (notes, fichiers, données).
-     * - Sandbox1    → Zone d'exécution de code et de scripts temporaires.
+     * Authorized zones:
+     * - storage_hm/ → Persistent agent storage (notes, files, data).
+     * - Sandbox1/   → Code execution and temporary script zone.
      */
     private getAuthorizedDirectoriesHint(): string {
-        const dirs = [...this.allowedDirectories].join('\n  - ');
-        return `\n[SANDBOX HINT] Tu as un accès en LECTURE universel (tout le système de fichiers). Pour l'ÉCRITURE, tu es limité aux répertoires suivants :\n  - ${dirs}\n  → ${this.storageDir} : ton espace de stockage persistant (fichiers, données, notes).\n  → ${this.sandboxDir} : ton espace d'exécution de code et de scripts temporaires.\nRetente l'action d'écriture en ciblant l'un de ces répertoires.`;
+        return `\n[SANDBOX HINT] You have universal READ access to the entire filesystem (the "Host Disk"). However, for WRITE access, you are strictly limited to your two authorized virtual disks:\n` +
+               `  - Sandbox Execution Disk: ${basename(this.sandboxDir)}/ (for running scripts, compiling code, and temporary tasks).\n` +
+               `  - Dedicated Storage Disk: ${basename(this.storageDir)}/ (for persistently saving your data, documents, stickers, screenshots).\n` +
+               `Any other directory (the rest of the project, /home, etc.) is the "Host Disk" and is READ-ONLY. Retry your write action targeting one of your two authorized virtual disks.`;
     }
 
     validateBashCommand(command: string, currentCwd: string = this.originalCwd): { result: boolean; requiresPermission: boolean; reason?: string } {
@@ -139,7 +167,7 @@ export class PermissionManager {
 
         // Check single-word banned commands (su, sudo)
         if (BANNED_COMMANDS.includes(baseCmd)) {
-            return { result: false, requiresPermission: false, reason: `La commande '${baseCmd}' est strictement interdite (escalade de privilèges).` };
+            return { result: false, requiresPermission: false, reason: `Command '${baseCmd}' is strictly forbidden (privilege escalation).` };
         }
 
         // Check compound flag patterns (node -e, bash -c, etc.)
@@ -149,7 +177,7 @@ export class PermissionManager {
                 ([cmd, flag]) => baseCmd === cmd && firstFlag === flag
             );
             if (isPatternBanned) {
-                return { result: false, requiresPermission: false, reason: `La combinaison '${baseCmd} ${firstFlag}' est interdite (exécution inline hors sandbox).` };
+                return { result: false, requiresPermission: false, reason: `The combination '${baseCmd} ${firstFlag}' is forbidden (inline execution outside sandbox).` };
             }
         }
 
@@ -162,7 +190,7 @@ export class PermissionManager {
                 return {
                     result: false,
                     requiresPermission: true,
-                    reason: `Navigation impossible vers '${targetDir}' : répertoire hors sandbox.${this.getAuthorizedDirectoriesHint()}`
+                    reason: `Cannot navigate to '${targetDir}': directory outside sandbox.${this.getAuthorizedDirectoriesHint()}`
                 };
             }
         }
@@ -174,7 +202,7 @@ export class PermissionManager {
             return {
                 result: false,
                 requiresPermission: true,
-                reason: `Écriture impossible vers '${filePath}' : répertoire hors sandbox.${this.getAuthorizedDirectoriesHint()}`
+                reason: `Cannot write to '${filePath}': directory outside sandbox.${this.getAuthorizedDirectoriesHint()}`
             };
         }
         return { result: true, requiresPermission: false };
@@ -185,15 +213,15 @@ export class PermissionManager {
     // =========================================================================
 
     /**
-     * Demande de permission via le système dual :
+     * Permission request via the dual system:
      *
-     * 1. LOGIQUE 1 (Admin Hub) — si SECURITY_HUB_ID est configuré :
-     *    Envoie sur le canal dédié avec `.approve <ID>` / `.reject <ID> [feedback]`.
-     *    Timeout → fallback vers LOGIQUE 2.
+     * 1. LOGIC 1 (Admin Hub) — if SECURITY_HUB_ID is configured:
+     *    Sends to the dedicated channel with `.approve <ID>` / `.reject <ID> [feedback]`.
+     *    Timeout → fallback to LOGIC 2.
      *
-     * 2. LOGIQUE 2 (In-Band avec Escalade) :
-     *    - Si senderJid est SuperAdmin → demande dans le chat actuel (In-Band)
-     *    - Sinon → escalade en DM au SUPER_ADMIN_JID
+     * 2. LOGIC 2 (In-Band with Escalation):
+     *    - If senderJid is SuperAdmin → asks in the current chat (In-Band)
+     *    - Otherwise → escalates via DM to the SUPER_ADMIN_JID
      *    Timeout → { granted: false }
      */
     async askPermission(
@@ -221,68 +249,68 @@ export class PermissionManager {
             this.pendingRequests.set(requestId, pending);
             this.numericIdMap.set(numericId, requestId);
 
-            // ── LOGIQUE 0 : CLI / TUI (Local Admin) ──
-            // L'utilisateur physiquement devant le terminal est l'admin par défaut.
+            // ── LOGIC 0: CLI / TUI (Local Admin) ──
+            // The user physically at the terminal is the admin by default.
             if (sourceChannel === 'cli') {
-                console.log(`[Permission] 💻 Requête CLI locale, demande directe dans le terminal.`);
+                console.log(`[Permission] 💻 Local CLI request, asking directly in terminal.`);
                 await this._startInBandFallback(pending, true);
                 return;
             }
 
-            // ── LOGIQUE 1 : Admin Hub (Out-of-Band) ──
+            // ── LOGIC 1: Admin Hub (Out-of-Band) ──
             if (this.SECURITY_HUB_ID) {
                 try {
                     await this._sendHubRequest(pending);
-                    console.log(`[Permission] 🏢 Requête #${numericId} envoyée au Hub (${this.SECURITY_TRANSPORT})`);
+                    console.log(`[Permission] 🏢 Request #${numericId} sent to Hub (${this.SECURITY_TRANSPORT})`);
 
-                    // Prévenir l'utilisateur final qu'on attend l'admin
+                    // Notify the end user that we're waiting for admin approval
                     await transportManager.sendText(
                         chatId,
-                        `⏳ _Une action sensible a été détectée. En attente de validation par l'administrateur système (Requête #${numericId})..._`,
+                        `⏳ _Une action sensible a été détectée. En attente de validation par l'administrateur système (Requête #${numericId})..._\n_A sensitive action was detected. Waiting for system administrator approval (Request #${numericId})..._`,
                         {},
                         sourceChannel
                     ).catch(() => {}); // Non-bloquant
 
-                    // Timeout Hub → Fallback vers LOGIQUE 2
+                    // Timeout Hub → Fallback to LOGIC 2
                     setTimeout(() => {
                         if (this.pendingRequests.has(requestId)) {
-                            console.log(`[Permission] ⏰ Timeout Hub pour #${numericId}, escalade vers LOGIQUE 2 (In-Band)`);
+                            console.log(`[Permission] ⏰ Hub timeout for #${numericId}, escalating to LOGIC 2 (In-Band)`);
                             this._startInBandFallback(pending, false);
                         }
                     }, this.HUB_TIMEOUT_MS);
 
-                    return; // La promise sera résolue par handleAdminCommand ou le fallback
+                    return; // Promise will be resolved by handleAdminCommand or fallback
                 } catch (hubErr) {
-                    console.warn(`[Permission] ⚠️ Hub indisponible, fallback direct vers LOGIQUE 2:`, hubErr);
-                    // Fallthrough → LOGIQUE 2
+                    console.warn(`[Permission] ⚠️ Hub unavailable, direct fallback to LOGIC 2:`, hubErr);
+                    // Fallthrough → LOGIC 2
                 }
             }
 
-            // ── LOGIQUE 2 : In-Band avec Escalade (direct ou fallback) ──
+            // ── LOGIC 2: In-Band with Escalation (direct or fallback) ──
             await this._startInBandFallback(pending, false);
         });
     }
 
     // =========================================================================
-    // LOGIQUE 1 — ADMIN HUB (Out-of-Band)
+    // LOGIC 1 — ADMIN HUB (Out-of-Band)
     // =========================================================================
 
-    /** Envoie la requête formatée au canal de sécurité */
+    /** Sends the formatted request to the security channel */
     private async _sendHubRequest(pending: PendingRequest): Promise<void> {
         const promptMessage =
-            `🚨 *REQUÊTE DE SÉCURITÉ #${pending.numericId}* 🚨\n\n`
+            `🚨 *REQUÊTE DE SÉCURITÉ / SECURITY REQUEST #${pending.numericId}* 🚨\n\n`
             + `*Source:* Conversation \`${pending.chatId.split('@')[0]}\`\n`
-            + `*Initiateur:* ${pending.senderJid.split('@')[0]}\n`
+            + `*Initiateur / Initiator:* ${pending.senderJid.split('@')[0]}\n`
             + `*Action:* ${pending.actionDescription}\n\n`
-            + `Pour répondre :\n`
+            + `Pour répondre / To respond:\n`
             + `👉 \`.approve ${pending.numericId}\`\n`
-            + `👉 \`.reject ${pending.numericId} [instructions de correction]\``;
+            + `👉 \`.reject ${pending.numericId} [instructions]\``;
 
         await transportManager.sendText(this.SECURITY_HUB_ID, promptMessage, {}, this.SECURITY_TRANSPORT);
     }
 
     /**
-     * Traite les commandes .approve / .reject depuis le Hub.
+     * Processes .approve / .reject commands from the Hub.
      */
     handleAdminCommand(text: string): boolean {
         const trimmed = text.trim();
@@ -307,27 +335,27 @@ export class PermissionManager {
     private _resolveByNumericId(numericId: number, result: PermissionResult): boolean {
         const requestId = this.numericIdMap.get(numericId);
         if (!requestId) {
-            console.warn(`[Permission] ⚠️ Requête #${numericId} introuvable ou expirée`);
+            console.warn(`[Permission] ⚠️ Request #${numericId} not found or expired`);
             return false;
         }
 
         const pending = this.pendingRequests.get(requestId);
         if (!pending) return false;
 
-        console.log(`[Permission] ${result.granted ? '✅' : '❌'} Requête #${numericId} ${result.granted ? 'approuvée' : 'rejetée'}`);
+        console.log(`[Permission] ${result.granted ? '✅' : '❌'} Request #${numericId} ${result.granted ? 'approved' : 'rejected'}`);
         this._cleanup(requestId, numericId);
         pending.resolve(result);
         return true;
     }
 
     // =========================================================================
-    // LOGIQUE 2 — IN-BAND AVEC ESCALADE (Fallback)
+    // LOGIC 2 — IN-BAND WITH ESCALATION (Fallback)
     // =========================================================================
 
     /**
-     * Démarre la logique In-Band :
-     * - Si forceDirect (CLI) ou senderJid est SuperAdmin → demande dans le chat actuel
-     * - Sinon (non-admin ou tâche système) → escalade en DM au Owner (DB)
+     * Starts the In-Band logic:
+     * - If forceDirect (CLI) or senderJid is SuperAdmin → asks in the current chat
+     * - Otherwise (non-admin or background task) → escalates via DM to the Owner (DB)
      */
     private async _startInBandFallback(pending: PendingRequest, forceDirect: boolean = false): Promise<void> {
         const { chatId, senderJid, actionDescription, sourceChannel, id: requestId, numericId } = pending;
@@ -339,32 +367,33 @@ export class PermissionManager {
         const isAdmin = forceDirect || await adminService.isSuperUser(senderJid);
 
         if (!isAdmin) {
-            // Non-admin → escalade vers DM de l'Owner (résolu dynamiquement depuis la DB)
+            // Non-admin → escalate via DM to the Owner (resolved dynamically from DB)
             const ownerJid = await adminService.getOwnerJid();
             if (ownerJid) {
                 targetChat = ownerJid;
-                targetChannel = 'whatsapp'; // On force sur WhatsApp pour l'Owner
+                targetChannel = 'whatsapp'; // Force WhatsApp for the Owner
                 escalated = true;
-                console.log(`[Permission] 🔀 Escalade #${numericId} : demande envoyée en DM à l'Owner (DB)`);
+                console.log(`[Permission] 🔀 Escalation #${numericId}: request sent via DM to Owner (DB)`);
             } else {
-                console.warn(`[Permission] ⚠️ Aucun owner trouvé dans global_admins. Blocage par défaut.`);
+                console.warn(`[Permission] ⚠️ No owner found in global_admins. Blocking by default.`);
                 this._cleanup(requestId, numericId);
-                pending.resolve({ granted: false, feedback: "Aucun propriétaire (owner) configuré dans la base de données pour approuver cette action." });
+                pending.resolve({ granted: false, feedback: "No owner configured in the database to approve this action." });
                 return;
             }
         } else {
-            console.log(`[Permission] 💬 Demande In-Band #${numericId} dans le chat actuel${forceDirect ? ' (CLI Local)' : ''}`);
+            console.log(`[Permission] 💬 In-Band request #${numericId} in current chat${forceDirect ? ' (Local CLI)' : ''}`);
         }
 
         const promptMessage =
-            `⚠️ *ALERTE SÉCURITÉ${escalated ? ' (Escalade)' : ''}${forceDirect ? '' : ` — Requête #${numericId}`}* ⚠️\n\n`
+            `⚠️ *ALERTE SÉCURITÉ / SECURITY ALERT${escalated ? ' (Escalade/Escalation)' : ''}${forceDirect ? '' : ` — Requête/Request #${numericId}`}* ⚠️\n\n`
             + `L'agent IA tente une action hors sandbox :\n`
+            + `The AI agent is attempting an action outside the sandbox:\n`
             + `*Action:* ${actionDescription}\n`
-            + `*Demandé par:* ${senderJid.split('@')[0]}\n\n`
-            + `Répondez par :\n`
-            + `👉 *oui* (autoriser)\n`
-            + `👉 *non* (bloquer)\n`
-            + `👉 *non, fais plutôt [votre consigne]* (corriger l'agent)`;
+            + `*Demandé par / Requested by:* ${senderJid.split('@')[0]}\n\n`
+            + `Répondez par / Reply with:\n`
+            + `👉 *oui / yes* (autoriser / allow)\n`
+            + `👉 *non / no* (bloquer / block)\n`
+            + `👉 *non, [consigne] / no, [instruction]* (corriger l'agent / correct the agent)`;
 
         try {
             await transportManager.sendText(targetChat, promptMessage, {}, targetChannel);
@@ -372,21 +401,21 @@ export class PermissionManager {
             // Timeout In-Band
             setTimeout(() => {
                 if (this.pendingRequests.has(requestId)) {
-                    console.log(`[Permission] ⏰ Timeout In-Band pour #${numericId}. Action bloquée.`);
-                    transportManager.sendText(targetChat, `⏳ Timeout de la demande #${numericId} expirée. Action bloquée par défaut.`, {}, targetChannel).catch(() => {});
+                    console.log(`[Permission] ⏰ In-Band timeout for #${numericId}. Action blocked.`);
+                    transportManager.sendText(targetChat, `⏳ Timeout de la demande #${numericId}. Action bloquée par défaut.\nRequest #${numericId} timed out. Action blocked by default.`, {}, targetChannel).catch(() => {});
                     this._cleanup(requestId, numericId);
-                    pending.resolve({ granted: false, feedback: "L'administrateur n'a pas répondu à temps (Timeout)." });
+                    pending.resolve({ granted: false, feedback: "The administrator did not respond in time (Timeout)." });
                 }
             }, this.INBAND_TIMEOUT_MS);
 
         } catch (error) {
-            console.error(`[Permission] ❌ Impossible d'envoyer la demande In-Band:`, error);
+            console.error(`[Permission] ❌ Failed to send In-Band request:`, error);
             this._cleanup(requestId, numericId);
             // WHY: If the request fails (network error, socket disconnected), we MUST provide feedback
             // to the LLM so it knows why its action was denied, rather than a silent failure.
             pending.resolve({ 
                 granted: false, 
-                feedback: "Impossible de joindre l'administrateur (erreur réseau/connexion). L'action a été bloquée par sécurité. Veuillez réessayer plus tard." 
+                feedback: "Unable to reach the administrator (network/connection error). Action blocked for security. Please try again later." 
             });
         }
     }
@@ -396,13 +425,13 @@ export class PermissionManager {
     // =========================================================================
 
     /**
-     * Traite une réponse oui/non d'un utilisateur (In-Band).
-     * Sécurité : le Core doit vérifier que senderJid est admin AVANT d'appeler.
+     * Processes a yes/no response from a user (In-Band).
+     * Security: Core must verify that senderJid is admin BEFORE calling.
      *
-     * Patterns reconnus :
-     * - "oui" / "y" / "ok"              → granted: true
-     * - "non" / "n" / "no"              → granted: false
-     * - "non, utilise npm run build"     → granted: false, feedback: "utilise npm run build"
+     * Recognized patterns:
+     * - "oui" / "y" / "ok" / "yes"       → granted: true
+     * - "non" / "n" / "no"               → granted: false
+     * - "non, use npm run build"         → granted: false, feedback: "use npm run build"
      */
     handleUserResponse(text: string): boolean {
         if (this.pendingRequests.size === 0) return false;
@@ -410,33 +439,33 @@ export class PermissionManager {
         const trimmed = text.trim();
         const lowerText = trimmed.toLowerCase();
 
-        // Trouver la requête In-Band la plus ancienne
+        // Find the oldest pending In-Band request
         const firstKey = this.pendingRequests.keys().next().value;
         if (firstKey === undefined) return false;
         const pending = this.pendingRequests.get(firstKey);
         if (!pending) return false;
 
-        // 1. Acceptation pure
-        if (/^(oui|y|yes|ok|autoriser)$/i.test(lowerText)) {
-            console.log(`[Permission] ✅ Requête #${pending.numericId} approuvée (In-Band)`);
+        // 1. Pure acceptance
+        if (/^(oui|y|yes|ok|autoriser|allow)$/i.test(lowerText)) {
+            console.log(`[Permission] ✅ Request #${pending.numericId} approved (In-Band)`);
             this._cleanup(pending.id, pending.numericId);
             pending.resolve({ granted: true });
             return true;
         }
 
-        // 2. Refus avec correction (HITL Actif)
-        const feedbackMatch = trimmed.match(/^non[,\s]+(.+)$/i);
+        // 2. Rejection with correction (Active HITL)
+        const feedbackMatch = trimmed.match(/^no[n]?[,\s]+(.+)$/i);
         if (feedbackMatch) {
             const feedback = feedbackMatch[1].trim();
-            console.log(`[Permission] ❌ Requête #${pending.numericId} rejetée avec feedback: "${feedback}"`);
+            console.log(`[Permission] ❌ Request #${pending.numericId} rejected with feedback: "${feedback}"`);
             this._cleanup(pending.id, pending.numericId);
             pending.resolve({ granted: false, feedback });
             return true;
         }
 
-        // 3. Refus pur
-        if (/^(non|n|no|bloquer|annuler)$/i.test(lowerText)) {
-            console.log(`[Permission] ❌ Requête #${pending.numericId} rejetée (In-Band)`);
+        // 3. Pure rejection
+        if (/^(non|n|no|bloquer|annuler|block|cancel)$/i.test(lowerText)) {
+            console.log(`[Permission] ❌ Request #${pending.numericId} rejected (In-Band)`);
             this._cleanup(pending.id, pending.numericId);
             pending.resolve({ granted: false });
             return true;
@@ -449,13 +478,13 @@ export class PermissionManager {
     // UTILITIES
     // =========================================================================
 
-    /** Nettoyage des maps internes après résolution */
+    /** Internal map cleanup after resolution */
     private _cleanup(requestId: string, numericId: number): void {
         this.pendingRequests.delete(requestId);
         this.numericIdMap.delete(numericId);
     }
 
-    /** Nombre de requêtes en attente (pour debug/monitoring) */
+    /** Number of pending requests (for debug/monitoring) */
     get pendingCount(): number {
         return this.pendingRequests.size;
     }

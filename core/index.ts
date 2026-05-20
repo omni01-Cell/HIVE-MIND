@@ -2276,12 +2276,17 @@ ${textToCompress}`
                     // WHY: Rehydrating state is not enough. The bot will wait silently for user input.
                     // We must synthesize an internal message to trigger the AI loop with the correct context.
                     this._handleMessage({
+                        type: 'message',
                         chatId: action.chatId,
-                        sender: 'system_recovery',
-                        senderName: 'SYSTEM',
-                        isGroup: action.chatId.endsWith('@g.us'),
-                        text: `[SYSTEM_RESUME] Tâche interrompue restaurée. Objectif initial: "${action.params?.goal || action.goal}". Reprends l'exécution de ce plan là où il s'est arrêté. Ne demande pas de permission, exécute la prochaine étape.`,
-                        sourceChannel: 'system'
+                        priority: 1,
+                        data: {
+                            chatId: action.chatId,
+                            sender: 'system_recovery',
+                            senderName: 'SYSTEM',
+                            isGroup: action.chatId.endsWith('@g.us'),
+                            text: `[SYSTEM_RESUME] Tâche interrompue restaurée. Objectif initial: "${action.params?.goal || action.goal}". Reprends l'exécution de ce plan là où il s'est arrêté. Ne demande pas de permission, exécute la prochaine étape.`,
+                            sourceChannel: 'system'
+                        }
                     } as any).catch(e => console.error('[Core] ❌ Erreur reprise automatique ReAct:', e));
                 }
             } else {

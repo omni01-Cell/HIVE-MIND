@@ -42,9 +42,9 @@ describe('PermissionManager (MOD 5 + MOD 7)', () => {
     // =========================================================================
 
     describe('isInSandbox', () => {
-        it('returns true for paths inside CWD', () => {
+        it('returns true for paths inside sandboxDir', () => {
             // Arrange
-            const target = `${process.cwd()}/src/index.ts`;
+            const target = `${pm.sandboxDir}/src/index.ts`;
 
             // Act
             const result = pm.isInSandbox(target);
@@ -53,7 +53,7 @@ describe('PermissionManager (MOD 5 + MOD 7)', () => {
             expect(result).toBe(true);
         });
 
-        it('returns false for paths outside CWD', () => {
+        it('returns false for paths outside sandboxDir', () => {
             // Act
             const result = pm.isInSandbox('/etc/passwd');
 
@@ -61,9 +61,9 @@ describe('PermissionManager (MOD 5 + MOD 7)', () => {
             expect(result).toBe(false);
         });
 
-        it('resolves relative paths against CWD', () => {
+        it('resolves relative paths against sandboxDir', () => {
             // Act
-            const result = pm.isInSandbox('./src/utils.ts');
+            const result = pm.isInSandbox('./src/utils.ts', pm.sandboxDir);
 
             // Assert
             expect(result).toBe(true);
@@ -108,7 +108,7 @@ describe('PermissionManager (MOD 5 + MOD 7)', () => {
 
         it('allows cd inside sandbox without permission', () => {
             // Act
-            const result = pm.validateBashCommand(`cd ${process.cwd()}/src`);
+            const result = pm.validateBashCommand(`cd ${pm.sandboxDir}/src`);
 
             // Assert
             expect(result.result).toBe(true);
@@ -132,7 +132,7 @@ describe('PermissionManager (MOD 5 + MOD 7)', () => {
     describe('validateFileWrite', () => {
         it('allows writes inside sandbox', () => {
             // Act
-            const result = pm.validateFileWrite(`${process.cwd()}/test.txt`);
+            const result = pm.validateFileWrite(`${pm.sandboxDir}/test.txt`);
 
             // Assert
             expect(result.result).toBe(true);

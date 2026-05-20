@@ -34,6 +34,7 @@ export class TransportManager {
             sendReaction: async () => true
         };
         this.register('internal', internalTransport);
+        this.register('system', internalTransport);
     }
 
     /**

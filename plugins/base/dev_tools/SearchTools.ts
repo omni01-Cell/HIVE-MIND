@@ -88,12 +88,18 @@ export default {
                     const absolutePath = path.resolve(process.cwd(), dirPath);
                     if (!fs.existsSync(absolutePath)) return { success: false, message: `Directory ${dirPath} does not exist.` };
 
+                    // WHY: storage_hm physically lives inside Sandbox1/ but the agent
+                    // sees it as an independent top-level disk. Hiding it from Sandbox1
+                    // listings maintains this virtual disk abstraction.
+                    const isSandboxRoot = absolutePath === permissionManager.sandboxDir;
+
                     const items = fs.readdirSync(absolutePath, { withFileTypes: true });
                     let result = '';
                     let count = 0;
 
                     for (const item of items) {
                         if (BANNED_DIRS.includes(item.name) || item.name.startsWith('.git')) continue;
+                        if (isSandboxRoot && item.name === 'storage_hm') continue;
                         
                         const type = item.isDirectory() ? '[DIR] ' : '[FILE]';
                         result += `${type} ${item.name}\n`;

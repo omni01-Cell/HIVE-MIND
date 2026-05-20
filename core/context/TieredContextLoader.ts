@@ -18,18 +18,18 @@
 import { container } from '../ServiceContainer.js';
 import { botIdentity } from '../../utils/botIdentity.js';
 import { readFileSync } from 'fs';
-import { dirname, join } from 'path';
+import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { permissionManager } from '../security/PermissionManager.js';
 import { blueprintManager } from '../blueprint/AgentBlueprint.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load the V3 system prompt template (contains {{PLACEHOLDERS}})
 let systemPromptTemplate = '';
 try {
     systemPromptTemplate = readFileSync(
-        join(__dirname, '..', '..', 'persona', 'prompts', 'system.md'), 'utf-8'
+        path.join(__dirname, '..', '..', 'persona', 'prompts', 'system.md'), 'utf-8'
     );
 } catch {
     systemPromptTemplate = 'You are HIVE-MIND V3, an autonomous AI agent.';
@@ -71,7 +71,7 @@ export class TieredContextLoader {
 
     /**
      * Initialise les services depuis le container.
-     * À appeler une fois au démarrage.
+     * Must be called once at startup.
      */
     init() {
         try {
@@ -360,7 +360,25 @@ export class TieredContextLoader {
         let economicConstraint = '';
         if (data.blueprint && data.blueprint.constraints) {
             const c = data.blueprint.constraints;
-            economicConstraint = `\n<economic_constraint>\n  <read_only_fs>${c.read_only_fs}</read_only_fs>\n  <max_budget_usd>${c.max_budget_usd}</max_budget_usd>\n  <max_iterations>${c.max_iterations}</max_iterations>\n</economic_constraint>\n`;
+            
+            // Resolve dynamic KKT lambda to detect budget panic
+            let lambda = 0;
+            try {
+                const runtime = container.get('runtime') as any;
+                if (runtime && runtime.finOps) {
+                    lambda = runtime.finOps.calculateLambda();
+                }
+            } catch {
+                // Non-blocking fallback
+            }
+
+            economicConstraint = `\n<economic_constraint>\n  <read_only_fs>${c.read_only_fs}</read_only_fs>\n  <max_budget_usd>${c.max_budget_usd}</max_budget_usd>\n  <max_iterations>${c.max_iterations}</max_iterations>\n`;
+            
+            if (lambda > 0.8) {
+                economicConstraint += `  <kkt_emergency>CRITICAL</kkt_emergency>\n  <lambda>${lambda.toFixed(2)}</lambda>\n  <kkt_directive>BUDGET EXHAUSTION NEARING. Minimize all tool execution and API requests. Conclude the current task immediately.</kkt_directive>\n`;
+            }
+            
+            economicConstraint += `</economic_constraint>\n`;
         }
 
         return `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}${mindosDrives}${economicConstraint}`;
@@ -409,7 +427,12 @@ ${steps || 'None yet'}
 
         block += `### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the \`get_my_capabilities\` tool**.\n`;
 
-        block += `\n### 📂 EXECUTION ENVIRONMENT (FILESYSTEM)\nYou have **universal read access** to the entire filesystem — use \`read_file\`, \`list_directory\`, and \`grep_search\` on ANY path (e.g., \`/home\`, \`/etc\`, project root, etc.).\n**Write access** is restricted to your authorized zones:\n- **Code Sandbox** (for scripts/code execution): \`${permissionManager.sandboxDir}\`\n- **File Storage** (for persistent files): \`${permissionManager.storageDir}\`\nFor file write operations, use only these directories. (Note: These are physical folders. Do NOT confuse them with your \`db_document_save\` database tools).\n`;
+        block += `\n### 📂 EXECUTION ENVIRONMENT (FILESYSTEM)\n` +
+                 `You have **universal read access** to the entire filesystem (referred to as the **"Host Disk"** — e.g. \`/home\`, \`/etc\`, project root, etc.). Use \`read_file\`, \`list_directory\`, and \`grep_search\` anywhere.\n` +
+                 `However, for **Write access**, you are strictly sandboxed and can write only to your two authorized virtual disks:\n` +
+                 `- **Sandbox Execution Disk**: Located at \`${path.basename(permissionManager.sandboxDir)}/\`. Use this virtual disk for running scripts, compiling code, and handling transient execution files.\n` +
+                 `- **Dedicated Storage Disk**: Located at \`${path.basename(permissionManager.storageDir)}/\`. Use this virtual disk to persistently save your files, assets, stickers, documents, and screenshots. This is an independent disk from the Sandbox.\n` +
+                 `Any attempt to write outside these virtual disks (e.g. directly to the "Host Disk" or project source code) is blocked and will require explicit HITL permission. Always direct your file outputs to their respective virtual disks.\n`;
 
         block += `\n### ⚡ EXECUTION DIRECTIVES (MANDATORY)\n`;
         block += `- **Actionable request → act NOW in this turn.** Never announce an action if you can execute it directly.\n`;
@@ -461,6 +484,12 @@ ${steps || 'None yet'}
             authority: { isSuperUser: false, isGlobalAdmin: false, isGroupAdmin: false, isBotAdmin: false, level: 0 },
             userSnapshot: { jid: message.sender, name: 'Unknown', interactionCount: 0 },
             groupBasics: null,
+            blueprint: {
+                metadata: { id: 'fallback', name: 'Safe Fallback', version: '0.1.0' },
+                mindos: { drives: [] },
+                action_space: { allowed_tools: [] },
+                constraints: { read_only_fs: false, max_budget_usd: 1.0, max_iterations: 10 }
+            },
             mode: 'UNIFIED'
         };
     }

@@ -86,7 +86,7 @@ export default {
             type: 'function',
             function: {
                 name: 'browser_screenshot',
-                description: 'Captures a screenshot of the current page. You MUST provide a descriptive filename (e.g. "hacker_news_home", "github_trending").',
+                description: 'Captures a screenshot of the current page and automatically sends it to the user. You do NOT need to call send_file or send_message to deliver the screenshot, as the system handles this instantly. You MUST provide a descriptive filename (e.g. "hacker_news_home", "github_trending"). Returns the file path of the saved screenshot.',
                 parameters: {
                     type: 'object',
                     properties: {
