@@ -1067,6 +1067,15 @@ class BaileysTransport extends EventEmitter {
     async setPresence(chatId: any, type: any) {
         if (!this.sock) return;
 
+        // Garde stricte : ignorer les JIDs internes/virtuels ou invalides
+        // WHY: Only real WhatsApp JIDs (@s.whatsapp.net, @g.us, @lid) are valid targets
+        // for Baileys sendPresenceUpdate. Internal system JIDs like 'system_internal_mind'
+        // or 'system@internal' must be rejected to prevent jidDecode() crashes.
+        const VALID_JID_SUFFIXES = ['@s.whatsapp.net', '@g.us', '@lid', '@broadcast'];
+        if (!chatId || typeof chatId !== 'string' || !VALID_JID_SUFFIXES.some(suffix => chatId.endsWith(suffix))) {
+            return;
+        }
+
         // Mapping types hive-mind -> baileys
         const presenceMap = {
             'composing': 'composing',

@@ -843,7 +843,7 @@ export class BotCore {
         }
 
         // Indicateur de frappe
-        await this.transport.setPresence(chatId, 'composing');
+        await this.transport.setPresence(chatId, 'composing', message.sourceChannel);
 
         // [FEEDBACK FIRST] Variables de contrôle pour la réponse rapide
         let feedbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -1489,7 +1489,7 @@ RULES:
 
                         // UX Agentique: Petit feedback visuel si c'est long
                         if (iterations > 1) {
-                            await this.transport.setPresence(chatId, 'composing');
+                            await this.transport.setPresence(chatId, 'composing', message.sourceChannel);
                         }
                     }
 
@@ -1669,7 +1669,7 @@ RULES:
 
                         if (ttsResult && ttsResult.filePath) {
                             // Indicateur "enregistrement" pour le voice note
-                            await this.transport.setPresence(chatId, 'recording');
+                            await this.transport.setPresence(chatId, 'recording', message.sourceChannel);
 
                             // Envoyer la note vocale via sendVoiceNote (PTT)
                             await this.transport.sendVoiceNote(chatId, ttsResult.filePath, {
@@ -1678,7 +1678,7 @@ RULES:
                             console.log(`[Core] ✓ Réponse vocale envoyée (${ttsResult.provider})`);
 
                             // Revenir en disponible
-                            await this.transport.setPresence(chatId, 'available');
+                            await this.transport.setPresence(chatId, 'available', message.sourceChannel);
 
                             // Stockage mémoire
                             await workingMemory.addMessage(chatId, 'assistant', finalResponse);
@@ -1824,7 +1824,7 @@ RULES:
                 console.log(`[Core] 📨 Message découpé en ${messageParts.length} parties`);
             }
 
-            await this.transport.setPresence(chatId, 'paused');
+            await this.transport.setPresence(chatId, 'paused', message.sourceChannel);
 
             // Mise à jour de la dernière interaction pour le mode conversationnel
             if (isGroup) {
@@ -1866,7 +1866,7 @@ RULES:
             } else {
                 await this.transport.sendUniversalResponse(chatId, { markdown: "Oups, j'ai bugué 😅 Réessaie !" }, {}, message.sourceChannel);
             }
-            await this.transport.setPresence(chatId, 'paused');
+            await this.transport.setPresence(chatId, 'paused', message.sourceChannel);
         }
     }
 
