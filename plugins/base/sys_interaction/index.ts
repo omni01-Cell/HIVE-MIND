@@ -29,11 +29,11 @@ export default {
             type: 'function',
             function: {
                 name: 'react_to_message',
-                description: 'Adds a reaction (emoji) to the message. Use to confirm (👍), like (❤️), or laugh (😂) instead of replying with text.',
+                description: 'Adds a single emoji reaction to the message. Use to confirm (👍), like (❤️), or laugh (😂) instead of replying with text. Returns a JSON structure: { success: boolean, message: string }.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        emoji: { type: 'string', description: 'The emoji to use (e.g., 👍, ❤️, 😂)' },
+                        emoji: { type: 'string', description: 'A single character emoji symbol (e.g., 👍, ❤️, 😂). Must be exactly one emoji.' },
                         target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional. The destination network. Defaults to the current network.' }
                     },
                     required: ['emoji']
@@ -44,17 +44,17 @@ export default {
             type: 'function',
             function: {
                 name: 'create_poll',
-                description: 'Creates a native poll. If the destination network does not support native polls, the transport will adapt the format.',
+                description: 'Creates a native poll. If the destination network does not support native polls, the transport will adapt the format. Returns a JSON structure: { success: boolean, message: string }.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        title: { type: 'string', description: 'The question or title of the poll' },
+                        title: { type: 'string', description: 'The question or title of the poll.' },
                         options: {
                             type: 'array',
                             items: { type: 'string' },
-                            description: 'List of possible choices (e.g., ["Monday", "Tuesday", "Never"])'
+                            description: 'List of possible choices (e.g., ["Monday", "Tuesday"]). Must contain between 2 and 10 choices.'
                         },
-                        allowMultipleAnswers: { type: 'boolean', description: 'If true, users can choose multiple options (default: false)' },
+                        allowMultipleAnswers: { type: 'boolean', description: 'If true, users can choose multiple options. Defaults to false.' },
                         target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional. The target network.' },
                         target_chat_id: { type: 'string', description: 'Optional. The target conversation ID.' }
                     },
@@ -66,14 +66,14 @@ export default {
             type: 'function',
             function: {
                 name: 'send_contact',
-                description: 'Sends a contact card (VCard). If the network does not support it, it will send formatted text.',
+                description: 'Sends a contact card (VCard). If the network does not support it, it will send formatted text. Returns a JSON structure: { success: boolean, message: string }.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        name: { type: 'string', description: 'Displayed contact name' },
-                        phone: { type: 'string', description: 'Full phone number (international format without +)' },
-                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional.' },
-                        target_chat_id: { type: 'string', description: 'Optional. Destination ID.' }
+                        name: { type: 'string', description: 'Displayed contact name.' },
+                        phone: { type: 'string', description: 'Full phone number (international format without + or spaces, e.g. 33612345678).' },
+                        target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional. The destination network.' },
+                        target_chat_id: { type: 'string', description: 'Optional. Destination chat/user ID.' }
                     },
                     required: ['name', 'phone']
                 }
@@ -83,7 +83,7 @@ export default {
             type: 'function',
             function: {
                 name: 'send_message',
-                description: 'Sends a message. Can be used to speak on the current network, OR to send a message to another network to another user (omni-channel).',
+                description: 'Sends a text message. Can be used to speak on the current network, OR to send a message to another network to another user (omni-channel). Returns a JSON structure: { success: boolean, message: string }.',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -99,11 +99,11 @@ export default {
             type: 'function',
             function: {
                 name: 'send_file',
-                description: 'Sends a file (image, video, document) to the target network. Universal (Discord, Telegram, WhatsApp).',
+                description: 'Sends a file (image, video, document, PDF) to the target network. Universal (Discord, Telegram, WhatsApp). Returns a JSON structure: { success: boolean, message: string }.',
                 parameters: {
                     type: 'object',
                     properties: {
-                        filePath: { type: 'string', description: 'The absolute path or URL of the file to send.' },
+                        filePath: { type: 'string', description: 'The path to the file. For local files, use the relative path or filename inside your designated Code Sandbox (e.g., "report.pdf" or "subfolder/image.png"). Absolute URLs starting with http:// or https:// are also supported.' },
                         caption: { type: 'string', description: 'Optional text accompanying the file.' },
                         target_channel: { type: 'string', enum: ['whatsapp', 'telegram', 'discord', 'cli'], description: 'Optional. The destination network. Defaults to current network.' },
                         target_chat_id: { type: 'string', description: 'Optional. The destination chat/user ID.' }
@@ -116,7 +116,7 @@ export default {
             type: 'function',
             function: {
                 name: 'get_my_capabilities',
-                description: 'Lists ALL features, plugins, and tools available to me. Use when the user asks "What can you do?" or "List your functions", as your current memory might be incomplete.',
+                description: 'Lists ALL active features, plugins, and tools available to me. Use when the user asks "What can you do?" or "List your functions", as your current memory might be incomplete. Returns a JSON structure: { success: boolean, message: string, data: { plugins: Array, tools: Array } } containing the list of capability objects.',
                 parameters: {
                     type: 'object',
                     properties: {},
@@ -128,17 +128,17 @@ export default {
             type: 'function',
             function: {
                 name: 'use_tool',
-                description: 'Meta-Executive tool. Allows executing ANY tool from your capabilities list (retrieved via get_my_capabilities), even if that tool is not active in your current context. Use this to bypass memory limitations.',
+                description: 'Meta-Executive tool. Allows executing ANY tool from your capabilities list (retrieved via get_my_capabilities), even if that tool is not active in your current context. Use this to bypass memory limitations. Returns the JSON response structure of the targeted tool.',
                 parameters: {
                     type: 'object',
                     properties: {
                         tool_name: {
                             type: 'string',
-                            description: 'The exact name of the function to execute (e.g., "react_to_message", "search_wikipedia")'
+                            description: 'The exact name of the function to execute (e.g., "react_to_message", "search_wikipedia").'
                         },
                         args: {
                             type: 'object',
-                            description: 'The arguments required by the target tool, in JSON format.'
+                            description: 'The arguments required by the target tool, in JSON format matching the targeted tool\'s schema.'
                         }
                     },
                     required: ['tool_name', 'args']
