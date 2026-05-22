@@ -165,7 +165,7 @@ export default {
                         role: 'assistant',
                         content: [
                             {
-                                type: 'input_text',
+                                type: 'output_text',
                                 text: m.content
                             }
                         ]
