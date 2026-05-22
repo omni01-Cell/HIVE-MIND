@@ -1224,10 +1224,45 @@ export class BotCore {
                             return `Step ${s.id} [${status}]: ${s.action} → ${resultSummary}`;
                         }).join('\n');
 
+                        const isUserAdmin = (fullContext as any).authority?.isSuperUser ||
+                            (fullContext as any).authority?.isGlobalAdmin ||
+                            ((fullContext as any).authority?.level && (fullContext as any).authority.level >= 2) ||
+                            false;
+
                         // If success rate is below 50%, skip LLM call — return factual report directly
                         if (successRate < 50) {
-                            console.warn(`[Planner] ⚠️ Low success rate (${successRate}%). Returning factual report instead of LLM summary.`);
-                            finalResponse = `⚠️ Plan partially failed (${successCount}/${totalSteps} steps completed, ${successRate}% success rate).\n\n${stepStatuses}`;
+                            console.warn(`[Planner] ⚠️ Low success rate (${successRate}%). Generating conversational apology.`);
+                            try {
+                                const failurePrompt = `<plan_execution_report>
+Objective: ${activePlan.goal}
+Result: ${successCount}/${totalSteps} steps completed (${successRate}% success rate) - FAILED.
+${failCount > 0 ? `⚠️ ${failCount} steps FAILED.` : ''}
+</plan_execution_report>
+
+<instructions>
+The task could not be completed successfully.
+Generate a polite, professional, and friendly apology message for the user, suitable for a business's customer service on WhatsApp.
+RULES:
+- Acknowledge that we encountered a technical issue or were unable to complete their request at this time.
+- Keep the tone warm, helpful, and professional.
+- Do NOT mention code-level details, tool names, or internal execution steps (e.g. "steps", "Planner", "database schemas", etc.) to the user.
+- Invite the user to try again in a few moments or contact support.
+- STRICTLY DO NOT claim success under any circumstances.
+</instructions>`;
+                                const summaryResponse = await providerRouter.chat([
+                                    ...history,
+                                    { role: 'user', content: failurePrompt }
+                                ], { category: 'AGENTIC' });
+
+                                finalResponse = summaryResponse.content;
+                            } catch (summaryErr: any) {
+                                console.error('[Planner] ❌ Échec génération excuses:', summaryErr.message);
+                                finalResponse = `Désolé, je n'ai pas pu finaliser votre demande pour le moment en raison d'un problème technique. N'hésitez pas à réessayer dans quelques instants ou à contacter notre support. Merci de votre patience ! 🙏`;
+                            }
+
+                            if (isUserAdmin) {
+                                finalResponse += `\n\n⚙️ *[Détails techniques (Administrateur)]* :\n${stepStatuses}`;
+                            }
                         } else {
                             try {
                                 const summaryPrompt = `<plan_execution_report>
@@ -1240,12 +1275,13 @@ ${stepStatuses}
 </plan_execution_report>
 
 <instructions>
-Generate an HONEST conversational summary of what happened.
+Generate an HONEST, polite, and professional conversational summary of what happened, suitable for a business's customer service on WhatsApp.
 RULES:
-- If steps failed, you MUST mention the failures explicitly.
+- Keep the tone warm, helpful, and professional.
+- If steps failed, you MUST mention the failures explicitly, but explain them in simple, user-friendly terms without using programmer jargon.
 - NEVER claim a file was created if the step that creates it failed or was skipped.
 - NEVER claim success if the success rate is below 80%.
-- If the overall result is a failure, say so clearly and explain what went wrong.
+- If the overall result is a failure, say so clearly, apologize politely, and explain what went wrong in a friendly way.
 - Do NOT invent outcomes that are not in the report above.
 </instructions>`;
                                 const summaryResponse = await providerRouter.chat([
@@ -1257,7 +1293,10 @@ RULES:
                             } catch (summaryErr: any) {
                                 // [BUG #7 FIX] Never leave the user without a response
                                 console.error('[Planner] ❌ Échec génération résumé:', summaryErr.message);
-                                finalResponse = `Plan executed (${successCount}/${totalSteps} steps, ${successRate}% success).\n\n${stepStatuses}`;
+                                finalResponse = `Désolé, je n'ai pas pu mener à bien l'intégralité de votre demande. N'hésitez pas à réessayer dans quelques instants.`;
+                                if (isUserAdmin) {
+                                    finalResponse += `\n\n⚙️ *[Détails techniques (Administrateur)]* :\n${stepStatuses}`;
+                                }
                             }
                         }
                         await this.actionMemory.completeAction(chatId, { success: (analysis as any).success });
