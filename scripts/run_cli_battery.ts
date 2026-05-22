@@ -120,6 +120,34 @@ async function simulateIncomingMessage(text: string, testId: number) {
 
 async function runTests() {
     try {
+        console.log('🧹 Nettoyage des anciens résultats et dossiers temporaires...');
+        
+        // Nettoyer les captures d'écran précédentes
+        const screenshotsDir = path.join(process.cwd(), 'storage_hm', 'screenshots');
+        if (fs.existsSync(screenshotsDir)) {
+            const files = fs.readdirSync(screenshotsDir);
+            for (const file of files) {
+                try {
+                    fs.unlinkSync(path.join(screenshotsDir, file));
+                } catch (e) {}
+            }
+        }
+        
+        // Nettoyer les répertoires temporaires créés par les autres tests de batterie
+        const dirsToClean = [
+            path.join(process.cwd(), 'storage_hm', 'veille_ia_2026'),
+            path.join(process.cwd(), 'storage_hm', 'benchmark_test'),
+            path.join(process.cwd(), 'storage_hm', 'portfolio_site'),
+            path.join(process.cwd(), 'storage_hm', 'baileys_check')
+        ];
+        for (const dir of dirsToClean) {
+            if (fs.existsSync(dir)) {
+                try {
+                    fs.rmSync(dir, { recursive: true, force: true });
+                } catch (e) {}
+            }
+        }
+
         console.log('🚀 Initializing bot core in CLI mode...');
         await botCore.init();
 
@@ -145,7 +173,18 @@ async function runTests() {
         process.stdout.write = hookStdout;
         process.stderr.write = hookStderr;
 
-        for (const test of TESTS) {
+        const runOnlyFirst = process.argv.includes('--first');
+        const targetIdArg = process.argv.find(arg => arg.startsWith('--id='));
+        const targetId = targetIdArg ? parseInt(targetIdArg.split('=')[1], 10) : null;
+        
+        let testsToRun = TESTS;
+        if (targetId) {
+            testsToRun = TESTS.filter(t => t.id === targetId);
+        } else if (runOnlyFirst) {
+            testsToRun = [TESTS[0]];
+        }
+
+        for (const test of testsToRun) {
             console.log(`\n==========================================`);
             console.log(`🚀 STARTING TEST ${test.id}: ${test.title}`);
             console.log(`==========================================\n`);

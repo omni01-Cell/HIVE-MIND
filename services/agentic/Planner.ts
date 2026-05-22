@@ -29,6 +29,24 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
     const isPathPlaceholder = placeholderName.toLowerCase().includes('path');
     const isUrlPlaceholder = placeholderName.toLowerCase().includes('url');
 
+    // Recursive object traversal to search exact case-insensitive key first
+    const findExactKey = (obj: any, targetKey: string): any => {
+        if (!obj || typeof obj !== 'object') return undefined;
+        const targetLower = targetKey.toLowerCase();
+        
+        for (const key in obj) {
+            if (key.toLowerCase() === targetLower) {
+                return obj[key];
+            }
+        }
+        
+        for (const key in obj) {
+            const found = findExactKey(obj[key], targetKey);
+            if (found !== undefined) return found;
+        }
+        return undefined;
+    };
+
     // Recursive object traversal to search key patterns
     const findKey = (obj: any, keys: string[]): any => {
         if (!obj || typeof obj !== 'object') return undefined;
@@ -43,13 +61,27 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
     };
 
     if (typeof output === 'object' && output !== null) {
+        // 1. Try to find exact case-insensitive key matching the placeholderName first
+        const exactMatch = findExactKey(output, placeholderName);
+        if (exactMatch !== undefined) {
+            if (typeof exactMatch === 'object' && exactMatch !== null) {
+                const subUrl = exactMatch.url || exactMatch.href || exactMatch.link;
+                if (subUrl && typeof subUrl !== 'object') {
+                    return String(subUrl);
+                }
+                return JSON.stringify(exactMatch);
+            }
+            return String(exactMatch);
+        }
+
+        // 2. Fallbacks for paths and URLs if exact match was not found
         if (isPathPlaceholder) {
             const pathKeys = ['filePath', 'path', 'fileName', 'file', 'filepath'];
             const foundPath = findKey(output, pathKeys);
             if (foundPath) return String(foundPath);
         }
         if (isUrlPlaceholder) {
-            const urlKeys = ['url', 'href', 'link', 'result'];
+            const urlKeys = ['url', 'href', 'link'];
             const foundUrl = findKey(output, urlKeys);
             if (foundUrl) return String(foundUrl);
         }
@@ -81,30 +113,67 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
     return String(output);
 }
 
+function formatToolForPlanner(t: any): string {
+    const name = t.function?.name || t.name;
+    const desc = t.function?.description || t.description || '';
+    const params = t.function?.parameters || t.parameters;
+    
+    let paramsStr = '';
+    if (params && params.properties) {
+        const required = params.required || [];
+        const props = Object.entries(params.properties).map(([key, val]: [string, any]) => {
+            const req = required.includes(key) ? ' (REQUIRED)' : ' (optional)';
+            const type = val.type ? `: ${val.type}` : '';
+            return `     * ${key}${type}${req} - ${val.description || ''}`;
+        }).join('\n');
+        if (props) {
+            paramsStr = `\n   Parameters:\n${props}`;
+        }
+    }
+    return `- ${name}: ${desc}${paramsStr}`;
+}
+
 function interpolateParams(params: any, stepResults: any): any {
     if (!params) return params;
     
     if (typeof params === 'string') {
-        // Match {{xxx_from_step_X}}
-        return params.replace(/\{\{([a-zA-Z0-9_]+)_from_step_(\d+)\}\}/g, (match, name, stepIdStr) => {
-            const stepId = parseInt(stepIdStr, 10);
-            const result = stepResults[stepId];
-            if (result) {
-                const val = extractValueFromStepResult(result, name);
-                console.log(`[Planner] 🔄 Interpolation placeholder: "${match}" -> "${val}"`);
-                return val;
+        // Robust multi-format interpolation parsing to support {{steps.2.output.filePath}}, {{step_2_filePath}}, {{filePath_from_step_2}}
+        return params.replace(/\{\{([\s\S]+?)\}\}/g, (match, inner) => {
+            const clean = inner.trim();
+            
+            // Format 1: {{name_from_step_X}}
+            const matchFromStep = clean.match(/^([a-zA-Z0-9_]+)_from_step_(\d+)$/i);
+            if (matchFromStep) {
+                const name = matchFromStep[1];
+                const stepId = parseInt(matchFromStep[2], 10);
+                const result = stepResults[stepId];
+                if (result) return extractValueFromStepResult(result, name);
+                return match;
             }
-            console.warn(`[Planner] ⚠️ Impossible d'interpoler ${match}: aucun résultat pour l'étape ${stepId}`);
-            return match;
-        }).replace(/\{\{step_(\d+)(?:_([a-zA-Z0-9_]+))?\}\}/g, (match, stepIdStr, propName) => {
-            const stepId = parseInt(stepIdStr, 10);
-            const result = stepResults[stepId];
-            if (result) {
-                const val = extractValueFromStepResult(result, propName || 'result');
-                console.log(`[Planner] 🔄 Interpolation placeholder: "${match}" -> "${val}"`);
-                return val;
+            
+            // Format 2: {{steps.X.output.name}} or {{step_X_name}} or {{step.X.name}}
+            const stepIdMatch = clean.match(/(?:step|steps)(?:\.|\s|_|-)?(\d+)/i);
+            if (stepIdMatch) {
+                const stepId = parseInt(stepIdMatch[1], 10);
+                const result = stepResults[stepId];
+                if (result) {
+                    let propName = 'result';
+                    const parts = clean.split(/[\._\-]/).map((p: string) => p.trim());
+                    const technicalWords = ['step', 'steps', 'output', 'result', String(stepId)];
+                    const cleanParts = parts.filter((p: string) => p && !technicalWords.includes(p.toLowerCase()));
+                    
+                    if (cleanParts.length > 0) {
+                        propName = cleanParts[0]; // take the custom property name, e.g. "filePath"
+                    }
+                    
+                    const val = extractValueFromStepResult(result, propName);
+                    console.log(`[Planner] 🔄 Interpolation placeholder: "${clean}" (step: ${stepId}, prop: ${propName}) -> "${val}"`);
+                    return val;
+                }
+                console.warn(`[Planner] ⚠️ Impossible d'interpoler ${match}: aucun résultat pour l'étape ${stepId}`);
+                return match;
             }
-            console.warn(`[Planner] ⚠️ Impossible d'interpoler ${match}: aucun résultat pour l'étape ${stepId}`);
+            
             return match;
         });
     }
@@ -123,6 +192,7 @@ function interpolateParams(params: any, stepResults: any): any {
     
     return params;
 }
+
 
 // 🛡️ Parsing JSON robuste - bibliothèques externes
 // Ces imports seront dynamiques pour éviter les erreurs si non installées
@@ -425,7 +495,7 @@ ${goal}
 </goal>
 
 <available_tools>
-${context.tools.map((t: any) => `- ${t.function?.name || t.name}: ${t.function?.description || t.description}`).join('\n')}
+${context.tools.map(formatToolForPlanner).join('\n')}
 </available_tools>
 
 <planning_instructions>
@@ -440,6 +510,12 @@ ${context.tools.map((t: any) => `- ${t.function?.name || t.name}: ${t.function?.
 5. CRITICAL: ONLY use tools EXACTLY as named in the available list. NEVER hallucinate tools.
 6. Use \`execute_bash_command\` for terminal commands, npm installs, Node scripts, and filesystem file creation.
 7. Use \`code_execution\` only for sandboxed JavaScript that orchestrates 2+ existing HIVE tools. Never use it for require/import, npm packages, shell commands, or local file writes.
+8. CRITICAL: To reuse outputs from prior steps (like generated files, URLs, or text), use the syntax "{{step_X_propertyName}}".
+   For example, if step 2 outputs a screenshot file path (e.g., property "filePath"), step 3 should use: {"filePath": "{{step_2_filePath}}"}.
+   If you need the default result of step 1, use: "{{step_1_result}}".
+   NEVER use random placeholders. Always refer to step outputs explicitly using the "{{step_X_propertyName}}" format.
+9. CRITICAL: Pay extreme attention to the parameters format of each tool. Provide ALL REQUIRED properties specified in the tool schema (e.g., "javascript" for "browser_eval", "text" for "send_message").
+10. CRITICAL: For web search tools (like \`google_ai_search\`, \`duckduck_search\`, \`wikipedia\`), the \`query\` parameter must ALWAYS be a short search query or a specific question (max 15 words). NEVER pass large blocks of text, scraped content, or massive step results (like "{{step_X_result}}" containing a scraped webpage) as the query argument. Doing so will cause HTTP query errors. To summarize, translate, or analyze previously retrieved text, do NOT call a search tool; instead, perform the summary directly in the final response step or use local tools.
 </planning_instructions>
 
 <output_format>
@@ -558,20 +634,27 @@ Plan:`;
      * @param {Object} context - {executeToolFn, chatId, message}
      * @returns {Promise<Object>} Résultat d'exécution
      */
-    async execute(plan: any, context: any) {
+    async execute(plan: any, context: any, initialExecutionLog?: any) {
         console.log(`[Planner] 🚀 Exécution du plan: ${plan.steps.length} étapes`);
 
         const executionLog = {
             planId: plan.id,
             goal: plan.goal,
-            startTime: Date.now(),
-            completed: [],
-            failed: [],
-            results: {}
+            plan: plan,
+            startTime: initialExecutionLog?.startTime || Date.now(),
+            completed: initialExecutionLog?.completed ? [...initialExecutionLog.completed] : [],
+            failed: initialExecutionLog?.failed ? [...initialExecutionLog.failed] : [],
+            results: initialExecutionLog?.results ? { ...initialExecutionLog.results } : {},
+            _replanAttempt: initialExecutionLog?._replanAttempt || false
         };
 
         for (let i = 0; i < plan.steps.length; i++) {
             const step = plan.steps[i];
+
+            if (executionLog.completed.includes(step.id)) {
+                console.log(`[Planner] ⏭️ Étape ${step.id} déjà complétée, passage.`);
+                continue;
+            }
 
             console.log(`[Planner] Étape ${step.id}/${plan.steps.length}: ${step.action}`);
 
@@ -726,12 +809,9 @@ Plan:`;
      * Détecte si un échec est critique
      */
     _isCriticalFailure(step: any, error: any) {
-        // Échec critique si:
-        // 1. C'est la première étape (base du plan)
-        // 2. Error fatale (network, auth, etc.)
-        if (step.id === 1) return true;
-        if (error.message.match(/(network|auth|timeout|fatal)/i)) return true;
-        return false;
+        // En mode de récupération adaptatif, n'importe quel échec d'étape est considéré comme critique
+        // pour déclencher une replanification intelligente (si pas déjà tentée).
+        return true;
     }
 
     /**
@@ -747,11 +827,38 @@ Plan:`;
 
         console.log('[Planner] 🔄 Replanification...');
 
-        // Build available tools list for the LLM
-        const availableToolNames = (context.tools || [])
-            .map((t: any) => t.function?.name || t.name)
-            .filter(Boolean)
-            .join(', ');
+        // Build detailed tools list for the LLM
+        const detailedToolsList = (context.tools || [])
+            .map(formatToolForPlanner)
+            .join('\n');
+
+        // Construit un log détaillé des étapes exécutées avec leurs résultats
+        const detailedStepsLog = originalPlan.steps.map((s: any) => {
+            const result = executionLog.results[s.id];
+            if (!result) return `- Step ${s.id} (${s.action}): Not executed`;
+            
+            const status = executionLog.completed.includes(s.id) ? 'SUCCESS' : 'FAILED';
+            let outputStr = '';
+            
+            if (result.error) {
+                outputStr = `Error: ${result.message || JSON.stringify(result)}`;
+            } else if (result.llmOutput) {
+                const out = result.llmOutput;
+                outputStr = typeof out === 'string' ? out : JSON.stringify(out);
+            } else {
+                outputStr = JSON.stringify(result);
+            }
+            
+            // Truncate output to avoid prompt bloat but keep crucial context (like accessibility tree)
+            if (outputStr.length > 3000) {
+                outputStr = outputStr.substring(0, 3000) + '\n... [TRUNCATED]';
+            }
+            
+            return `### Step ${s.id} (${s.action}) - ${status}
+- Tool: ${s.tool}
+- Params: ${JSON.stringify(s.params)}
+- Output/Error: ${outputStr}`;
+        }).join('\n\n');
 
         const replanPrompt = `<role>
 You are HIVE-MIND's adaptive PLANNER recovering from execution failure.
@@ -767,8 +874,12 @@ Completed steps: ${executionLog.completed.join(', ') || 'none'}
 Failed steps: ${executionLog.failed.join(', ')}
 </execution_results>
 
+<detailed_execution_log>
+${detailedStepsLog}
+</detailed_execution_log>
+
 <available_tools>
-${availableToolNames || 'No tool list provided'}
+${detailedToolsList || 'No tool list provided'}
 </available_tools>
 
 <replanning_strategy>
@@ -780,12 +891,30 @@ ${availableToolNames || 'No tool list provided'}
    - Modified parameters
    - Alternative step ordering
    - Simpler intermediate goals
+5. CRITICAL: Look closely at the <detailed_execution_log> to find the exact element references (like @e181, @e182) from the previous browser_snapshot step. In your corrected steps, use these exact references (e.g. {"selector": "@e182"}) as the parameters for browser_click or browser_fill.
+6. Use \`execute_bash_command\` for terminal commands, npm installs, Node scripts, and filesystem file creation.
+7. Use \`code_execution\` only for sandboxed JavaScript that orchestrates 2+ existing HIVE tools. Never use it for require/import, npm packages, shell commands, or local file writes.
+8. CRITICAL: To reuse outputs from prior steps (like generated files, URLs, or text), use the syntax "{{step_X_propertyName}}".
+   For example, if step 2 outputs a screenshot file path (e.g., property "filePath"), step 3 should use: {"filePath": "{{step_2_filePath}}"}.
+   If you need the default result of step 1, use: "{{step_1_result}}".
+   NEVER use random placeholders. Always refer to step outputs explicitly using the "{{step_X_propertyName}}" format.
+9. CRITICAL: Pay extreme attention to the parameters format of each tool. Provide ALL REQUIRED properties specified in the tool schema (e.g., "javascript" for "browser_eval", "text" for "send_message").
+10. CRITICAL: For web search tools (like \`google_ai_search\`, \`duckduck_search\`, \`wikipedia\`), the \`query\` parameter must ALWAYS be a short search query or a specific question (max 15 words). NEVER pass large blocks of text, scraped content, or massive step results (like "{{step_X_result}}" containing a scraped webpage) as the query argument. Doing so will cause HTTP query errors. To summarize, translate, or analyze previously retrieved text, do NOT call a search tool; instead, perform the summary directly in the final response step or use local tools.
 </replanning_strategy>
 
 <output_format>
 Respond in JSON (same format as original plan):
 {
-  "steps": [...],
+  "steps": [
+    {
+      "id": 1,
+      "action": "Clear action description",
+      "tool": "tool_name",
+      "params": {"key": "value"},
+      "estimated_time": 10,
+      "depends_on": []
+    }
+  ],
   "total_time_estimate": X,
   "complexity": "low|medium|high"
 }
@@ -803,8 +932,10 @@ New plan:`;
                 throw new Error('AI response for replan is empty');
             }
 
-            const newPlanText = response.content.replace(/```json|```/g, '').trim();
-            const newPlan = JSON.parse(newPlanText);
+            const newPlan = await this._parsePlanJson(response.content);
+            if (!newPlan) {
+                throw new Error('Impossible de parser le nouveau plan JSON après replanification');
+            }
 
             // Validate that all tools in the new plan actually exist
             const validToolNames = new Set((context.tools || []).map((t: any) => t.function?.name || t.name));
@@ -821,7 +952,7 @@ New plan:`;
             console.log('[Planner] ✅ Nouveau plan créé, réexécution...');
 
             // Execute with the new plan (guard flag already set, so no recursive replan)
-            return await this.execute({ ...originalPlan, steps: newPlan.steps }, context);
+            return await this.execute({ ...originalPlan, steps: newPlan.steps }, context, executionLog);
 
         } catch (e: any) {
             console.error('[Planner] Erreur replanification:', e.message);

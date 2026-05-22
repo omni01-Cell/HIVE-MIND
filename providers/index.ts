@@ -762,7 +762,7 @@ export async function loadAdapters(): Promise<void> {
                     providerRouter.registerAdapter(name, adapter.default);
                 }
             } catch (error: any) {
-                if (error.code !== 'ERR_MODULE_NOT_FOUND') {
+                if (error.code !== 'ERR_MODULE_NOT_FOUND' && error.code !== 'MODULE_NOT_FOUND') {
                     console.error(`[Router Debug] Erreur de chargement pour ${fileName}:`, error);
                 }
             }

@@ -80,7 +80,7 @@
                 "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.8
             },
-            "MORAL_COMPASS": {
+            "SAFETY_SENTINEL": {
                 "family": "groq",
                 "model": "openai/gpt-oss-120b",
                 "fallback": "gemma-4-31b-it",
@@ -192,7 +192,7 @@
                 "service_roles": [
                     "EXECUTOR",
                     "PLANNER",
-                    "MORAL_COMPASS"
+                    "SAFETY_SENTINEL"
                 ],
                 "chat_categories": [
                     "REASONING",
@@ -206,7 +206,7 @@
             },
             "openai/gpt-oss-120b": {
                 "service_roles": [
-                    "MORAL_COMPASS"
+                    "SAFETY_SENTINEL"
                 ],
                 "chat_categories": [
                     "REASONING"

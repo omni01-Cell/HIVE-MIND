@@ -1206,13 +1206,14 @@ export class BotCore {
                         const analysis = await planner.review(executionLog);
 
                         // [PRIORITY 1 FIX] Honest plan summary — block false success claims
+                        const activePlan = (executionLog as any).plan || plan;
                         const successCount = (executionLog as any).completed?.length || 0;
                         const failCount = (executionLog as any).failed?.length || 0;
-                        const totalSteps = (plan as any).steps?.length || 1;
+                        const totalSteps = activePlan.steps?.length || 1;
                         const successRate = Math.round((successCount / totalSteps) * 100);
 
                         // Build factual step-by-step status
-                        const stepStatuses = ((plan as any).steps || []).map((s: any) => {
+                        const stepStatuses = (activePlan.steps || []).map((s: any) => {
                             const succeeded = (executionLog as any).completed?.includes(s.id);
                             const failed = (executionLog as any).failed?.includes(s.id);
                             const status = succeeded ? '✅' : failed ? '❌' : '⏭️ skipped';
@@ -1230,7 +1231,7 @@ export class BotCore {
                         } else {
                             try {
                                 const summaryPrompt = `<plan_execution_report>
-Objective: ${(plan as any).goal}
+Objective: ${activePlan.goal}
 Result: ${successCount}/${totalSteps} steps completed (${successRate}% success rate)
 ${failCount > 0 ? `⚠️ ${failCount} steps FAILED.` : ''}
 
@@ -1875,7 +1876,7 @@ RULES:
 
 
     /**
-     * Exécute un outil de manière sécurisée (avec Critique et Boussole Morale)
+     * Exécute un outil de manière sécurisée (Sentinel)
      * Utiliser cette méthode au lieu de _executeTool direct pour le Planner
      */
     async _safeExecuteTool(toolCall: any, context: any): Promise<any> {
@@ -1891,6 +1892,7 @@ RULES:
         const authorityLevel = isSuperUser ? 'SUPERUSER' : (isGlobalAdmin ? 'GLOBAL_ADMIN' : `USER (Lvl ${level})`);
 
         console.log(`[SafeExecute] 🛡️ Exécution sécurisée demandée: ${toolName} (Level: ${authorityLevel})`);
+        console.log(`[SafeExecute] 📦 Arguments: ${toolCall.function.arguments}`);
 
         if (chatId) {
             await this.actionMemory.pulseAction(chatId);

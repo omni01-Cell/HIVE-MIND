@@ -155,8 +155,7 @@ export class RuntimeFinOps {
 
 /**
  * 2. RuntimeSentinel (VIGIL)
- * Replaces MoralCompass, MultiAgent.Critic, and MultiAgent.Observer.
- * Evaluates safety, ethics, and coherence in a single prompt before tool execution.
+ * Sentinel safety service that evaluates safety, ethics, and coherence in a single prompt before tool execution.
  */
 export class RuntimeSentinel {
     /**
@@ -276,7 +275,7 @@ Respond in JSON only:
 }
 </output_format>`;
 
-            const response = await providerRouter.callServiceRecipe('MORAL_COMPASS', [
+            const response = await providerRouter.callServiceRecipe('SAFETY_SENTINEL', [
                 { role: 'system', content: 'You are the HIVE-MIND VIGIL safety sentinel. Output clean JSON only.' },
                 { role: 'user', content: prompt }
             ]);
