@@ -3,6 +3,7 @@
         "familles_prioritaires": [
             "gemini",
             "openai",
+            "codex",
             "mistral",
             "anthropic",
             "kimi",
@@ -985,6 +986,91 @@
                         "rpd": 1000
                     },
                     "ptc_tier": "B"
+                }
+            ]
+        },
+        "codex": {
+            "nom_affiche": "OpenAI Codex OAuth",
+            "modeles": [
+                {
+                    "id": "gpt-5.5",
+                    "description": "GPT-5.5 Codex via OAuth",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 100,
+                        "tpm": 1000000,
+                        "rpd": 10000
+                    },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "gpt-5.4",
+                    "description": "GPT-5.4 Codex via OAuth",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 100,
+                        "tpm": 1000000,
+                        "rpd": 10000
+                    },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "gpt-5.4-mini",
+                    "description": "GPT-5.4 Mini Codex via OAuth",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 150,
+                        "tpm": 2000000,
+                        "rpd": 15000
+                    },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "gpt-5.3-codex",
+                    "description": "GPT-5.3 Codex via OAuth",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 100,
+                        "tpm": 1000000,
+                        "rpd": 10000
+                    },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "gpt-5.2",
+                    "description": "GPT-5.2 Codex via OAuth",
+                    "types": [
+                        "chat",
+                        "reasoning",
+                        "agentic",
+                        "coding"
+                    ],
+                    "quota": {
+                        "rpm": 100,
+                        "tpm": 1000000,
+                        "rpd": 10000
+                    },
+                    "ptc_tier": "S"
                 }
             ]
         }

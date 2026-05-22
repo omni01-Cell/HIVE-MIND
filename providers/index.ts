@@ -730,48 +730,46 @@ export const providerRouter = new ProviderRouter();
 // WHY: Exported and idempotent so ServiceContainer can `await loadAdapters()`.
 // The module-level fire-and-forget call below provides backward compatibility
 // for code paths that import providerRouter without going through the container.
-let _adaptersLoaded = false;
-export async function loadAdapters() {
-    if (_adaptersLoaded) return; // Idempotent — safe to call multiple times
-    _adaptersLoaded = true;
+let loadPromise: Promise<void> | null = null;
+export async function loadAdapters(): Promise<void> {
+    if (loadPromise) return loadPromise;
 
-    // Mapping: nom du fichier adaptateur → nom(s) à enregistrer
-    const adapterMapping = {
-        'openai': ['openai'],
-        'gemini': ['gemini'],
-        'anthropic': ['anthropic'],
-        'mistral': ['mistral'],
-        'kimi': ['kimi'],         // Kimi Code (API spéciale coding agents)
-        'moonshot': ['moonshot'], // Moonshot AI standard
-        'github': ['github'],     // GitHub Models (Free Tier)
-        'groq': ['groq'],         // Groq LPU (Fast Inference)
-        'huggingface': ['huggingface'], // HF Router
-        'nvidia': ['nvidia'],       // NVIDIA AI Platform (NIM)
-        'openrouter': ['openrouter'] // OpenRouter (Multi-provider fast gateway)
-    };
+    loadPromise = (async () => {
+        // Mapping: nom du fichier adaptateur → nom(s) à enregistrer
+        const adapterMapping = {
+            'codex': ['codex'],
+            'openai': ['openai'],
+            'gemini': ['gemini'],
+            'anthropic': ['anthropic'],
+            'mistral': ['mistral'],
+            'kimi': ['kimi'],         // Kimi Code (API spéciale coding agents)
+            'moonshot': ['moonshot'], // Moonshot AI standard
+            'github': ['github'],     // GitHub Models (Free Tier)
+            'groq': ['groq'],         // Groq LPU (Fast Inference)
+            'huggingface': ['huggingface'], // HF Router
+            'nvidia': ['nvidia'],       // NVIDIA AI Platform (NIM)
+            'openrouter': ['openrouter'] // OpenRouter (Multi-provider fast gateway)
+        };
 
-    for (const [fileName, registerNames] of Object.entries(adapterMapping)) {
-        try {
-            // ... (existing imports)
+        for (const [fileName, registerNames] of Object.entries(adapterMapping)) {
+            try {
+                const adapterPath = join(__dirname, 'adapters', `${fileName}.js`);
+                const adapterUrl = pathToFileURL(adapterPath).href;
+                const adapter = await import(adapterUrl);
 
-            // ...
-
-            const adapterPath = join(__dirname, 'adapters', `${fileName}.js`);
-            const adapterUrl = pathToFileURL(adapterPath).href;
-            const adapter = await import(adapterUrl);
-
-            // Enregistrer l'adaptateur sous tous les noms associés
-            for (const name of registerNames) {
-                providerRouter.registerAdapter(name, adapter.default);
-            }
-            // Chargement silencieux pour ne pas casser la barre de progression
-        } catch (error: any) {
-            // L'adaptateur n'existe pas encore, c'est OK (silencieux)
-            if (error.code !== 'ERR_MODULE_NOT_FOUND') {
-                // Log d'erreur seulement pour les vraies erreurs, pas les modules manquants
+                // Enregistrer l'adaptateur sous tous les noms associés
+                for (const name of registerNames) {
+                    providerRouter.registerAdapter(name, adapter.default);
+                }
+            } catch (error: any) {
+                if (error.code !== 'ERR_MODULE_NOT_FOUND') {
+                    console.error(`[Router Debug] Erreur de chargement pour ${fileName}:`, error);
+                }
             }
         }
-    }
+    })();
+
+    return loadPromise;
 }
 
 // Backward compatibility: auto-load when module is imported outside ServiceContainer

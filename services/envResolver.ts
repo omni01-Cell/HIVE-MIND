@@ -5,6 +5,8 @@
 // ============================================================================
 // Centralise TOUTE la logique de résolution .env pour éviter la fragmentation
 
+import { existsSync } from 'fs';
+
 /**
  * Service singleton pour résoudre les variables d'environnement
  * Supporte les formats :
@@ -89,6 +91,16 @@ export class EnvResolver {
      * N'utilise pas credentials.json ni les anciens alias legacy.
      */
     resolveProviderKey(providerName: any, keyIndex: any = null) {
+        if (providerName === 'codex') {
+            const codexKey = process.env.CODEX_KEY || process.env.CODEX_REFRESH_TOKEN || process.env.CODEX_ACCESS_TOKEN;
+            if (codexKey && !this._isDisabledKey(codexKey)) {
+                return codexKey;
+            }
+            if (existsSync('/home/omni/.codex/auth.json')) {
+                return 'oauth';
+            }
+        }
+
         const prefix = `${String(providerName).toUpperCase()}_KEY`;
         const candidates = keyIndex === null || keyIndex === undefined
             ? [prefix, ...Array.from({ length: 7 }, (_, index) => `${prefix}_${index + 1}`)]
@@ -113,6 +125,16 @@ export class EnvResolver {
      * @returns {number[]} - Liste des indices
      */
     getAvailableKeysForProvider(providerName: any) {
+        if (providerName === 'codex') {
+            const codexKey = process.env.CODEX_KEY || process.env.CODEX_REFRESH_TOKEN || process.env.CODEX_ACCESS_TOKEN;
+            if (codexKey && !this._isDisabledKey(codexKey)) {
+                return [1];
+            }
+            if (existsSync('/home/omni/.codex/auth.json')) {
+                return [1];
+            }
+        }
+
         const prefix = `${providerName.toUpperCase()}_KEY`;
         const indices = [];
 
