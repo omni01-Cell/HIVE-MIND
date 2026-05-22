@@ -124,10 +124,10 @@ export class TransportManager {
 
     /**
      * Récupère un transport spécifique (pour l'envoi ciblé)
-     * Par défaut, renvoie le premier transport actif, ou 'whatsapp' en fallback.
+     * Résout 'current' ou les transports non trouvés/inactifs vers le transport actif par défaut.
      */
     getTransport(name?: string): any {
-        if (!name) {
+        if (!name || name === 'current') {
             if (this.activeTransports.length > 0) {
                 return this.transports.get(this.activeTransports[0]);
             }
@@ -137,7 +137,11 @@ export class TransportManager {
         
         const transport = this.transports.get(name);
         if (!transport) {
-            throw new Error(`[TransportManager] Transport non trouvé ou inactif: ${name}`);
+            console.warn(`[TransportManager] Transport '${name}' non trouvé ou inactif. Fallback sur le transport par défaut.`);
+            if (this.activeTransports.length > 0) {
+                return this.transports.get(this.activeTransports[0]);
+            }
+            return this.transports.get('whatsapp');
         }
         return transport;
     }
