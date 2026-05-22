@@ -128,9 +128,9 @@
                     "description": "Logique, mathématiques, raisonnement profond"
                 },
                 "FAST_CHAT": {
-                    "primary": "gemini-3-flash-preview",
-                    "fallback": "qwen/qwen3-32b",
-                    "description": "Salutations, questions simples, chat rapide sans petit modèle"
+                    "primary": "gemini-3.5-flash",
+                    "fallback": "gpt-5.4-mini",
+                    "description": "Salutations, questions simples, chat rapide avec Gemini 3.5 et GPT-5.4 Mini"
                 },
                 "MULTIMODAL": {
                     "primary": "gemini-3.5-flash",
