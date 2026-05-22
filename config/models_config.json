@@ -46,9 +46,9 @@
         },
         "service_recipes": {
             "EXECUTOR": {
-                "family": "nvidia",
-                "model": "moonshotai/kimi-k2.6",
-                "fallback": "gemma-4-31b-it",
+                "family": "codex",
+                "model": "gpt-5.5",
+                "fallback": "gemini-3.5-flash",
                 "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.7
             },
@@ -67,9 +67,9 @@
                 "temperature": 0.1
             },
             "PLANNER": {
-                "family": "nvidia",
-                "model": "moonshotai/kimi-k2.6",
-                "fallback": "gemma-4-31b-it",
+                "family": "codex",
+                "model": "gpt-5.5",
+                "fallback": "gemini-3.5-flash",
                 "fallback_2": "gemma-4-31b-it",
                 "temperature": 0.5
             },
@@ -118,13 +118,13 @@
         "chat_recipes": {
             "categories": {
                 "CODING": {
-                    "primary": "moonshotai/kimi-k2.6",
+                    "primary": "gpt-5.5",
                     "fallback": "gemini-3.5-flash",
                     "description": "Code complexe, algorithmes, debugging"
                 },
                 "REASONING": {
-                    "primary": "gemini-3.5-flash",
-                    "fallback": "openai/gpt-oss-120b",
+                    "primary": "gpt-5.5",
+                    "fallback": "gemini-3.5-flash",
                     "description": "Logique, mathématiques, raisonnement profond"
                 },
                 "FAST_CHAT": {
@@ -143,8 +143,8 @@
                     "description": "Analyse d'images, OCR, génération visuelle"
                 },
                 "AGENTIC": {
-                    "primary": "moonshotai/kimi-k2.6",
-                    "fallback": "gemma-4-31b-it",
+                    "primary": "gpt-5.5",
+                    "fallback": "gemini-3.5-flash",
                     "description": "Tâches agentic complexes, function calling et raisonnement"
                 },
                 "CREATIVITY": {
