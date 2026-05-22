@@ -53,7 +53,7 @@ describe('PermissionManager', () => {
 
             // Assert
             expect(validation.result).toBe(false);
-            expect(validation.reason).toMatch(/escalade de privilèges/);
+            expect(validation.reason).toMatch(/privilege escalation/);
         });
 
         it('cas d\'erreur — bloque les patterns d\'évasion inline', () => {
@@ -65,7 +65,7 @@ describe('PermissionManager', () => {
 
             // Assert
             expect(validation.result).toBe(false);
-            expect(validation.reason).toMatch(/exécution inline hors sandbox/);
+            expect(validation.reason).toMatch(/inline execution outside sandbox/);
         });
 
         it('cas limite — autorise cd dans la Sandbox, mais bloque cd /root', () => {

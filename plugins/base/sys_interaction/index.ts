@@ -251,6 +251,21 @@ export default {
                     return { success: true, message: `[ACTION] Contact ${name} (${cleanPhone}) sent on ${contactTargetChannel}.` };
                 }
 
+                case 'use_tool': {
+                    const useToolArgs = args as { tool_name: string; args: Record<string, any> };
+                    const { tool_name, args: targetArgs } = useToolArgs;
+
+                    if (!tool_name) {
+                        return { success: false, message: 'Missing tool_name parameter.' };
+                    }
+
+                    console.log(`[use_tool] ⚡ Meta-executing tool "${tool_name}" with args:`, targetArgs);
+
+                    // Déléguer dynamiquement l'exécution de l'outil au pluginLoader
+                    const result = await pluginLoader.execute(tool_name, targetArgs, context);
+                    return result;
+                }
+
                 case 'send_message': {
                     const msgArgs = args as SendMessageArgs;
                     const { text } = msgArgs;
