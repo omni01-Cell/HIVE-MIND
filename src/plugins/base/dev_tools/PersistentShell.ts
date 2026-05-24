@@ -88,7 +88,7 @@ class PersistentShell extends EventEmitter {
     /**
      * Executes a command in the persistent shell
      */
-    async execute(command: string, timeoutMs: number = 30000): Promise<{ stdout: string, exitCode: number }> {
+    async execute(command: string, timeoutMs: number = 120000): Promise<{ stdout: string, exitCode: number }> {
         if (this.isExecuting) {
             throw new Error('The shell is already executing a command.');
         }

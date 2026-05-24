@@ -327,8 +327,23 @@ export class ExplicitPlanner {
      */
     _parseJsonFallback(jsonText: any) {
         try {
+            let cleaned = jsonText.trim();
+            // Extraire d'abord la partie JSON
+            const jsonBlockMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonBlockMatch) {
+                cleaned = jsonBlockMatch[1].trim();
+            } else {
+                const firstOpen = cleaned.search(/[{[]/);
+                if (firstOpen !== -1) {
+                    const lastClose = cleaned.lastIndexOf(cleaned[firstOpen] === '{' ? '}' : ']');
+                    if (lastClose !== -1 && lastClose > firstOpen) {
+                        cleaned = cleaned.slice(firstOpen, lastClose + 1).trim();
+                    }
+                }
+            }
+
             // Nettoyage manuel (logique originale améliorée)
-            const fixedJson = jsonText
+            const fixedJson = cleaned
                 .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Guillemets clés
                 .replace(/'/g, '"') // Simple quotes → double
                 .replace(/,\s*([}\]])/g, '$1') // Virgules traînantes
@@ -508,6 +523,7 @@ To ensure successful execution, structure your planning process according to the
 5. DEFINE COMPLETE PARAMETERS: For every step, provide all required properties for the chosen tool.
 6. PASS DATA SEQUENTIALLY: Reuse outputs from previous steps by using the variable interpolation syntax "{{step_X_propertyName}}" (e.g., {"filePath": "{{step_1_filePath}}"} or "{{step_1_result}}").
 7. DRAFT CONCISE QUERIES: When using search tools (\`google_ai_search\`, \`duckduck_search\`, \`wikipedia\`), write a short, concise search query (maximum of 15 words) for the query parameter. Avoid passing large chunks of text or variable references like "{{step_X_result}}".
+8. JSON VALIDITY: Double-check your JSON block. Ensure there are no trailing commas, all keys and strings are wrapped in double quotes, and braces/brackets are correctly balanced.
 </planning_instructions>
 
 <output_format>
@@ -552,7 +568,7 @@ The user wants to navigate to a page, take a screenshot, and then extract trendi
 Plan:`;
 
         let attempts = 0;
-        const maxAttempts = 3;
+        const maxAttempts = 5;
         let plan: any = null;
         let chatHistory: any[] = [
             { role: 'system', content: 'Tu es un planificateur expert en décomposition de tâches. Tu dois impérativement respecter le schéma de sortie JSON demandé et diviser les tâches complexes en au moins 2 étapes distinctes.' },
@@ -561,8 +577,9 @@ Plan:`;
 
         while (attempts < maxAttempts) {
             attempts++;
+            let response: any = null;
             try {
-                const response = await providerRouter.chat(chatHistory, { temperature: 0.3 });
+                response = await providerRouter.chat(chatHistory, { temperature: 0.3 });
                 if (!response?.content) {
                     throw new Error('La réponse du modèle est vide ou nulle.');
                 }
@@ -628,7 +645,7 @@ Plan:`;
                     throw new Error(`Planification impossible après ${maxAttempts} tentatives. Dernière erreur: ${err.message}`);
                 }
                 // Alimenter l'historique pour la tentative suivante avec le feedback d'erreur
-                chatHistory.push({ role: 'assistant', content: plan ? JSON.stringify(plan) : 'Plan malformé ou incomplet' });
+                chatHistory.push({ role: 'assistant', content: response?.content || 'Plan malformé ou incomplet' });
                 chatHistory.push({ role: 'user', content: `ERREUR DE PLANIFICATION: ${err.message}\n\nVeuillez corriger le plan et me renvoyer uniquement le JSON valide contenant toutes les étapes nécessaires.` });
             }
         }
@@ -953,45 +970,59 @@ The previous step failed because the selector was not found on the page. I will 
 
 New plan:`;
 
-        try {
-            const response = await providerRouter.chat([
-                { role: 'system', content: 'Tu es un planificateur expert en récupération d\'échecs.' },
-                { role: 'user', content: replanPrompt }
-            ], { temperature: 0.5 });
+        let attempts = 0;
+        const maxAttempts = 3;
+        let newPlan: any = null;
+        let chatHistory: any[] = [
+            { role: 'system', content: 'Tu es un planificateur expert en récupération d\'échecs.' },
+            { role: 'user', content: replanPrompt }
+        ];
 
-            if (!response?.content) {
-                throw new Error('AI response for replan is empty');
+        while (attempts < maxAttempts) {
+            attempts++;
+            let response: any = null;
+            try {
+                response = await providerRouter.chat(chatHistory, { temperature: 0.5 });
+                if (!response?.content) {
+                    throw new Error('AI response for replan is empty');
+                }
+
+                newPlan = await this._parsePlanJson(response.content);
+                if (!newPlan) {
+                    throw new Error('Impossible de parser le nouveau plan JSON après replanification');
+                }
+
+                // Validate that all tools in the new plan actually exist
+                const validToolNames = new Set((context.tools || []).map((t: any) => t.function?.name || t.name));
+                const invalidSteps = (newPlan.steps || []).filter((s: any) => s.tool && !validToolNames.has(s.tool));
+                if (invalidSteps.length > 0) {
+                    console.warn(`[Planner] ⚠️ Replan contains ${invalidSteps.length} invalid tool(s): ${invalidSteps.map((s: any) => s.tool).join(', ')}. Filtering out.`);
+                    newPlan.steps = (newPlan.steps || []).filter((s: any) => !s.tool || validToolNames.has(s.tool));
+                }
+
+                if (!newPlan.steps || newPlan.steps.length === 0) {
+                    throw new Error('Replan produced no valid steps');
+                }
+
+                break;
+            } catch (err: any) {
+                console.warn(`[Planner] ⚠️ Tentative replan ${attempts}/${maxAttempts} échouée: ${err.message}`);
+                if (attempts >= maxAttempts) {
+                    console.error('[Planner] Erreur replanification:', err.message);
+                    return {
+                        ...executionLog,
+                        replanFailed: true
+                    };
+                }
+                chatHistory.push({ role: 'assistant', content: response?.content || 'Plan malformé ou incomplet' });
+                chatHistory.push({ role: 'user', content: `ERREUR DE PLANIFICATION: ${err.message}\n\nVeuillez corriger le plan et me renvoyer uniquement le JSON valide.` });
             }
-
-            const newPlan = await this._parsePlanJson(response.content);
-            if (!newPlan) {
-                throw new Error('Impossible de parser le nouveau plan JSON après replanification');
-            }
-
-            // Validate that all tools in the new plan actually exist
-            const validToolNames = new Set((context.tools || []).map((t: any) => t.function?.name || t.name));
-            const invalidSteps = (newPlan.steps || []).filter((s: any) => s.tool && !validToolNames.has(s.tool));
-            if (invalidSteps.length > 0) {
-                console.warn(`[Planner] ⚠️ Replan contains ${invalidSteps.length} invalid tool(s): ${invalidSteps.map((s: any) => s.tool).join(', ')}. Filtering out.`);
-                newPlan.steps = (newPlan.steps || []).filter((s: any) => !s.tool || validToolNames.has(s.tool));
-            }
-
-            if (!newPlan.steps || newPlan.steps.length === 0) {
-                throw new Error('Replan produced no valid steps');
-            }
-
-            console.log('[Planner] ✅ Nouveau plan créé, réexécution...');
-
-            // Execute with the new plan (guard flag already set, so no recursive replan)
-            return await this.execute({ ...originalPlan, steps: newPlan.steps }, context, executionLog);
-
-        } catch (e: any) {
-            console.error('[Planner] Erreur replanification:', e.message);
-            return {
-                ...executionLog,
-                replanFailed: true
-            };
         }
+
+        console.log('[Planner] ✅ Nouveau plan créé, réexécution...');
+
+        // Execute with the new plan (guard flag already set, so no recursive replan)
+        return await this.execute({ ...originalPlan, steps: newPlan.steps }, context, executionLog);
     }
 }
 

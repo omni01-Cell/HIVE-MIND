@@ -10,9 +10,64 @@ export interface EnforceOptions<T> {
  * Tente de parser et de réparer le JSON de manière résiliente.
  */
 export function tryParseJson<T>(content: string): T {
-    const cleaned = content.trim().replace(/^```json\s*|```$/g, '').trim();
+    let cleaned = content.trim();
+
+    // 1. Tenter d'extraire le bloc ```json ... ```
+    const jsonBlockMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch) {
+        cleaned = jsonBlockMatch[1].trim();
+    } else {
+        // 2. Tenter de nettoyer les backticks d'un bloc simple si présent au début/fin
+        cleaned = cleaned.replace(/^```json\s*|```$/g, '').trim();
+    }
+
+    // 3. Si on a extrait un bloc ```json ... ```, on essaie de le parser directement
+    try {
+        return parseCleanedJson<T>(cleaned);
+    } catch (e) {
+        // Si cela échoue ou qu'il n'y avait pas de bloc, on continue avec la recherche robuste
+    }
+
+    // 4. Recherche globale robuste de blocs JSON (objets ou tableaux)
+    const rawContent = content;
+    const candidates: string[] = [];
+    
+    // Trouver tous les indices de '{' et '['
+    for (let i = 0; i < rawContent.length; i++) {
+        const char = rawContent[i];
+        if (char === '{' || char === '[') {
+            const closeChar = char === '{' ? '}' : ']';
+            // Chercher les caractères de fermeture correspondants de la fin vers i (décroissant)
+            let j = rawContent.lastIndexOf(closeChar);
+            while (j > i) {
+                const candidate = rawContent.slice(i, j + 1).trim();
+                candidates.push(candidate);
+                j = rawContent.lastIndexOf(closeChar, j - 1);
+            }
+        }
+    }
+
+    // Trier les candidats par longueur décroissante pour privilégier le plus grand bloc JSON
+    candidates.sort((a, b) => b.length - a.length);
+
+    // Essayer de parser chaque candidat
+    for (const candidate of candidates) {
+        try {
+            return parseCleanedJson<T>(candidate);
+        } catch {
+            // Continuer
+        }
+    }
+
+    throw new Error('Response does not contain a valid JSON object or array');
+}
+
+/**
+ * Tente de parser une chaîne de caractères déjà nettoyée qui doit commencer par { ou [.
+ */
+function parseCleanedJson<T>(cleaned: string): T {
     if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
-        throw new Error('Response is not a JSON object or array');
+        throw new Error('Not a JSON object or array');
     }
     try {
         return JSON.parse(cleaned);
