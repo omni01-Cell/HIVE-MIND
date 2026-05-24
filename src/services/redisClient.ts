@@ -290,10 +290,10 @@ class InMemoryRedisMock {
 
 function switchToMock(redisInstance: any) {
     const mock = new InMemoryRedisMock();
-    
+
     Object.defineProperty(redisInstance, 'isOpen', { get: () => mock.isOpen });
     Object.defineProperty(redisInstance, 'isReady', { get: () => mock.isReady });
-    
+
     redisInstance.get = mock.get.bind(mock);
     redisInstance.set = mock.set.bind(mock);
     redisInstance.setEx = mock.setEx.bind(mock);

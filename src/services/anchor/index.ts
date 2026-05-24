@@ -11,7 +11,7 @@ export {
     formatLineWithHash,
     stripHashes,
     extractId,
-    splitAnchor,
+    splitAnchor
 } from './lineHashing.js';
 export { ANCHOR_WORDS } from './hashDictionary.js';
 

@@ -132,9 +132,9 @@ export class SchedulerHandler {
             const fakeContext = {
                 isGroup: true,
                 chatId: groupId,
-                text: "SYSTEM_WAKEUP_PROTOCOL: The group is inactive. Generate a thought to wake it up politely or with a controversial topic about tech/AI.",
-                senderName: "SYSTEM",
-                sender: "system@internal"
+                text: 'SYSTEM_WAKEUP_PROTOCOL: The group is inactive. Generate a thought to wake it up politely or with a controversial topic about tech/AI.',
+                senderName: 'SYSTEM',
+                sender: 'system@internal'
             };
 
             if (this.messageHandler) {
@@ -160,7 +160,7 @@ export class SchedulerHandler {
 
             let actualMessage = reminder.message;
             let cronExpr = null;
-            
+
             if (actualMessage.startsWith('[WS:')) {
                 actualMessage = actualMessage.replace(/^\[WS:\s*(.+?)\]\s*/i, '');
             }
@@ -283,26 +283,26 @@ export class SchedulerHandler {
         try {
             const { supabase } = await import('../../services/supabase.js');
             const { providerRouter } = await import('../../providers/index.js');
-            
+
             // Scanner les documents modifiés dans les dernières 24 heures
             const targetTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            
+
             const { data: workspaces, error } = await supabase
                 .from('agent_workspace')
                 .select('id, context_id, key, content')
                 .gte('updated_at', targetTime);
-                
+
             if (error) throw error;
             if (!workspaces || workspaces.length === 0) {
                 console.log('[Scheduler] Aucun document workspace récent à analyser.');
                 return;
             }
-            
+
             let extractedCount = 0;
-            
+
             for (const doc of workspaces) {
                 const textToAnalyze = doc.content.substring(0, 2000);
-                
+
                 const prompt = `
 You are a strict calendar extraction agent. Analyze the following workspace document and extract ONLY explicitly mentioned appointments, reminders, or future actions.
 Strict rules:
@@ -319,7 +319,7 @@ Document [Clé: ${doc.key}]:
 ${textToAnalyze}
 `;
                 const response = await providerRouter.chat([{ role: 'user', content: prompt }], { category: 'FAST_CHAT', temperature: 0.1 });
-                
+
                 if (response?.content) {
                     try {
                         const jsonStr = response.content.replace(/```json\n?|\n?```/g, '').trim();
@@ -330,7 +330,7 @@ ${textToAnalyze}
                         } catch (e) {
                             events = JSON.parse(jsonStr);
                         }
-                        
+
                         if (Array.isArray(events) && events.length > 0) {
                             // Purge existing pending reminders for this document to synchronize state
                             await supabase.from('reminders')
@@ -342,7 +342,7 @@ ${textToAnalyze}
                             for (const ev of events) {
                                 let targetDate = ev.date_iso;
                                 let finalMessage = `[WS: ${doc.key}] ${ev.message}`;
-                                
+
                                 if (ev.cron) {
                                     try {
                                         const parser = (await import('cron-parser')).default;
@@ -356,15 +356,15 @@ ${textToAnalyze}
                                 }
 
                                 if (finalMessage && targetDate && new Date(targetDate).getTime() > Date.now()) {
-                                    
-                                        await supabase.from('reminders').insert({
-                                            context_id: doc.context_id,
-                                            message: finalMessage,
-                                            remind_at: targetDate,
-                                            sent: false
-                                        });
-                                        console.log(`[Scheduler] ✅ Rappel créé: "${finalMessage}" pour ${targetDate}`);
-                                        extractedCount++;
+
+                                    await supabase.from('reminders').insert({
+                                        context_id: doc.context_id,
+                                        message: finalMessage,
+                                        remind_at: targetDate,
+                                        sent: false
+                                    });
+                                    console.log(`[Scheduler] ✅ Rappel créé: "${finalMessage}" pour ${targetDate}`);
+                                    extractedCount++;
                                 }
                             }
                         }
@@ -373,7 +373,7 @@ ${textToAnalyze}
                     }
                 }
             }
-            
+
             console.log(`[Scheduler] Fin du scan. ${extractedCount} nouveau(x) rappel(s) créé(s).`);
         } catch (error: any) {
             console.error('[Scheduler] Erreur memoryEventScanner:', error.message);
@@ -433,8 +433,8 @@ ${textToAnalyze}
                             isGroup: goal.target_chat_id ? goal.target_chat_id.endsWith('@g.us') : false,
                             chatId: goal.target_chat_id,
                             text: `SYSTEM_GOAL_TRIGGER: L'heure est venue d'exécuter l'objectif "${goal.title}".\nConsigne: ${goal.description}\nPriorité: ${goal.priority}`,
-                            senderName: "SYSTEM_SCHEDULER",
-                            sender: "system@internal",
+                            senderName: 'SYSTEM_SCHEDULER',
+                            sender: 'system@internal',
                             isSystem: true // Flag pour traiter différemment si besoin
                         }
                     });
@@ -556,60 +556,60 @@ ${textToAnalyze}
                     console.error('[Watchdog] Erreur traitement evenements MAPLE:', err.message);
                 }
             }
-            
+
             // 2. Check Zombies (tâches inactives depuis > 5 minutes)
             const stalledActions = await actionMemory.getStalledActions(5 * 60 * 1000);
             for (const action of stalledActions) {
                 console.log(`[Watchdog] 🧟 Zombie détecté : ${action.type} (Chat: ${action.chatId})`);
-                await actionMemory.interruptAction(action.chatId, "TIMEOUT: Action stalled for more than 5 minutes.");
-                
+                await actionMemory.interruptAction(action.chatId, 'TIMEOUT: Action stalled for more than 5 minutes.');
+
                 if (this.transport && typeof this.transport.sendText === 'function') {
                     await this.transport.sendText(action.chatId, `⚠️ **Action Interrompue** : L'action \`${action.type}\` a été stoppée car elle ne répondait plus depuis 5 minutes.`);
                 }
             }
-            
+
             // 3. Check Wake Events échus
             const missedWakes = await hiveWakeSystem.getMissedWakes();
-            
+
             // 4. Si rien, on ne réveille pas le LLM
             if (unreadEvents.length === 0 && stalledActions.length === 0 && missedWakes.length === 0) {
                 return;
             }
-            
+
             console.log(`[Watchdog] ⚠️ Réveil requis : ${unreadEvents.length} events, ${stalledActions.length} crashs, ${missedWakes.length} réveils.`);
-            
-            let wakeupPrompt = `[SYSTEM WATCHDOG & RECOVERY PROTOCOL]\nTu as été réveillé par le Heartbeat du système.\n\n`;
-            
+
+            let wakeupPrompt = '[SYSTEM WATCHDOG & RECOVERY PROTOCOL]\nTu as été réveillé par le Heartbeat du système.\n\n';
+
             if (unreadEvents.length > 0) {
                 wakeupPrompt += `📥 NOUVEAUX ÉVÉNEMENTS:\nTu as ${unreadEvents.length} événements dans ton Inbox. Utilise l'outil \`read_event_inbox\` pour les lire, traite-les, puis utilise \`clear_event_inbox\`.\n\n`;
             }
-            
+
             if (missedWakes.length > 0) {
-                wakeupPrompt += `⏰ RAPPELS / TÂCHES DE FOND (WakeSystem):\n`;
+                wakeupPrompt += '⏰ RAPPELS / TÂCHES DE FOND (WakeSystem):\n';
                 missedWakes.forEach(w => {
                     wakeupPrompt += `- Contexte/Chat: ${w.chatId} | Consigne: "${w.prompt}"\n`;
                 });
-                wakeupPrompt += `Exécute ces consignes maintenant (utilise send_message pour notifier l'utilisateur concerné si nécessaire).\n\n`;
+                wakeupPrompt += 'Exécute ces consignes maintenant (utilise send_message pour notifier l\'utilisateur concerné si nécessaire).\n\n';
             }
-            
+
             if (stalledActions.length > 0) {
-                wakeupPrompt += `🚨 TÂCHES INTERROMPUES (CRASH RECOVERY):\n`;
+                wakeupPrompt += '🚨 TÂCHES INTERROMPUES (CRASH RECOVERY):\n';
                 stalledActions.forEach(a => {
                     wakeupPrompt += `- Chat: ${a.chatId} | Outil: ${a.type} | Objectif: "${a.goal}"\n`;
                 });
-                wakeupPrompt += `Il semble que tu aies crashé pendant ces tâches. Analyse la situation et reprends l'exécution si possible.\n\n`;
+                wakeupPrompt += 'Il semble que tu aies crashé pendant ces tâches. Analyse la situation et reprends l\'exécution si possible.\n\n';
             }
-            
-            wakeupPrompt += `DIRECTIVE: Gère cette file d'attente. Une fois terminé ou si tu n'as rien de concret à faire, réponds UNIQUEMENT par le token "__HIVE_SILENT_7f3a__" pour te rendormir silencieusement.`;
-            
+
+            wakeupPrompt += 'DIRECTIVE: Gère cette file d\'attente. Une fois terminé ou si tu n\'as rien de concret à faire, réponds UNIQUEMENT par le token "__HIVE_SILENT_7f3a__" pour te rendormir silencieusement.';
+
             if (this.messageHandler) {
                 await this.messageHandler({
                     data: {
                         isGroup: false,
                         chatId: 'system_internal_mind',
                         text: wakeupPrompt,
-                        senderName: "SYSTEM_WATCHDOG",
-                        sender: "system@internal",
+                        senderName: 'SYSTEM_WATCHDOG',
+                        sender: 'system@internal',
                         isSystem: true,
                         sourceChannel: 'internal'
                     }

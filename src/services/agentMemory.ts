@@ -32,9 +32,9 @@ export const agentMemory = {
                 .insert({
                     context_id: resolved.context_id,
                     tool_name: toolName,
-                    params: params,
-                    result: result,
-                    status: status,
+                    params,
+                    result,
+                    status,
                     error_message: errorMessage
                 });
 
@@ -49,8 +49,8 @@ export const agentMemory = {
 
     /**
      * Récupère les dernières actions pour un chat (contexte)
-     * @param {string} chatId 
-     * @param {number} limit 
+     * @param {string} chatId
+     * @param {number} limit
      * @returns {Promise<Array>}
      */
     async getRecentActions(chatId: any, limit: any = 5) {
@@ -75,8 +75,8 @@ export const agentMemory = {
 
     /**
      * Vérifie si un outil a récemment échoué (évite répétition d'erreurs)
-     * @param {string} chatId 
-     * @param {string} toolName 
+     * @param {string} chatId
+     * @param {string} toolName
      * @param {number} withinMinutes - Fenêtre de temps en minutes
      * @returns {Promise<{hasFailure: boolean, errorMessage: string|null}>}
      */
@@ -115,7 +115,7 @@ export const agentMemory = {
 
     /**
      * Statistiques d'utilisation des outils pour un chat
-     * @param {string} chatId 
+     * @param {string} chatId
      * @returns {Promise<Object>} - { toolName: { success: n, error: n } }
      */
     async getToolStats(chatId: any) {
@@ -148,8 +148,8 @@ export const agentMemory = {
     /**
      * Récupère les "leçons apprises" - les erreurs les plus fréquentes
      * Utile pour éviter de répéter les mêmes erreurs
-     * @param {string} chatId 
-     * @param {number} limit 
+     * @param {string} chatId
+     * @param {number} limit
      * @returns {Promise<Array>}
      */
     async getLessonsLearned(chatId: any, limit: any = 3) {
@@ -181,7 +181,7 @@ export const agentMemory = {
 
     /**
      * Récupère les leçons apprises globales (tous les chats)
-     * @param {number} limit 
+     * @param {number} limit
      * @returns {Promise<Array>}
      */
     async getGlobalLessonsLearned(limit: any = 10) {

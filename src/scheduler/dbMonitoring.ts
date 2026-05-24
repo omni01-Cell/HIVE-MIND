@@ -12,29 +12,29 @@ import { databaseMonitor } from '../services/monitoring/DatabaseMonitor.js';
  */
 export async function monitorDatabaseHealth() {
     console.log('[Scheduler] 🕕 Tâche de monitoring DB démarrée...');
-    
+
     try {
         // Vérifier la santé générale
         await databaseMonitor.checkDatabaseHealth();
-        
+
         // Effectuer une vérification complète
         const report = await databaseMonitor.performFullCheck();
-        
+
         console.log('[Scheduler] ✅ Monitoring DB terminé');
         console.log('[Scheduler] 📊 Rapport:', report.summary);
-        
+
         return {
             success: true,
-            report: report,
+            report,
             message: 'Monitoring terminé avec succès'
         };
-        
+
     } catch (error: any) {
         console.error('[Scheduler] ❌ Erreur monitoring DB:', error.message);
-        
+
         // Envoyer une alerte critique
         await databaseMonitor.sendCriticalAlert('monitoring_task', 0);
-        
+
         return {
             success: false,
             error: error.message,
@@ -49,11 +49,11 @@ export async function monitorDatabaseHealth() {
  */
 export async function cleanupOldData() {
     console.log('[Scheduler] 🧹 Tâche de cleanup démarrée...');
-    
+
     try {
         // Appeler la fonction de cleanup via Supabase
         const { data, error } = await databaseMonitor.supabase.rpc('cleanup_old_data');
-        
+
         if (error) {
             console.error('[Scheduler] Erreur cleanup:', error.message);
             return {
@@ -61,13 +61,13 @@ export async function cleanupOldData() {
                 error: error.message
             };
         }
-        
+
         console.log('[Scheduler] ✅ Cleanup terminé');
         return {
             success: true,
             message: 'Nettoyage effectué avec succès'
         };
-        
+
     } catch (error: any) {
         console.error('[Scheduler] ❌ Erreur cleanup:', error.message);
         return {
@@ -83,16 +83,16 @@ export async function cleanupOldData() {
  */
 export async function analyzePerformance() {
     console.log('[Scheduler] 📊 Tâche d\'analyse de performance démarrée...');
-    
+
     try {
         await databaseMonitor.checkPerformanceMetrics();
-        
+
         console.log('[Scheduler] ✅ Analyse performance terminée');
         return {
             success: true,
             message: 'Analyse effectuée avec succès'
         };
-        
+
     } catch (error: any) {
         console.error('[Scheduler] ❌ Erreur analyse performance:', error.message);
         return {
@@ -108,31 +108,31 @@ export async function analyzePerformance() {
  */
 export async function generateWeeklyReport() {
     console.log('[Scheduler] 📋 Génération du rapport hebdomadaire...');
-    
+
     try {
         const report = await databaseMonitor.generateHealthReport();
-        
+
         // Sauvegarder le rapport dans un fichier
         const fs = await import('fs');
         const path = await import('path');
-        
+
         const reportPath = path.join(process.cwd(), 'logs', `db_health_report_${new Date().toISOString().split('T')[0]}.json`);
-        
+
         // Créer le dossier logs s'il n'existe pas
         const logsDir = path.dirname(reportPath);
         if (!fs.existsSync(logsDir)) {
             fs.mkdirSync(logsDir, { recursive: true });
         }
-        
+
         fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-        
+
         console.log(`[Scheduler] ✅ Rapport généré: ${reportPath}`);
         return {
             success: true,
-            reportPath: reportPath,
+            reportPath,
             message: 'Rapport généré avec succès'
         };
-        
+
     } catch (error: any) {
         console.error('[Scheduler] ❌ Erreur génération rapport:', error.message);
         return {
@@ -154,17 +154,17 @@ export async function getMonitoringStatus() {
  */
 export async function forceHealthCheck() {
     console.log('[Scheduler] 🔍 Vérification forcée...');
-    
+
     try {
         await databaseMonitor.checkDatabaseHealth();
         const report = await databaseMonitor.generateHealthReport();
-        
+
         return {
             success: true,
-            report: report,
+            report,
             message: 'Vérification forcée terminée'
         };
-        
+
     } catch (error: any) {
         console.error('[Scheduler] ❌ Erreur vérification forcée:', error.message);
         return {

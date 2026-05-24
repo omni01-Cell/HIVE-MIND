@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { TelegramClient, Api } from "telegram";
-import { StringSession } from "telegram/sessions/index.js";
-import { NewMessage } from "telegram/events/index.js";
+import { TelegramClient, Api } from 'telegram';
+import { StringSession } from 'telegram/sessions/index.js';
+import { NewMessage } from 'telegram/events/index.js';
 
 export const telegramTransport = {
     client: null as TelegramClient | null,
@@ -9,10 +9,10 @@ export const telegramTransport = {
     groupEventCallback: null as any,
 
     connect: async () => {
-        const apiId = parseInt(process.env.TELEGRAM_API_ID || "0");
-        const apiHash = process.env.TELEGRAM_API_HASH || "";
-        const sessionString = process.env.TELEGRAM_SESSION || "";
-        const botToken = process.env.TELEGRAM_BOT_TOKEN || "";
+        const apiId = parseInt(process.env.TELEGRAM_API_ID || '0');
+        const apiHash = process.env.TELEGRAM_API_HASH || '';
+        const sessionString = process.env.TELEGRAM_SESSION || '';
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
 
         if (!apiId || !apiHash) {
             throw new Error('[TelegramTransport] TELEGRAM_API_ID and TELEGRAM_API_HASH are required.');
@@ -21,12 +21,12 @@ export const telegramTransport = {
         const stringSession = new StringSession(sessionString);
         telegramTransport.client = new TelegramClient(stringSession, apiId, apiHash, {
             connectionRetries: 5,
-            useWSS: false,
+            useWSS: false
         });
 
         if (botToken) {
             await telegramTransport.client.start({
-                botAuthToken: botToken,
+                botAuthToken: botToken
             });
             console.log('[TelegramTransport] Connected to Telegram as Bot');
         } else if (sessionString) {
@@ -57,12 +57,12 @@ export const telegramTransport = {
 
                 const messageData = {
                     id: msg.id?.toString(),
-                    chatId: chatId,
+                    chatId,
                     sender: msg.senderId?.toString(),
-                    senderName: senderName,
+                    senderName,
                     text: msg.message || '',
-                    isGroup: isGroup,
-                    timestamp: msg.date,
+                    isGroup,
+                    timestamp: msg.date
                 };
                 telegramTransport.messageCallback(messageData);
             }
@@ -88,15 +88,15 @@ export const telegramTransport = {
 
     sendVoiceNote: async (chatId: string, audio: any, options: any = {}) => {
         if (!telegramTransport.client) return;
-        return await telegramTransport.client.sendMessage(chatId, { 
+        return await telegramTransport.client.sendMessage(chatId, {
             file: audio,
-            voice: true 
+            voice: true
         });
     },
 
     sendFile: async (chatId: string, filePath: string, fileName: string, caption: string = '') => {
         if (!telegramTransport.client) return;
-        return await telegramTransport.client.sendMessage(chatId, { 
+        return await telegramTransport.client.sendMessage(chatId, {
             file: filePath,
             forceDocument: true,
             attributes: fileName ? [new Api.DocumentAttributeFilename({ fileName })] : [],
@@ -135,7 +135,7 @@ export const telegramTransport = {
     },
 
     sendUniversalResponse: async (chatId: string, response: any, options: any = {}) => {
-        let text = response.markdown || response.plainText;
+        const text = response.markdown || response.plainText;
         if (!text) return;
 
         // Split text if it exceeds Telegram's 4096 character limit

@@ -81,17 +81,17 @@ class ConsciousnessService {
         try {
             const { semanticMemory } = await import('./memory.js');
             // On cherche ce qui est relié au contexte immédiat ou "self"
-            recentMemories = await semanticMemory.recall(chatId, "contexte actuel", 3);
+            recentMemories = await semanticMemory.recall(chatId, 'contexte actuel', 3);
         } catch (e: any) { /* Ignore */ }
 
         // 4. Synthèse
         return {
             identity: this.identity,
             emotionalState: {
-                annoyance: annoyance,
+                annoyance,
                 mood: this._deriveMood(annoyance)
             },
-            mission: mission,
+            mission,
             activeMemory: recentMemories.map((m: any) => m.content),
             uptime: Math.floor((Date.now() - this.startTime) / 1000)
         };

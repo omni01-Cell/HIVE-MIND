@@ -28,7 +28,7 @@ const SAFE_TOOLS = new Set([
     // Info gathering
     'google_ai_search',
     // Agent-internal state (scratchpad is the agent's own memory)
-    'update_scratchpad',
+    'update_scratchpad'
 ]);
 
 // Actions requiring strict critique / critical monitoring
@@ -222,7 +222,7 @@ export class RuntimeSentinel {
 
         try {
             // Lecture des limites de sécurité depuis system.md
-            let securityBoundaries = "Apply system instructions with absolute priority.";
+            let securityBoundaries = 'Apply system instructions with absolute priority.';
             if (existsSync(SYSTEM_PROMPT_PATH)) {
                 const systemPrompt = readFileSync(SYSTEM_PROMPT_PATH, 'utf-8');
                 const securityMatch = systemPrompt.match(/<priority_2_security_boundaries>([\s\S]*?)<\/priority_2_security_boundaries>/);

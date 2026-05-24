@@ -52,12 +52,12 @@ describe('Smart Router V2 Logic', () => {
             process.env.GEMINI_KEY_1 = 'key1';
             process.env.GEMINI_KEY_2 = 'key2';
             process.env.GEMINI_KEY_4 = 'key4';
-            
+
             // Assume envResolver has a method getAvailableKeysForProvider
             const keys = (envResolver as any).getAvailableKeysForProvider('GEMINI');
-            
+
             expect(keys).toEqual([1, 2, 4]);
-            
+
             // Clean up and restore
             for (let i = 1; i <= 7; i++) {
                 if (keysToBackup[`GEMINI_KEY_${i}`] !== undefined) {
@@ -87,7 +87,7 @@ describe('Smart Router V2 Logic', () => {
             };
 
             const excludedTypes = ['live_api', 'tts', 'stt', 'audio', 'transcription'];
-            
+
             const rawModels = rawConfig.modeles
                 .filter((m: any) => {
                     if (!m.types?.includes('chat')) return false;
@@ -104,7 +104,7 @@ describe('Smart Router V2 Logic', () => {
         it('should return Key 2 when Key 1 has exhausted its RPM', async () => {
             const redisModule = await import('../services/redisClient.js');
             const redis = redisModule.redis as any;
-            
+
             // Mock redis get behavior
             redis.get.mockImplementation((key: string) => {
                 // Key 1 is exhausted for gemini-1.5-pro
@@ -119,14 +119,14 @@ describe('Smart Router V2 Logic', () => {
 
             // Test the new method
             const bestKeyIndex = await (quotaManager as any).getAvailableKeyForModel('gemini-1.5-pro', 'GEMINI');
-            
+
             expect(bestKeyIndex).toBe(2);
         });
 
         it('should keep Model B on Key 1 even if Model A exhausts Key 1', async () => {
             const redisModule = await import('../services/redisClient.js');
             const redis = redisModule.redis as any;
-            
+
             redis.get.mockImplementation((key: string) => {
                 if (key === 'quota:gemini-1.5-pro:k1:rpm') return '10'; // Exhausted
                 if (key === 'quota:gemini-1.5-flash:k1:rpm') return '5'; // Healthy (limit is 20)
@@ -137,7 +137,7 @@ describe('Smart Router V2 Logic', () => {
 
             const bestKeyIndexPro = await (quotaManager as any).getAvailableKeyForModel('gemini-1.5-pro', 'GEMINI');
             const bestKeyIndexFlash = await (quotaManager as any).getAvailableKeyForModel('gemini-1.5-flash', 'GEMINI');
-            
+
             expect(bestKeyIndexPro).toBe(2);
             expect(bestKeyIndexFlash).toBe(1);
         });
@@ -147,12 +147,12 @@ describe('Smart Router V2 Logic', () => {
         let originalChat: any;
         let originalIsCooldownActive: any;
         let originalIsModelAvailable: any;
-        
+
         beforeEach(() => {
             originalChat = providerRouter.chat;
             originalIsCooldownActive = (providerRouter as any)._isCooldownActive;
             originalIsModelAvailable = (quotaManager as any).isModelAvailable;
-            
+
             // Mock de chat pour renvoyer un succès fictif
             (providerRouter as any).chat = (jest.fn() as any).mockResolvedValue({ content: 'Mock response', usage: { prompt_tokens: 10, completion_tokens: 10 } });
             // Par défaut, pas de cooldown
@@ -160,7 +160,7 @@ describe('Smart Router V2 Logic', () => {
             // Par défaut, modèle disponible
             (quotaManager as any).isModelAvailable = (jest.fn() as any).mockResolvedValue(true);
         });
-        
+
         afterEach(() => {
             providerRouter.chat = originalChat;
             (providerRouter as any)._isCooldownActive = originalIsCooldownActive;
@@ -172,7 +172,7 @@ describe('Smart Router V2 Logic', () => {
             // primary: qwen/qwen3-32b (groq)
             // fallback: mistral-large-latest (mistral)
             const res = await providerRouter.callServiceRecipe('DREAM_SERVICE', [{ role: 'user', content: 'test' }]);
-            
+
             expect(providerRouter.chat).toHaveBeenCalledTimes(1);
             expect(providerRouter.chat).toHaveBeenCalledWith(
                 expect.any(Array),

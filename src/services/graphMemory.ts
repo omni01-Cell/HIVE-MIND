@@ -32,7 +32,7 @@ try {
 export const graphMemory = {
     /**
      * Enregistre ou met à jour une entité
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {Object} entity - { name, type, description, metadata }
      */
     async upsertEntity(chatId: any, entity: any) {
@@ -67,11 +67,11 @@ export const graphMemory = {
 
     /**
      * Crée une relation entre deux entités
-     * @param {string} chatId 
-     * @param {string} sourceName 
-     * @param {string} targetName 
-     * @param {string} relationType 
-     * @param {number} strength 
+     * @param {string} chatId
+     * @param {string} sourceName
+     * @param {string} targetName
+     * @param {string} relationType
+     * @param {number} strength
      */
     async addRelationship(chatId: any, sourceName: any, targetName: any, relationType: any, strength: any = 1.0) {
         if (!supabase) return null;
@@ -105,7 +105,7 @@ export const graphMemory = {
                     source_id: source.id,
                     target_id: target.id,
                     relation_type: relationType,
-                    strength: strength
+                    strength
                 }, { onConflict: 'source_id,target_id,relation_type' })
                 .select()
                 .single();
@@ -120,9 +120,9 @@ export const graphMemory = {
 
     /**
      * Recherche des entités par similarité sémantique
-     * @param {string} chatId 
-     * @param {string} query 
-     * @param {number} limit 
+     * @param {string} chatId
+     * @param {string} query
+     * @param {number} limit
      */
     async searchEntities(chatId: any, query: any, limit: any = 5) {
         if (!supabase) return [];
@@ -148,7 +148,7 @@ export const graphMemory = {
 
     /**
      * Récupère le voisinage d'une entité (ses relations directes)
-     * @param {string} entityId 
+     * @param {string} entityId
      */
     async getNeighbors(entityId: any) {
         if (!supabase) return [];

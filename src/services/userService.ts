@@ -55,8 +55,8 @@ import { redis } from './redisClient.js';
 export const userService = {
     /**
      * Enregistre une interaction utilisateur via StateManager (Buffer Redis)
-     * @param {string} identifier 
-     * @param {string} pushName 
+     * @param {string} identifier
+     * @param {string} pushName
      * @param {string} groupJid - Optionnel
      */
     async recordInteraction(identifier: any, pushName: any, groupJid: any = null) {
@@ -73,7 +73,7 @@ export const userService = {
 
     /**
      * Récupère le profil via StateManager (Cache-First)
-     * @param {string} identifier 
+     * @param {string} identifier
      * @returns {Promise<Object>}
      */
     async getProfile(identifier: any) {
@@ -222,7 +222,7 @@ export const userService = {
                 const { data: exactMatches } = await supabase
                     .from('users')
                     .select('jid, username, interaction_count') // last_pushname n'existe pas dans le schema user ? Attends, flattenForRedis utilise last_pushname mais DB user a interaction_count et username.
-                    // Verification schema: users table a username. Pas last_pushname. 
+                    // Verification schema: users table a username. Pas last_pushname.
                     // Mais StateManager sync username = last_pushname. Donc c'est bon.
                     .or(`username.ilike.${searchName}`)
                     .limit(10);

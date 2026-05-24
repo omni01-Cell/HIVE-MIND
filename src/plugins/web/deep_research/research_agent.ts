@@ -14,7 +14,7 @@ export class DeepResearchAgent {
     constructor(userId, chatId) {
         this.userId = userId;
         this.chatId = chatId;
-        
+
         // Initialiser le moteur de sous-agent
         this.engine = new SubAgentEngine({
             name: 'DeepResearcher',

@@ -64,6 +64,6 @@ export default {
                 return { success: false, message: `Shopping search failed: ${err.message}` };
             }
         }
-        return { success: false, message: "Unknown tool" };
+        return { success: false, message: 'Unknown tool' };
     }
 };

@@ -2,15 +2,15 @@
 // ============================================================================
 // SERVICE DE RÉSOLUTION D'IDENTITÉ (LID <-> JID)
 // ============================================================================
-// 
+//
 // CONTEXTE WHATSAPP:
 // - JID (Jabber ID) : Identifiant basé sur le numéro de téléphone (ex: 33612345678@s.whatsapp.net)
 // - LID (Local ID)  : Identifiant de device cryptique (ex: 186101520123456@lid)
-// 
+//
 // PROBLÈME RÉSOLU:
 // WhatsApp envoie parfois le LID au lieu du JID (notamment dans les groupes).
 // Sans mapping, on créerait des profils "fantômes" distincts pour la même personne.
-// 
+//
 // SOLUTION:
 // 1. resolve() : Convertit un LID en JID si le mapping existe
 // 2. register(): Enregistre le lien LID<->JID et FUSIONNE les comptes fantômes
@@ -60,14 +60,14 @@ export const IdentityMap = {
     },
     /**
      * Résout un identifiant vers le JID canonique (clé primaire DB)
-     * 
+     *
      * @param {string} identifier - JID, LID, ou identifiant brut
      * @returns {Promise<string>} Le JID canonique ou l'identifiant original si non résolu
-     * 
+     *
      * @example
      * // Si mapping existe: 186...@lid -> 336...@s.whatsapp.net
      * await IdentityMap.resolve('186101520...@lid'); // '33612345678@s.whatsapp.net'
-     * 
+     *
      * // Si pas de mapping, retourne l'original
      * await IdentityMap.resolve('inconnu@lid'); // 'inconnu@lid'
      */
@@ -178,13 +178,13 @@ export const IdentityMap = {
 
                     // 1. Assigner le LID au vrai user_id
                     await supabase.from('user_identities').update({ user_id: realIdentity.user_id }).eq('id', ghostIdentity.id);
-                    
+
                     // 2. Mettre à jour l'XP
                     await supabase.from('users').update({ interaction_count: newXp }).eq('id', realIdentity.user_id);
-                    
+
                     // 3. Supprimer le user fantôme orphelin
                     await supabase.from('users').delete().eq('id', ghostIdentity.user_id);
-                    
+
                     return;
                 }
 

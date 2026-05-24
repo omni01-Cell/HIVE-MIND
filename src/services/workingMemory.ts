@@ -7,17 +7,17 @@ import { redis, ensureConnected, checkHealth as redisCheckHealth } from './redis
 export const workingMemory = {
     /**
      * Ajoute un message au contexte éphémère.
-     * 
+     *
      * ⚠️ CONTRAT ARCHITECTURAL (Biais #2 Audit Expert) :
      * Cette méthode ne DOIT JAMAIS être appelée manuellement par un plugin
-     * (ex: send_message, memory_store, etc). Le cycle de vie de la boucle ReAct 
+     * (ex: send_message, memory_store, etc). Le cycle de vie de la boucle ReAct
      * ajoute automatiquement la réponse finale de l'assistant à la fin de `_handleMessage`.
      * Un appel forcé par un plugin créerait des doublons fantômes dans l'historique Redis,
      * brisant le pattern strict 'Alternating User/Assistant' requis par la majorité des LLMs.
-     * 
-     * @param {string} chatId 
+     *
+     * @param {string} chatId
      * @param {string} role 'user' | 'assistant'
-     * @param {string} content 
+     * @param {string} content
      * @param {string} speakerHash - Optionnel, hash 3 chars pour identification (groupes)
      * @param {string} speakerName - Optionnel, nom de l'utilisateur (groupes)
      */
@@ -50,7 +50,7 @@ export const workingMemory = {
 
     /**
      * Récupère le contexte récent
-     * @param {string} chatId 
+     * @param {string} chatId
      * @returns {Promise<Array>}
      */
     async getContext(chatId: any, limit: number = 15) {
@@ -71,7 +71,7 @@ export const workingMemory = {
 
     /**
      * Nettoie le contexte
-     * @param {string} chatId 
+     * @param {string} chatId
      */
     async clearContext(chatId: any) {
         try {
@@ -96,9 +96,9 @@ export const workingMemory = {
 
     /**
      * Mute un utilisateur
-     * @param {string} groupJid 
-     * @param {string} userJid 
-     * @param {number} durationMinutes 
+     * @param {string} groupJid
+     * @param {string} userJid
+     * @param {number} durationMinutes
      */
     async muteUser(groupJid: any, userJid: any, durationMinutes: any) {
         try {
@@ -113,8 +113,8 @@ export const workingMemory = {
 
     /**
      * Vérifie si un utilisateur est mute
-     * @param {string} groupJid 
-     * @param {string} userJid 
+     * @param {string} groupJid
+     * @param {string} userJid
      */
     async isMuted(groupJid: any, userJid: any) {
         try {
@@ -130,7 +130,7 @@ export const workingMemory = {
 
     /**
      * Définit les permissions audio pour un groupe
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @param {string} permission 'all' | 'admins_only' | 'none'
      */
     async setAudioPermission(groupJid: any, permission: any) {
@@ -147,7 +147,7 @@ export const workingMemory = {
 
     /**
      * Récupère les permissions audio pour un groupe
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @returns {Promise<string>} 'all' | 'admins_only' | 'none' (default: 'all')
      */
     async getAudioPermission(groupJid: any) {
@@ -184,7 +184,7 @@ export const workingMemory = {
 
     /**
      * Active/désactive les vocaux en PV globalement (Global Admin only)
-     * @param {boolean} disabled 
+     * @param {boolean} disabled
      */
     async setPvAudioDisabled(disabled: any) {
         try {
@@ -206,8 +206,8 @@ export const workingMemory = {
 
     /**
      * Stocke un message pour l'anti-delete
-     * @param {string} chatId 
-     * @param {string} messageId 
+     * @param {string} chatId
+     * @param {string} messageId
      * @param {Object} messageData { sender, senderName, text, mediaType, timestamp }
      */
     async storeMessage(chatId: any, messageId: any, messageData: any) {
@@ -230,8 +230,8 @@ export const workingMemory = {
 
     /**
      * Récupère un message stocké
-     * @param {string} chatId 
-     * @param {string} messageId 
+     * @param {string} chatId
+     * @param {string} messageId
      * @returns {Promise<Object|null>}
      */
     async getStoredMessage(chatId: any, messageId: any) {
@@ -250,9 +250,9 @@ export const workingMemory = {
 
     /**
      * Marque un message comme supprimé et l'ajoute à la liste des suppressions
-     * @param {string} chatId 
-     * @param {string} messageId 
-     * @param {Object} messageData 
+     * @param {string} chatId
+     * @param {string} messageId
+     * @param {Object} messageData
      */
     async trackDeletedMessage(chatId: any, messageId: any, messageData: any) {
         try {
@@ -283,8 +283,8 @@ export const workingMemory = {
 
     /**
      * Récupère les messages supprimés d'un groupe
-     * @param {string} chatId 
-     * @param {number} limit 
+     * @param {string} chatId
+     * @param {number} limit
      * @returns {Promise<Array>}
      */
     async getDeletedMessages(chatId: any, limit: any = 10) {
@@ -304,8 +304,8 @@ export const workingMemory = {
 
     /**
      * Active/désactive l'anti-delete pour un groupe
-     * @param {string} chatId 
-     * @param {boolean} enabled 
+     * @param {string} chatId
+     * @param {boolean} enabled
      */
     async setAntiDeleteEnabled(chatId: any, enabled: any) {
         try {
@@ -320,7 +320,7 @@ export const workingMemory = {
 
     /**
      * Vérifie si l'anti-delete est activé pour un groupe
-     * @param {string} chatId 
+     * @param {string} chatId
      * @returns {Promise<boolean>}
      */
     async isAntiDeleteEnabled(chatId: any) {
@@ -340,8 +340,8 @@ export const workingMemory = {
 
     /**
      * Enregistre un message pour le calcul de vélocité
-     * @param {string} chatId 
-     * @param {string} senderId 
+     * @param {string} chatId
+     * @param {string} senderId
      */
     async trackMessage(chatId: any, senderId: any) {
         try {
@@ -372,7 +372,7 @@ export const workingMemory = {
 
     /**
      * Calcule la vélocité du chat (messages par minute)
-     * @param {string} chatId 
+     * @param {string} chatId
      * @returns {Promise<{velocity: number, mode: string, uniqueSenders: number}>}
      */
     async getChatVelocity(chatId: any) {
@@ -412,14 +412,14 @@ export const workingMemory = {
 
     /**
      * Détermine la stratégie de réponse basée sur la vélocité
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {Object} originalMessage - Le message original (pour quoted reply)
      * @returns {Promise<{useQuote: boolean, useMention: boolean, reason: string}>}
      */
     async getReplyStrategy(chatId: any, originalMessage: any = null) {
         const { velocity, mode, uniqueSenders } = await this.getChatVelocity(chatId);
 
-        let strategy = {
+        const strategy = {
             useQuote: false,
             useMention: false,
             reason: `Mode: ${mode} (${velocity} msg/min, ${uniqueSenders} utilisateurs)`
@@ -430,7 +430,7 @@ export const workingMemory = {
                 // Conversation directe, pas besoin de citation
                 strategy.useQuote = false;
                 strategy.useMention = false;
-                strategy.reason = `🧘 Solo: conversation directe`;
+                strategy.reason = '🧘 Solo: conversation directe';
                 break;
 
             case 'calm':
@@ -463,8 +463,8 @@ export const workingMemory = {
 
     /**
      * Enregistre la dernière interaction du bot dans un groupe
-     * @param {string} chatId 
-     * @param {string} userJid 
+     * @param {string} chatId
+     * @param {string} userJid
      */
     async setLastInteraction(chatId: any, userJid: any) {
         try {
@@ -486,7 +486,7 @@ export const workingMemory = {
 
     /**
      * Récupère la dernière interaction du bot
-     * @param {string} chatId 
+     * @param {string} chatId
      * @returns {Promise<{user: string, timestamp: number}|null>}
      */
     async getLastInteraction(chatId: any) {
@@ -508,7 +508,7 @@ export const workingMemory = {
 
     /**
      * Enregistre l'activité d'un groupe (Sorted Set)
-     * @param {string} chatId 
+     * @param {string} chatId
      */
     async trackGroupActivity(chatId: any) {
         if (!chatId.endsWith('@g.us')) return;
@@ -527,7 +527,7 @@ export const workingMemory = {
 
     /**
      * Récupère les groupes inactifs depuis plus de X minutes
-     * @param {number} thresholdMinutes 
+     * @param {number} thresholdMinutes
      * @returns {Promise<string[]>} Liste des JID
      */
     async getInactiveGroups(thresholdMinutes: any = 180) {

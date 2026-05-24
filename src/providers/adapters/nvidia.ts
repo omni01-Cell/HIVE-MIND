@@ -29,7 +29,7 @@ export default {
     async chat(messages: any, options: any) {
         const { model, apiKey, tools, temperature = 1.00 } = options;
 
-        const invokeUrl = "https://integrate.api.nvidia.com/v1/chat/completions";
+        const invokeUrl = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
         // Récupérer les paramètres spécifiques au modèle
         const modelCfg = MODEL_CONFIG[model] || { max_tokens: 16384 };
@@ -83,7 +83,7 @@ export default {
                 console.error(`[NVIDIA] ❌ Fetch Error after ${duration}ms: ${e.message}`);
                 throw e;
             });
-            
+
             clearTimeout(timeoutId);
 
             const duration = Date.now() - requestStart;
@@ -102,7 +102,7 @@ export default {
             }
 
             const data = await response.json();
-            
+
             if (!data.choices || data.choices.length === 0) {
                 throw new Error('[NVIDIA Adapter] Réponse vide de l\'API (no choices)');
             }

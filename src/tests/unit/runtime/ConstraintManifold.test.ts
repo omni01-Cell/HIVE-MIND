@@ -9,19 +9,19 @@ describe('Constraint Manifold (RuntimeSentinel integration)', () => {
         metadata: {
             id: 'test_manifold',
             name: 'Manifold Agent',
-            version: '1.0.0',
+            version: '1.0.0'
         },
         mindos: {
-            drives: ['Execute order'],
+            drives: ['Execute order']
         },
         action_space: {
-            allowed_tools: ['read_file', 'list_directory', 'send_message'],
+            allowed_tools: ['read_file', 'list_directory', 'send_message']
         },
         constraints: {
             read_only_fs: true,
             max_budget_usd: 0.5,
-            max_iterations: 5,
-        },
+            max_iterations: 5
+        }
     };
 
     it('should block tools that are not in the blueprint whitelist', async () => {
@@ -52,12 +52,12 @@ describe('Constraint Manifold (RuntimeSentinel integration)', () => {
         const writeBlueprint: AgentBlueprint = {
             ...mockBlueprint,
             action_space: {
-                allowed_tools: ['read_file', 'edit_file'], // edit_file is whitelisted here
+                allowed_tools: ['read_file', 'edit_file'] // edit_file is whitelisted here
             },
             constraints: {
                 ...mockBlueprint.constraints,
-                read_only_fs: true, // But read-only FS is active
-            },
+                read_only_fs: true // But read-only FS is active
+            }
         };
 
         const result = await sentinel.evaluate(
@@ -75,7 +75,7 @@ describe('Constraint Manifold (RuntimeSentinel integration)', () => {
         const rawTools = [
             { function: { name: 'read_file' } },
             { function: { name: 'edit_file' } },
-            { function: { name: 'execute_bash_command' } },
+            { function: { name: 'execute_bash_command' } }
         ];
 
         const projected = sentinel.projectActionSpace(rawTools, mockBlueprint);

@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import { permissionManager } from '../../../core/security/PermissionManager.js';
 import { fileState } from './FileState.js';
 import { hashLines } from '../../../services/anchor/index.js';
+import { readFileInRange } from '../../../utils/readFileInRange.js';
 
 const execAsync = promisify(exec);
 const MAX_FILES_TO_LIST = 1000;
@@ -51,13 +52,15 @@ export default {
             type: 'function',
             function: {
                 name: 'read_file',
-                description: 'Reads file content with line numbers and anchors (limited to 800 lines at a time).',
+                description: 'Reads file content with line numbers and anchors (limited to 800 lines at a time). Supports line range offset and limit.',
                 parameters: {
                     type: 'object',
                     properties: {
                         file_path: { type: 'string', description: 'The path of the file to read' },
                         start_line: { type: 'number', description: 'Start line (1-indexed)' },
-                        end_line: { type: 'number', description: 'End line (optional)' }
+                        end_line: { type: 'number', description: 'End line (optional)' },
+                        offset: { type: 'number', description: 'Offset in lines (alternative to start_line, 0-indexed)' },
+                        limit: { type: 'number', description: 'Limit of lines to read' }
                     },
                     required: ['file_path']
                 }
@@ -100,7 +103,7 @@ export default {
                     for (const item of items) {
                         if (BANNED_DIRS.includes(item.name) || item.name.startsWith('.git')) continue;
                         if (isSandboxRoot && item.name === 'storage_hm') continue;
-                        
+
                         const type = item.isDirectory() ? '[DIR] ' : '[FILE]';
                         result += `${type} ${item.name}\n`;
                         count++;
@@ -123,9 +126,9 @@ export default {
                     if (!(await checkReadAccess(search_path)).granted) {
                         return { success: false, message: 'Permission denied for searching outside sandbox.' };
                     }
-                    
+
                     const absolutePath = path.resolve(process.cwd(), search_path);
-                    
+
                     let command = '';
                     try {
                         await execAsync('which rg');
@@ -151,7 +154,7 @@ export default {
                 }
 
                 case 'read_file': {
-                    const { file_path, start_line = 1, end_line } = args;
+                    const { file_path, start_line, end_line, offset: argOffset, limit: argLimit } = args;
                     // WHY: The Planner sometimes passes undefined file_path when the LLM
                     // omits required params. path.resolve(cwd, undefined) crashes with
                     // "paths[1] must be of type string". Fail closed with a clear error.
@@ -168,25 +171,46 @@ export default {
                     // [CLAUDE CODE PATTERN] Record read timestamp
                     fileState.recordRead(absolutePath);
 
-                    const content = fs.readFileSync(absolutePath, 'utf8');
-                    const lines = content.split('\n');
-                    
-                    const startIdx = Math.max(0, start_line - 1);
-                    const endIdx = end_line ? Math.min(lines.length, end_line) : Math.min(lines.length, startIdx + MAX_READ_LINES);
+                    // Compute offset and limit supporting both legacy start_line/end_line and new offset/limit
+                    const offset = argOffset !== undefined ? Math.max(0, argOffset) : (start_line !== undefined ? Math.max(0, start_line - 1) : 0);
 
-                    // [DIRAC] Hash-Anchored Lines: Each line gets a stable word-anchor
-                    // WHY: Anchors survive insertions/deletions, unlike line numbers.
-                    // The LLM uses these anchors to target edits with 100% precision.
-                    const hashedContent = hashLines(absolutePath, content);
-                    const hashedLines = hashedContent.split('\n');
-
-                    let result = '';
-                    for (let i = startIdx; i < endIdx; i++) {
-                        result += `${hashedLines[i]}\n`;
+                    let limit = MAX_READ_LINES;
+                    if (argLimit !== undefined) {
+                        limit = Math.max(1, argLimit);
+                    } else if (end_line !== undefined) {
+                        const calculatedLimit = end_line - (start_line !== undefined ? start_line : offset + 1) + 1;
+                        limit = Math.max(1, calculatedLimit);
                     }
 
-                    if (lines.length > endIdx) {
-                        result += `\n... (File truncated. Use start_line and end_line to see more) ...`;
+                    const stats = fs.statSync(absolutePath);
+                    let result = '';
+
+                    // For files < 10 MB, load full file to preserve global Dirac anchor stability
+                    if (stats.size < 10 * 1024 * 1024) {
+                        const content = fs.readFileSync(absolutePath, 'utf8');
+                        const hashedContent = hashLines(absolutePath, content);
+                        const hashedLines = hashedContent.split('\n');
+
+                        const startIdx = offset;
+                        const endIdx = Math.min(hashedLines.length, startIdx + limit);
+
+                        for (let i = startIdx; i < endIdx; i++) {
+                            result += `${hashedLines[i]}\n`;
+                        }
+
+                        if (hashedLines.length > endIdx) {
+                            result += '\n... (File truncated. Use offset and limit parameters to read specific portions) ...';
+                        }
+                    } else {
+                        // For huge files, stream read directly to prevent OOM
+                        const readResult = await readFileInRange(absolutePath, offset, limit);
+                        // Generate anchors on the sliced content
+                        const hashedFragment = hashLines(absolutePath, readResult.content);
+                        result = hashedFragment;
+
+                        if (readResult.totalLines > offset + readResult.lineCount) {
+                            result += '\n... (File truncated. Use offset and limit parameters to read specific portions) ...';
+                        }
                     }
 
                     return { success: true, message: result };

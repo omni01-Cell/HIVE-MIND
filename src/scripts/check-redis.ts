@@ -31,7 +31,7 @@ async function checkRedis() {
     } else {
         console.error('❌ Redis Connection Failed (Timeout)');
         // Try manual connect if not connecting?
-        // await redisClient.connect(); 
+        // await redisClient.connect();
         // But core/redisClient already calls connect().
     }
 

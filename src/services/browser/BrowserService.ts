@@ -20,14 +20,14 @@ export class BrowserService {
         'pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com',
         'redtube.com', 'youporn.com',
         // Darknet gateways
-        'onion.to', 'onion.ws', 'onion.ly',
+        'onion.to', 'onion.ws', 'onion.ly'
     ];
 
     private constructor() {
         // Initialize screenshot directory
         const storageDir = process.env.STORAGE_DIR || join(process.cwd(), 'storage_hm');
         this.screenshotDir = process.env.AGENT_BROWSER_SCREENSHOT_DIR || join(storageDir, 'screenshots');
-        
+
         if (!existsSync(this.screenshotDir)) {
             mkdirSync(this.screenshotDir, { recursive: true });
         }
@@ -50,7 +50,7 @@ export class BrowserService {
      */
     private async exec(args: string[], options: BrowserExecOptions = {}): Promise<BrowserResult> {
         const cmdArgs = [...args, '--json'];
-        
+
         if (options.session) {
             cmdArgs.push('--session', options.session);
         }
@@ -58,7 +58,7 @@ export class BrowserService {
         const timeout = options.timeout || this.defaultTimeout;
 
         const env: NodeJS.ProcessEnv = { ...process.env, AGENT_BROWSER_IDLE_TIMEOUT_MS: process.env.AGENT_BROWSER_IDLE_TIMEOUT_MS || '300000' };
-        
+
         // Ensure we find agent-browser if installed globally via NVM/npm
         const nodeBinDir = dirname(process.execPath);
         if (env.PATH && !env.PATH.includes(nodeBinDir)) {
@@ -121,7 +121,7 @@ export class BrowserService {
         if (interactiveOnly) {
             args.push('--interactive');
         }
-        
+
         const result = await this.exec(args, { session });
         if (!result.success) return result as SnapshotResult;
 
@@ -147,13 +147,13 @@ export class BrowserService {
     public async screenshot(session?: string, name?: string, fullPage?: boolean): Promise<ScreenshotResult> {
         const fileName = name || `screenshot-${Date.now()}.png`;
         const filePath = join(this.screenshotDir, fileName);
-        
+
         const args = ['screenshot'];
         if (fullPage) {
             args.push('--full');
         }
         args.push(filePath);
-        
+
         const result = await this.exec(args, { session });
         if (!result.success) return result as ScreenshotResult;
 
@@ -189,7 +189,7 @@ export class BrowserService {
         } else if (options.timeout) {
             args.push(options.timeout.toString());
         }
-        
+
         return this.exec(args, { session });
     }
 

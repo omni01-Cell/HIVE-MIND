@@ -11,7 +11,7 @@ export class DriverSystem {
     /**
      * Évalue les drives pour un chatId donné et déclenche un événement autonome si les conditions sont remplies.
      * Preserves invariant: triggers at most one spontaneous thought per chatId per hour, only if chat is calm.
-     * 
+     *
      * @param chatId Identifiant unique de la conversation
      * @param blueprintId Identifiant du blueprint à charger (défaut 'hive_main')
      * @returns boolean true si une action a été déclenchée, false sinon

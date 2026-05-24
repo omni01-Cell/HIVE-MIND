@@ -72,7 +72,7 @@ class PluginLoader {
 
     /**
      * Loads a specific plugin
-     * @param {string} pluginName 
+     * @param {string} pluginName
      */
     async load(pluginName: any) {
         const pluginPath = join(__dirname, pluginName, 'index.js');
@@ -174,33 +174,33 @@ class PluginLoader {
         if (!toolDef.function) {
             throw new Error(`Plugin ${pluginName}: tool definition is missing "function" object`);
         }
-        
+
         const { name, description, parameters } = toolDef.function;
-        
+
         if (!name || typeof name !== 'string') {
             throw new Error(`Plugin ${pluginName}: missing or invalid tool name`);
         }
-        
+
         if (!description || typeof description !== 'string') {
             throw new Error(`Plugin ${pluginName}: missing description for tool "${name}"`);
         }
-        
+
         if (!parameters || typeof parameters !== 'object') {
             throw new Error(`Plugin ${pluginName}: missing parameters for tool "${name}"`);
         }
-        
+
         // Check parameters format (Standard JSON Schema)
         if (parameters.type !== 'object' || !parameters.properties) {
             console.warn(`[PluginLoader] ⚠️ Tool "${name}" (Plugin: ${pluginName}) uses non-standard parameters format`);
         }
-        
+
         return true;
     }
 
     /**
      * Récupère un plugin par son nom
 
-     * @param {string} name 
+     * @param {string} name
      * @returns {Plugin|undefined}
      */
     get(name: any) {
@@ -251,11 +251,11 @@ class PluginLoader {
     /**
      * Searches for a textual handler matching given text
      * Allows plugins to declare their own regex patterns
-     * 
+     *
      * @param {string} text - Text to analyze
      * @param {Object} message - Full WhatsApp message (for mentions, etc.)
      * @returns {{name: string, args: Object}|null} - Parsed command or null
-     * 
+     *
      * @example
      * const cmd = pluginLoader.findTextHandler("[ban:@user]", message);
      * // { name: 'whatsapp_ban_user', args: { user_jid: '123@s.whatsapp.net' } }
@@ -306,12 +306,12 @@ class PluginLoader {
     /**
      * Returns the most relevant tools for a given request
      * Uses semantic search on bot_tools table
-     * 
+     *
      * @param {string} userMessage - User message
      * @param {number} limit - Max tools to return (default: 5)
      * @param {number} fallbackLimit - If RAG fails, how many tools to send (default: 10)
      * @returns {Promise<Array>} - Relevant tool definitions
-     * 
+     *
      * @example
      * const tools = await pluginLoader.getRelevantTools("ban this guy", 5);
      * // Returns the 5 tools closest to "ban"
@@ -321,7 +321,7 @@ class PluginLoader {
         // Dynamic import to avoid circular dependencies
         const { supabase } = await import('../services/supabase.js');
         const { container } = await import('../core/ServiceContainer.js');
-        
+
         // Use EmbeddingsService singleton from container (avoids duplication)
         let embeddings: any = null;
         try {
@@ -362,13 +362,13 @@ class PluginLoader {
 
             if (!data || data.length === 0) {
                 console.warn('[PluginLoader] No tools found by RAG, fallback to base tools');
-                return this.toolDefinitions.filter((t: any) => 
+                return this.toolDefinitions.filter((t: any) =>
                     t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name)
                 );
             }
 
             // 3. Merge with CORE TOOLS (Always available tools)
-            let CORE_TOOLS = [
+            const CORE_TOOLS = [
                 'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
                 'code_execution', 'execute_bash_command', 'run_scratchpad',
                 'get_file_skeleton', 'get_function', 'edit_file', 'read_file',
@@ -394,7 +394,7 @@ class PluginLoader {
             );
 
             // Map RAG tools
-            let relevantTools = data.map((tool: any) => tool.definition);
+            const relevantTools = data.map((tool: any) => tool.definition);
 
             // Add Core Tools if not already there
             for (const coreTool of coreToolDefs) {
@@ -411,7 +411,7 @@ class PluginLoader {
 
         } catch (error: any) {
             console.error('[PluginLoader] getRelevantTools error:', error.message);
-            return this.toolDefinitions.filter((t: any) => 
+            return this.toolDefinitions.filter((t: any) =>
                 t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name)
             );
         }
@@ -510,7 +510,7 @@ class PluginLoader {
 
     /**
      * Reloads a specific plugin
-     * @param {string} name 
+     * @param {string} name
      */
     async reload(name: any) {
         const plugin = this.plugins.get(name);

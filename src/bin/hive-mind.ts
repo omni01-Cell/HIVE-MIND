@@ -210,7 +210,7 @@ stateCmd.command('release-lock <jid>').description('Fait sauter le verrou d\'un 
     const { redis } = await initAdminEnv();
     const lockKey = `lock:user:${jid}`;
     const result = await redis.del(lockKey);
-    console.log(result ? `🔓 Verrou sauté pour ${jid}` : `⚠️ Aucun verrou trouvé`);
+    console.log(result ? `🔓 Verrou sauté pour ${jid}` : '⚠️ Aucun verrou trouvé');
     process.exit(0);
 });
 
@@ -291,14 +291,14 @@ program.command('db:reset-data').description('Réinitialise les tables de la BDD
         try {
             tablesToFlush = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'db-reset-tables.json'), 'utf-8'));
         } catch {}
-        
+
         for (const table of tablesToFlush) {
             console.log(`🗑️ Vidage de ${table}...`);
             let query = supabase.from(table).delete();
             query = query.neq('id', '00000000-0000-0000-0000-000000000000');
             await query;
         }
-        
+
         if (adminJids.length > 0) {
             // Note: Since users use UUIDs now, this requires a more complex query if we want to keep admins.
             // For now, we clear everything since it's a reset.

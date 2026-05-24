@@ -66,9 +66,9 @@ export const db = {
      */
     async resolveUser(platform: string, platformUserId: string, username?: string): Promise<string | null> {
         if (!supabase) return null;
-        
+
         // 1. Cherche l'identité existante
-        let { data: identity } = await supabase
+        const { data: identity } = await supabase
             .from('user_identities')
             .select('user_id')
             .eq('platform', platform)
@@ -84,9 +84,9 @@ export const db = {
             .select()
             .single();
 
-        if (errUser) { 
-            console.error('[DB] Erreur création contact central:', errUser); 
-            return null; 
+        if (errUser) {
+            console.error('[DB] Erreur création contact central:', errUser);
+            return null;
         }
 
         // 3. Créer le lien d'identité (UPSERT pour éviter race condition)
@@ -94,9 +94,9 @@ export const db = {
             .from('user_identities')
             .upsert({ user_id: newUser.id, platform, platform_user_id: platformUserId }, { onConflict: 'platform,platform_user_id' });
 
-        if (errId) { 
-            console.error('[DB] Erreur création user_identity:', errId); 
-            return null; 
+        if (errId) {
+            console.error('[DB] Erreur création user_identity:', errId);
+            return null;
         }
 
         return newUser.id;
@@ -107,8 +107,8 @@ export const db = {
      */
     async resolveGroup(platform: string, platformGroupId: string, name?: string): Promise<string | null> {
         if (!supabase) return null;
-        
-        let { data: group } = await supabase
+
+        const { data: group } = await supabase
             .from('groups')
             .select('id')
             .eq('platform', platform)
@@ -120,17 +120,17 @@ export const db = {
         // [UPSERT] Utiliser upsert pour éviter les erreurs 23505 (duplicate key) en cas d'appels concurrents
         const { data: newGroup, error } = await supabase
             .from('groups')
-            .upsert({ 
-                platform, 
-                platform_group_id: platformGroupId, 
-                name: name || platformGroupId 
+            .upsert({
+                platform,
+                platform_group_id: platformGroupId,
+                name: name || platformGroupId
             }, { onConflict: 'platform,platform_group_id' })
             .select()
             .single();
 
-        if (error) { 
-            console.error('[DB] Erreur création groupe unifié:', error); 
-            return null; 
+        if (error) {
+            console.error('[DB] Erreur création groupe unifié:', error);
+            return null;
         }
         return newGroup.id;
     },
@@ -144,13 +144,13 @@ export const db = {
      */
     async resolveLegacyIdFromContext(contextId: string): Promise<string | null> {
         if (!supabase) return null;
-        
+
         const { data: group } = await supabase.from('groups').select('platform_group_id').eq('id', contextId).maybeSingle();
         if (group) return group.platform_group_id;
-        
+
         const { data: identity } = await supabase.from('user_identities').select('platform_user_id').eq('user_id', contextId).maybeSingle();
         if (identity) return identity.platform_user_id;
-        
+
         return null;
     },
 
@@ -160,11 +160,11 @@ export const db = {
      */
     async resolveContextFromLegacyId(legacyId: string): Promise<{ context_id: string, type: 'user'|'group' } | null> {
         if (!legacyId) return null;
-        
+
         // Heuristiques de détection
         const isGroup = legacyId.includes('@g.us') || legacyId.includes('-') || legacyId.startsWith('chat_');
         let platform = 'cli';
-        
+
         if (legacyId.includes('whatsapp.net') || legacyId.includes('@g.us')) {
             platform = 'whatsapp';
         } else if (legacyId.includes('discord')) {
@@ -198,8 +198,8 @@ export const db = {
             await supabase.from('agent_actions').insert({
                 context_id: resolved.context_id,
                 tool_name: toolName,
-                params: params,
-                result: result,
+                params,
+                result,
                 status: isSuccess ? 'success' : 'error',
                 error_message: errorMessage
             });
@@ -261,7 +261,7 @@ export const db = {
             .from('reminders')
             .insert({
                 context_id: resolved.context_id,
-                message: message,
+                message,
                 remind_at: remindAt.toISOString(),
                 sent: false
             })
@@ -329,7 +329,7 @@ export const db = {
         if (error && error.code !== 'PGRST116') {
             console.error('[DB] Erreur getGroupFounder:', error);
         }
-        
+
         if (!data?.founder_id) return null;
 
         // On va chercher l'ID brut pour la rétrocompatibilité
@@ -349,7 +349,7 @@ export const db = {
         if (!supabase) return null;
         const groupRes = await this.resolveContextFromLegacyId(groupJid);
         const founderRes = await this.resolveContextFromLegacyId(founderJid);
-        
+
         if (!groupRes || !founderRes || groupRes.type !== 'group' || founderRes.type !== 'user') return null;
 
         const { data, error } = await supabase
@@ -370,7 +370,7 @@ export const db = {
         if (!supabase) return [];
         const groupRes = await this.resolveContextFromLegacyId(groupJid);
         const userRes = await this.resolveContextFromLegacyId(userJid);
-        
+
         if (!groupRes || !userRes) return [];
 
         const { data, error } = await supabase

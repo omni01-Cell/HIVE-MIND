@@ -3,6 +3,7 @@ import * as path from 'path';
 import { permissionManager } from '../../../core/security/PermissionManager.js';
 import { fileState } from './FileState.js';
 import { AnchorStateManager, extractId, ANCHOR_DELIMITER, hashLines } from '../../../services/anchor/index.js';
+import { fileStateCache } from '../../../utils/fileStateCache.js';
 
 export default {
     name: 'dev_tools_file_edit',
@@ -101,7 +102,7 @@ BATCHING: You CAN group multiple files and edits in a single call via the "files
         if (args.files && Array.isArray(args.files)) {
             return executeAnchorMode(args.files, chatId, sourceChannel, context);
         }
-        
+
         // Legacy fallback
         return executeLegacyMode(args, chatId, sourceChannel, context);
     }
@@ -120,8 +121,8 @@ async function executeAnchorMode(
     const results: Array<{ file: string; success: boolean; editsApplied: number; message: string }> = [];
 
     for (const fileEntry of files) {
-        const absolutePath = path.isAbsolute(fileEntry.path) 
-            ? fileEntry.path 
+        const absolutePath = path.isAbsolute(fileEntry.path)
+            ? fileEntry.path
             : path.resolve(permissionManager.sandboxDir, fileEntry.path);
 
         // Security check
@@ -138,8 +139,8 @@ async function executeAnchorMode(
                     file: fileEntry.path,
                     success: false,
                     editsApplied: 0,
-                    message: permResult.feedback 
-                        ? `[REJECTED] ${permResult.feedback}` 
+                    message: permResult.feedback
+                        ? `[REJECTED] ${permResult.feedback}`
                         : '[REJECTED] Permission denied.'
                 });
                 continue;
@@ -158,13 +159,26 @@ async function executeAnchorMode(
         }
 
         // Staleness check
-        const { changed } = fileState.hasChanged(absolutePath);
-        if (changed) {
+        let isStale = false;
+        const { changed, lastRead } = fileState.hasChanged(absolutePath);
+        if (lastRead === undefined) {
+            const cachedState = fileStateCache.get(absolutePath);
+            if (cachedState) {
+                const currentStats = fs.statSync(absolutePath);
+                if (currentStats.mtimeMs > cachedState.mtimeMs) {
+                    isStale = true;
+                }
+            }
+        } else if (changed) {
+            isStale = true;
+        }
+
+        if (isStale) {
             results.push({
                 file: fileEntry.path,
                 success: false,
                 editsApplied: 0,
-                message: `SECURITY_ERROR: File modified since last read. Re-read with read_file.`
+                message: 'SECURITY_ERROR: File modified since last read. Re-read with read_file.'
             });
             continue;
         }
@@ -193,7 +207,7 @@ async function executeAnchorMode(
     const allSuccess = results.every(r => r.success);
     const totalEdits = results.reduce((sum, r) => sum + r.editsApplied, 0);
 
-    const summary = results.map(r => 
+    const summary = results.map(r =>
         `${r.success ? '✅' : '❌'} ${r.file}: ${r.editsApplied} edits — ${r.message}`
     ).join('\n');
 
@@ -392,11 +406,24 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
         }
 
         // Staleness check
+        let isStale = false;
         const { changed, current, lastRead } = fileState.hasChanged(absolutePath);
-        if (changed) {
+        if (lastRead === undefined) {
+            const cachedState = fileStateCache.get(absolutePath);
+            if (cachedState) {
+                const currentStats = fs.statSync(absolutePath);
+                if (currentStats.mtimeMs > cachedState.mtimeMs) {
+                    isStale = true;
+                }
+            }
+        } else if (changed) {
+            isStale = true;
+        }
+
+        if (isStale) {
             return {
                 success: false,
-                message: `SECURITY_ERROR: File ${file_path} has been modified on disk since you last read it (Last read: ${new Date(lastRead!).toLocaleTimeString('en-US')}, Current: ${new Date(current!).toLocaleTimeString('en-US')}). Re-read with read_file before applying changes to avoid overwriting user work.`
+                message: `SECURITY_ERROR: File ${file_path} has been modified on disk since you last read it. Re-read with read_file before applying changes to avoid overwriting user work.`
             };
         }
 
@@ -408,7 +435,7 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
         if (occurrences === 0) {
             return {
                 success: false,
-                message: `Error: 'old_string' was not found exactly in the file. Check spaces and indentation.`
+                message: 'Error: \'old_string\' was not found exactly in the file. Check spaces and indentation.'
             };
         }
 

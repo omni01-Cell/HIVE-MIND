@@ -17,7 +17,7 @@ import { tryParseJson } from '../../utils/ResponseFormatEnforcer.js';
 
 function extractValueFromStepResult(result: any, placeholderName: string): string {
     if (!result) return '';
-    
+
     // Extract output payload
     let output = result.llmOutput;
     if (output === undefined) {
@@ -26,7 +26,7 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
     if (output === undefined) {
         output = result;
     }
-    
+
     const isPathPlaceholder = placeholderName.toLowerCase().includes('path');
     const isUrlPlaceholder = placeholderName.toLowerCase().includes('url');
 
@@ -34,13 +34,13 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
     const findExactKey = (obj: any, targetKey: string): any => {
         if (!obj || typeof obj !== 'object') return undefined;
         const targetLower = targetKey.toLowerCase();
-        
+
         for (const key in obj) {
             if (key.toLowerCase() === targetLower) {
                 return obj[key];
             }
         }
-        
+
         for (const key in obj) {
             const found = findExactKey(obj[key], targetKey);
             if (found !== undefined) return found;
@@ -86,7 +86,7 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
             const foundUrl = findKey(output, urlKeys);
             if (foundUrl) return String(foundUrl);
         }
-        
+
         // General common keys
         const generalKeys = ['result', 'data', 'text', 'value', 'filePath', 'path', 'url'];
         const foundGeneral = findKey(output, generalKeys);
@@ -96,7 +96,7 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
             }
             return String(foundGeneral);
         }
-        
+
         // Default properties fallback
         if (output.result !== undefined) {
             return typeof output.result === 'object' ? JSON.stringify(output.result) : String(output.result);
@@ -107,10 +107,10 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
             }
             return typeof output.data === 'object' ? JSON.stringify(output.data) : String(output.data);
         }
-        
+
         return JSON.stringify(output);
     }
-    
+
     return String(output);
 }
 
@@ -118,7 +118,7 @@ function formatToolForPlanner(t: any): string {
     const name = t.function?.name || t.name;
     const desc = t.function?.description || t.description || '';
     const params = t.function?.parameters || t.parameters;
-    
+
     let paramsStr = '';
     if (params && params.properties) {
         const required = params.required || [];
@@ -136,12 +136,12 @@ function formatToolForPlanner(t: any): string {
 
 function interpolateParams(params: any, stepResults: any): any {
     if (!params) return params;
-    
+
     if (typeof params === 'string') {
         // Robust multi-format interpolation parsing to support {{steps.2.output.filePath}}, {{step_2_filePath}}, {{filePath_from_step_2}}
         return params.replace(/\{\{([\s\S]+?)\}\}/g, (match, inner) => {
             const clean = inner.trim();
-            
+
             // Format 1: {{name_from_step_X}}
             const matchFromStep = clean.match(/^([a-zA-Z0-9_]+)_from_step_(\d+)$/i);
             if (matchFromStep) {
@@ -151,7 +151,7 @@ function interpolateParams(params: any, stepResults: any): any {
                 if (result) return extractValueFromStepResult(result, name);
                 return match;
             }
-            
+
             // Format 2: {{steps.X.output.name}} or {{step_X_name}} or {{step.X.name}}
             const stepIdMatch = clean.match(/(?:step|steps)(?:\.|\s|_|-)?(\d+)/i);
             if (stepIdMatch) {
@@ -162,11 +162,11 @@ function interpolateParams(params: any, stepResults: any): any {
                     const parts = clean.split(/[\._\-]/).map((p: string) => p.trim());
                     const technicalWords = ['step', 'steps', 'output', 'result', String(stepId)];
                     const cleanParts = parts.filter((p: string) => p && !technicalWords.includes(p.toLowerCase()));
-                    
+
                     if (cleanParts.length > 0) {
                         propName = cleanParts[0]; // take the custom property name, e.g. "filePath"
                     }
-                    
+
                     const val = extractValueFromStepResult(result, propName);
                     console.log(`[Planner] 🔄 Interpolation placeholder: "${clean}" (step: ${stepId}, prop: ${propName}) -> "${val}"`);
                     return val;
@@ -174,15 +174,15 @@ function interpolateParams(params: any, stepResults: any): any {
                 console.warn(`[Planner] ⚠️ Impossible d'interpoler ${match}: aucun résultat pour l'étape ${stepId}`);
                 return match;
             }
-            
+
             return match;
         });
     }
-    
+
     if (Array.isArray(params)) {
         return params.map(item => interpolateParams(item, stepResults));
     }
-    
+
     if (typeof params === 'object' && params !== null) {
         const interpolated: any = {};
         for (const key in params) {
@@ -190,7 +190,7 @@ function interpolateParams(params: any, stepResults: any): any {
         }
         return interpolated;
     }
-    
+
     return params;
 }
 
@@ -202,19 +202,19 @@ let json5, jsonRepair, Ajv;
 // Chargement dynamique des bibliothèques (évite crash si pas installées)
 async function loadJsonLibraries() {
     if (json5 && jsonRepair && Ajv) return { json5, jsonRepair, Ajv };
-    
+
     try {
         const json5Module = await import('json5');
         const jsonRepairModule = await import('jsonrepair');
         const ajvModule = await import('ajv');
-        
+
         // ESM: json5 exporte { default: { parse, stringify } }
         json5 = json5Module.default || json5Module;
         // ESM: jsonrepair exporte { jsonrepair: fn } directement
         jsonRepair = jsonRepairModule;
         // ESM: ajv exporte { default: AjvClass }
         Ajv = ajvModule.default || ajvModule;
-        
+
         console.log('[Planner] ✅ Bibliothèques JSON chargées (json5, jsonrepair, ajv)');
         return { json5, jsonRepair, Ajv };
     } catch (e: any) {
@@ -237,7 +237,7 @@ const PLAN_SCHEMA = {
                     tool: { type: 'string', minLength: 1 },
                     params: { type: 'object' },
                     estimated_time: { type: 'number', minimum: 0 },
-                    depends_on: { 
+                    depends_on: {
                         type: 'array',
                         items: { type: 'number' }
                     }
@@ -247,9 +247,9 @@ const PLAN_SCHEMA = {
             minItems: 1
         },
         total_time_estimate: { type: 'number', minimum: 0 },
-        complexity: { 
-            type: 'string', 
-            enum: ['low', 'medium', 'high'] 
+        complexity: {
+            type: 'string',
+            enum: ['low', 'medium', 'high']
         }
     },
     required: ['steps']
@@ -274,7 +274,7 @@ export class ExplicitPlanner {
         if (!planText) return null;
 
         // Déclaration hors du try pour rester accessible dans le catch
-        let cleanedJson = planText.trim();
+        const cleanedJson = planText.trim();
 
         try {
             let parsedPlan: any;
@@ -294,17 +294,17 @@ export class ExplicitPlanner {
                 try {
                     const ajv = new Ajv({ useDefaults: true, allErrors: true });
                     const validate = ajv.compile(PLAN_SCHEMA);
-                    
+
                     if (!validate(parsedPlan)) {
                         console.warn('[Planner] ⚠️ Plan invalide selon schéma:', validate.errors);
-                        
+
                         // Tenter de corriger automatiquement
                         const correctedPlan = this._autoCorrectPlan(parsedPlan);
                         if (correctedPlan) {
                             console.log('[Planner] ✅ Plan corrigé automatiquement');
                             return correctedPlan;
                         }
-                        
+
                         console.warn(`[Planner] ⚠️ Plan invalide: ${validate.errors?.[0]?.message}`);
                     }
                 } catch (ajvErr: any) {
@@ -349,9 +349,9 @@ export class ExplicitPlanner {
                 .replace(/,\s*([}\]])/g, '$1') // Virgules traînantes
                 .replace(/([{,]\s*)"([^"]+)"\s*:\s*'(.*?)'/g, '$1"$2":"$3"') // Valeurs simple quotes
                 .trim();
-            
+
             return JSON.parse(fixedJson);
-            
+
         } catch (e: any) {
             console.error('[Planner] ❌ Échec parsing JSON après toutes les tentatives:', e.message);
             return null;
@@ -365,19 +365,19 @@ export class ExplicitPlanner {
     _autoCorrectPlan(plan: any) {
         try {
             const corrected = { ...plan };
-            
+
             // S'assurer que steps existe et est un tableau
             if (!Array.isArray(corrected.steps)) {
                 corrected.steps = [];
             }
-            
+
             // Filtrer et corriger les étapes invalides
             corrected.steps = corrected.steps
                 .filter((step: any) => step && typeof step === 'object')
                 .map((step: any, index: any) => {
                     // Résoudre les synonymes possibles pour la propriété "tool"
                     let resolvedTool = step.tool || step.tool_name || step.toolName || step.function || step.use_tool || step.action_type || step.command || null;
-                    
+
                     // Si aucun outil n'est explicitement défini, tenter de l'inférer de l'action
                     if (!resolvedTool && step.action) {
                         const actionLower = String(step.action).toLowerCase();
@@ -404,22 +404,22 @@ export class ExplicitPlanner {
                         depends_on: Array.isArray(step.depends_on) ? step.depends_on.map(Number) : []
                     };
                 });
-            
+
             // S'assurer qu'il y a au moins une étape
             if (corrected.steps.length === 0) {
                 return null;
             }
-            
+
             // Ajouter les champs manquants avec valeurs par défaut
-            corrected.total_time_estimate = Number(corrected.total_time_estimate) || 
+            corrected.total_time_estimate = Number(corrected.total_time_estimate) ||
                 corrected.steps.reduce((sum: any, step: any) => sum + (step.estimated_time || 0), 0);
-            
-            corrected.complexity = ['low', 'medium', 'high'].includes(corrected.complexity) 
-                ? corrected.complexity 
+
+            corrected.complexity = ['low', 'medium', 'high'].includes(corrected.complexity)
+                ? corrected.complexity
                 : 'medium';
-            
+
             return corrected;
-            
+
         } catch (e: any) {
             console.error('[Planner] Erreur auto-correction:', e.message);
             return null;
@@ -428,7 +428,7 @@ export class ExplicitPlanner {
 
     /**
      * Détecte si une requête nécessite un plan explicite
-     * @param {string} userMessage 
+     * @param {string} userMessage
      * @param {Array} tools - Outils disponibles
      * @returns {Promise<boolean>}
      */
@@ -570,7 +570,7 @@ Plan:`;
         let attempts = 0;
         const maxAttempts = 5;
         let plan: any = null;
-        let chatHistory: any[] = [
+        const chatHistory: any[] = [
             { role: 'system', content: 'Tu es un planificateur expert en décomposition de tâches. Tu dois impérativement respecter le schéma de sortie JSON demandé et diviser les tâches complexes en au moins 2 étapes distinctes.' },
             { role: 'user', content: planPrompt }
         ];
@@ -684,7 +684,7 @@ Plan:`;
         const executionLog = {
             planId: plan.id,
             goal: plan.goal,
-            plan: plan,
+            plan,
             startTime: initialExecutionLog?.startTime || Date.now(),
             completed: initialExecutionLog?.completed ? [...initialExecutionLog.completed] : [],
             failed: initialExecutionLog?.failed ? [...initialExecutionLog.failed] : [],
@@ -732,51 +732,78 @@ Plan:`;
                     continue;
                 }
 
-                // [GLOBAL TOOL RETRY SYSTEM] Pre-execution parameter validation
-                // WHY: The Planner bypassed the ReAct loop's validateToolArgs check,
-                // causing crashes when LLMs omit required params (e.g., file_path, instructions).
-                // This applies the same validation the ReAct path uses, preventing crashes.
-                const { validateToolArgs } = await import('../../utils/toolValidator.js');
-                const validation = validateToolArgs(toolName, JSON.stringify(step.params || {}), context.tools || []);
-                if (!validation.valid) {
-                    console.warn(`[Planner] ⚠️ Étape ${step.id}: paramètres manquants pour "${toolName}": [${validation.missing.join(', ')}]`);
-                    executionLog.failed.push(step.id);
-                    executionLog.results[step.id] = { 
-                        error: true, 
-                        success: false, 
-                        message: `Missing required parameters: [${validation.missing.join(', ')}]. Expected: ${JSON.stringify(validation.schema, null, 0)}` 
-                    };
-                    await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - params manquants: ${validation.missing.join(', ')}`);
-                    continue;
+                // [GLOBAL TOOL RETRY SYSTEM] Self-correcting loop inspired by Claude Code
+                let retries = 0;
+                const MAX_RETRIES = 3;
+                let finalResult: any = null;
+                let stepParams = step.params || {};
+
+                while (retries < MAX_RETRIES) {
+                    try {
+                        const { validateToolArgs } = await import('../../utils/toolValidator.js');
+                        const validation = validateToolArgs(toolName, JSON.stringify(stepParams), context.tools || []);
+
+                        if (!validation.valid) {
+                            throw new Error(`[SYSTEM REJECTION] : ${validation.formattedError}\nDIRECTIVE: Expected schema: ${JSON.stringify(validation.schema, null, 0)}`);
+                        }
+
+                        const toolCall = {
+                            id: `step_${step.id}_try_${retries}`,
+                            function: { name: toolName, arguments: JSON.stringify(stepParams) }
+                        };
+
+                        finalResult = await context.executeToolFn(toolCall, context.message);
+
+                        if (finalResult && (finalResult.error === true || finalResult.success === false)) {
+                            throw new Error(finalResult.message || finalResult.error || (typeof finalResult.llmOutput === 'string' ? finalResult.llmOutput : '') || 'erreur inconnue');
+                        }
+
+                        // Break out of retry loop on success
+                        break;
+
+                    } catch (err: any) {
+                        retries++;
+                        console.warn(`[Planner] ⚠️ Étape ${step.id} (Essai ${retries}/${MAX_RETRIES}) échouée: ${err.message}`);
+
+                        if (retries >= MAX_RETRIES) {
+                            console.error(`[Planner] 🛑 Échec définitif de l'étape ${step.id} après ${MAX_RETRIES} essais.`);
+                            executionLog.failed.push(step.id);
+                            executionLog.results[step.id] = { error: true, success: false, message: err.message };
+                            await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - ${err.message}`);
+
+                            if (this._isCriticalFailure(step, err)) {
+                                console.warn('[Planner] 🛑 Échec critique, replanification...');
+                                return await this._replan(plan, executionLog, context);
+                            }
+                            break; // Continue to next step in plan
+                        }
+
+                        // --- SELF-CORRECTION AI CALL ---
+                        console.log(`[Planner] 🔄 Demande d'auto-correction au LLM pour l'étape ${step.id}...`);
+                        const fixPrompt = `Your previous attempt to call tool "${toolName}" failed with the following error:\n<tool_use_error>${err.message}</tool_use_error>\n\nYour previous parameters were:\n${JSON.stringify(stepParams)}\n\nFix the parameters and output ONLY the corrected JSON parameters object. Do NOT wrap in markdown.`;
+
+                        try {
+                            const providerRouter = (await import('../../providers/index.js')).providerRouter;
+                            const fixResponse = await providerRouter.callServiceRecipe('PLANNER', [
+                                { role: 'system', content: 'You are a JSON parameter corrector. Output strictly valid JSON.' },
+                                { role: 'user', content: fixPrompt }
+                            ]);
+
+                            if (fixResponse && fixResponse.content) {
+                                const { tryParseJson } = await import('../../utils/ResponseFormatEnforcer.js');
+                                const parsed = tryParseJson(fixResponse.content);
+                                if (parsed) stepParams = parsed;
+                            }
+                        } catch (aiErr) {
+                            console.error('[Planner] Échec de la requête de correction:', aiErr);
+                        }
+                    }
                 }
-                
-                // Construire le toolCall format
-                const toolCall = {
-                    id: `step_${step.id}`,
-                    function: {
-                        name: toolName,
-                        arguments: JSON.stringify(step.params || {})
-                    }
-                };
 
-                // Utiliser la fonction d'exécution fournie
-                const result = await context.executeToolFn(toolCall, context.message);
-
-                executionLog.results[step.id] = result;
-
-                // [BUG #8 FIX] Vérifier si l'outil a réellement réussi
-                if (result && (result.error === true || result.success === false)) {
-                    const errorMessage = result.message || result.error || (typeof result.llmOutput === 'string' ? result.llmOutput : '') || 'erreur inconnue';
-                    console.warn(`[Planner] ⚠️ Étape ${step.id} échouée (outil): ${errorMessage}`);
-                    executionLog.failed.push(step.id);
-                    await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - ${errorMessage}`);
-
-                    // Analyser si échec critique
-                    if (this._isCriticalFailure(step, new Error(errorMessage || 'tool_error'))) {
-                        console.warn(`[Planner] 🛑 Échec critique détecté, replanification...`);
-                        return await this._replan(plan, executionLog, context);
-                    }
-                    continue;
+                // If the loop finished successfully (or broke after max retries but didn't critical fail)
+                if (finalResult && !executionLog.failed.includes(step.id)) {
+                    finalResult.retries = retries;
+                    executionLog.results[step.id] = finalResult;
                 }
 
                 executionLog.completed.push(step.id);
@@ -792,7 +819,7 @@ Plan:`;
 
                 // Analyser si échec critique
                 if (this._isCriticalFailure(step, error)) {
-                    console.warn(`[Planner] 🛑 Échec critique détecté, replanification...`);
+                    console.warn('[Planner] 🛑 Échec critique détecté, replanification...');
                     return await this._replan(plan, executionLog, context);
                 }
 
@@ -880,10 +907,10 @@ Plan:`;
         const detailedStepsLog = originalPlan.steps.map((s: any) => {
             const result = executionLog.results[s.id];
             if (!result) return `- Step ${s.id} (${s.action}): Not executed`;
-            
+
             const status = executionLog.completed.includes(s.id) ? 'SUCCESS' : 'FAILED';
             let outputStr = '';
-            
+
             if (result.error) {
                 outputStr = `Error: ${result.message || JSON.stringify(result)}`;
             } else if (result.llmOutput) {
@@ -892,12 +919,12 @@ Plan:`;
             } else {
                 outputStr = JSON.stringify(result);
             }
-            
+
             // Truncate output to avoid prompt bloat but keep crucial context (like accessibility tree)
             if (outputStr.length > 3000) {
                 outputStr = outputStr.substring(0, 3000) + '\n... [TRUNCATED]';
             }
-            
+
             return `### Step ${s.id} (${s.action}) - ${status}
 - Tool: ${s.tool}
 - Params: ${JSON.stringify(s.params)}
@@ -973,7 +1000,7 @@ New plan:`;
         let attempts = 0;
         const maxAttempts = 3;
         let newPlan: any = null;
-        let chatHistory: any[] = [
+        const chatHistory: any[] = [
             { role: 'system', content: 'Tu es un planificateur expert en récupération d\'échecs.' },
             { role: 'user', content: replanPrompt }
         ];

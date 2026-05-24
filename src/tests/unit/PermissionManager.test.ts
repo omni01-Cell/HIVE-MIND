@@ -114,10 +114,10 @@ describe('PermissionManager', () => {
             // Arrange
             (adminService.isSuperUser as any).mockResolvedValue(false);
             (adminService.getOwnerJid as any).mockResolvedValue('owner@s.whatsapp.net');
-            
+
             // Act: appel sans await direct pour pouvoir interagir avec la réponse en cours
             const promise = permissionManager.askPermission('chat123', 'action dangereuse', 'whatsapp', 'user1');
-            
+
             // Attendre un cycle pour que les promises internes (escalade) se résolvent
             await new Promise(r => setTimeout(r, 20));
 
@@ -128,7 +128,7 @@ describe('PermissionManager', () => {
                 expect.any(Object),
                 'whatsapp'
             );
-            
+
             // Cleanup: Forcer la résolution pour éviter que le test ne timeout
             permissionManager.handleUserResponse('non');
             await promise;

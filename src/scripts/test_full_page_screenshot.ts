@@ -30,7 +30,7 @@ async function simulateIncomingMessage(text: string): Promise<void> {
         isGroup: false,
         isSystem: false,
         raw: { text },
-        authorityLevel: 'DIVIN (SuperUser)',
+        authorityLevel: 'DIVIN (SuperUser)'
     };
 
     const transport = botCore.transport.getTransport('cli');
@@ -60,7 +60,7 @@ async function run(): Promise<void> {
             'Va sur le site https://news.ycombinator.com et fais deux captures d\'écran :',
             '1) Une capture d\'écran normale (viewport seulement) avec le nom "hn_viewport"',
             '2) Une capture d\'écran PLEINE PAGE (full_page: true) avec le nom "hn_full_page"',
-            'Envoie moi les deux images.',
+            'Envoie moi les deux images.'
         ].join(' ');
 
         await simulateIncomingMessage(prompt);

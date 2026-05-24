@@ -27,18 +27,19 @@ const updateStepMock = jest.fn<UpdateStepFn>();
 jest.unstable_mockModule('../../../providers/index.js', () => ({
     providerRouter: {
         chat: chatMock,
-    },
+        callServiceRecipe: jest.fn<any>().mockResolvedValue({ content: '{"target_url":"https://example.com/target-page","file_path":"/path/to/reconstructed/file.txt"}' })
+    }
 }));
 
 jest.unstable_mockModule('../../../services/memory/ActionMemory.js', () => ({
     actionMemory: {
         startAction: startActionMock,
-        updateStep: updateStepMock,
-    },
+        updateStep: updateStepMock
+    }
 }));
 
 jest.unstable_mockModule('../../../services/supabase.js', () => ({
-    supabase: null,
+    supabase: null
 }));
 
 const { ExplicitPlanner } = await import('../../../services/agentic/Planner.js');
@@ -62,20 +63,20 @@ describe('ExplicitPlanner', () => {
                             tool: 'execute_bash_command',
                             params: { command: 'node extract_pdf.js' },
                             estimated_time: 10,
-                            depends_on: [],
-                        },
+                            depends_on: []
+                        }
                     ],
                     total_time_estimate: 10,
-                    complexity: 'medium',
-                }),
+                    complexity: 'medium'
+                })
             });
             const planner = new ExplicitPlanner();
             const context = {
                 chatId: 'chat_1',
                 tools: [
                     createToolDefinition('execute_bash_command', 'Execute terminal commands'),
-                    createToolDefinition('code_execution', 'Execute sandboxed JavaScript'),
-                ],
+                    createToolDefinition('code_execution', 'Execute sandboxed JavaScript')
+                ]
             };
 
             // Act
@@ -103,11 +104,11 @@ describe('ExplicitPlanner', () => {
                         tool: 'test_tool',
                         params: {
                             target_url: '{{step_2_url}}',
-                            file_path: '{{step_2_filePath}}',
+                            file_path: '{{step_2_filePath}}'
                         },
-                        depends_on: [],
-                    },
-                ],
+                        depends_on: []
+                    }
+                ]
             };
 
             const initialExecutionLog = {
@@ -122,21 +123,21 @@ describe('ExplicitPlanner', () => {
                                 result: {
                                     title: 'Test Page',
                                     url: 'https://example.com/target-page',
-                                    filePath: '/path/to/reconstructed/file.txt',
-                                },
-                            },
-                        },
-                    },
-                },
+                                    filePath: '/path/to/reconstructed/file.txt'
+                                }
+                            }
+                        }
+                    }
+                }
             };
 
             const context = {
                 chatId: 'chat_123',
                 executeToolFn: executeToolMock,
                 tools: [
-                    createToolDefinition('test_tool', 'A test tool'),
+                    createToolDefinition('test_tool', 'A test tool')
                 ],
-                message: { role: 'user', content: 'test' },
+                message: { role: 'user', content: 'test' }
             };
 
             // Act
@@ -148,7 +149,7 @@ describe('ExplicitPlanner', () => {
             const callArgs = executeToolMock.mock.calls[0];
             const toolCall = callArgs[0] as any;
             const parsedArgs = JSON.parse(toolCall.function.arguments);
-            
+
             expect(parsedArgs.target_url).toBe('https://example.com/target-page');
             expect(parsedArgs.file_path).toBe('/path/to/reconstructed/file.txt');
         });
@@ -162,9 +163,13 @@ function createToolDefinition(name: string, description: string) {
             description,
             parameters: {
                 type: 'object',
-                properties: {},
-            },
-        },
+                properties: {
+                    command: { type: 'string' },
+                    target_url: { type: 'string' },
+                    file_path: { type: 'string' }
+                }
+            }
+        }
     };
 }
 

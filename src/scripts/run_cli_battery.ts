@@ -22,7 +22,7 @@ const TESTS = [
     },
     {
         id: 2,
-        title: "Extraction de Données Structurées depuis un Site",
+        title: 'Extraction de Données Structurées depuis un Site',
         prompt: "Rends-toi sur https://github.com/trending et fais une capture d'écran de la page. Ensuite, extrais les 5 premiers repos trending avec leur nom, leur description, le langage utilisé et le nombre d'étoiles. Formate tout ça dans un fichier markdown propre et envoie-le moi, avec la capture d'écran.",
         expectedFiles: 2
     },
@@ -34,8 +34,8 @@ const TESTS = [
     },
     {
         id: 4,
-        title: "Pipeline Terminal Avancé",
-        prompt: "Dans ton terminal :\n1. Crée un dossier \"benchmark_test\" dans ton espace de stockage\n2. Génère un fichier JSON contenant 100 entrées aléatoires avec les champs : id, name, email, score (entre 0 et 100)\n3. Écris un script Node.js qui lit ce JSON, calcule la moyenne des scores, trouve le top 5 et le bottom 5, puis génère un rapport en markdown\n4. Exécute le script et envoie-moi le rapport markdown final",
+        title: 'Pipeline Terminal Avancé',
+        prompt: 'Dans ton terminal :\n1. Crée un dossier "benchmark_test" dans ton espace de stockage\n2. Génère un fichier JSON contenant 100 entrées aléatoires avec les champs : id, name, email, score (entre 0 et 100)\n3. Écris un script Node.js qui lit ce JSON, calcule la moyenne des scores, trouve le top 5 et le bottom 5, puis génère un rapport en markdown\n4. Exécute le script et envoie-moi le rapport markdown final',
         expectedFiles: 1
     },
     {
@@ -52,25 +52,25 @@ const TESTS = [
     },
     {
         id: 7,
-        title: "Lecture et Analyse de ses Propres Fichiers",
-        prompt: "Lis ton propre fichier de configuration principal (le system prompt dans persona/prompts/system.md) et fais-moi une analyse complète :\n1. Combien de sections principales contient-il ?\n2. Quelle est la taille totale en lignes et en mots ?\n3. Liste les 5 instructions les plus importantes que tu identifies\n4. Y a-t-il des contradictions ou des redondances dans les instructions ?\n5. Propose 3 améliorations concrètes\n\nFormate ta réponse dans un rapport markdown structuré.",
+        title: 'Lecture et Analyse de ses Propres Fichiers',
+        prompt: 'Lis ton propre fichier de configuration principal (le system prompt dans persona/prompts/system.md) et fais-moi une analyse complète :\n1. Combien de sections principales contient-il ?\n2. Quelle est la taille totale en lignes et en mots ?\n3. Liste les 5 instructions les plus importantes que tu identifies\n4. Y a-t-il des contradictions ou des redondances dans les instructions ?\n5. Propose 3 améliorations concrètes\n\nFormate ta réponse dans un rapport markdown structuré.',
         expectedFiles: 0
     },
     {
         id: 8,
-        title: "Veille Technologique Automatisée",
+        title: 'Veille Technologique Automatisée',
         prompt: "Réalise une veille technologique complète sur \"AI Agents 2026\" :\n\n1. NAVIGATEUR : Va sur ces 3 sites et fais une capture d'écran de chacun :\n   - https://news.ycombinator.com (cherche \"AI agent\")\n   - https://arxiv.org/search/?query=AI+agents&searchtype=all\n   - https://github.com/trending?since=weekly\n\n2. EXTRACTION : Depuis chaque site, extrais les 3 résultats les plus pertinents sur les agents IA\n\n3. TERMINAL : Utilise ton terminal pour créer un dossier \"veille_ia_2026\" dans storage_hm et organise les captures par source\n\n4. SYNTHÈSE : Crée un rapport markdown complet \"veille_ia_2026/rapport.md\" avec :\n   - Un résumé exécutif de 5 lignes\n   - Un tableau comparatif des 9 résultats (source, titre, lien, pertinence /5)\n   - Les tendances identifiées\n   - Les captures d'écran intégrées\n\n5. Envoie-moi le rapport final et les 3 captures d'écran",
         expectedFiles: 4
     },
     {
         id: 9,
-        title: "Audit de Sécurité Automatisé",
+        title: 'Audit de Sécurité Automatisé',
         prompt: "Réalise un mini-audit de sécurité de notre projet :\n\n1. FICHIERS : Lis le fichier .env et les fichiers de configuration (config/index.ts, config/credentials.json) pour identifier toutes les clés API et secrets présents\n\n2. TERMINAL : Exécute une recherche dans tout le projet pour trouver des patterns dangereux :\n   - Mots de passe en dur (grep pour \"password\", \"secret\", \"token\" dans le code)\n   - Fichiers .env non gitignorés (vérifie le .gitignore)\n   - Dépendances npm avec des vulnérabilités connues (npm audit)\n\n3. NAVIGATEUR : Va sur https://cve.mitre.org et cherche s'il y a des CVE récentes pour nos 3 dépendances principales (baileys, supabase, redis)\n\n4. RAPPORT : Génère un rapport de sécurité en markdown dans storage_hm/ avec :\n   - Score de risque global (/10)\n   - Tableau des secrets détectés (masqués avec ***) et leur exposition\n   - Résultat du npm audit\n   - CVE pertinentes trouvées\n   - 5 recommandations prioritaires\n\n5. Envoie-moi le rapport + une capture d'écran des résultats CVE",
         expectedFiles: 2
     },
     {
         id: 10,
-        title: "Mission Complète Baileys",
+        title: 'Mission Complète Baileys',
         prompt: "Mission complète en 5 phases. Tu dois utiliser TOUS tes outils :\n\nPHASE 1 — RECHERCHE (Navigateur)\nVa sur https://api.github.com/repos/WhiskeySockets/Baileys/releases/latest et récupère la dernière version de Baileys. Ensuite va sur la page GitHub du repo et fais une capture d'écran de la page des releases.\n\nPHASE 2 — ANALYSE (Fichiers)\nLis notre package.json et compare la version de Baileys que nous utilisons avec la dernière version disponible. Lis aussi les 50 premières lignes de notre fichier core/index.ts pour identifier les imports Baileys.\n\nPHASE 3 — PROTOTYPE (Terminal + Fichiers)\nCrée un script Node.js dans storage_hm/baileys_check/ qui :\n- Fait un fetch de l'API GitHub pour récupérer les 5 dernières releases de Baileys\n- Compare avec notre version actuelle\n- Liste les breaking changes entre notre version et la dernière\n- Génère un rapport de compatibilité\n\nPHASE 4 — EXÉCUTION (Terminal)\nExécute le script et capture la sortie. Si le script échoue, corrige-le et ré-exécute.\n\nPHASE 5 — LIVRABLE (Fichiers + Envoi)\nCompile tout dans un rapport final \"baileys_upgrade_assessment.md\" dans storage_hm/ contenant :\n- Version actuelle vs dernière version\n- Changelog résumé\n- Breaking changes identifiés\n- Recommandation : upgrader maintenant ou attendre (avec justification)\n- La capture d'écran des releases GitHub\n\nEnvoie-moi le rapport final et la capture d'écran.",
         expectedFiles: 2
     }
@@ -106,7 +106,7 @@ async function simulateIncomingMessage(text: string, testId: number) {
         chatId: 'cli_chat_e2e_' + testId,
         sender: 'test_user',
         senderName: 'Tester',
-        text: text,
+        text,
         isGroup: false,
         isSystem: false,
         raw: { text },
@@ -121,7 +121,7 @@ async function simulateIncomingMessage(text: string, testId: number) {
 async function runTests() {
     try {
         console.log('🧹 Nettoyage des anciens résultats et dossiers temporaires...');
-        
+
         // Nettoyer les captures d'écran précédentes
         const screenshotsDir = path.join(process.cwd(), 'storage_hm', 'screenshots');
         if (fs.existsSync(screenshotsDir)) {
@@ -132,7 +132,7 @@ async function runTests() {
                 } catch (e) {}
             }
         }
-        
+
         // Nettoyer les répertoires temporaires créés par les autres tests de batterie
         const dirsToClean = [
             path.join(process.cwd(), 'storage_hm', 'veille_ia_2026'),
@@ -173,7 +173,7 @@ async function runTests() {
         const runOnlyFirst = process.argv.includes('--first');
         const targetIdArg = process.argv.find(arg => arg.startsWith('--id='));
         const targetId = targetIdArg ? parseInt(targetIdArg.split('=')[1], 10) : null;
-        
+
         let testsToRun = TESTS;
         if (targetId) {
             testsToRun = TESTS.filter(t => t.id === targetId);
@@ -182,9 +182,9 @@ async function runTests() {
         }
 
         for (const test of testsToRun) {
-            console.log(`\n==========================================`);
+            console.log('\n==========================================');
             console.log(`🚀 STARTING TEST ${test.id}: ${test.title}`);
-            console.log(`==========================================\n`);
+            console.log('==========================================\n');
 
             // Reset interceptors
             currentCapturedText = '';
@@ -242,14 +242,14 @@ async function runTests() {
 
                 // If 30 seconds have passed with no new text or files, assume the agent is done
                 if (timeSinceLastActivity > 30000 && currentCapturedText.length > 20) {
-                    console.log(`⏳ [CLI-TEST] Inactivité détectée pendant 30s. Fin du test.`);
+                    console.log('⏳ [CLI-TEST] Inactivité détectée pendant 30s. Fin du test.');
                     completed = true;
                     break;
                 }
             }
 
             if (!completed) {
-                console.log(`⚠️ [CLI-TEST] Timeout atteint pour ce test (10min). On passe au suivant.`);
+                console.log('⚠️ [CLI-TEST] Timeout atteint pour ce test (10min). On passe au suivant.');
             }
 
             // [PRIORITY 7 FIX] Structured verdict per test
@@ -286,7 +286,7 @@ async function runTests() {
             activeChatId = '';
 
             // [PRIORITY 6 FIX] Drain async jobs between tests — longer wait to prevent contamination
-            console.log(`⏳ [CLI-TEST] Draining async jobs (45s) before next test...`);
+            console.log('⏳ [CLI-TEST] Draining async jobs (45s) before next test...');
             await delay(45000);
 
             // [ANTI-POLLUTION FIX] Reset the persistent shell CWD to project root to avoid nested folders (like storage_hm/storage_hm/)
@@ -294,7 +294,7 @@ async function runTests() {
                 await persistentShell.execute('cd ' + process.cwd());
                 console.log(`🧹 [CLI-TEST] Reset PersistentShell CWD to ${process.cwd()}`);
             } catch (e) {
-                console.error(`⚠️ [CLI-TEST] Failed to reset PersistentShell CWD:`, e);
+                console.error('⚠️ [CLI-TEST] Failed to reset PersistentShell CWD:', e);
             }
         }
 

@@ -12,7 +12,7 @@ const STICKER_FILES = [
     'rire__mdr_lol_drole__chat_qui_rit.webp',
     'triste__pleure_decu_melancolie__bonhomme_larme.webp',
     'ok__accord_valide_pouce__pouce_en_haut.webp',
-    'colere__enerve_furieux_rage__personnage_rouge.webp',
+    'colere__enerve_furieux_rage__personnage_rouge.webp'
 ];
 
 // ─── Mock fs/promises to use our test directory ─────────────────────────────
@@ -21,7 +21,7 @@ const STICKER_FILES = [
 // We mock readdir and readFile to point to our test fixtures.
 jest.unstable_mockModule('fs/promises', () => ({
     readdir: jest.fn<() => Promise<string[]>>(),
-    readFile: jest.fn<() => Promise<Buffer>>(),
+    readFile: jest.fn<() => Promise<Buffer>>()
 }));
 
 // Must come AFTER jest.unstable_mockModule
@@ -32,7 +32,7 @@ const { default: SendStickerPlugin } = await import('../../../plugins/tools/send
 
 function mockTransport() {
     return {
-        sendSticker: jest.fn<(chatId: string, buffer: Buffer) => Promise<object>>(async () => ({})),
+        sendSticker: jest.fn<(chatId: string, buffer: Buffer) => Promise<object>>(async () => ({}))
     };
 }
 

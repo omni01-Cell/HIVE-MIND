@@ -58,7 +58,7 @@ STRICT RULES:
         });
 
         const result = await scratchpadEngine.run(instructions, context);
-        
+
         return {
             success: result.success,
             message: result.message

@@ -22,6 +22,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { permissionManager } from '../security/PermissionManager.js';
 import { blueprintManager } from '../blueprint/AgentBlueprint.js';
+import { TOOL_USE_GUIDELINES, ERROR_HANDLING_RULES, FEW_SHOT_EXAMPLES } from '../../constants/systemPromptSections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -360,7 +361,7 @@ export class TieredContextLoader {
         let economicConstraint = '';
         if (data.blueprint && data.blueprint.constraints) {
             const c = data.blueprint.constraints;
-            
+
             // Resolve dynamic KKT lambda to detect budget panic
             let lambda = 0;
             try {
@@ -373,12 +374,12 @@ export class TieredContextLoader {
             }
 
             economicConstraint = `\n<economic_constraint>\n  <read_only_fs>${c.read_only_fs}</read_only_fs>\n  <max_budget_usd>${c.max_budget_usd}</max_budget_usd>\n  <max_iterations>${c.max_iterations}</max_iterations>\n`;
-            
+
             if (lambda > 0.8) {
                 economicConstraint += `  <kkt_emergency>CRITICAL</kkt_emergency>\n  <lambda>${lambda.toFixed(2)}</lambda>\n  <kkt_directive>BUDGET EXHAUSTION NEARING. Minimize all tool execution and API requests. Conclude the current task immediately.</kkt_directive>\n`;
             }
-            
-            economicConstraint += `</economic_constraint>\n`;
+
+            economicConstraint += '</economic_constraint>\n';
         }
 
         return `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}${mindosDrives}${economicConstraint}`;
@@ -390,7 +391,7 @@ export class TieredContextLoader {
     async _buildHarnessContext(chatId: string): Promise<string> {
         try {
             const { actionMemory } = await import('../../services/memory/ActionMemory.js');
-            let harness = "";
+            let harness = '';
 
             // 1. Carnet de bord (Scratchpad)
             const scratchpad = await this.workingMemory.getScratchpad(chatId);
@@ -423,32 +424,36 @@ ${steps || 'None yet'}
      * Builds the execution engine block (sandbox paths, tool directives, etc.)
      */
     _buildExecutionBlock(data: any): string {
-        let block = `<execution_engine>\n`;
+        let block = '<execution_engine>\n';
 
-        block += `### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the \`get_my_capabilities\` tool**.\n`;
+        block += '### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the `get_my_capabilities` tool**.\n';
 
-        block += `\n### 📂 EXECUTION ENVIRONMENT (FILESYSTEM)\n` +
-                 `You have **universal read access** to the entire filesystem (referred to as the **"Host Disk"** — e.g. \`/home\`, \`/etc\`, project root, etc.). Use \`read_file\`, \`list_directory\`, and \`grep_search\` anywhere.\n` +
-                 `However, for **Write access**, you are strictly sandboxed and can write only to your two authorized virtual disks:\n` +
+        block += '\n### 📂 EXECUTION ENVIRONMENT (FILESYSTEM)\n' +
+                 'You have **universal read access** to the entire filesystem (referred to as the **"Host Disk"** — e.g. `/home`, `/etc`, project root, etc.). Use `read_file`, `list_directory`, and `grep_search` anywhere.\n' +
+                 'However, for **Write access**, you are strictly sandboxed and can write only to your two authorized virtual disks:\n' +
                  `- **Sandbox Execution Disk**: Located at \`${path.basename(permissionManager.sandboxDir)}/\`. Use this virtual disk for running scripts, compiling code, and handling transient execution files.\n` +
                  `- **Dedicated Storage Disk**: Located at \`${path.basename(permissionManager.storageDir)}/\`. Use this virtual disk to persistently save your files, assets, stickers, documents, and screenshots. This is an independent disk from the Sandbox.\n` +
-                 `Any attempt to write outside these virtual disks (e.g. directly to the "Host Disk" or project source code) is blocked and will require explicit HITL permission. Always direct your file outputs to their respective virtual disks.\n`;
+                 'Any attempt to write outside these virtual disks (e.g. directly to the "Host Disk" or project source code) is blocked and will require explicit HITL permission. Always direct your file outputs to their respective virtual disks.\n';
 
-        block += `\n### ⚡ EXECUTION DIRECTIVES (MANDATORY)\n`;
-        block += `- **Actionable request → act NOW in this turn.** Never announce an action if you can execute it directly.\n`;
-        block += `- **Continue until finished or blocked.** Do not reply with a plan or promise when a tool can advance the task.\n`;
-        block += `- **Weak or empty tool result → vary the query** before concluding failure.\n`;
-        block += `- **Mutable facts (git, process, api) require live checks** via tools.\n`;
-        block += `- **Long task (>30s) → use \`code_execution\` with \`HIVE.sleepAndWake(delayMs, prompt)\`** to free the LLM loop. Never block.\n`;
+        block += '\n### ⚡ EXECUTION DIRECTIVES (MANDATORY)\n';
+        block += '- **Actionable request → act NOW in this turn.** Never announce an action if you can execute it directly.\n';
+        block += '- **Continue until finished or blocked.** Do not reply with a plan or promise when a tool can advance the task.\n';
+        block += '- **Weak or empty tool result → vary the query** before concluding failure.\n';
+        block += '- **Mutable facts (git, process, api) require live checks** via tools.\n';
+        block += '- **Long task (>30s) → use `code_execution` with `HIVE.sleepAndWake(delayMs, prompt)`** to free the LLM loop. Never block.\n';
 
-        block += `\n### 💻 DIRAC CODING PROTOCOL (Refactoring & Code)\n`;
-        block += `1. **AST-Native First**: Only use \`read_file\` on a large file as a LAST resort. ALWAYS prefer \`get_file_skeleton\` to understand the structure, then \`get_function\` to target precise code. It is 90% faster.\n`;
-        block += `2. **Hash-Anchored Edits**: Lines of code returned by AST tools and \`read_file\` are prefixed by a unique anchor (e.g., \`AppleBanana§    def process():\`).\n`;
-        block += `3. **Surgical Editing**: To modify code, use \`edit_file\` providing the **exact anchor** (\`AppleBanana\`) or the full line with the anchor in \`anchor\`. This is highly precise and resilient to line shifts.\n`;
-        block += `4. **Multi-File Batching**: Group ALL your file edits in a single \`edit_file\` call via the \`files\` parameter. Do not make separate calls.\n`;
+        block += '\n### 💻 DIRAC CODING PROTOCOL (Refactoring & Code)\n';
+        block += '1. **AST-Native First**: Only use `read_file` on a large file as a LAST resort. ALWAYS prefer `get_file_skeleton` to understand the structure, then `get_function` to target precise code. It is 90% faster.\n';
+        block += '2. **Hash-Anchored Edits**: Lines of code returned by AST tools and `read_file` are prefixed by a unique anchor (e.g., `AppleBanana§    def process():`).\n';
+        block += '3. **Surgical Editing**: To modify code, use `edit_file` providing the **exact anchor** (`AppleBanana`) or the full line with the anchor in `anchor`. This is highly precise and resilient to line shifts.\n';
+        block += '4. **Multi-File Batching**: Group ALL your file edits in a single `edit_file` call via the `files` parameter. Do not make separate calls.\n';
 
-        block += `\n### 🤫 SILENCE TOKEN\nWhen you have called HIVE.sleepAndWake() or have NOTHING to say to the user, reply ONLY with: \`__HIVE_SILENT_7f3a__\`\nThis must be your ONLY text.\n`;
-        block += `</execution_engine>\n`;
+        block += '\n### 🤫 SILENCE TOKEN\nWhen you have called HIVE.sleepAndWake() or have NOTHING to say to the user, reply ONLY with: `__HIVE_SILENT_7f3a__`\nThis must be your ONLY text.\n';
+        block += '</execution_engine>\n';
+
+        block += `\n${TOOL_USE_GUIDELINES}\n`;
+        block += `\n${ERROR_HANDLING_RULES}\n`;
+        block += `\n${FEW_SHOT_EXAMPLES}\n`;
 
         return block;
     }
@@ -458,7 +463,7 @@ ${steps || 'None yet'}
      */
     _buildSocialContext(data: any): string {
         const now = new Date();
-        let block = `<current_consciousness_state>\n`;
+        let block = '<current_consciousness_state>\n';
         block += `  <timestamp>${now.getTime()}</timestamp>\n`;
         block += `  <datetime>${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} ${now.toLocaleTimeString('fr-FR')}</datetime>\n`;
 
@@ -469,7 +474,7 @@ ${steps || 'None yet'}
             block += `  <social_context>\nInterlocutor: ${data.userSnapshot.name}\nStatus: ${data.authority.isSuperUser ? '👑 SuperUser' : 'Standard'}\n  </social_context>\n`;
         }
 
-        block += `</current_consciousness_state>\n`;
+        block += '</current_consciousness_state>\n';
         return block;
     }
 

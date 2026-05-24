@@ -39,6 +39,11 @@ export default {
                         mission: {
                             type: 'string',
                             description: 'The exact instructions and task the sub-agent must accomplish.'
+                        },
+                        mode: {
+                            type: 'string',
+                            enum: ['fresh', 'fork'],
+                            description: 'The mode to launch the sub-agent. "fresh" starts with a clean context, "fork" clones the parent conversation history to maximize prompt caching and give the sub-agent full situational awareness (defaults to "fresh").'
                         }
                     },
                     required: ['name', 'persona', 'tools', 'mission']
@@ -50,28 +55,31 @@ export default {
     async execute(args: any, context: any, toolName: string) {
         if (toolName !== 'spawn_sub_agent') return null;
 
-        const { name, persona, tools, mission } = args;
-        
-        console.log(`[Swarm Orchestration] 🧬 Dynamically creating sub-agent: ${name}`);
+        const { name, persona, tools, mission, mode = 'fresh' } = args;
+
+        console.log(`[Swarm Orchestration] 🧬 Dynamically creating sub-agent: ${name} (mode: ${mode})`);
         console.log(`[Swarm Orchestration] 🛠️ Tools allocated: ${tools.join(', ')}`);
 
         // Prevent delegation of critical tools like bash_eval unless explicitly verified
         const safeTools = tools.filter((tool: string) => tool !== 'bash_eval');
 
         if (safeTools.length !== tools.length) {
-            console.warn(`[Swarm Orchestration] ⚠️ bash_eval was removed for security reasons.`);
+            console.warn('[Swarm Orchestration] ⚠️ bash_eval was removed for security reasons.');
         }
 
+        const parentHistory = mode === 'fork' ? context.conversationHistory : undefined;
+
         const dynamicEngine = new SubAgentEngine({
-            name: name,
+            name,
             systemPrompt: persona,
             allowedTools: safeTools,
             maxIterations: 10, // Reasonable limit for a dynamic agent
-            category: 'AGENTIC' // Force use of a reasoning model
+            category: 'AGENTIC', // Force use of a reasoning model
+            parentHistory
         });
 
         const result = await dynamicEngine.run(mission, context);
-        
+
         return {
             success: result.success,
             message: result.message

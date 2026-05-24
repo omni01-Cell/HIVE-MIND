@@ -59,14 +59,14 @@ export function impersonatedRequest(urlStr: string, options: { method?: string; 
         try {
             const url = new URL(urlStr);
             const agent = getImpersonatedAgent('go');
-            
+
             const reqOptions: https.RequestOptions = {
                 hostname: url.hostname,
                 port: url.port || 443,
                 path: url.pathname + url.search,
                 method: options.method || 'POST',
                 headers: options.headers || {},
-                agent: agent,
+                agent,
                 rejectUnauthorized: false
             };
 

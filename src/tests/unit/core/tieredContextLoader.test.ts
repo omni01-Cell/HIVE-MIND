@@ -91,7 +91,7 @@ describe('TieredContextLoader (MindOS & Constraints Integration)', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        
+
         // Inject mocks directly into singleton
         tieredContextLoader.workingMemory = mockWorkingMemory;
         tieredContextLoader.userService = mockUserService;

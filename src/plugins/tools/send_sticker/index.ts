@@ -75,7 +75,7 @@ function parseFileName(fileName: string): StickerEntry | null {
         id,
         tags,
         description,
-        filePath: join(STICKERS_DIR, fileName),
+        filePath: join(STICKERS_DIR, fileName)
     };
 }
 
@@ -146,7 +146,7 @@ function searchStickers(intent: string, limit: number = TOP_MATCHES_COUNT): Stic
                 id: entry.id,
                 tags: entry.tags.join(', '),
                 description: entry.description,
-                score,
+                score
             });
         }
     }
@@ -167,9 +167,9 @@ function buildToolDefinition(): object {
         function: {
             name: 'send_sticker',
             description:
-                `Send a sticker to react emotionally or complement your reply. ` +
-                `Step 1: call with "intent" to find matching stickers (returns top 3). ` +
-                `Step 2: call again with "sticker_name" to send the chosen one. ` +
+                'Send a sticker to react emotionally or complement your reply. ' +
+                'Step 1: call with "intent" to find matching stickers (returns top 3). ' +
+                'Step 2: call again with "sticker_name" to send the chosen one. ' +
                 availableHint,
             parameters: {
                 type: 'object',
@@ -177,17 +177,17 @@ function buildToolDefinition(): object {
                     intent: {
                         type: 'string',
                         description:
-                            'Emotion or action to search (e.g. "bravo", "rire", "triste"). Returns top 3 matches.',
+                            'Emotion or action to search (e.g. "bravo", "rire", "triste"). Returns top 3 matches.'
                     },
                     sticker_name: {
                         type: 'string',
                         description:
-                            'Exact sticker ID to send (from a previous search result).',
-                    },
+                            'Exact sticker ID to send (from a previous search result).'
+                    }
                 },
-                required: [],
-            },
-        },
+                required: []
+            }
+        }
     };
 }
 
@@ -224,12 +224,12 @@ export default {
                     return {
                         success: false,
                         message: `Sticker "${sticker_name}" not found. Did you mean one of these?`,
-                        matches: fallbackMatches,
+                        matches: fallbackMatches
                     };
                 }
                 return {
                     success: false,
-                    message: `Sticker "${sticker_name}" not found and no similar stickers available.`,
+                    message: `Sticker "${sticker_name}" not found and no similar stickers available.`
                 };
             }
 
@@ -238,7 +238,7 @@ export default {
                 await ctx.transport.sendSticker(ctx.chatId, buffer);
                 return {
                     success: true,
-                    message: `Sticker "${entry.id}" sent (${entry.description}).`,
+                    message: `Sticker "${entry.id}" sent (${entry.description}).`
                 };
             } catch (err: unknown) {
                 const errMsg = err instanceof Error ? err.message : String(err);
@@ -257,21 +257,21 @@ export default {
             if (matches.length === 0) {
                 return {
                     success: false,
-                    message: `No stickers match "${intent}". Available moods: ${tagCloud}`,
+                    message: `No stickers match "${intent}". Available moods: ${tagCloud}`
                 };
             }
 
             return {
                 success: true,
                 message: `Found ${matches.length} sticker(s) matching "${intent}". Pick one and call send_sticker with its sticker_name.`,
-                matches,
+                matches
             };
         }
 
         // ── No input ──
         return {
             success: false,
-            message: 'Provide either "intent" (to search) or "sticker_name" (to send).',
+            message: 'Provide either "intent" (to search) or "sticker_name" (to send).'
         };
-    },
+    }
 };

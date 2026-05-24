@@ -32,7 +32,7 @@ export default {
         }
 
         if (toolName === 'generate_daily_pulse') {
-            await transport.sendText(chatId, `🎙️ **The Daily Pulse**\nAnalyzing logs... Tuning microphones...`);
+            await transport.sendText(chatId, '🎙️ **The Daily Pulse**\nAnalyzing logs... Tuning microphones...');
 
             try {
                 // 1. Generate the script via dynamic import
@@ -40,7 +40,7 @@ export default {
                 const script = await journalGenerator.generateDailyScript(chatId);
 
                 if (!script) {
-                    return { success: false, message: "Not enough activity for a Daily Pulse today. 😴" };
+                    return { success: false, message: 'Not enough activity for a Daily Pulse today. 😴' };
                 }
 
                 // 2. Audio Production via Gemini Live
@@ -54,20 +54,20 @@ export default {
                     });
 
                     console.log('[DailyPulse] ✅ Audio sent successfully');
-                    return { success: true, message: "Daily Pulse audio sent! 🎙️" };
+                    return { success: true, message: 'Daily Pulse audio sent! 🎙️' };
                 } else {
                     // Fallback: send script as text if audio fails
                     console.warn('[DailyPulse] ⚠️ Audio failed, fallback to text');
                     await transport.sendText(chatId, `📻 **Radio Script of the Day:**\n\n${script}\n\n*(Audio not available this time)*`);
-                    return { success: true, message: "Daily Pulse generated (Text Mode - Audio unavailable)" };
+                    return { success: true, message: 'Daily Pulse generated (Text Mode - Audio unavailable)' };
                 }
 
             } catch (error: unknown) {
                 const err = error instanceof Error ? error : new Error(String(error));
                 console.error('[DailyPulse] Error:', err);
-                return { success: false, message: "Error during Daily Pulse production." };
+                return { success: false, message: 'Error during Daily Pulse production.' };
             }
         }
-        return { success: false, message: "Unknown tool" };
+        return { success: false, message: 'Unknown tool' };
     }
 };

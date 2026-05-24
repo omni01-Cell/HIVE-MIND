@@ -72,7 +72,7 @@ describe('DriverSystem (MindOS Drives)', () => {
 
     it('should trigger drive event when conditions are met (calm chat, no lock)', async () => {
         const result = await driverSystem.evaluateDrives('chat123', 'test_agent');
-        
+
         expect(result).toBe(true);
         expect(eventInboxService.pushEvent).toHaveBeenCalledWith(
             'spontaneous_thought',
@@ -82,10 +82,10 @@ describe('DriverSystem (MindOS Drives)', () => {
                 drive: 'drive_a'
             })
         );
-        
+
         // Verrou posé dans Redis
         expect(mockRedisDb.get('driver_lock:chat123')).toBe('1');
-        
+
         // Index round-robin incrémenté (prochain index = 0 car premier index sauvé = 0)
         expect(mockRedisDb.get('driver_last_index:chat123')).toBe('0');
     });
@@ -117,7 +117,7 @@ describe('DriverSystem (MindOS Drives)', () => {
         mockRedisDb.set('driver_lock:chat123', '1');
 
         const result = await driverSystem.evaluateDrives('chat123', 'test_agent');
-        
+
         expect(result).toBe(false);
         expect(eventInboxService.pushEvent).not.toHaveBeenCalled();
     });
@@ -126,14 +126,14 @@ describe('DriverSystem (MindOS Drives)', () => {
         mockVelocityMode = 'active';
 
         const result = await driverSystem.evaluateDrives('chat123', 'test_agent');
-        
+
         expect(result).toBe(false);
         expect(eventInboxService.pushEvent).not.toHaveBeenCalled();
     });
 
     it('should do nothing if blueprint has no drives', async () => {
         const result = await driverSystem.evaluateDrives('chat123', 'empty_agent');
-        
+
         expect(result).toBe(false);
         expect(eventInboxService.pushEvent).not.toHaveBeenCalled();
     });

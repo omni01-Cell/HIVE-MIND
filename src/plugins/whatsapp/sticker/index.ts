@@ -98,7 +98,7 @@ export default {
             // Create sticker
             const sticker = new Sticker(mediaBuffer, {
                 pack: pack_name,
-                author: author,
+                author,
                 type: StickerTypes.FULL,
                 quality: 80
             });

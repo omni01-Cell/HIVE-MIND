@@ -30,9 +30,9 @@ jest.unstable_mockModule('fs', () => ({
                 if (event === 'finish') cb();
             })
         }),
-        readFileSync: jest.fn().mockReturnValue(JSON.stringify({ fullName: "Bot" }))
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({ fullName: 'Bot' }))
     },
-    readFileSync: jest.fn().mockReturnValue(JSON.stringify({ fullName: "Bot" }))
+    readFileSync: jest.fn().mockReturnValue(JSON.stringify({ fullName: 'Bot' }))
 }));
 
 const { default: VisualReporterPlugin } = await import('../../../plugins/tools/visual_reporter/index.js');

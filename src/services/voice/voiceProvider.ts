@@ -78,7 +78,7 @@ export class VoiceProvider {
 
         // 4. Gemini Live (Native Audio)
         this.adapters.set('gemini_live', new GeminiLiveAdapter(geminiKey, {}));
-        
+
         console.log(`[VoiceProvider] 🎙️ ${this.adapters.size} adaptateurs initialisés`);
     }
 
@@ -136,7 +136,7 @@ export class VoiceProvider {
                 const synthesizeOptions = {
                     ...modelConfig,
                     ...options,
-                    model: model
+                    model
                 };
 
                 const result = await adapter.synthesize(text, synthesizeOptions);
@@ -150,8 +150,8 @@ export class VoiceProvider {
 
                 return {
                     ...result,
-                    provider: provider,
-                    model: model
+                    provider,
+                    model
                 };
 
             } catch (error: any) {
@@ -177,7 +177,7 @@ export class VoiceProvider {
 
         // Si Gemini n'a pas de clé, on ne peut pas utiliser de voix spécifique
         if (!geminiAdapter || !geminiAdapter.isAvailable()) {
-            console.warn(`[VoiceProvider] Gemini non disponible pour voix spécifique, repli sur TTS standard`);
+            console.warn('[VoiceProvider] Gemini non disponible pour voix spécifique, repli sur TTS standard');
             return this.textToSpeech(text, options);
         }
 
@@ -189,9 +189,9 @@ export class VoiceProvider {
         }
 
         try {
-            const result = await geminiAdapter.synthesize(text, { 
+            const result = await geminiAdapter.synthesize(text, {
                 ...options,
-                voice: voiceName || 'Aoede' 
+                voice: voiceName || 'Aoede'
             });
 
             console.log(`[VoiceProvider] ✅ TTS Gemini réussi avec voix "${voiceName || 'Aoede'}"`);
@@ -269,7 +269,7 @@ export class VoiceProvider {
                         fallbackUsed: false
                     };
                 } catch (error: any) {
-                    console.error(`[VoiceProvider] ❌ Plugin TTS Gemini échoué:`, error.message);
+                    console.error('[VoiceProvider] ❌ Plugin TTS Gemini échoué:', error.message);
                 }
             }
         }
@@ -311,7 +311,7 @@ export class VoiceProvider {
                 fallbackUsed: options.fallbackUsed ?? false
             };
         } catch (error: any) {
-            console.error(`[VoiceProvider] ❌ Plugin TTS GTTS échoué:`, error.message);
+            console.error('[VoiceProvider] ❌ Plugin TTS GTTS échoué:', error.message);
             return null;
         }
     }

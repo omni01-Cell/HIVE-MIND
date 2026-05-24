@@ -17,7 +17,7 @@ describe('Gemini CLI Provider Adapter', () => {
 
     it('should successfully call chat with correct parameters and thought signature bypass', async () => {
         const mockAccessToken = 'header.' + Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64') + '.signature';
-        
+
         mockFetch.mockResolvedValueOnce({
             ok: true,
             json: async () => ({ access_token: mockAccessToken, refresh_token: 'new_gemini_cli_refresh' })
@@ -77,10 +77,10 @@ describe('Gemini CLI Provider Adapter', () => {
         expect(result.thought).toBe('Reasoning deep...');
         expect(result.toolCalls).toHaveLength(1);
         expect(result.toolCalls![0].function.name).toBe('test_tool_cli');
-        
+
         // Validation que fetch a bien été appelé deux fois
         expect(mockFetch).toHaveBeenCalledTimes(2);
-        
+
         // Validation des arguments de l'appel generateContent
         const lastCallArgs = mockFetch.mock.calls[1];
         const bodyParsed = JSON.parse(lastCallArgs[1].body);

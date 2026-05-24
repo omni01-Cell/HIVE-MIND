@@ -14,7 +14,7 @@ export class TransportManager {
         this.register('cli', cliTransport);
         this.register('discord', discordTransport);
         this.register('telegram', telegramTransport);
-        
+
         // Register a dummy transport for 'internal' to support system conscious pulse and silent events
         const internalTransport = {
             connect: async () => {},
@@ -62,7 +62,7 @@ export class TransportManager {
      */
     async initialize(activeTransportNames: string[] = ['whatsapp']) {
         this.activeTransports = activeTransportNames;
-        
+
         const initPromises = this.activeTransports.map(async (name) => {
             if (name === 'ink-cli' && !this.transports.has('ink-cli')) {
                 try {
@@ -134,7 +134,7 @@ export class TransportManager {
             // Fallback pour les tests ou l'accès précoce
             return this.transports.get('whatsapp');
         }
-        
+
         const transport = this.transports.get(name);
         if (!transport) {
             console.warn(`[TransportManager] Transport '${name}' non trouvé ou inactif. Fallback sur le transport par défaut.`);

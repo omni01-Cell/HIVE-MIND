@@ -37,13 +37,13 @@ function inferProviderName(credentialValue: string): string | null {
 export function resolveCredentials(credentials: Record<string, any>): Record<string, any> {
     if (!credentials) return {};
     const resolved = { ...credentials };
-    
+
     if (resolved.familles_ia) {
         resolved.familles_ia = { ...resolved.familles_ia };
         for (const [family, key] of Object.entries(resolved.familles_ia as Record<string, string>)) {
             resolved.familles_ia[family] = resolveApiKey(key, family);
         }
     }
-    
+
     return resolved;
 }

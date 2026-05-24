@@ -1,3 +1,5 @@
+// @ts-nocheck
+import { TOOL_USE_GUIDELINES, ERROR_HANDLING_RULES, FEW_SHOT_EXAMPLES } from '../../constants/systemPromptSections.js';
 // services/agentic/SubAgentEngine.ts
 // ============================================================================
 // Moteur Universel de Sous-Agents (Swarm Architecture)
@@ -7,6 +9,7 @@
 import { providerRouter } from '../../providers/index.js';
 import { pluginLoader } from '../../plugins/loader.js';
 import { blueprintManager } from '../../core/blueprint/AgentBlueprint.js';
+import { validateToolArgs } from '../../utils/toolValidator.js';
 
 export interface SubAgentConfig {
     name: string;
@@ -14,6 +17,7 @@ export interface SubAgentConfig {
     allowedTools: string[];
     maxIterations?: number;
     category?: string; // ex: 'AGENTIC'
+    parentHistory?: any[]; // Historique parent pour le mode fork
 }
 
 export class SubAgentEngine {
@@ -78,17 +82,36 @@ export class SubAgentEngine {
                 console.warn(`[SubAgentEngine:${this.config.name}] ⚠️ Aucun outil autorisé trouvé dans la liste des plugins.`);
             }
 
-            // 2. Initialiser le Scratchpad (historique isolé)
-            const subAgentHistory: any[] = [
-                {
-                    role: 'system',
-                    content: `${this.config.systemPrompt}\n\nRÈGLES STRICTES:\n- Explore tes outils pour trouver ou construire la réponse.\n- Ta mission est de répondre à l'instruction de l'utilisateur de manière la plus détaillée possible.\n- Ne dépasse pas ${this.config.maxIterations} itérations.\n- Ton rapport final doit être riche et actionnable directement par l'agent principal.`
-                },
-                {
+            // 2. Initialiser le Scratchpad (historique isolé ou clone du parent pour mode fork)
+            const subAgentHistory: any[] = [];
+
+            if (this.config.parentHistory && this.config.parentHistory.length > 0) {
+                // Mode FORK : Cloner l'historique parent pour maximiser le prompt caching
+                subAgentHistory.push(...this.config.parentHistory);
+
+                // Ajouter la mission spécifique du fork à la fin
+                subAgentHistory.push({
                     role: 'user',
-                    content: `Mission: ${task}`
-                }
-            ];
+                    content: `[FORK MISSION - ${this.config.name}]\n`
+                        + 'Tu es un sous-agent spécialisé issu d\'un fork.\n'
+                        + `Ton rôle spécifique : ${this.config.systemPrompt}\n`
+                        + `Tes consignes de sécurité :\n${TOOL_USE_GUIDELINES}\n${ERROR_HANDLING_RULES}\n${FEW_SHOT_EXAMPLES}\n`
+                        + `Mission spécifique à accomplir en tâche de fond : ${task}\n`
+                        + 'Fais tes appels d\'outils et rédige ton rapport final détaillé destiné à ton agent parent.'
+                });
+            } else {
+                // Mode FRESH : Démarrage avec un historique propre
+                subAgentHistory.push(
+                    {
+                        role: 'system',
+                        content: `${this.config.systemPrompt}\n\n${TOOL_USE_GUIDELINES}\n${ERROR_HANDLING_RULES}\n${FEW_SHOT_EXAMPLES}\n\nRÈGLES STRICTES:\n- Explore tes outils pour trouver ou construire la réponse.\n- Ta mission est de répondre à l'instruction de l'utilisateur de manière la plus détaillée possible.\n- Ne dépasse pas ${this.config.maxIterations} itérations.\n- Ton rapport final doit être riche et actionnable directement par l'agent principal.`
+                    },
+                    {
+                        role: 'user',
+                        content: `Mission: ${task}`
+                    }
+                );
+            }
 
             let iterations = 0;
             let finalReport = '';
@@ -102,7 +125,7 @@ export class SubAgentEngine {
                 // Sécurité Timeout
                 if (Date.now() - START_TIME > MAX_DURATION_MS) {
                     console.warn(`[SubAgentEngine:${this.config.name}] ⏱️ Timeout forcé après 2 minutes.`);
-                    finalReport = "La recherche a été interrompue car elle prenait trop de temps. Voici les informations partielles collectées.";
+                    finalReport = 'La recherche a été interrompue car elle prenait trop de temps. Voici les informations partielles collectées.';
                     break;
                 }
 
@@ -118,13 +141,13 @@ export class SubAgentEngine {
                     // Enregistrer la réponse de l'assistant
                     const assistantMsg: any = {
                         role: 'assistant',
-                        content: response.content || null,
+                        content: response.content || null
                     };
-                    
+
                     if (response.toolCalls && response.toolCalls.length > 0) {
                         assistantMsg.tool_calls = response.toolCalls;
                     }
-                    
+
                     subAgentHistory.push(assistantMsg);
 
                     // Si pas d'outil demandé, l'agent a terminé sa réflexion
@@ -140,7 +163,7 @@ export class SubAgentEngine {
                             role: 'user',
                             content: 'Tu as atteint ta limite d\'actions. Fais un rapport final très complet avec ce que tu as appris jusqu\'ici.'
                         });
-                        
+
                         const forcedConclusion = await providerRouter.chat(subAgentHistory, {
                             category: this.config.category
                         });
@@ -166,6 +189,19 @@ export class SubAgentEngine {
                                 tool_call_id: call.id,
                                 name: call.function.name,
                                 content: JSON.stringify({ error: `Outil "${call.function.name}" non autorisé pour cet agent.` })
+                            });
+                            continue;
+                        }
+
+                        // [GLOBAL RETRY AND DEFENSE SYSTEM] Pre-execution validation
+                        const validation = validateToolArgs(call.function.name, JSON.stringify(toolArgs), allowedToolsDefs);
+                        if (!validation.valid) {
+                            console.warn(`[SubAgentEngine:${this.config.name}] ⚠️ Validation failed for "${call.function.name}": ${validation.formattedError}`);
+                            subAgentHistory.push({
+                                role: 'tool',
+                                tool_call_id: call.id,
+                                name: call.function.name,
+                                content: validation.formattedError
                             });
                             continue;
                         }

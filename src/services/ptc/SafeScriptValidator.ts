@@ -50,19 +50,19 @@ const JS_BUILTINS = new Set([
     'Error', 'Map', 'Set', 'Promise', 'parseInt', 'parseFloat',
     'isNaN', 'isFinite', 'String', 'Number', 'Boolean', 'RegExp',
     'setTimeout', 'undefined', 'null', 'true', 'false', 'Infinity', 'NaN',
-    'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI',
+    'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI'
 ]);
 
 // Helpers défensifs injectés par SandboxHelpers.ts
 const SANDBOX_HELPERS = new Set([
     'toArray', 'safeGet', 'safeMap', 'safeFilter', 'first', 'len',
-    'isSuccess', 'extractData', 'extractText', 'getCommandOutput',
+    'isSuccess', 'extractData', 'extractText', 'getCommandOutput'
 ]);
 
 // Constructions JS dangereuses interdites dans le sandbox
 const UNSAFE_FUNCTIONS = new Set([
     'eval', 'Function', 'require', 'import', 'process', 'globalThis',
-    '__proto__', 'constructor',
+    '__proto__', 'constructor'
 ]);
 
 // ─────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ const UNSAFE_FUNCTIONS = new Set([
  */
 export function validateCode(
     code: string,
-    availableTools: readonly string[],
+    availableTools: readonly string[]
 ): ValidationResult {
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
@@ -88,7 +88,7 @@ export function validateCode(
         ...JS_BUILTINS,
         ...SANDBOX_HELPERS,
         ...availableTools,
-        'HIVE',
+        'HIVE'
     ]);
 
     // 1. Parse AST
@@ -98,7 +98,7 @@ export function validateCode(
             ecmaVersion: 2022,
             sourceType: 'script',
             allowAwaitOutsideFunction: true,
-            allowReturnOutsideFunction: true,
+            allowReturnOutsideFunction: true
         });
     } catch (parseErr: any) {
         errors.push({
@@ -106,7 +106,7 @@ export function validateCode(
             message: parseErr.message,
             line: parseErr.loc?.line,
             column: parseErr.loc?.column,
-            autoFixable: true,
+            autoFixable: true
         });
         return { isValid: false, errors, warnings };
     }
@@ -164,7 +164,7 @@ export function validateCode(
                     if (decl.id?.type === 'Identifier') declaredVars.add(decl.id.name);
                 }
             }
-        },
+        }
     });
 
     // Collecter les identifiants utilisés (pas les déclarations)
@@ -188,7 +188,7 @@ export function validateCode(
             if (node.callee?.type === 'Identifier') {
                 calledFunctions.add(node.callee.name);
             }
-        },
+        }
     });
 
     // 3. Vérifier les variables non définies
@@ -201,7 +201,7 @@ export function validateCode(
             errors.push({
                 type: 'UNDEFINED_VAR',
                 message: `Variable "${name}" utilisée mais jamais déclarée. Déclarez-la avec const/let ou vérifiez le nom.`,
-                autoFixable: false,
+                autoFixable: false
             });
         }
     }
@@ -223,7 +223,7 @@ export function validateCode(
             errors.push({
                 type: 'UNKNOWN_TOOL',
                 message: `Fonction "${fnName}" n'existe pas.${hint}`,
-                autoFixable: false,
+                autoFixable: false
             });
         }
     }
@@ -238,7 +238,7 @@ export function validateCode(
                 errors.push({
                     type: 'UNSAFE_CONSTRUCT',
                     message: `"${calleeName}()" est interdit dans le sandbox.`,
-                    autoFixable: false,
+                    autoFixable: false
                 });
             }
         },
@@ -250,10 +250,10 @@ export function validateCode(
                 errors.push({
                     type: 'UNSAFE_CONSTRUCT',
                     message: `Accès à "${node.property.name}" est interdit (prototype pollution).`,
-                    autoFixable: false,
+                    autoFixable: false
                 });
             }
-        },
+        }
     });
 
     // 6. Warnings (non-bloquants)
@@ -262,7 +262,7 @@ export function validateCode(
             if (node.test?.type === 'Literal' && node.test.value === true) {
                 warnings.push({
                     type: 'INFINITE_LOOP',
-                    message: 'while(true) détecté — risque de boucle infinie.',
+                    message: 'while(true) détecté — risque de boucle infinie.'
                 });
             }
         },
@@ -270,10 +270,10 @@ export function validateCode(
             if (!node.test) {
                 warnings.push({
                     type: 'INFINITE_LOOP',
-                    message: 'for(;;) détecté — risque de boucle infinie.',
+                    message: 'for(;;) détecté — risque de boucle infinie.'
                 });
             }
-        },
+        }
     });
 
     // 7. Warning si pas de `return` dans le code top-level
@@ -281,7 +281,7 @@ export function validateCode(
     if (!hasReturn && calledFunctions.size > 0) {
         warnings.push({
             type: 'MISSING_RETURN',
-            message: 'Le code ne contient pas de `return`. Le résultat pourrait être undefined.',
+            message: 'Le code ne contient pas de `return`. Le résultat pourrait être undefined.'
         });
     }
 
@@ -302,7 +302,7 @@ export function validateCode(
  */
 export function autoRepairCode(
     code: string,
-    errors: readonly ValidationError[],
+    errors: readonly ValidationError[]
 ): RepairResult {
     let repaired = code;
     const appliedFixes: string[] = [];
@@ -359,7 +359,7 @@ export function autoRepairCode(
             const singleQuotes = (repaired.match(/(?<!\\)'/g) || []).length;
             if (singleQuotes % 2 !== 0) {
                 repaired += "'";
-                appliedFixes.push("Fermé string (guillemet simple manquant)");
+                appliedFixes.push('Fermé string (guillemet simple manquant)');
             }
             const doubleQuotes = (repaired.match(/(?<!\\)"/g) || []).length;
             if (doubleQuotes % 2 !== 0) {
@@ -392,7 +392,7 @@ export function autoRepairCode(
             ecmaVersion: 2022,
             sourceType: 'script',
             allowAwaitOutsideFunction: true,
-            allowReturnOutsideFunction: true,
+            allowReturnOutsideFunction: true
         });
         console.log(`[SafeScript] 🔧 Auto-repair réussi: ${appliedFixes.join(', ')}`);
         return { success: true, repairedCode: repaired, appliedFixes };
@@ -417,7 +417,7 @@ export function autoRepairCode(
  */
 export function countToolCalls(
     code: string,
-    availableTools: readonly string[],
+    availableTools: readonly string[]
 ): number {
     const toolSet = new Set(availableTools);
     let count = 0;
@@ -427,7 +427,7 @@ export function countToolCalls(
             ecmaVersion: 2022,
             sourceType: 'script',
             allowAwaitOutsideFunction: true,
-            allowReturnOutsideFunction: true,
+            allowReturnOutsideFunction: true
         });
 
         walk.simple(ast, {
@@ -438,7 +438,7 @@ export function countToolCalls(
                 if (name && toolSet.has(name)) {
                     count++;
                 }
-            },
+            }
         });
     } catch {
         // Si le code ne parse pas, on ne peut pas compter → laisser passer

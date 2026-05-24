@@ -27,7 +27,7 @@ async function getUserId(userJid: string): Promise<string> {
  */
 export const filterDB = {
     async addFilter(groupJid: any, keyword: any, contextRule: any, severity: any = 'warn', createdBy: any) {
-        if (!supabase) throw new Error("Supabase non connecté");
+        if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const creatorId = createdBy ? await getUserId(createdBy) : null;
 
@@ -61,7 +61,7 @@ export const filterDB = {
     },
 
     async removeFilter(filterId: any) {
-        if (!supabase) throw new Error("Supabase non connecté");
+        if (!supabase) throw new Error('Supabase non connecté');
 
         const { error } = await supabase
             .from('group_filters')
@@ -73,7 +73,7 @@ export const filterDB = {
     },
 
     async updateVariants(filterId: any, variants: any) {
-        if (!supabase) throw new Error("Supabase non connecté");
+        if (!supabase) throw new Error('Supabase non connecté');
 
         const { error } = await supabase
             .from('group_filters')
@@ -90,7 +90,7 @@ export const filterDB = {
  */
 export const whitelistDB = {
     async add(groupJid: any, userJid: any, addedBy: any, reason: any = '') {
-        if (!supabase) throw new Error("Supabase non connecté");
+        if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const userId = await getUserId(userJid);
         const addedById = addedBy ? await getUserId(addedBy) : null;
@@ -129,7 +129,7 @@ export const whitelistDB = {
     },
 
     async remove(groupJid: any, userJid: any) {
-        if (!supabase) throw new Error("Supabase non connecté");
+        if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const userId = await getUserId(userJid);
 
@@ -149,7 +149,7 @@ export const whitelistDB = {
  */
 export const warningsDB = {
     async add(groupJid: any, userJid: any, reason: any, filterId: any = null) {
-        if (!supabase) throw new Error("Supabase non connecté");
+        if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const userId = await getUserId(userJid);
 
@@ -190,7 +190,7 @@ export const warningsDB = {
     },
 
     async reset(groupJid: any, userJid: any) {
-        if (!supabase) throw new Error("Supabase non connecté");
+        if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const userId = await getUserId(userJid);
 
@@ -228,7 +228,7 @@ export const configDB = {
     },
 
     async update(groupJid: any, updates: any) {
-        if (!supabase) throw new Error("Supabase non connecté");
+        if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
 
         const { error } = await supabase

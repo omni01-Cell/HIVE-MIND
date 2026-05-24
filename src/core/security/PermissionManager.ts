@@ -22,7 +22,7 @@ import { adminService } from '../../services/adminService.js';
 // Network tools (curl, wget) are useful and allowed — the agent won't exfiltrate.
 // VM escape vectors are handled by SafeScriptValidator at the JS level.
 export const BANNED_COMMANDS = [
-    'su', 'sudo',
+    'su', 'sudo'
 ];
 
 // WHY: These flag combinations allow inline code execution that could bypass
@@ -32,7 +32,7 @@ const BANNED_FLAG_PATTERNS: ReadonlyArray<[string, string]> = [
     ['node', '-e'], ['node', '--eval'],
     ['python', '-c'], ['python3', '-c'],
     ['perl', '-e'], ['ruby', '-e'], ['lua', '-e'],
-    ['bash', '-c'], ['sh', '-c'], ['zsh', '-c'],
+    ['bash', '-c'], ['sh', '-c'], ['zsh', '-c']
 ];
 
 export const SAFE_COMMANDS = new Set([
@@ -86,8 +86,8 @@ export class PermissionManager {
 
     constructor() {
         this.originalCwd = process.cwd();
-        this.sandboxDir = process.env.SANDBOX_DIR 
-            ? resolve(process.env.SANDBOX_DIR) 
+        this.sandboxDir = process.env.SANDBOX_DIR
+            ? resolve(process.env.SANDBOX_DIR)
             : resolve(this.originalCwd, 'Sandbox1');
 
         // WHY: storage_hm lives physically inside Sandbox1/ for containment,
@@ -127,7 +127,7 @@ export class PermissionManager {
             // Path does not exist — create symlink
             fs.symlinkSync(physicalStoragePath, symlinkPath);
         }
-        
+
         this.allowedDirectories.add(this.sandboxDir);
         this.allowedDirectories.add(this.storageDir);
     }
@@ -155,10 +155,10 @@ export class PermissionManager {
      * - Sandbox1/   → Code execution and temporary script zone.
      */
     private getAuthorizedDirectoriesHint(): string {
-        return `\n[SANDBOX HINT] You have universal READ access to the entire filesystem (the "Host Disk"). However, for WRITE access, you are strictly limited to your two authorized virtual disks:\n` +
+        return '\n[SANDBOX HINT] You have universal READ access to the entire filesystem (the "Host Disk"). However, for WRITE access, you are strictly limited to your two authorized virtual disks:\n' +
                `  - Sandbox Execution Disk: ${basename(this.sandboxDir)}/ (for running scripts, compiling code, and temporary tasks).\n` +
                `  - Dedicated Storage Disk: ${basename(this.storageDir)}/ (for persistently saving your data, documents, stickers, screenshots).\n` +
-               `Any other directory (the rest of the project, /home, etc.) is the "Host Disk" and is READ-ONLY. Retry your write action targeting one of your two authorized virtual disks.`;
+               'Any other directory (the rest of the project, /home, etc.) is the "Host Disk" and is READ-ONLY. Retry your write action targeting one of your two authorized virtual disks.';
     }
 
     validateBashCommand(command: string, currentCwd: string = this.originalCwd): { result: boolean; requiresPermission: boolean; reason?: string } {
@@ -252,7 +252,7 @@ export class PermissionManager {
             // ── LOGIC 0: CLI / TUI (Local Admin) ──
             // The user physically at the terminal is the admin by default.
             if (sourceChannel === 'cli') {
-                console.log(`[Permission] 💻 Local CLI request, asking directly in terminal.`);
+                console.log('[Permission] 💻 Local CLI request, asking directly in terminal.');
                 await this._startInBandFallback(pending, true);
                 return;
             }
@@ -281,7 +281,7 @@ export class PermissionManager {
 
                     return; // Promise will be resolved by handleAdminCommand or fallback
                 } catch (hubErr) {
-                    console.warn(`[Permission] ⚠️ Hub unavailable, direct fallback to LOGIC 2:`, hubErr);
+                    console.warn('[Permission] ⚠️ Hub unavailable, direct fallback to LOGIC 2:', hubErr);
                     // Fallthrough → LOGIC 2
                 }
             }
@@ -302,7 +302,7 @@ export class PermissionManager {
             + `*Source:* Conversation \`${pending.chatId.split('@')[0]}\`\n`
             + `*Initiateur / Initiator:* ${pending.senderJid.split('@')[0]}\n`
             + `*Action:* ${pending.actionDescription}\n\n`
-            + `Pour répondre / To respond:\n`
+            + 'Pour répondre / To respond:\n'
             + `👉 \`.approve ${pending.numericId}\`\n`
             + `👉 \`.reject ${pending.numericId} [instructions]\``;
 
@@ -375,9 +375,9 @@ export class PermissionManager {
                 escalated = true;
                 console.log(`[Permission] 🔀 Escalation #${numericId}: request sent via DM to Owner (DB)`);
             } else {
-                console.warn(`[Permission] ⚠️ No owner found in global_admins. Blocking by default.`);
+                console.warn('[Permission] ⚠️ No owner found in global_admins. Blocking by default.');
                 this._cleanup(requestId, numericId);
-                pending.resolve({ granted: false, feedback: "No owner configured in the database to approve this action." });
+                pending.resolve({ granted: false, feedback: 'No owner configured in the database to approve this action.' });
                 return;
             }
         } else {
@@ -386,14 +386,14 @@ export class PermissionManager {
 
         const promptMessage =
             `⚠️ *ALERTE SÉCURITÉ / SECURITY ALERT${escalated ? ' (Escalade/Escalation)' : ''}${forceDirect ? '' : ` — Requête/Request #${numericId}`}* ⚠️\n\n`
-            + `L'agent IA tente une action hors sandbox :\n`
-            + `The AI agent is attempting an action outside the sandbox:\n`
+            + 'L\'agent IA tente une action hors sandbox :\n'
+            + 'The AI agent is attempting an action outside the sandbox:\n'
             + `*Action:* ${actionDescription}\n`
             + `*Demandé par / Requested by:* ${senderJid.split('@')[0]}\n\n`
-            + `Répondez par / Reply with:\n`
-            + `👉 *oui / yes* (autoriser / allow)\n`
-            + `👉 *non / no* (bloquer / block)\n`
-            + `👉 *non, [consigne] / no, [instruction]* (corriger l'agent / correct the agent)`;
+            + 'Répondez par / Reply with:\n'
+            + '👉 *oui / yes* (autoriser / allow)\n'
+            + '👉 *non / no* (bloquer / block)\n'
+            + '👉 *non, [consigne] / no, [instruction]* (corriger l\'agent / correct the agent)';
 
         try {
             await transportManager.sendText(targetChat, promptMessage, {}, targetChannel);
@@ -404,18 +404,18 @@ export class PermissionManager {
                     console.log(`[Permission] ⏰ In-Band timeout for #${numericId}. Action blocked.`);
                     transportManager.sendText(targetChat, `⏳ Timeout de la demande #${numericId}. Action bloquée par défaut.\nRequest #${numericId} timed out. Action blocked by default.`, {}, targetChannel).catch(() => {});
                     this._cleanup(requestId, numericId);
-                    pending.resolve({ granted: false, feedback: "The administrator did not respond in time (Timeout)." });
+                    pending.resolve({ granted: false, feedback: 'The administrator did not respond in time (Timeout).' });
                 }
             }, this.INBAND_TIMEOUT_MS);
 
         } catch (error) {
-            console.error(`[Permission] ❌ Failed to send In-Band request:`, error);
+            console.error('[Permission] ❌ Failed to send In-Band request:', error);
             this._cleanup(requestId, numericId);
             // WHY: If the request fails (network error, socket disconnected), we MUST provide feedback
             // to the LLM so it knows why its action was denied, rather than a silent failure.
-            pending.resolve({ 
-                granted: false, 
-                feedback: "Unable to reach the administrator (network/connection error). Action blocked for security. Please try again later." 
+            pending.resolve({
+                granted: false,
+                feedback: 'Unable to reach the administrator (network/connection error). Action blocked for security. Please try again later.'
             });
         }
     }

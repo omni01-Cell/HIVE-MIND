@@ -11,7 +11,7 @@ jest.unstable_mockModule('https', () => ({
     ...httpsActual,
     request: jest.fn((options: any, callback?: any) => {
         mockRequest(options);
-        
+
         // Simulate a successful response
         const mockRes = {
             statusCode: 200,
@@ -79,10 +79,10 @@ describe('TlsImpersonator', () => {
 
             expect(result.ok).toBe(true);
             expect(result.status).toBe(200);
-            
+
             const responseText = await result.text();
             expect(responseText).toBe('{"success":true}');
-            
+
             const responseJson = await result.json();
             expect(responseJson).toEqual({ success: true });
 

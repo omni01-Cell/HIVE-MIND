@@ -32,7 +32,7 @@ export const moderationActions = {
             // Envoyer le message AVANT le ban
             const message = `🚫 **Exclusion** @${username}\n` +
                 `Raison: ${reason}\n` +
-                `Tu as dépassé la limite d'avertissements.`;
+                'Tu as dépassé la limite d\'avertissements.';
 
             await transport.sendText(groupJid, message, {
                 mentions: [userJid]

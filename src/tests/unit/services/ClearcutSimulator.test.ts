@@ -31,10 +31,10 @@ describe('ClearcutSimulator', () => {
         const [url, options] = mockImpersonatedRequest.mock.calls[0];
         expect(url).toContain('play.googleapis.com/log');
         expect(options.method).toBe('POST');
-        
+
         const payload = JSON.parse(options.body);
         expect(payload[0].log_source_name).toBe('CONCORD');
-        
+
         const logEvent = JSON.parse(payload[0].log_event[0].source_extension_json);
         expect(logEvent.event_name).toBe('start_session');
         expect(logEvent.console_type).toBe('GEMINI_CLI');
@@ -58,7 +58,7 @@ describe('ClearcutSimulator', () => {
         const payload = JSON.parse(options.body);
         const logEvent = JSON.parse(payload[0].log_event[0].source_extension_json);
         expect(logEvent.event_name).toBe('new_prompt');
-        
+
         const promptMeta = logEvent.event_metadata[0].find((m: any) => m.gemini_cli_key === 35);
         expect(promptMeta).toBeDefined();
         expect(promptMeta.value).toBe(promptId);

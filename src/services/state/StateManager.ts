@@ -49,11 +49,11 @@ export const StateManager = {
     async getUser(identifier: any) {
         const jid = await IdentityMap.resolve(identifier);
         const resolved = await db.resolveContextFromLegacyId(jid);
-        
+
         if (!resolved || resolved.type !== 'user') {
             return { jid, names: ['Inconnu'], interaction_count: 0 };
         }
-        
+
         const uuid = resolved.context_id;
         const cacheKey = `user:${uuid}:data`;
 
@@ -97,7 +97,7 @@ export const StateManager = {
         const jid = await IdentityMap.resolve(identifier);
         const resolved = await db.resolveContextFromLegacyId(jid);
         if (!resolved || resolved.type !== 'user') return;
-        
+
         const uuid = resolved.context_id;
         const cacheKey = `user:${uuid}:data`;
 
@@ -133,7 +133,7 @@ export const StateManager = {
         const jid = await IdentityMap.resolve(identifier);
         const resolved = await db.resolveContextFromLegacyId(jid);
         if (!resolved || resolved.type !== 'user') return;
-        
+
         const uuid = resolved.context_id;
         const cacheKey = `user:${uuid}:data`;
 
@@ -142,7 +142,7 @@ export const StateManager = {
         const pipeline = redis.multi();
         if (preferences.language) pipeline.hSet(cacheKey, 'language', preferences.language);
         if (preferences.timezone) pipeline.hSet(cacheKey, 'timezone', preferences.timezone);
-        
+
         pipeline.sAdd(SYNC_QUEUE_KEY, uuid);
         await pipeline.exec();
     },
@@ -165,7 +165,7 @@ export const StateManager = {
         // 2. Construire le batch
         const pipeline = redis.multi();
         uuids.forEach((uuid: any) => pipeline.hGetAll(`user:${uuid}:data`));
-        const results = await pipeline.exec(); 
+        const results = await pipeline.exec();
 
         for (let i = 0; i < uuids.length; i++) {
             const data = results[i];
@@ -205,7 +205,7 @@ export const StateManager = {
         if (!obj) return {};
         const result = {
             ...obj,
-            interaction_count: parseInt(obj.interaction_count || 0),
+            interaction_count: parseInt(obj.interaction_count || 0)
             // ajouter d'autres conversions de type si nécessaire
         };
         // Conversion last_seen si num

@@ -76,7 +76,7 @@ export class GeminiLiveAdapter {
                 audioBuffer: readFileSync(oggPath),
                 format: 'ogg',
                 filePath: oggPath,
-                voice: voice,
+                voice,
                 provider: 'gemini-live'
             };
 

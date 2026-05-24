@@ -22,7 +22,7 @@ export class DatabaseMonitor {
             critical: 500 * 1024 * 1024,     // 500MB
             maxSize: 1024 * 1024 * 1024      // 1GB
         };
-        
+
         this.alertedTables = new Set(); // Tracker les tables déjà alertées
         this.monitoringActive = false;
     }
@@ -32,18 +32,18 @@ export class DatabaseMonitor {
      */
     async init() {
         console.log('[DatabaseMonitor] 🔍 Initialisation du monitoring DB...');
-        
+
         // Vérifier la connectivité
         try {
             const { error } = await supabase.from('memories').select('id').limit(1);
             if (error) throw error;
-            
+
             console.log('[DatabaseMonitor] ✅ Connecté à Supabase');
             this.monitoringActive = true;
-            
+
             // Démarrer le monitoring périodique
             this.startPeriodicMonitoring();
-            
+
         } catch (error: any) {
             console.error('[DatabaseMonitor] ❌ Erreur connexion:', error.message);
             this.monitoringActive = false;
@@ -58,18 +58,18 @@ export class DatabaseMonitor {
         // Vérifier toutes les heures
         setInterval(async () => {
             if (!this.monitoringActive) return;
-            
+
             try {
                 await this.checkDatabaseHealth();
             } catch (error: any) {
                 console.error('[DatabaseMonitor] Erreur monitoring:', error.message);
             }
         }, 60 * 60 * 1000); // Toutes les heures
-        
+
         // Vérification complète tous les jours à 6h
         setInterval(async () => {
             if (!this.monitoringActive) return;
-            
+
             try {
                 console.log('[DatabaseMonitor] 📊 Vérification complète quotidienne...');
                 await this.performFullCheck();
@@ -77,7 +77,7 @@ export class DatabaseMonitor {
                 console.error('[DatabaseMonitor] Erreur vérification complète:', error.message);
             }
         }, this.getNextDailyCheck());
-        
+
         console.log('[DatabaseMonitor] ⏰ Monitoring démarré');
     }
 
@@ -86,15 +86,15 @@ export class DatabaseMonitor {
      */
     async checkDatabaseHealth() {
         const stats = await this.getDatabaseStats();
-        
+
         // Vérifier chaque table
         for (const table of stats.tables) {
             await this.checkTableHealth(table);
         }
-        
+
         // Vérifier les performances
         await this.checkPerformanceMetrics();
-        
+
         // Log résumé
         console.log(`[DatabaseMonitor] 📈 Santé DB - Tables: ${stats.tables.length}, Taille totale: ${stats.totalSize}`);
     }
@@ -105,14 +105,14 @@ export class DatabaseMonitor {
      */
     async checkTableHealth(table: any) {
         const { name, size } = table;
-        
+
         // Vérifier seuils
         if (size > this.thresholds.critical) {
             await this.sendCriticalAlert(name, size);
         } else if (size > this.thresholds.warning) {
             await this.sendWarningAlert(name, size);
         }
-        
+
         // Vérifier croissance anormale
         await this.checkGrowthRate(name);
     }
@@ -136,17 +136,17 @@ export class DatabaseMonitor {
                     ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
                 `
             });
-            
+
             if (error) throw error;
-            
+
             const totalSize = data.reduce((sum: any, table: any) => sum + table.size_bytes, 0);
-            
+
             return {
                 tables: data,
-                totalSize: totalSize,
+                totalSize,
                 totalSizePretty: this.formatBytes(totalSize)
             };
-            
+
         } catch (error: any) {
             console.error('[DatabaseMonitor] Erreur stats:', error.message);
             return { tables: [], totalSize: 0, totalSizePretty: '0 B' };
@@ -155,7 +155,7 @@ export class DatabaseMonitor {
 
     /**
      * Vérifie le taux de croissance d'une table
-     * @param {string} tableName 
+     * @param {string} tableName
      */
     async checkGrowthRate(tableName: any) {
         try {
@@ -171,22 +171,22 @@ export class DatabaseMonitor {
                     ORDER BY day DESC;
                 `
             });
-            
+
             if (error) throw error;
-            
+
             // Analyser la tendance
             if (data.length >= 3) {
                 const recent = data.slice(0, 3).reduce((sum: any, d: any) => sum + d.count, 0) / 3;
                 const older = data.slice(-3).reduce((sum: any, d: any) => sum + d.count, 3) / 3;
-                
+
                 const growthRate = (recent - older) / older;
-                
+
                 if (growthRate > 2) { // +200% = alerte
                     console.warn(`[DatabaseMonitor] 🚨 Croissance explosive détectée sur ${tableName}: +${Math.round(growthRate*100)}%`);
                     await this.sendGrowthAlert(tableName, growthRate);
                 }
             }
-            
+
         } catch (error: any) {
             console.warn(`[DatabaseMonitor] Erreur croissance ${tableName}:`, error.message);
         }
@@ -207,20 +207,20 @@ export class DatabaseMonitor {
                     LIMIT 5;
                 `
             });
-            
+
             if (error) {
                 // pg_stat_statements peut ne pas être activé
                 console.log('[DatabaseMonitor] ℹ️ pg_stat_statements non disponible');
                 return;
             }
-            
+
             if (data && data.length > 0) {
                 console.warn(`[DatabaseMonitor] ⚠️ ${data.length} requêtes lentes détectées`);
                 data.forEach((query: any) => {
                     console.warn(`[DatabaseMonitor] Lente: ${query.mean_time}ms - ${query.query.substring(0, 100)}...`);
                 });
             }
-            
+
         } catch (error: any) {
             console.warn('[DatabaseMonitor] Erreur perf metrics:', error.message);
         }
@@ -231,17 +231,17 @@ export class DatabaseMonitor {
      */
     async performFullCheck() {
         console.log('[DatabaseMonitor] 🔍 Vérification complète...');
-        
+
         // Stats détaillées
         const stats = await this.getDetailedStats();
         console.log('[DatabaseMonitor] Statistiques détaillées:', stats);
-        
+
         // Vérifier les indexes
         await this.checkIndexesHealth();
-        
+
         // Vérifier les contraintes
         await this.checkConstraintsHealth();
-        
+
         // Générer rapport
         await this.generateHealthReport();
     }
@@ -264,9 +264,9 @@ export class DatabaseMonitor {
                     ORDER BY pg_total_relation_size('public.' || table_name) DESC;
                 `
             });
-            
+
             return data || [];
-            
+
         } catch (error: any) {
             console.error('[DatabaseMonitor] Erreur stats détaillées:', error.message);
             return [];
@@ -290,32 +290,32 @@ export class DatabaseMonitor {
                     ORDER BY tablename, indexname;
                 `
             });
-            
+
             if (error) throw error;
-            
+
             console.log(`[DatabaseMonitor] 📊 Indexes: ${data.length} trouvés`);
-            
+
             // Vérifier les indexes manquants sur les colonnes fréquemment utilisées
             const criticalColumns = ['chat_id', 'created_at', 'status'];
             const tablesNeedingIndexes = [];
-            
+
             // Logique simplifiée - en production, utiliser pg_stat_user_tables
             for (const table of ['memories', 'agent_actions', 'facts']) {
                 for (const column of criticalColumns) {
-                    const hasIndex = data.some((idx: any) => 
+                    const hasIndex = data.some((idx: any) =>
                         idx.tablename === table && idx.indexdef.includes(column)
                     );
-                    
+
                     if (!hasIndex) {
                         tablesNeedingIndexes.push(`${table}.${column}`);
                     }
                 }
             }
-            
+
             if (tablesNeedingIndexes.length > 0) {
-                console.warn(`[DatabaseMonitor] ⚠️ Indexes manquants suggérés:`, tablesNeedingIndexes);
+                console.warn('[DatabaseMonitor] ⚠️ Indexes manquants suggérés:', tablesNeedingIndexes);
             }
-            
+
         } catch (error: any) {
             console.error('[DatabaseMonitor] Erreur indexes:', error.message);
         }
@@ -337,26 +337,26 @@ export class DatabaseMonitor {
                     ORDER BY table_name, constraint_name;
                 `
             });
-            
+
             if (error) throw error;
-            
+
             console.log(`[DatabaseMonitor] 🔒 Contraintes: ${data.length} trouvées`);
-            
+
             // Vérifier les contraintes manquantes
             const expectedConstraints = [
                 { table: 'facts', constraint: 'facts_chat_key_unique' }
             ];
-            
+
             for (const expected of expectedConstraints) {
-                const hasConstraint = data.some((c: any) => 
+                const hasConstraint = data.some((c: any) =>
                     c.table_name === expected.table && c.constraint_name === expected.constraint
                 );
-                
+
                 if (!hasConstraint) {
                     console.warn(`[DatabaseMonitor] ⚠️ Contrainte manquante: ${expected.constraint} sur ${expected.table}`);
                 }
             }
-            
+
         } catch (error: any) {
             console.error('[DatabaseMonitor] Erreur contraintes:', error.message);
         }
@@ -368,7 +368,7 @@ export class DatabaseMonitor {
     async generateHealthReport() {
         const stats = await this.getDatabaseStats();
         const detailedStats = await this.getDetailedStats();
-        
+
         const report = {
             timestamp: new Date().toISOString(),
             summary: {
@@ -385,10 +385,10 @@ export class DatabaseMonitor {
             })),
             recommendations: await this.generateRecommendations()
         };
-        
+
         // Sauvegarder le rapport
         await this.saveHealthReport(report);
-        
+
         console.log('[DatabaseMonitor] 📋 Rapport de santé généré');
         return report;
     }
@@ -398,10 +398,10 @@ export class DatabaseMonitor {
      */
     async generateRecommendations() {
         const recommendations = [];
-        
+
         try {
             const stats = await this.getDatabaseStats();
-            
+
             // Recommandation 1: Tables trop grosses
             for (const table of stats.tables) {
                 if (table.size_bytes > this.thresholds.critical) {
@@ -414,7 +414,7 @@ export class DatabaseMonitor {
                     });
                 }
             }
-            
+
             // Recommandation 2: Vérifier les tables sans index
             const { data: indexes } = await supabase.rpc('exec_sql', {
                 sql: `
@@ -428,7 +428,7 @@ export class DatabaseMonitor {
                     );
                 `
             });
-            
+
             if (indexes?.length > 0) {
                 recommendations.push({
                     type: 'performance',
@@ -438,11 +438,11 @@ export class DatabaseMonitor {
                     action: 'add_indexes'
                 });
             }
-            
+
         } catch (error: any) {
             console.error('[DatabaseMonitor] Erreur recommandations:', error.message);
         }
-        
+
         return recommendations;
     }
 
@@ -451,9 +451,9 @@ export class DatabaseMonitor {
      */
     async sendCriticalAlert(tableName: any, size: any) {
         const alertKey = `critical_${tableName}`;
-        
+
         if (this.alertedTables.has(alertKey)) return; // Déjà alerté
-        
+
         const alert = {
             type: 'critical',
             table: tableName,
@@ -461,9 +461,9 @@ export class DatabaseMonitor {
             message: `Table ${tableName} dépasse 500MB (${this.formatBytes(size)}) - Action immédiate requise`,
             timestamp: new Date().toISOString()
         };
-        
-        console.error(`[DatabaseMonitor] 🚨 ALERTE CRITIQUE:`, alert);
-        
+
+        console.error('[DatabaseMonitor] 🚨 ALERTE CRITIQUE:', alert);
+
         // Sauvegarder dans la DB
         await supabase.from('system_alerts').insert({
             type: 'db_size_critical',
@@ -471,9 +471,9 @@ export class DatabaseMonitor {
             message: alert.message,
             metadata: alert
         });
-        
+
         this.alertedTables.add(alertKey);
-        
+
         // Notification (dans une vraie app, envoyer email/Slack ici)
         await this.sendNotification(alert);
     }
@@ -483,9 +483,9 @@ export class DatabaseMonitor {
      */
     async sendWarningAlert(tableName: any, size: any) {
         const alertKey = `warning_${tableName}`;
-        
+
         if (this.alertedTables.has(alertKey)) return;
-        
+
         const alert = {
             type: 'warning',
             table: tableName,
@@ -493,9 +493,9 @@ export class DatabaseMonitor {
             message: `Table ${tableName} dépasse 100MB (${this.formatBytes(size)}) - Surveillance recommandée`,
             timestamp: new Date().toISOString()
         };
-        
-        console.warn(`[DatabaseMonitor] ⚠️ ALERTE WARNING:`, alert);
-        
+
+        console.warn('[DatabaseMonitor] ⚠️ ALERTE WARNING:', alert);
+
         // Sauvegarder dans la DB
         await supabase.from('system_alerts').insert({
             type: 'db_size_warning',
@@ -503,7 +503,7 @@ export class DatabaseMonitor {
             message: alert.message,
             metadata: alert
         });
-        
+
         this.alertedTables.add(alertKey);
     }
 
@@ -518,9 +518,9 @@ export class DatabaseMonitor {
             message: `Table ${tableName} a une croissance de +${Math.round(growthRate*100)}% sur 7 jours`,
             timestamp: new Date().toISOString()
         };
-        
-        console.warn(`[DatabaseMonitor] 📈 ALERTE CROISSANCE:`, alert);
-        
+
+        console.warn('[DatabaseMonitor] 📈 ALERTE CROISSANCE:', alert);
+
         await supabase.from('system_alerts').insert({
             type: 'db_growth_warning',
             severity: 'warning',
@@ -559,11 +559,11 @@ export class DatabaseMonitor {
         const now = new Date();
         const next = new Date(now);
         next.setHours(6, 0, 0, 0);
-        
+
         if (next <= now) {
             next.setDate(next.getDate() + 1);
         }
-        
+
         return next - now;
     }
 
@@ -572,11 +572,11 @@ export class DatabaseMonitor {
      */
     formatBytes(bytes: any) {
         if (bytes === 0) return '0 B';
-        
+
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        
+
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 

@@ -6,7 +6,7 @@ export const journalGenerator = {
 
     /**
      * Génère un script audio basé sur l'activité récente
-     * @param {string} chatId 
+     * @param {string} chatId
      */
     async generateDailyScript(chatId: any) {
         console.log(`[DailyPulse] 🎙️ Génération du script pour ${chatId}...`);
@@ -14,7 +14,7 @@ export const journalGenerator = {
         // 1. Récupérer l'historique (via WorkingMemory ou Supabase)
         // Pour l'instant, on tape dans la mémoire court terme Redis
         // Idéalement, il faudrait une méthode getHistory(chatId, limit) exposée proprement
-        // On va simuler ou récupérer ce qu'on peut. 
+        // On va simuler ou récupérer ce qu'on peut.
         // Note: workingMemory stocke le contexte, mais pas forcément l'historique brut accessible facilement
         // On va supposer qu'on a accès aux logs via Supabase pour avoir de la matière
 
@@ -73,7 +73,7 @@ Si le chat est vide ou ennuyeux, moque-toi du silence.
 
     /**
      * Convertit le script en audio (TTS via Gemini Audio)
-     * @param {string} script 
+     * @param {string} script
      */
     async produceAudio(script: any) {
         try {
@@ -100,7 +100,7 @@ Si le chat est vide ou ennuyeux, moque-toi du silence.
                 console.log(`[DailyPulse] ✅ Audio généré: ${result.filePath}`);
                 return result.filePath;
             } else {
-                throw new Error("Pas de fichier audio généré");
+                throw new Error('Pas de fichier audio généré');
             }
 
         } catch (error: any) {

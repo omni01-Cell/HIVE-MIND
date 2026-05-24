@@ -126,5 +126,5 @@ export const ANCHOR_WORDS: readonly string[] = Object.freeze([
     // ── Y ──
     'Yakima', 'Yarn', 'Yonder',
     // ── Z ──
-    'Zealot', 'Zenith', 'Zephyr', 'Zigzag', 'Zinc', 'Zodiac', 'Zombie',
+    'Zealot', 'Zenith', 'Zephyr', 'Zigzag', 'Zinc', 'Zodiac', 'Zombie'
 ]);

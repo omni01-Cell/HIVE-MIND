@@ -26,10 +26,10 @@ describe('SystemScratchpadTool (run_scratchpad)', () => {
         // Dynamic import AFTER mock registration
         const mod1 = await import('../../../plugins/base/dev_tools/SystemScratchpadTool.js');
         SystemScratchpadTool = mod1.default;
-        
+
         const mod2 = await import('../../../plugins/loader.js');
         pluginLoader = mod2.pluginLoader;
-        
+
         providersModule = await import('../../../providers/index.js');
     });
 

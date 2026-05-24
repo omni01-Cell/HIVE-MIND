@@ -106,7 +106,7 @@ export default {
             content: message.content,
             // [FIX] Extraire le reasoning_content pour l'historique
             reasoningContent: message.reasoning_content || null,
-            toolCalls: toolCalls,
+            toolCalls,
             usage: data.usage
         };
     },

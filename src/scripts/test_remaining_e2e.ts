@@ -8,24 +8,24 @@ import { botCore } from '../core/index.js';
 import { eventBus, BotEvents } from '../core/events.js';
 
 async function sendAndWaitForResponse(
-    text: string, 
-    matchFn: (response: string) => boolean, 
-    chatId = 'cli_chat_e2e', 
+    text: string,
+    matchFn: (response: string) => boolean,
+    chatId = 'cli_chat_e2e',
     sender = 'test_user'
 ) {
     console.log(`\n[E2E-TEST] 📩 Sending message: "${text}"`);
     const messageObj: any = {
         id: 'test_' + Date.now(),
-        chatId: chatId,
-        sender: sender,
+        chatId,
+        sender,
         senderName: 'Tester',
-        text: text,
+        text,
         isGroup: false,
         isSystem: false,
         raw: { text },
         authorityLevel: 'DIVIN (SuperUser)'
     };
-    
+
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             eventBus.unsubscribe(BotEvents.MESSAGE_SENT, listener);
@@ -60,11 +60,11 @@ async function sendAndWaitForResponse(
         const transportManager = botCore.transport;
         const transport = transportManager.getTransport('cli');
         if (transport && transport.messageCallback) {
-             transport.messageCallback(messageObj);
+            transport.messageCallback(messageObj);
         } else if (transport && transport.handleMessage) {
-             transport.handleMessage(messageObj);
+            transport.handleMessage(messageObj);
         } else {
-             console.log('[E2E-TEST] Warning: Could not find CLI transport message handler');
+            console.log('[E2E-TEST] Warning: Could not find CLI transport message handler');
         }
     });
 }
@@ -84,7 +84,7 @@ async function runRemainingTests() {
             (res) => res.toLowerCase().includes('aigle noir') || res.toLowerCase().includes('mémoris'),
             memChatId1
         );
-        
+
         await delay(2000);
 
         // 2. Memory Test - Recall Fact (USING A DIFFERENT CHAT ID TO CLEAR CONTEXT BIAS)
@@ -93,11 +93,11 @@ async function runRemainingTests() {
         const memChatId2 = 'mem_chat_recall_' + Date.now();
         console.log('\n--- TEST: Memory Recall (Clean Context) ---');
         await sendAndWaitForResponse(
-            "Quel est mon nom de code secret ? Utilise tes outils de mémoire pour le retrouver.",
+            'Quel est mon nom de code secret ? Utilise tes outils de mémoire pour le retrouver.',
             (res) => res.toLowerCase().includes('aigle') && res.toLowerCase().includes('noir'),
             memChatId2
         );
-        
+
         await delay(2000);
 
         // 3. Security: VM Escape Mitigation

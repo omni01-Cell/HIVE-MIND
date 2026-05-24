@@ -7,7 +7,7 @@
 import { supabase, default as db } from './supabase.js';
 
 // Cache RAM pour vérification instantanée (0ms)
-let adminCache = new Map(); // UUID -> Role ('owner', 'moderator')
+const adminCache = new Map(); // UUID -> Role ('owner', 'moderator')
 let lastRefresh = 0;
 const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
 
@@ -24,7 +24,7 @@ export const adminService = {
     get userService() {
         return this.container?.get('userService');
     },
-    
+
     async init() {
         const initialRefresh = async () => {
             const success = await this.refresh();
@@ -34,7 +34,7 @@ export const adminService = {
             }
         };
         await initialRefresh();
-        
+
         setInterval(() => {
             this.refresh().catch(console.error);
         }, REFRESH_INTERVAL);
@@ -65,7 +65,7 @@ export const adminService = {
 
     async isGlobalAdmin(jid: any) {
         if (!jid) return false;
-        
+
         let resolvedJid = jid;
         if (this.userService) {
             resolvedJid = await this.userService.resolveLid(jid) || jid;

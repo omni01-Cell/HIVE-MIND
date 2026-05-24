@@ -1,6 +1,6 @@
 /**
  * ToolBridge — Pont entre les plugins HIVE-MIND et le sandbox PTC
- * 
+ *
  * WHY: Le PTC executor a besoin de fonctions `async (args) => result` pour chaque outil.
  * Les plugins HIVE-MIND utilisent le format OpenAI (`toolDefinition`) et s'exécutent
  * via `pluginLoader.execute(name, args, context)`. Ce bridge fait la conversion.
@@ -27,7 +27,7 @@ type PluginExecuteFn = (
 
 /**
  * Crée une Map de fonctions exécutables à partir des tool definitions HIVE-MIND.
- * 
+ *
  * @param toolDefs — Définitions d'outils au format OpenAI (depuis pluginLoader.getRelevantTools)
  * @param executeFn — Fonction d'exécution (typiquement pluginLoader.execute)
  * @param context — Contexte de message courant (transport, chatId, sender, etc.)
@@ -36,7 +36,7 @@ type PluginExecuteFn = (
 export function buildToolFunctions(
     toolDefs: readonly OpenAIToolDefinition[],
     executeFn: PluginExecuteFn,
-    context: ToolExecutionContext,
+    context: ToolExecutionContext
 ): Map<string, ToolFunction> {
     const fns = new Map<string, ToolFunction>();
 

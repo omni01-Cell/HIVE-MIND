@@ -62,7 +62,7 @@ export default {
                     results.push({ role: 'assistant', tool_calls: sanitizedTools, content: null });
                 } else {
                     // Cas standard (Texte seul)
-                    results.push({ role: 'assistant', content: m.content || "" });
+                    results.push({ role: 'assistant', content: m.content || '' });
                 }
 
                 return results;

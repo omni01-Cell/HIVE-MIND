@@ -61,8 +61,8 @@ class Orchestrator extends EventEmitter {
 
     /**
      * Enregistre un handler pour un type d'événement
-     * @param {EventType} type 
-     * @param {Function} handler 
+     * @param {EventType} type
+     * @param {Function} handler
      */
     registerHandler(type: any, handler: any) {
         this.handlers.set(type, handler);
@@ -70,7 +70,7 @@ class Orchestrator extends EventEmitter {
 
     /**
      * Met à jour la configuration (pour les tests)
-     * @param {Object} newConfig 
+     * @param {Object} newConfig
      */
     setConfig(newConfig: any) {
         activeConfig = { ...activeConfig, ...newConfig };
@@ -79,7 +79,7 @@ class Orchestrator extends EventEmitter {
 
     /**
      * Ajoute un événement à la file d'attente
-     * @param {QueueEvent} event 
+     * @param {QueueEvent} event
      */
     enqueue(event: any) {
         const queueEvent = {
@@ -128,7 +128,7 @@ class Orchestrator extends EventEmitter {
 
     /**
      * Dispatch vers le handler approprié
-     * @param {QueueEvent} event 
+     * @param {QueueEvent} event
      */
     async handleEvent(event: any) {
         this.emit('processing', event);
@@ -155,7 +155,7 @@ class Orchestrator extends EventEmitter {
             await handler(event);
             this.lastProcessedTime = Date.now(); // Mettre à jour le timestamp
         } catch (error: any) {
-            console.error(`[Orchestrator] Erreur lors du traitement:`, error);
+            console.error('[Orchestrator] Erreur lors du traitement:', error);
             throw error;
         }
     }

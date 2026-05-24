@@ -37,7 +37,7 @@ export const groupService = {
 
     /**
      * Injecte le conteneur de services (appelé par ServiceContainer.register)
-     * @param {import('../core/ServiceContainer.js').ServiceContainer} container 
+     * @param {import('../core/ServiceContainer.js').ServiceContainer} container
      */
     setContainer(container: any) {
         this.container = container;
@@ -52,7 +52,7 @@ export const groupService = {
     },
     /**
      * Met à jour le cache groupe avec les métadonnées WhatsApp
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @param {Object} waMetadata - Métadonnées de l'API WhatsApp
      */
     async updateGroup(groupJid: any, waMetadata: any) {
@@ -81,7 +81,7 @@ export const groupService = {
 
                 return {
                     jid: realJid,
-                    lid: lid,
+                    lid,
                     phoneNumber: phoneJid,
                     name: p.name || p.notify || null,
                     isAdmin: p.admin === 'admin' || p.admin === 'superadmin'
@@ -118,7 +118,7 @@ export const groupService = {
             // Phase 3: Sync du groupe lui-même dans 'groups' (CRITIQUE pour FKs)
             if (supabase) {
                 // Tenter de résoudre le founder s'il est au format LID
-                let founder = waMetadata.owner || waMetadata.subjectOwner;
+                const founder = waMetadata.owner || waMetadata.subjectOwner;
                 let validFounderJid: any = null;
 
                 if (founder) {
@@ -161,7 +161,7 @@ export const groupService = {
 
     /**
      * Vérifie si les données du groupe nécessitent une mise à jour
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @returns {Promise<boolean>}
      */
     async needsUpdate(groupJid: any) {
@@ -223,7 +223,7 @@ export const groupService = {
 
     /**
      * Invalide le cache d'un groupe (appelé sur events promote/demote/remove)
-     * @param {string} groupJid 
+     * @param {string} groupJid
      */
     async invalidateCache(groupJid: any) {
         const cacheKey = `group:${groupJid}:meta`;
@@ -238,7 +238,7 @@ export const groupService = {
 
     /**
      * Récupère la config/settings d'un groupe (Proxy vers Supabase)
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @returns {Promise<Object>}
      */
     async getGroupSettings(groupJid: any) {
@@ -263,7 +263,7 @@ export const groupService = {
     async getContext(chatJid: any, senderJid: any, userProfile: any) {
         const isGroup = chatJid.endsWith('@g.us');
 
-        let context = {
+        const context = {
             type: isGroup ? 'GROUP' : 'PRIVATE',
             sender: userProfile,
             group: null,
@@ -288,7 +288,7 @@ export const groupService = {
                     name: cached.name,
                     description: cached.description || 'Aucune description',
                     owner: cached.owner,
-                    admins: admins,
+                    admins,
                     member_count: parseInt(cached.member_count) || 0,
                     tasks: [] // Les tâches viennent de Supabase group_configs
                 };
@@ -318,7 +318,7 @@ export const groupService = {
 
     /**
      * Récupère la liste des membres d'un groupe (depuis le cache Redis)
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @returns {Promise<Array<{jid: string, isAdmin: boolean}>>}
      */
     async getGroupMembers(groupJid: any) {
@@ -369,7 +369,7 @@ export const groupService = {
     /**
      * Récupère la mission bot d'un groupe (depuis Supabase)
      * Utilisé par: gm_mission (group_manager plugin)
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @returns {Promise<{title: string, description: string, author: string}|null>}
      */
     async getBotMission(groupJid: any) {
@@ -402,7 +402,7 @@ export const groupService = {
     /**
      * Définit la mission bot d'un groupe
      * Utilisé par: gm_setmission (group_manager plugin)
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @param {string} title - Titre de la mission (stocké dans name)
      * @param {string} description - Description de la mission (stocké dans bot_mission)
      * @param {string} author - JID de l'auteur (stocké dans admins)
@@ -433,7 +433,7 @@ export const groupService = {
     /**
      * Synchronise les admins WhatsApp vers la table group_admins
      * Appelé après updateGroup() pour persistance
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @param {Array<string>} adminJids - Liste des JIDs des admins
      * @param {string} promotedBy - JID de celui qui a fait l'action (optionnel)
      */
@@ -493,8 +493,8 @@ export const groupService = {
     /**
      * Vérifie si un utilisateur est admin dans un groupe (via Supabase)
      * Utile pour les vérifications cross-data de permissions
-     * @param {string} groupJid 
-     * @param {string} userJid 
+     * @param {string} groupJid
+     * @param {string} userJid
      * @returns {Promise<boolean>}
      */
     async isGroupAdmin(groupJid: any, userJid: any) {
@@ -529,7 +529,7 @@ export const groupService = {
     /**
      * Liste tous les groupes où un utilisateur est admin
      * Utilisé par: gm_mygroups (group_manager plugin)
-     * @param {string} userJid 
+     * @param {string} userJid
      * @returns {Promise<Array<string>>}
      */
     async getAdminGroups(userJid: any) {
@@ -551,7 +551,7 @@ export const groupService = {
     /**
      * Compte le nombre d'admins par groupe
      * Utilisé par: gm_groupstats (group_manager plugin)
-     * @param {string} groupJid 
+     * @param {string} groupJid
      * @returns {Promise<number>}
      */
     async countAdmins(groupJid: any) {
@@ -584,10 +584,10 @@ export const groupService = {
         const leaderboard = await StateManager.getGroupLeaderboard(groupJid, 10);
 
         if (!leaderboard || leaderboard.length === 0) {
-            return "📊 Pas encore de statistiques pour ce groupe.";
+            return '📊 Pas encore de statistiques pour ce groupe.';
         }
 
-        let report = `📊 **TOP 10 MEMBRES ACTIFS**\n`;
+        let report = '📊 **TOP 10 MEMBRES ACTIFS**\n';
 
         // On résout les noms (Nécessite UserService pour convertir JID -> Nom)
         for (let i = 0; i < leaderboard.length; i++) {

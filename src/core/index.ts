@@ -2,7 +2,7 @@
 // Orchestrateur principal du bot - Cerveau central
 
 import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 
 import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
@@ -47,6 +47,8 @@ import { SchedulerHandler, GroupHandler } from './handlers/index.js';
 import { tieredContextLoader } from './context/TieredContextLoader.js';
 import { permissionManager } from './security/PermissionManager.js';
 import { blueprintManager, AgentBlueprint } from './blueprint/AgentBlueprint.js';
+import { fileStateCache } from '../utils/fileStateCache.js';
+import { stripHashes } from '../services/anchor/lineHashing.js';
 
 // DTC Phase 1: Les admins globaux sont maintenant dans Supabase via adminService
 // Le chargement se fait de manière asynchrone dans init()
@@ -111,11 +113,11 @@ export class BotCore {
         // [FEEDBACK FIRST] Constantes pour réponse rapide < 30s
         this.FEEDBACK_TIMEOUT_MS = 25000; // 25 secondes max avant accusé de réception
         this.QUICK_ACKNOWLEDGMENTS = [
-            "Je réfléchis... 🤔",
-            "Laisse-moi 2 secondes... 💭",
-            "Je cherche ça... 🔍",
-            "Hmm, intéressant... 🧐",
-            "Un instant... ⏳"
+            'Je réfléchis... 🤔',
+            'Laisse-moi 2 secondes... 💭',
+            'Je cherche ça... 🔍',
+            'Hmm, intéressant... 🧐',
+            'Un instant... ⏳'
         ];
     }
 
@@ -189,13 +191,11 @@ export class BotCore {
         // [GLOBAL RETRY AND DEFENSE SYSTEM] Pre-execution argument validation (Layer A)
         const validation = validateToolArgs(name, JSON.stringify(args || {}), availableTools);
         if (!validation.valid) {
-            console.warn(`[GeminiLive] ⚠️ Missing required params for "${name}": [${validation.missing.join(', ')}]`);
+            console.warn(`[GeminiLive] ⚠️ Validation failed for "${name}": ${validation.formattedError}`);
             return {
                 success: false,
-                error: 'MISSING_REQUIRED_PARAMETERS',
-                message: `TOOL_CALL_REJECTED: Tool "${name}" is missing required parameters: [${validation.missing.join(', ')}]. `
-                    + `You MUST retry this tool call immediately with ALL required parameters filled. `
-                    + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
+                error: 'TOOL_VALIDATION_ERROR',
+                message: validation.formattedError + `\nYou MUST retry this tool call immediately with correct parameters. Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
                 missing_params: validation.missing
             };
         }
@@ -219,7 +219,7 @@ export class BotCore {
                     sourceChannel: message.sourceChannel,
                     onProgress: (status: string) => {
                         eventBus.publish(BotEvents.TOOL_PROGRESS, { tool: 'code_execution', status, chatId });
-                    },
+                    }
                 }
             );
 
@@ -234,7 +234,7 @@ export class BotCore {
                         text: `[WAKE_EVENT] ${wakeEvent.prompt}`,
                         isGroup: wakeEvent.chatId?.endsWith('@g.us') ?? false,
                         isSystem: true,
-                        sourceChannel: 'internal',
+                        sourceChannel: 'internal'
                     } as any);
                 });
 
@@ -246,7 +246,7 @@ export class BotCore {
                         type: 'SLEEP_SCHEDULED',
                         message: sleep.message,
                         wakeEventId: sleep.wakeEventId,
-                        wakeAtMs: sleep.wakeAtMs,
+                        wakeAtMs: sleep.wakeAtMs
                     };
                 }
                 return ptcResult;
@@ -401,7 +401,7 @@ export class BotCore {
                     text: `[WAKE_EVENT] ${event.prompt}`,
                     isGroup: event.chatId?.endsWith('@g.us') ?? false,
                     isSystem: true,
-                    sourceChannel: 'internal',
+                    sourceChannel: 'internal'
                 } as any);
             });
 
@@ -536,7 +536,7 @@ export class BotCore {
         const config = await db.getGroupConfig(groupId);
 
         // 2. Message de bienvenue personnalisé ou défaut
-        const welcomeTemplate = config?.welcome_message || `Bienvenue @user !`;
+        const welcomeTemplate = config?.welcome_message || 'Bienvenue @user !';
 
         for (const participant of participants) {
             const userJid = participant;
@@ -674,8 +674,8 @@ export class BotCore {
                             isGroup: goal.target_chat_id ? goal.target_chat_id.endsWith('@g.us') : false,
                             chatId: goal.target_chat_id,
                             text: `SYSTEM_GOAL_TRIGGER: L'objectif "${goal.title}" a été déclenché par un événement (Reçu message de ${senderName}).\nConsigne: ${goal.description}\nPriorité: ${goal.priority}`,
-                            senderName: "SYSTEM_EVENT_LISTENER",
-                            sender: "system@internal",
+                            senderName: 'SYSTEM_EVENT_LISTENER',
+                            sender: 'system@internal',
                             isSystem: true
                         } as any);
                     }, 500); // Petit délai pour laisser traiter le message courant
@@ -754,14 +754,14 @@ export class BotCore {
         // ======== INTERCEPTION PERMISSION MANAGER — Admin Hub (.approve/.reject) ========
         if (text.startsWith('.approve') || text.startsWith('.reject')) {
             if (permissionManager.handleAdminCommand(text)) {
-                console.log(`[Core] 🏢 Commande Admin Hub consommée par le PermissionManager`);
+                console.log('[Core] 🏢 Commande Admin Hub consommée par le PermissionManager');
                 return;
             }
         }
 
         // ======== INTERCEPTION PERMISSION MANAGER — In-Band (oui/non) ========
         if (permissionManager.handleUserResponse(text)) {
-            console.log(`[Core] 🛡️ Message consommé par le PermissionManager (In-Band)`);
+            console.log('[Core] 🛡️ Message consommé par le PermissionManager (In-Band)');
             return;
         }
 
@@ -866,7 +866,7 @@ export class BotCore {
         await this.transport.setPresence(chatId, 'composing', message.sourceChannel);
 
         // [FEEDBACK FIRST] Variables de contrôle pour la réponse rapide
-        let feedbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
+        const feedbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
         const feedbackState = { sent: false };
 
         try {
@@ -914,7 +914,7 @@ export class BotCore {
                             // Il faut le convertir en OGG ici ou dans le provider.
                             // Le provider renvoie 'audioFile' (PCM). Baileys sendVoice attend un OGG/MP3 souvent.
                             // Baileys sendVoice: { audio: { url: path }, mimetype: 'audio/mp4', ptt: true }
-                            // Il faut convertir PCM -> OGG/MP3. 
+                            // Il faut convertir PCM -> OGG/MP3.
 
                             // Import dynamique du converter
                             const converter = await import('../services/audio/audioConverter.js');
@@ -1095,7 +1095,7 @@ export class BotCore {
 
 
             // Construire les options de réponse (Quote, Mention)
-            let replyOptions: Record<string, any> = {};
+            const replyOptions: Record<string, any> = {};
             if (isGroup) {
                 const strategy = await workingMemory.getReplyStrategy(chatId, message);
                 const isBotDirectlyAddressed = mentionsBot || isContextualReply;
@@ -1105,7 +1105,7 @@ export class BotCore {
                 // 2. Si le chat est en chaos (useMention = true), le Quote prendrait trop de place verticale.
                 //    On désactive le Quote automatique, l'IA se chargera d'écrire `@Nom` si elle le juge nécessaire.
                 if (strategy.useMention) {
-                    // Mode Chaos : Pas de Quote, pas de Tag automatique. 
+                    // Mode Chaos : Pas de Quote, pas de Tag automatique.
                     // C'est le parser (baileys.ts) qui gérera les tags si l'IA écrit "@Prénom".
                 } else if ((strategy.useQuote || isBotDirectlyAddressed) && message.raw) {
                     // Mode Actif/Calm/Solo : On cite le message pour garder le contexte visuel (très humain).
@@ -1125,7 +1125,7 @@ export class BotCore {
 
             // 2. Build LLM history
             const systemPrompt = fullContext.systemPrompt;
-            let history = [];
+            const history = [];
 
             history.push({ role: 'system', content: systemPrompt });
             history.push(...fullContext.history);
@@ -1144,15 +1144,11 @@ export class BotCore {
             const MAX_DEFECT_RETRIES = 2;
 
 
-
             let finalResponse: any = null;
             let keepThinking = true;
             let iterations = 0;
             const MAX_ITERATIONS = 10;
             let usedFamily: any = null;
-
-
-
 
 
             // [UNIFIED] All messages go through the ReAct loop — no FAST/AGENTIC split
@@ -1265,7 +1261,7 @@ RULES:
                                 }
                             } catch (summaryErr: any) {
                                 console.error('[Planner] ❌ Échec génération excuses:', summaryErr.message);
-                                finalResponse = `Désolé, je n'ai pas pu finaliser votre demande pour le moment en raison d'un problème technique. N'hésitez pas à réessayer dans quelques instants ou à contacter notre support. Merci de votre patience ! 🙏`;
+                                finalResponse = 'Désolé, je n\'ai pas pu finaliser votre demande pour le moment en raison d\'un problème technique. N\'hésitez pas à réessayer dans quelques instants ou à contacter notre support. Merci de votre patience ! 🙏';
                             }
 
                             if (isUserAdmin) {
@@ -1304,7 +1300,7 @@ RULES:
                             } catch (summaryErr: any) {
                                 // [BUG #7 FIX] Never leave the user without a response
                                 console.error('[Planner] ❌ Échec génération résumé:', summaryErr.message);
-                                finalResponse = `Désolé, je n'ai pas pu mener à bien l'intégralité de votre demande. N'hésitez pas à réessayer dans quelques instants.`;
+                                finalResponse = 'Désolé, je n\'ai pas pu mener à bien l\'intégralité de votre demande. N\'hésitez pas à réessayer dans quelques instants.';
                                 if (isUserAdmin) {
                                     finalResponse += `\n\n⚙️ *[Détails techniques (Administrateur)]* :\n${stepStatuses}`;
                                 }
@@ -1437,6 +1433,7 @@ RULES:
                     const READ_ONLY_TOOLS = new Set([
                         'read_file', 'list_directory', 'grep_search',
                         'get_file_skeleton', 'get_function', 'find_symbol_references',
+                        'spawn_sub_agent'
                     ]);
 
                     // Partition tool calls into parallel-safe (read-only) and sequential (mutating)
@@ -1468,24 +1465,14 @@ RULES:
 
                                 if (currentRetries < MAX_TOOL_RETRIES) {
                                     toolRetryCount.set(retryKey, currentRetries + 1);
-                                    console.warn(`[ToolValidator] ⚠️ Missing required params for "${toolName}": [${validation.missing.join(', ')}] (retry ${currentRetries + 1}/${MAX_TOOL_RETRIES})`);
+                                    console.warn(`[ToolValidator] ⚠️ Validation failed for "${toolName}": ${validation.formattedError} (retry ${currentRetries + 1}/${MAX_TOOL_RETRIES})`);
 
                                     // Return structured error that guides the LLM to self-correct
                                     return {
                                         role: 'tool' as const,
                                         tool_call_id: toolCall.id,
                                         name: toolName,
-                                        content: JSON.stringify({
-                                            success: false,
-                                            error: 'MISSING_REQUIRED_PARAMETERS',
-                                            message: `[SYSTEM REJECTION] : Tool "${toolName}" is missing required parameters: [${validation.missing.join(', ')}]. `
-                                                + `DIRECTIVE: This is a system correction. You MUST retry this tool call immediately with ALL required parameters filled. `
-                                                + `DO NOT apologize, do not acknowledge this message. Just output the corrected tool call. `
-                                                + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
-                                            missing_params: validation.missing,
-                                            retry: currentRetries + 1,
-                                            maxRetries: MAX_TOOL_RETRIES
-                                        })
+                                        content: validation.formattedError
                                     };
                                 }
                                 console.error(`[ToolValidator] ❌ Max retries (${MAX_TOOL_RETRIES}) exceeded for "${toolName}". Proceeding with invalid args.`);
@@ -1500,7 +1487,8 @@ RULES:
                                 chatId,
                                 message,
                                 authority: fullContext.authority,
-                                blueprint: activeBlueprint
+                                blueprint: activeBlueprint,
+                                history
                             });
 
                             // --- LE DOUBLE RENDU (DUAL RENDERING) ---
@@ -1532,16 +1520,16 @@ RULES:
                                 role: 'tool' as const,
                                 tool_call_id: toolCall.id,
                                 name: toolName,
-                                content: llmContent,
+                                content: llmContent
                             };
 
                         } catch (unexpectedErr: any) {
-                            console.error(`[Agent] ❌ Erreur fatale boucle ReAct:`, unexpectedErr);
+                            console.error('[Agent] ❌ Erreur fatale boucle ReAct:', unexpectedErr);
                             return {
                                 role: 'tool' as const,
                                 tool_call_id: toolCall.id,
                                 name: toolName,
-                                content: JSON.stringify({ success: false, error: true, message: `Fatal Loop Error: ${unexpectedErr.message}` }),
+                                content: JSON.stringify({ success: false, error: true, message: `Fatal Loop Error: ${unexpectedErr.message}` })
                             };
                         }
                     };
@@ -1628,30 +1616,30 @@ I need to write a file using write_to_file.
                     }
 
                     // [RUNTIME: RALPH LOOP]
-                    // On évalue la paresse agentique uniquement si l'agent a fait au moins 1 action (itérations > 1) 
+                    // On évalue la paresse agentique uniquement si l'agent a fait au moins 1 action (itérations > 1)
                     // et a produit un texte final.
                     if (iterations > 1 && contentStr && iterations < MAX_ITERATIONS) {
                         const runtime = container.get('runtime');
                         // Extraire le but initial depuis userContent (qui peut être un string ou un array multimodal)
                         const initialGoal = typeof userContent === 'string' ? userContent : JSON.stringify(userContent);
-                        
+
                         const ralphEval = await runtime.ralph.verifyCompletion(initialGoal, contentStr);
-                        
+
                         if (!ralphEval.is_complete && ralphEval.laziness_detected) {
-                            console.warn(`[Runtime:RALPH] 🥾 Agent paresseux détecté. Injection du kickback prompt.`);
-                            
+                            console.warn('[Runtime:RALPH] 🥾 Agent paresseux détecté. Injection du kickback prompt.');
+
                             // On sauvegarde la réponse paresseuse dans l'historique
                             history.push({
                                 role: 'assistant',
                                 content: contentStr
                             });
-                            
+
                             // On force la boucle à continuer avec l'intervention de RALPH
                             history.push({
                                 role: 'user',
                                 content: `[SYSTEM SUPERVISOR: RALPH] ${ralphEval.kickback_message}`
                             });
-                            
+
                             continue; // 🔄 DÉCLENCHE UNE NOUVELLE ITÉRATION ReAct
                         }
                     }
@@ -1672,11 +1660,10 @@ I need to write a file using write_to_file.
                         });
                         history.push({
                             role: 'user',
-                            content: `[SYSTEM REJECTION] : ACTION REJECTED by internal validator.\nReason: You thought inside your <thought> tags, but produced no final response for the user and called no tools.\n\nSYSTEM DIRECTIVE: This is an automatic interception. Immediately generate a direct user response without apologizing or justifying this omission. Do not reply to this system message.`
+                            content: '[SYSTEM REJECTION] : ACTION REJECTED by internal validator.\nReason: You thought inside your <thought> tags, but produced no final response for the user and called no tools.\n\nSYSTEM DIRECTIVE: This is an automatic interception. Immediately generate a direct user response without apologizing or justifying this omission. Do not reply to this system message.'
                         });
                         continue; // Force une itération supplémentaire
                     }
-
 
 
                     finalResponse = response.content;
@@ -1721,7 +1708,7 @@ I need to write a file using write_to_file.
                             finalResponse = toolResult.message;
                         }
                     } catch (cmdErr: any) {
-                        console.error(`[Core] ⚠️ Text Command Fallback Error:`, cmdErr.message);
+                        console.error('[Core] ⚠️ Text Command Fallback Error:', cmdErr.message);
                     }
                 }
             }
@@ -1817,7 +1804,7 @@ I need to write a file using write_to_file.
                 // Si après nettoyage il ne reste rien
                 if (!finalResponse) {
                     if (iterations > 0) {
-                        finalResponse = "*(Réflexion terminée sans réponse textuelle)*";
+                        finalResponse = '*(Réflexion terminée sans réponse textuelle)*';
                     } else {
                         return;
                     }
@@ -1826,7 +1813,7 @@ I need to write a file using write_to_file.
                 // Si on a nettoyé des balises orphelines sans capturer de pensée valide
                 if (!finalResponse) {
                     if (iterations > 0) {
-                        finalResponse = "*(Réflexion terminée sans réponse textuelle)*";
+                        finalResponse = '*(Réflexion terminée sans réponse textuelle)*';
                     } else {
                         return;
                     }
@@ -1943,8 +1930,6 @@ I need to write a file using write_to_file.
     }
 
 
-
-
     /**
      * Exécute un outil de manière sécurisée (Sentinel)
      * Utiliser cette méthode au lieu de _executeTool direct pour le Planner
@@ -1975,10 +1960,10 @@ I need to write a file using write_to_file.
                 const agentMemory = this.agentMemory;
                 const recentActions = chatId ? await agentMemory.getRecentActions(chatId, 5) : [];
                 const activeBlueprint = context.blueprint || this.currentBlueprint;
-                
+
                 const evalResult = await runtime.sentinel.evaluate(toolCall, {
                     senderName: message?.senderName || 'Anonymous',
-                    authorityLevel: authorityLevel,
+                    authorityLevel,
                     isGroup: message?.isGroup || false,
                     chatId: chatId || 'unknown'
                 }, recentActions, activeBlueprint);
@@ -1988,7 +1973,7 @@ I need to write a file using write_to_file.
                     return {
                         success: false,
                         error: true,
-                        message: `TOOL_BLOCKED_BY_RUNTIME_SENTINEL:\n`
+                        message: 'TOOL_BLOCKED_BY_RUNTIME_SENTINEL:\n'
                             + `Tool: ${toolName}\n`
                             + `Risk Level: ${evalResult.risk_level}\n`
                             + `Reason: ${evalResult.reason}\n`
@@ -2011,14 +1996,17 @@ I need to write a file using write_to_file.
                     sender: message.sender,
                     isGroup: message.isGroup,
                     authorityLevel: authorityLevel || 'MEMBRE (Standard)',
-                    isSuperUser: isSuperUser,
-                    isGlobalAdmin: isGlobalAdmin,
-                    sourceChannel: message.sourceChannel,
+                    isSuperUser,
+                    isGlobalAdmin,
+                    sourceChannel: message.sourceChannel
                 });
             }
 
             // EXÉCUTION RÉELLE
-            const toolResult = await this._executeTool(toolCall, message);
+            const toolResult = await this._executeTool(toolCall, {
+                ...message,
+                conversationHistory: context.history
+            });
 
             // [P0 FIX] Parse tool args once, reuse for Observer + ActionEvaluator
             // WHY: Prevents a second unguarded JSON.parse that could convert a successful
@@ -2078,8 +2066,8 @@ I need to write a file using write_to_file.
                 success: false,
                 error: 'MALFORMED_JSON_ARGUMENTS',
                 message: `[SYSTEM REJECTION] : Your tool call arguments are malformed JSON: "${parseErr.message}". `
-                    + `DIRECTIVE: This is a system correction. Please retry with valid JSON containing a "code" string parameter. `
-                    + `DO NOT apologize, do not acknowledge this error. Just output the corrected tool call.`
+                    + 'DIRECTIVE: This is a system correction. Please retry with valid JSON containing a "code" string parameter. '
+                    + 'DO NOT apologize, do not acknowledge this error. Just output the corrected tool call.'
             };
         }
 
@@ -2095,7 +2083,7 @@ I need to write a file using write_to_file.
                 ...contextParams,
                 onProgress: (status: string) => {
                     eventBus.publish(BotEvents.TOOL_PROGRESS, { tool: 'code_execution', status, chatId });
-                },
+                }
             }
         );
 
@@ -2113,7 +2101,7 @@ I need to write a file using write_to_file.
                     text: `[WAKE_EVENT] ${wakeEvent.prompt}`,
                     isGroup: wakeEvent.chatId?.endsWith('@g.us') ?? false,
                     isSystem: true,
-                    sourceChannel: 'internal',
+                    sourceChannel: 'internal'
                 } as any);
             });
 
@@ -2129,7 +2117,7 @@ I need to write a file using write_to_file.
                     type: 'SLEEP_SCHEDULED',
                     message: sleep.message,
                     wakeEventId: sleep.wakeEventId,
-                    wakeAtMs: sleep.wakeAtMs,
+                    wakeAtMs: sleep.wakeAtMs
                 };
             }
 
@@ -2147,14 +2135,11 @@ I need to write a file using write_to_file.
                     // [GLOBAL RETRY AND DEFENSE SYSTEM] Validation du fallback (Layer B)
                     const validation = validateToolArgs(extractedTool, extractedArgs, relevantTools);
                     if (!validation.valid) {
-                        console.warn(`[PTC→Native] ⚠️ Missing required params for "${extractedTool}": [${validation.missing.join(', ')}]`);
+                        console.warn(`[PTC→Native] ⚠️ Validation failed for "${extractedTool}": ${validation.formattedError}`);
                         return {
                             success: false,
-                            error: 'MISSING_REQUIRED_PARAMETERS',
-                            message: `[SYSTEM REJECTION] : Tool "${extractedTool}" is missing required parameters: [${validation.missing.join(', ')}]. `
-                                + `DIRECTIVE: This is a system correction. You MUST retry this tool call immediately with ALL required parameters filled. `
-                                + `DO NOT apologize, do not acknowledge this message. Just output the corrected tool call. `
-                                + `Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
+                            error: 'TOOL_VALIDATION_ERROR',
+                            message: `[SYSTEM REJECTION] : ${validation.formattedError}\nDIRECTIVE: This is a system correction. You MUST retry this tool call immediately with correct parameters. DO NOT apologize, do not acknowledge this message. Just output the corrected tool call. Expected schema: ${JSON.stringify(validation.schema, null, 0)}`,
                             missing_params: validation.missing
                         };
                     }
@@ -2197,9 +2182,6 @@ I need to write a file using write_to_file.
     }
 
 
-
-
-
     /**
      * Compresse l'historique via un LLM rapide quand la fenêtre de contexte sature.
      * Inspiré de Claude Code /compact : on résume la conversation passée,
@@ -2224,6 +2206,40 @@ I need to write a file using write_to_file.
         // Messages à compresser : tout entre system prompt et les 2 derniers
         const messagesToCompress = history.slice(1, -2);
         if (messagesToCompress.length === 0) return history;
+
+        // [SOTA] Populate the fileStateCache with files about to be pruned
+        try {
+            const toolCallArgsMap = new Map<string, string>();
+            for (const msg of messagesToCompress) {
+                if (msg.role === 'assistant' && Array.isArray(msg.tool_calls)) {
+                    for (const call of msg.tool_calls) {
+                        if (call.function && (call.function.name === 'read_file' || call.function.name === 'edit_file')) {
+                            try {
+                                const args = typeof call.function.arguments === 'string'
+                                    ? JSON.parse(call.function.arguments)
+                                    : call.function.arguments;
+                                const filePath = args.file_path || (args.files && args.files[0]?.path);
+                                if (filePath && call.id) {
+                                    toolCallArgsMap.set(call.id, filePath);
+                                }
+                            } catch (err) {
+                                // Ignore parsing errors
+                            }
+                        }
+                    }
+                } else if (msg.role === 'tool' && msg.name === 'read_file' && msg.tool_call_id) {
+                    const filePath = toolCallArgsMap.get(msg.tool_call_id);
+                    if (filePath) {
+                        const absolutePath = resolve(process.cwd(), filePath);
+                        const rawContent = msg.content || '';
+                        const contentWithoutHashes = stripHashes(rawContent);
+                        fileStateCache.recordFile(absolutePath, contentWithoutHashes);
+                    }
+                }
+            }
+        } catch (cacheErr: any) {
+            console.error('[ContextManager] ⚠️ Erreur lors du peuplement du fileStateCache:', cacheErr.message);
+        }
 
         const textToCompress = JSON.stringify(messagesToCompress);
 
@@ -2266,7 +2282,7 @@ ${textToCompress}`
                 ...lastInteraction
             ];
         } catch (e: any) {
-            console.error(`[ContextManager] ❌ Échec compression IA, fallback troncature:`, e.message);
+            console.error('[ContextManager] ❌ Échec compression IA, fallback troncature:', e.message);
             return this._optimizeHistory(history);
         }
     }
@@ -2342,7 +2358,7 @@ ${textToCompress}`
                     // [REHYDRATION] Restaure le contexte Redis pour que le Planner soit prêt
                     await actionMemory.rehydrateAction(action.chatId, action.id);
 
-                    // On ne change PAS le status DB ici pour garder la persistance "active" 
+                    // On ne change PAS le status DB ici pour garder la persistance "active"
                     // tant que la tâche n'est pas finie ou annulée.
 
                     // WHY: Rehydrating state is not enough. The bot will wait silently for user input.
@@ -2384,7 +2400,7 @@ ${textToCompress}`
             await this.transport.sendText(chatId, "⚠️ *Configuration Requise*\nJe n'ai pas de feuille de route pour ce groupe. Quel est notre objectif ici ? (Répondez pour définir la mission)");
 
             // On pourrait créer une entrée temporaire pour marquer qu'on a demandé
-            await db.upsertGroupConfig(chatId, { description: "EN_ATTENTE" });
+            await db.upsertGroupConfig(chatId, { description: 'EN_ATTENTE' });
         }
     }
 
@@ -2428,6 +2444,7 @@ ${textToCompress}`
             message,
             chatId: message.chatId,
             sender: message.sender,
+            conversationHistory: message.conversationHistory, // Cloned history for sub-agents / forks
             // sourceChannel is used by PermissionManager.askPermission to route
             // the sandbox permission prompt to the correct transport adapter.
             sourceChannel: message.sourceChannel ?? (message.chatId?.endsWith('@g.us') ? 'group' : 'private'),
@@ -2498,7 +2515,7 @@ ${textToCompress}`
                 success: false,
                 message: `ERREUR_OUTIL [${errorType}]: L'outil "${name}" a échoué - ${userFriendlyMsg}. Tu peux expliquer à l'utilisateur que cette fonctionnalité est temporairement indisponible et continuer avec les autres demandes.`,
                 error: execErr.message,
-                errorType: errorType,
+                errorType,
                 gracefulDegradation: true
             };
         }
@@ -2509,7 +2526,7 @@ ${textToCompress}`
      */
     async _generateRefusal(originalMessage: string, reason: string) {
         // Construction du prompt via le template chargé
-        let prompt = refusalPrompt
+        const prompt = refusalPrompt
             .replace('{{name}}', persona.name)
             .replace('{{reason}}', reason)
             .replace('{{role}}', persona.role || 'Assistant');
@@ -2687,9 +2704,9 @@ ${textToCompress}`
                     const fakeContext = {
                         isGroup: true,
                         chatId: groupId,
-                        text: "SYSTEM_WAKEUP_PROTOCOL: The group is inactive. Generate a thought to wake it up politely or with a controversial topic about tech/AI.",
-                        senderName: "SYSTEM",
-                        sender: "system@internal"
+                        text: 'SYSTEM_WAKEUP_PROTOCOL: The group is inactive. Generate a thought to wake it up politely or with a controversial topic about tech/AI.',
+                        senderName: 'SYSTEM',
+                        sender: 'system@internal'
                     };
 
                     await this._handleMessage({ data: fakeContext } as BotEvent);
@@ -2884,7 +2901,7 @@ ${textToCompress}`
         // Message d'adieu
         const goodbye = shutdownUntil
             ? `😴 Je fais une sieste de ${durationStr}. À tout à l'heure !`
-            : `👋 Arrêt du système demandé. Au revoir !`;
+            : '👋 Arrêt du système demandé. Au revoir !';
 
         await this.transport.sendText(chatId, goodbye);
 
@@ -2932,7 +2949,7 @@ ${textToCompress}`
             // Anniversaire
             { regex: /(?:mon anniversaire|je suis né|née le)\s+(?:le\s+)?(\d{1,2}\s+\w+)/i, key: 'anniversaire' },
             // Préférence couleur
-            { regex: /(?:ma couleur préférée|j'aime le|j'adore le)\s+(bleu|rouge|vert|jaune|noir|blanc|rose|violet|orange)/i, key: 'couleur_préférée' },
+            { regex: /(?:ma couleur préférée|j'aime le|j'adore le)\s+(bleu|rouge|vert|jaune|noir|blanc|rose|violet|orange)/i, key: 'couleur_préférée' }
         ];
 
         const extractedFacts = [];

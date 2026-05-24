@@ -90,11 +90,11 @@ export class GeminiTTSAdapter {
 
         const body = {
             contents: [{
-                role: "user",
+                role: 'user',
                 parts: [{ text: finalText }]
             }],
             generationConfig: {
-                responseModalities: ["AUDIO"],
+                responseModalities: ['AUDIO'],
                 speechConfig: {
                     voiceConfig: {
                         prebuiltVoiceConfig: {
@@ -176,7 +176,7 @@ export class GeminiTTSAdapter {
             format: 'ogg',
             filePath: outputOggPath,
             provider: 'gemini',
-            model: model
+            model
         };
     }
 

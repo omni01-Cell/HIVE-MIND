@@ -56,8 +56,8 @@ export class MinimaxTTSAdapter {
         const voiceId = options.voice_id || this.config.voice_id || 'female-01';
 
         const payload = {
-            model: model,
-            text: text,
+            model,
+            text,
             stream: false,
             voice_setting: {
                 voice_id: voiceId,
@@ -68,7 +68,7 @@ export class MinimaxTTSAdapter {
             audio_setting: {
                 sample_rate: 32000,
                 bitrate: 128000,
-                format: "mp3",
+                format: 'mp3',
                 channel: 1
             }
         };

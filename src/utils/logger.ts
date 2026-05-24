@@ -4,14 +4,14 @@
  */
 
 const COLORS = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m'
+    reset: '\x1b[0m',
+    bright: '\x1b[1m',
+    red: '\x1b[31m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m'
 } as const;
 
 export type LogLevel = 'INFO' | '✓' | 'WARN' | 'ERROR' | 'DEBUG';
@@ -24,9 +24,9 @@ interface DebugState {
 }
 
 const debugState: DebugState = {
-  enabled: process.env.DEBUG === 'true',
-  categories: new Set(['all']),
-  verbose: false,
+    enabled: process.env.DEBUG === 'true',
+    categories: new Set(['all']),
+    verbose: false
 };
 
 // ============================================================
@@ -34,50 +34,50 @@ const debugState: DebugState = {
 // ============================================================
 
 export class Logger {
-  private prefix: string;
+    private prefix: string;
 
-  constructor(prefix: string = '') {
-    this.prefix = prefix;
-  }
+    constructor(prefix: string = '') {
+        this.prefix = prefix;
+    }
 
-  private _timestamp(): string {
-    return new Date().toISOString().substring(11, 19);
-  }
+    private _timestamp(): string {
+        return new Date().toISOString().substring(11, 19);
+    }
 
-  private _format(level: LogLevel, color: string, message: any, ...args: any[]): void {
-    const ts = this._timestamp();
-    const pre = this.prefix ? `[${this.prefix}]` : '';
-    console.log(`${color}[${ts}] ${level}${pre}${COLORS.reset}`, message, ...args);
-  }
+    private _format(level: LogLevel, color: string, message: any, ...args: any[]): void {
+        const ts = this._timestamp();
+        const pre = this.prefix ? `[${this.prefix}]` : '';
+        console.log(`${color}[${ts}] ${level}${pre}${COLORS.reset}`, message, ...args);
+    }
 
-  public info(message: any, ...args: any[]): void {
-    this._format('INFO', COLORS.cyan, message, ...args);
-  }
+    public info(message: any, ...args: any[]): void {
+        this._format('INFO', COLORS.cyan, message, ...args);
+    }
 
-  public success(message: any, ...args: any[]): void {
-    this._format('✓', COLORS.green, message, ...args);
-  }
+    public success(message: any, ...args: any[]): void {
+        this._format('✓', COLORS.green, message, ...args);
+    }
 
-  public warn(message: any, ...args: any[]): void {
-    this._format('WARN', COLORS.yellow, message, ...args);
-  }
+    public warn(message: any, ...args: any[]): void {
+        this._format('WARN', COLORS.yellow, message, ...args);
+    }
 
-  public error(message: any, ...args: any[]): void {
-    this._format('ERROR', COLORS.red, message, ...args);
-  }
+    public error(message: any, ...args: any[]): void {
+        this._format('ERROR', COLORS.red, message, ...args);
+    }
 
-  public debug(category: DebugCategory, message: any, ...args: any[]): void {
-    if (!debugState.enabled) return;
-    if (!debugState.categories.has('all') && !debugState.categories.has(category)) return;
+    public debug(category: DebugCategory, message: any, ...args: any[]): void {
+        if (!debugState.enabled) return;
+        if (!debugState.categories.has('all') && !debugState.categories.has(category)) return;
 
-    const ts = this._timestamp();
-    const pre = this.prefix ? `[${this.prefix}]` : '';
-    console.log(`${COLORS.magenta}[${ts}] DEBUG:${category.toUpperCase()}${pre}${COLORS.reset}`, message, ...args);
-  }
+        const ts = this._timestamp();
+        const pre = this.prefix ? `[${this.prefix}]` : '';
+        console.log(`${COLORS.magenta}[${ts}] DEBUG:${category.toUpperCase()}${pre}${COLORS.reset}`, message, ...args);
+    }
 
-  public child(prefix: string): Logger {
-    return new Logger(this.prefix ? `${this.prefix}:${prefix}` : prefix);
-  }
+    public child(prefix: string): Logger {
+        return new Logger(this.prefix ? `${this.prefix}:${prefix}` : prefix);
+    }
 }
 
 // ============================================================
@@ -85,36 +85,36 @@ export class Logger {
 // ============================================================
 
 export function enableDebug(): boolean {
-  debugState.enabled = true;
-  console.log('✅ [Logger] Mode DEBUG activé');
-  return true;
+    debugState.enabled = true;
+    console.log('✅ [Logger] Mode DEBUG activé');
+    return true;
 }
 
 export function disableDebug(): boolean {
-  debugState.enabled = false;
-  console.log('🔇 [Logger] Mode DEBUG désactivé');
-  return true;
+    debugState.enabled = false;
+    console.log('🔇 [Logger] Mode DEBUG désactivé');
+    return true;
 }
 
 export function setDebugCategories(categories: DebugCategory[]): boolean {
-  debugState.categories = new Set(categories);
-  console.log(`🔧 [Logger] Catégories actives: ${categories.join(', ')}`);
-  return true;
+    debugState.categories = new Set(categories);
+    console.log(`🔧 [Logger] Catégories actives: ${categories.join(', ')}`);
+    return true;
 }
 
 export function resetDebug(): boolean {
-  debugState.enabled = true;
-  debugState.categories = new Set(['all']);
-  console.log('🔄 [Logger] Debug réinitialisé');
-  return true;
+    debugState.enabled = true;
+    debugState.categories = new Set(['all']);
+    console.log('🔄 [Logger] Debug réinitialisé');
+    return true;
 }
 
 export function debugStatus(): { enabled: boolean; categories: DebugCategory[]; verbose: boolean } {
-  return {
-    enabled: debugState.enabled,
-    categories: Array.from(debugState.categories),
-    verbose: debugState.verbose
-  };
+    return {
+        enabled: debugState.enabled,
+        categories: Array.from(debugState.categories),
+        verbose: debugState.verbose
+    };
 }
 
 // ============================================================
@@ -128,46 +128,46 @@ interface RedisClient {
 }
 
 export async function clearGroupCache(redis: RedisClient | null, groupJid: string): Promise<{ success: boolean; error?: string }> {
-  if (!redis) return { success: false, error: 'Redis non disponible' };
+    if (!redis) return { success: false, error: 'Redis non disponible' };
 
-  try {
-    const keys = [`group:${groupJid}:meta`, `group:${groupJid}:context`];
-    for (const key of keys) await redis.del(key);
-    console.log(`✅ [Logger] Cache groupe effacé: ${groupJid}`);
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
+    try {
+        const keys = [`group:${groupJid}:meta`, `group:${groupJid}:context`];
+        for (const key of keys) await redis.del(key);
+        console.log(`✅ [Logger] Cache groupe effacé: ${groupJid}`);
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
 }
 
 export async function flushRedisCache(redis: RedisClient | null): Promise<{ success: boolean; keysDeleted?: number; error?: string }> {
-  if (!redis) return { success: false, error: 'Redis non disponible' };
+    if (!redis) return { success: false, error: 'Redis non disponible' };
 
-  try {
-    const groupKeys = await redis.keys('group:*');
-    const userKeys = await redis.keys('user:*');
-    const wmKeys = await redis.keys('wm:*');
-    const allKeys = [...groupKeys, ...userKeys, ...wmKeys];
+    try {
+        const groupKeys = await redis.keys('group:*');
+        const userKeys = await redis.keys('user:*');
+        const wmKeys = await redis.keys('wm:*');
+        const allKeys = [...groupKeys, ...userKeys, ...wmKeys];
 
-    for (const key of allKeys) await redis.del(key);
-    console.log(`✅ [Logger] Cache Redis nettoyé: ${allKeys.length} clés`);
-    return { success: true, keysDeleted: allKeys.length };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
+        for (const key of allKeys) await redis.del(key);
+        console.log(`✅ [Logger] Cache Redis nettoyé: ${allKeys.length} clés`);
+        return { success: true, keysDeleted: allKeys.length };
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
 }
 
 export async function redisStats(redis: RedisClient | null): Promise<{ groups?: number; users?: number; workingMemory?: number; total?: number; error?: string }> {
-  if (!redis) return { error: 'Redis non disponible' };
+    if (!redis) return { error: 'Redis non disponible' };
 
-  try {
-    const groups = (await redis.keys('group:*')).length;
-    const users = (await redis.keys('user:*')).length;
-    const wm = (await redis.keys('wm:*')).length;
-    return { groups, users, workingMemory: wm, total: groups + users + wm };
-  } catch (err: any) {
-    return { error: err.message };
-  }
+    try {
+        const groups = (await redis.keys('group:*')).length;
+        const users = (await redis.keys('user:*')).length;
+        const wm = (await redis.keys('wm:*')).length;
+        return { groups, users, workingMemory: wm, total: groups + users + wm };
+    } catch (err: any) {
+        return { error: err.message };
+    }
 }
 
 // ============================================================
@@ -180,43 +180,43 @@ interface AdminService {
 }
 
 export async function refreshAdminCache(adminService: AdminService | null): Promise<boolean> {
-  if (!adminService) return false;
-  try {
-    await adminService.refresh();
-    console.log('✅ [Logger] Cache admin rafraîchi');
-    return true;
-  } catch (err: any) {
-    console.error('❌ [Logger] Erreur refreshAdminCache:', err.message);
-    return false;
-  }
+    if (!adminService) return false;
+    try {
+        await adminService.refresh();
+        console.log('✅ [Logger] Cache admin rafraîchi');
+        return true;
+    } catch (err: any) {
+        console.error('❌ [Logger] Erreur refreshAdminCache:', err.message);
+        return false;
+    }
 }
 
 export async function systemStatus(services: { redis?: RedisClient; adminService?: AdminService } = {}): Promise<any> {
-  const status: any = {
-    timestamp: new Date().toISOString(),
-    debug: debugStatus(),
-    services: {}
-  };
+    const status: any = {
+        timestamp: new Date().toISOString(),
+        debug: debugStatus(),
+        services: {}
+    };
 
-  if (services.redis) {
-    try {
-      await services.redis.ping();
-      status.services.redis = '✅ OK';
-      status.redisStats = await redisStats(services.redis);
-    } catch {
-      status.services.redis = '❌ Déconnecté';
+    if (services.redis) {
+        try {
+            await services.redis.ping();
+            status.services.redis = '✅ OK';
+            status.redisStats = await redisStats(services.redis);
+        } catch {
+            status.services.redis = '❌ Déconnecté';
+        }
     }
-  }
 
-  if (services.adminService) {
-    status.services.adminCache = `${services.adminService.getCacheSize()} admin(s)`;
-  }
+    if (services.adminService) {
+        status.services.adminCache = `${services.adminService.getCacheSize()} admin(s)`;
+    }
 
-  return status;
+    return status;
 }
 
 export function help(): void {
-  console.log(`
+    console.log(`
 📋 COMMANDES LOGGER DISPONIBLES:
 
 🔧 DEBUG:

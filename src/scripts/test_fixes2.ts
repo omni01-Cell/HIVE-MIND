@@ -21,21 +21,21 @@ async function testSendFile() {
 
     const context = {
         transport: mockTransport,
-        chatId: "123@c.us",
-        sourceChannel: "cli"
+        chatId: '123@c.us',
+        sourceChannel: 'cli'
     };
 
-    console.log("Testing Markdown file...");
-    fs.writeFileSync("test.md", "# Hello");
-    await sysInteraction.execute({ filePath: "test.md" }, context, "send_file");
+    console.log('Testing Markdown file...');
+    fs.writeFileSync('test.md', '# Hello');
+    await sysInteraction.execute({ filePath: 'test.md' }, context, 'send_file');
     console.log(sentMedia);
-    fs.unlinkSync("test.md");
+    fs.unlinkSync('test.md');
 
-    console.log("\nTesting PDF file...");
-    fs.writeFileSync("test.pdf", "%PDF-");
-    await sysInteraction.execute({ filePath: "test.pdf" }, context, "send_file");
+    console.log('\nTesting PDF file...');
+    fs.writeFileSync('test.pdf', '%PDF-');
+    await sysInteraction.execute({ filePath: 'test.pdf' }, context, 'send_file');
     console.log(sentMedia);
-    fs.unlinkSync("test.pdf");
+    fs.unlinkSync('test.pdf');
 }
 
 testSendFile().catch(console.error);

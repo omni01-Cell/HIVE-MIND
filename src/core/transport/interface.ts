@@ -36,7 +36,7 @@ export const TransportInterface = {
 
     /**
      * Envoie un média (image, vidéo, audio, document)
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {Buffer|string} media - Buffer ou URL
      * @param {Object} options - { type, caption, filename }
      * @returns {Promise<Object>}
@@ -47,9 +47,9 @@ export const TransportInterface = {
 
     /**
      * Envoie une note vocale
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {Buffer|string} audio - Buffer ou URL/Path
-     * @param {Object} options 
+     * @param {Object} options
      */
     sendVoiceNote: async (chatId: any, audio: any, options: any = {}) => {
         throw new Error('sendVoiceNote() must be implemented');
@@ -57,10 +57,10 @@ export const TransportInterface = {
 
     /**
      * Envoie un fichier
-     * @param {string} chatId 
-     * @param {string} filePath 
-     * @param {string} fileName 
-     * @param {string} caption 
+     * @param {string} chatId
+     * @param {string} filePath
+     * @param {string} fileName
+     * @param {string} caption
      */
     sendFile: async (chatId: any, filePath: any, fileName: any, caption: any = '') => {
         throw new Error('sendFile() must be implemented');
@@ -68,8 +68,8 @@ export const TransportInterface = {
 
     /**
      * Envoie un sticker
-     * @param {string} chatId 
-     * @param {Buffer} stickerBuffer 
+     * @param {string} chatId
+     * @param {Buffer} stickerBuffer
      * @returns {Promise<Object>}
      */
     sendSticker: async (chatId: any, stickerBuffer: any) => {
@@ -78,7 +78,7 @@ export const TransportInterface = {
 
     /**
      * Récupère les métadonnées d'un groupe
-     * @param {string} groupId 
+     * @param {string} groupId
      * @returns {Promise<Object>} - { name, participants, admins, ... }
      */
     getGroupMetadata: async (groupId: any) => {
@@ -87,7 +87,7 @@ export const TransportInterface = {
 
     /**
      * Télécharge un média depuis un message
-     * @param {Object} message 
+     * @param {Object} message
      * @returns {Promise<Buffer>}
      */
     downloadMedia: async (message: any) => {
@@ -112,7 +112,7 @@ export const TransportInterface = {
 
     /**
      * Met à jour la présence (typing, online, etc.)
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {string} presence - 'composing' | 'paused' | 'available'
      */
     setPresence: async (chatId: any, presence: any) => {
@@ -121,9 +121,9 @@ export const TransportInterface = {
 
     /**
      * Envoie une réponse structurée (Universal Response)
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {Object} response - { markdown, plainText, visual, data }
-     * @param {Object} options 
+     * @param {Object} options
      */
     sendUniversalResponse: async (chatId, response, options = {}) => {
         throw new Error('sendUniversalResponse() must be implemented');
@@ -131,8 +131,8 @@ export const TransportInterface = {
 
     /**
      * Vérifie si un utilisateur est admin d'un groupe
-     * @param {string} groupId 
-     * @param {string} userId 
+     * @param {string} groupId
+     * @param {string} userId
      * @returns {Promise<boolean>}
      */
     isAdmin: async (groupId: any, userId: any) => {
@@ -141,9 +141,9 @@ export const TransportInterface = {
 
     /**
      * Envoie une réaction (emoji) sur un message
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {Object} key - Clé du message cible
-     * @param {string} emoji 
+     * @param {string} emoji
      * @returns {Promise<boolean>}
      */
     sendReaction: async (chatId: any, key: any, emoji: any) => {
@@ -153,7 +153,7 @@ export const TransportInterface = {
 
 /**
  * Valide qu'un objet implémente l'interface TransportInterface
- * @param {Object} transport 
+ * @param {Object} transport
  * @returns {boolean}
  */
 export function validateTransport(transport: any) {

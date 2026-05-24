@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { collapseMessages } from '../../../utils/collapseReadSearch.js';
 
 interface Message {
     id: string;
@@ -24,10 +25,12 @@ export const App: React.FC<AppProps> = ({ onMessage, messages }) => {
         onMessage(text);
     };
 
+    const renderedMessages = collapseMessages(messages);
+
     return (
         <Box flexDirection="column" padding={1}>
             <Box flexDirection="column" marginBottom={1}>
-                {messages.map((msg) => (
+                {renderedMessages.map((msg) => (
                     <Box key={msg.id} flexDirection="row">
                         <Text color={msg.sender === 'user' ? 'blue' : 'green'} bold>
                             {msg.sender === 'user' ? 'YOU > ' : 'HIVE-MIND > '}
@@ -36,7 +39,7 @@ export const App: React.FC<AppProps> = ({ onMessage, messages }) => {
                     </Box>
                 ))}
             </Box>
-            
+
             <Box>
                 <Text color="cyan" bold>
                     YOU {'>'}{' '}

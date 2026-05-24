@@ -19,7 +19,7 @@ export const HD_VOICES = {
     KORE: 'Kore',           // Doux, empathique
     ACHERNAR: 'Achernar',   // Profond, autoritaire
     ACHIRD: 'Achird',       // Clair, articulé
-    ALGENIB: 'Algenib',     // Chaleureux, amical
+    ALGENIB: 'Algenib'     // Chaleureux, amical
     // ... autres voix disponibles via l'API
 };
 
@@ -189,7 +189,7 @@ export class GeminiLiveProvider {
     async _waitForResponse(queue: any, session: any) {
         const audioParts = [];
         let transcription = '';
-        let emotion: any = null;
+        const emotion: any = null;
         let done = false;
 
         while (!done) {

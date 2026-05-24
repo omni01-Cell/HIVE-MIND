@@ -8,7 +8,7 @@ import { tryParseJson } from '../utils/ResponseFormatEnforcer.js';
 export const socialCueWatcher = {
     /**
      * Analyse le "pouls" d'un groupe (sentiment, vélocité, thèmes)
-     * @param {string} chatId 
+     * @param {string} chatId
      * @returns {Promise<Object>} Analyse { sentiment, conflict, unansweredQuestion }
      */
     async analyzeGroupPulse(chatId: any) {
@@ -126,7 +126,7 @@ Example 2:
 
     /**
      * Décide si le bot doit intervenir
-     * @param {Object} analysis 
+     * @param {Object} analysis
      * @returns {boolean}
      */
     shouldIntervene(analysis: any) {
@@ -148,8 +148,8 @@ Example 2:
 
     /**
      * Génère une pensée proactive contextuelle
-     * @param {string} chatId 
-     * @param {Object} analysis 
+     * @param {string} chatId
+     * @param {Object} analysis
      * @returns {Promise<string|null>}
      */
     async generateProactiveThought(chatId: any, analysis: any) {

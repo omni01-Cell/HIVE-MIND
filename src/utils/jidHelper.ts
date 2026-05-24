@@ -18,20 +18,20 @@ export type JidType = 'phone' | 'lid' | 'group' | 'unknown';
  * @returns Partie numérique uniquement
  */
 export function extractNumericId(jid: string | null | undefined): string {
-  if (!jid) return '';
-  // Supprimer tout après @ et avant : (pour les device IDs)
-  return jid.split('@')[0].split(':')[0];
+    if (!jid) return '';
+    // Supprimer tout après @ et avant : (pour les device IDs)
+    return jid.split('@')[0].split(':')[0];
 }
 
 /**
  * Normalise un JID vers le format standard s.whatsapp.net
- * @param jid 
- * @returns 
+ * @param jid
+ * @returns
  */
 export function normalizeJid(jid: string | null | undefined): string {
-  if (!jid) return '';
-  const num = extractNumericId(jid);
-  return num ? `${num}@s.whatsapp.net` : '';
+    if (!jid) return '';
+    const num = extractNumericId(jid);
+    return num ? `${num}@s.whatsapp.net` : '';
 }
 
 /**
@@ -39,108 +39,108 @@ export function normalizeJid(jid: string | null | undefined): string {
  * Compare les parties numériques avec tolérance pour les sous-chaînes
  */
 export function jidMatch(jid1: string | null | undefined, jid2: string | null | undefined): boolean {
-  if (!jid1 || !jid2) return false;
+    if (!jid1 || !jid2) return false;
 
-  const num1 = extractNumericId(jid1);
-  const num2 = extractNumericId(jid2);
+    const num1 = extractNumericId(jid1);
+    const num2 = extractNumericId(jid2);
 
-  if (!num1 || !num2) return false;
+    if (!num1 || !num2) return false;
 
-  // Match exact
-  if (num1 === num2) return true;
+    // Match exact
+    if (num1 === num2) return true;
 
-  // Match par inclusion (pour les LID qui peuvent être des sous-parties)
-  if (num1.includes(num2) || num2.includes(num1)) return true;
+    // Match par inclusion (pour les LID qui peuvent être des sous-parties)
+    if (num1.includes(num2) || num2.includes(num1)) return true;
 
-  return false;
+    return false;
 }
 
 /**
  * Trouve un match dans une Map de JID
  */
 export function findInJidMap<T>(
-  searchJid: string | null | undefined, 
-  jidMap: Map<string, T>
+    searchJid: string | null | undefined,
+    jidMap: Map<string, T>
 ): { key: string; value: T } | null {
-  if (!searchJid || !jidMap) return null;
+    if (!searchJid || !jidMap) return null;
 
-  // Essai 1: Match exact (rapide)
-  if (jidMap.has(searchJid)) {
-    return { key: searchJid, value: jidMap.get(searchJid)! };
-  }
-
-  // Essai 2: Match par numéro
-  for (const [key, value] of jidMap) {
-    if (jidMatch(searchJid, key)) {
-      return { key, value };
+    // Essai 1: Match exact (rapide)
+    if (jidMap.has(searchJid)) {
+        return { key: searchJid, value: jidMap.get(searchJid)! };
     }
-  }
 
-  return null;
+    // Essai 2: Match par numéro
+    for (const [key, value] of jidMap) {
+        if (jidMatch(searchJid, key)) {
+            return { key, value };
+        }
+    }
+
+    return null;
 }
 
 /**
  * Trouve un match dans un tableau d'objets contenant des JID
  */
 export function findInJidArray<T extends Record<string, any>>(
-  searchJid: string | null | undefined, 
-  array: T[], 
-  jidField: keyof T = 'jid' as keyof T
+    searchJid: string | null | undefined,
+    array: T[],
+    jidField: keyof T = 'jid' as keyof T
 ): T | null {
-  if (!searchJid || !array) return null;
+    if (!searchJid || !array) return null;
 
-  for (const item of array) {
-    if (jidMatch(searchJid, item[jidField] as string)) {
-      return item;
+    for (const item of array) {
+        if (jidMatch(searchJid, item[jidField] as string)) {
+            return item;
+        }
     }
-  }
 
-  return null;
+    return null;
 }
 
 /**
  * Vérifie si un JID est dans une liste (Set ou Array de JID)
  */
 export function jidInList(jid: string | null | undefined, jidList: string[] | Set<string>): boolean {
-  if (!jid || !jidList) return false;
+    if (!jid || !jidList) return false;
 
-  const list = Array.isArray(jidList) ? jidList : Array.from(jidList);
-  return list.some((item: any) => jidMatch(jid, item));
+    const list = Array.isArray(jidList) ? jidList : Array.from(jidList);
+    return list.some((item: any) => jidMatch(jid, item));
 }
 
 /**
  * Identifie le type de JID
  */
 export function getJidType(jid: string | null | undefined): JidType {
-  if (!jid) return 'unknown';
-  if (jid.endsWith('@g.us')) return 'group';
-  if (jid.endsWith('@lid')) return 'lid';
-  if (jid.endsWith('@s.whatsapp.net')) return 'phone';
-  return 'unknown';
+    if (!jid) return 'unknown';
+    if (jid.endsWith('@g.us')) return 'group';
+    if (jid.endsWith('@lid')) return 'lid';
+    if (jid.endsWith('@s.whatsapp.net')) return 'phone';
+    return 'unknown';
 }
 
 /**
  * Formate un JID pour l'affichage utilisateur (sans exposer le JID brut)
  */
 export function formatForDisplay(jid: string | null | undefined, name: string | null = null): string {
-  if (name && name !== 'Inconnu') {
-    return name;
-  }
-  // Fallback: afficher le numéro masqué
-  const num = extractNumericId(jid);
-  if (num.length > 6) {
-    return `+${num.substring(0, 3)}***${num.substring(num.length - 3)}`;
-  }
-  return num || 'Inconnu';
+    if (name && name !== 'Inconnu') {
+        return name;
+    }
+    // Fallback: afficher le numéro masqué
+    const num = extractNumericId(jid);
+    if (num.length > 6) {
+        return `+${num.substring(0, 3)}***${num.substring(num.length - 3)}`;
+    }
+    return num || 'Inconnu';
 }
 
 export default {
-  extractNumericId,
-  normalizeJid,
-  jidMatch,
-  findInJidMap,
-  findInJidArray,
-  jidInList,
-  getJidType,
-  formatForDisplay,
+    extractNumericId,
+    normalizeJid,
+    jidMatch,
+    findInJidMap,
+    findInJidArray,
+    jidInList,
+    getJidType,
+    formatForDisplay
 };

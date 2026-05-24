@@ -486,13 +486,13 @@ class ProviderRouter {
                 // Sinon (fallback ou famille différente), on cherche les modèles 'chat' de cette famille
                 // Smart Router V2: On exclut les modèles purement audio/live pour préserver les quotas texte
                 const excludedTypes = ['live_api', 'tts', 'stt', 'audio', 'transcription'];
-                
+
                 const rawModels = familyConfig?.modeles
                     ?.filter((m: any) => {
                         if (!m.types?.includes('chat')) return false;
                         // Ne pas bloquer si isServiceRecipe est true (services internes peuvent bypasser le filtre)
                         if (options.isServiceRecipe) return true;
-                        
+
                         const hasExcluded = m.types.some((t: string) => excludedTypes.includes(t));
                         return !hasExcluded;
                     })
@@ -511,7 +511,7 @@ class ProviderRouter {
                 while (attempt < maxKeyAttempts) {
                     attempt++;
                     let keyIndex = 1;
-                    
+
                     try {
                         // [ZERO-429] Smart Router V2 : Recherche proactive de clé avec multi-rotation
                         if (quotaManager) {
@@ -527,7 +527,7 @@ class ProviderRouter {
                         // ── KKT Lagrangian Throttling ──
                         const runtimeInstance = await getRuntime();
                         const lambda = runtimeInstance.finOps.calculateLambda();
-                        let activeOptions = { ...options };
+                        const activeOptions = { ...options };
                         if (lambda > 0.05) {
                             const baseMaxTokens = options.max_tokens || 4096;
                             const throttledMaxTokens = Math.max(200, Math.floor(baseMaxTokens * (1 - lambda)));
@@ -591,7 +591,7 @@ class ProviderRouter {
                             // On bloque spécifiquement CE modèle, pas toute la famille, et pour cette CLÉ
                             await quotaManager.recordQuotaExceeded(model, waitTime, keyIndex);
                             console.log(`[Router] 🛡️ Modèle ${model} (Clé ${keyIndex}) bloqué pour ${waitTime}s (Feedback Temps Réel)`);
-                            
+
                             // 🔄 INNER RETRY LOOP : Si on a d'autres clés pour CE modèle, on réessaie immédiatement !
                             if (attempt < maxKeyAttempts) {
                                 console.log(`[Router] 🔄 Basculement transparent sur la clé suivante pour ${model}...`);
@@ -609,7 +609,7 @@ class ProviderRouter {
                 } // End while (attempt < maxKeyAttempts)
 
                 if (modelFailedNonQuota && this._isCooldownActive(family)) break; // Famille morte, on sort du for modelsToTry
-                
+
                 // Si on était en mode "Famille Forcée" (contexte) mais que le modèle a échoué sur toutes les clés
                 // On doit briser le cadenas et permettre d'essayer les autres familles
                 if (availableFamilies.length === 1 && options.family) {
@@ -617,7 +617,7 @@ class ProviderRouter {
 
                     // Pour sécuriser, on va relancer chat() sans la contrainte 'family'
                     if (!options.isFallback) {
-                        console.log(`[Router] 🔄 Redirection vers les autres providers...`);
+                        console.log('[Router] 🔄 Redirection vers les autres providers...');
                         return this.chat(messages, { ...options, family: undefined, isFallback: true });
                     }
                 }
@@ -656,7 +656,7 @@ class ProviderRouter {
         if (quotaManager) {
             const isAvailable = await quotaManager.isModelAvailable(modelId);
             if (!isAvailable) {
-                // Fallback vers secondaire si primaire épuisé ? 
+                // Fallback vers secondaire si primaire épuisé ?
                 // Pour l'instant on fail, ou on pourrait implémenter une logique de fallback complexe ici.
                 // Essayons le fallback configuré
                 const fallbackConfig = modelsConfig.reglages_generaux?.embeddings?.fallback;
@@ -709,7 +709,6 @@ class ProviderRouter {
     }
 
 
-
     /**
      * Liste les familles disponibles
      */
@@ -748,7 +747,6 @@ class ProviderRouter {
         }
         return stats;
     }
-
 
 
     /**

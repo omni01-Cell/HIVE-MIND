@@ -29,8 +29,8 @@ export class FairnessQueue {
 
     /**
      * Ajoute un événement à la file spécifique de son chatId
-     * @param {string} chatId 
-     * @param {QueueEvent} event 
+     * @param {string} chatId
+     * @param {QueueEvent} event
      * @param {boolean} isPremium - Si vrai, saute la file (ex: Admin DM)
      */
     enqueue(chatId: string, event: QueueEvent, isPremium: boolean = false) {

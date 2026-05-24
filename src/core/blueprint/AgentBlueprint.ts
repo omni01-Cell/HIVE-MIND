@@ -7,19 +7,19 @@ export const AgenticFormatSchema = z.object({
     metadata: z.object({
         id: z.string(),
         name: z.string(),
-        version: z.string(),
+        version: z.string()
     }),
     mindos: z.object({
-        drives: z.array(z.string()), // Core drives/motivations
+        drives: z.array(z.string()) // Core drives/motivations
     }),
     action_space: z.object({
-        allowed_tools: z.array(z.string()), // Tool whitelist
+        allowed_tools: z.array(z.string()) // Tool whitelist
     }),
     constraints: z.object({
         read_only_fs: z.boolean().default(false),
         max_budget_usd: z.number().default(1.0),
-        max_iterations: z.number().default(10),
-    }),
+        max_iterations: z.number().default(10)
+    })
 });
 
 export type AgentBlueprint = z.infer<typeof AgenticFormatSchema>;

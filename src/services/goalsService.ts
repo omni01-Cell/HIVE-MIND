@@ -73,7 +73,7 @@ export const goalsService = {
 
     /**
      * Marque un objectif comme "en cours"
-     * @param {string} goalId 
+     * @param {string} goalId
      */
     async markInProgress(goalId: any) {
         try {
@@ -90,7 +90,7 @@ export const goalsService = {
 
     /**
      * Marque un objectif comme complété
-     * @param {string} goalId 
+     * @param {string} goalId
      * @param {string} result - Résultat de l'exécution
      */
     async completeGoal(goalId: any, result: any) {
@@ -112,7 +112,7 @@ export const goalsService = {
 
     /**
      * Annule un objectif
-     * @param {string} goalId 
+     * @param {string} goalId
      */
     async cancelGoal(goalId: any) {
         try {
@@ -194,7 +194,7 @@ export const goalsService = {
 
     /**
      * Récupère tous les objectifs d'un chat
-     * @param {string} chatId 
+     * @param {string} chatId
      * @returns {Promise<Array>}
      */
     async getChatGoals(chatId: any) {
@@ -215,7 +215,7 @@ export const goalsService = {
 
     /**
      * Parse une durée relative (ex: "2h", "1d", "tomorrow 9am") en timestamp
-     * @param {string} duration 
+     * @param {string} duration
      * @returns {Date}
      */
     parseDuration(duration: any) {

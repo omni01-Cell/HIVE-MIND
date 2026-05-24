@@ -109,7 +109,7 @@ describe('validateToolArgs', () => {
             expect(result.missing).toEqual([]);
         });
 
-        it('should return valid when all required params are present with extras', () => {
+        it('should return invalid when unexpected parameters are provided (strict mode)', () => {
             // Arrange
             const toolCall = {
                 function: {
@@ -122,8 +122,9 @@ describe('validateToolArgs', () => {
             const result = validateToolArgs(toolCall.function.name, toolCall.function.arguments, ALL_TOOLS);
 
             // Assert
-            expect(result.valid).toBe(true);
+            expect(result.valid).toBe(false);
             expect(result.missing).toEqual([]);
+            expect(result.formattedError).toContain("An unexpected parameter 'extra' was provided");
         });
 
         it('should return valid when tool has no required array', () => {
@@ -140,7 +141,7 @@ describe('validateToolArgs', () => {
 
             // Assert
             expect(result.valid).toBe(true);
-            expect(result.schema).toBeNull();
+            expect(result.schema).toEqual({ ...SEND_MESSAGE_DEF.function.parameters, additionalProperties: false });
         });
 
         it('should return valid when tool is not found in definitions', () => {
@@ -177,7 +178,7 @@ describe('validateToolArgs', () => {
             // Assert
             expect(result.valid).toBe(false);
             expect(result.missing).toEqual(['name']);
-            expect(result.schema).toEqual(TEST_GENERIC_DEF.function.parameters);
+            expect(result.schema).toEqual({ ...TEST_GENERIC_DEF.function.parameters, additionalProperties: false });
         });
 
         it('should detect multiple missing required params', () => {

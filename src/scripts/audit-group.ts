@@ -60,7 +60,7 @@ async function main() {
                 console.log('\n📊 --- RAPPORT COMPARATIF --- 📊\n');
 
                 // A. TITRE
-                console.log(`TITRE:`);
+                console.log('TITRE:');
                 console.log(`  Live: ${liveMeta.subject}`);
                 console.log(`  Cache: ${redisMeta.name || 'N/A'}`);
                 console.log(`  DB:    ${dbMeta?.name || 'N/A'}`);
@@ -68,12 +68,12 @@ async function main() {
                 // B. PARTICIPANTS
                 const liveCount = liveMeta.participants.length;
                 const redisCount = redisMeta.member_count || 'N/A';
-                console.log(`\nPARTICIPANTS:`);
+                console.log('\nPARTICIPANTS:');
                 console.log(`  Live: ${liveCount}`);
                 console.log(`  Cache: ${redisCount}`);
 
                 // C. IDENTITÉS (JID vs LID)
-                console.log(`\nANALYSE DES IDs (Live):`);
+                console.log('\nANALYSE DES IDs (Live):');
                 const hasJid = liveMeta.participants.some(p => p.jid);
                 const hasLidInId = liveMeta.participants.some(p => p.id.endsWith('@lid'));
                 const realJids = liveMeta.participants.filter(p => p.jid || p.id.includes('@s.whatsapp.net')).length;
@@ -85,7 +85,7 @@ async function main() {
                 // D. FONDATEUR
                 const liveOwner = liveMeta.owner || liveMeta.subjectOwner;
                 const dbOwner = dbMeta?.founder_jid;
-                console.log(`\nFONDATEUR:`);
+                console.log('\nFONDATEUR:');
                 console.log(`  Live (Brut): ${liveOwner}`);
                 console.log(`  Redis:       ${redisMeta.owner || 'N/A'}`);
                 console.log(`  DB (JID):    ${dbOwner || 'NULL (en attente resolution)'}`);

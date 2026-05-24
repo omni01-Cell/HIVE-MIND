@@ -36,7 +36,7 @@ export default {
     async execute(args: unknown, context: any, toolName?: string) {
         const searchArgs = args as DuckDuckSearchArgs;
         const { query, num_results = 3 } = searchArgs;
-        
+
         console.log(`[DuckDuckSearch] 🦆 DuckDuckGo Search: "${query}"`);
 
         return await this.searchDuckDuckGo(query, num_results);
@@ -47,21 +47,21 @@ export default {
      */
     async searchDuckDuckGo(query: string, num_results: number) {
         try {
-            const url = "https://html.duckduckgo.com/html/";
-            const body = new URLSearchParams({ q: query, b: "" }); // POST form data
+            const url = 'https://html.duckduckgo.com/html/';
+            const body = new URLSearchParams({ q: query, b: '' }); // POST form data
 
             const response = await fetch(url, {
-                method: "POST",
+                method: 'POST',
                 headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-                    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-                    "Upgrade-Insecure-Requests": "1",
-                    "Origin": "https://html.duckduckgo.com",
-                    "Referer": "https://html.duckduckgo.com/"
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Origin': 'https://html.duckduckgo.com',
+                    'Referer': 'https://html.duckduckgo.com/'
                 },
-                body: body
+                body
             });
 
             if (!response.ok) throw new Error(`DDG Status ${response.status}`);
@@ -79,15 +79,15 @@ export default {
             while ((match = resultRegex.exec(html)) !== null && count < num_results) {
                 const link = match[1];
                 // Clean remaining HTML tags in title/snippet
-                const title = match[2].replace(/<[^>]+>/g, "").trim();
-                const snippet = match[3].replace(/<[^>]+>/g, "").trim();
+                const title = match[2].replace(/<[^>]+>/g, '').trim();
+                const snippet = match[3].replace(/<[^>]+>/g, '').trim();
 
                 results.push(`Title: ${title}\nLink: ${link}\nExcerpt: ${snippet}\n---`);
                 count++;
             }
 
             if (results.length === 0) {
-                return { success: false, message: "No results found on DuckDuckGo." };
+                return { success: false, message: 'No results found on DuckDuckGo.' };
             }
 
             return {

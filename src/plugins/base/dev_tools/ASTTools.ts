@@ -16,11 +16,11 @@ import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { permissionManager } from '../../../core/security/PermissionManager.js';
-import { 
-    getFileSkeleton, 
-    getFunction, 
+import {
+    getFileSkeleton,
+    getFunction,
     findSymbolReferences,
-    LANGUAGE_MAP 
+    LANGUAGE_MAP
 } from '../../../services/ast/index.js';
 import { hashLines } from '../../../services/anchor/index.js';
 
@@ -37,7 +37,7 @@ export default {
             type: 'function',
             function: {
                 name: 'get_file_skeleton',
-                description: `Extracts the structure of a source file (function signatures, classes, methods, interfaces) WITHOUT implementation bodies. Returns a compact skeleton ~80-95% smaller than the full file. Use this tool BEFORE read_file to understand a file's structure. Supports: TypeScript, JavaScript, Python.`,
+                description: 'Extracts the structure of a source file (function signatures, classes, methods, interfaces) WITHOUT implementation bodies. Returns a compact skeleton ~80-95% smaller than the full file. Use this tool BEFORE read_file to understand a file\'s structure. Supports: TypeScript, JavaScript, Python.',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -55,7 +55,7 @@ export default {
             type: 'function',
             function: {
                 name: 'get_function',
-                description: `Extracts the complete code of a specific function or method by its name. Supports "Class.method" notation for class methods. Returns ONLY the targeted function's code with its hash-stable anchors. ~90% more efficient than read_file for a specific target.`,
+                description: 'Extracts the complete code of a specific function or method by its name. Supports "Class.method" notation for class methods. Returns ONLY the targeted function\'s code with its hash-stable anchors. ~90% more efficient than read_file for a specific target.',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -76,7 +76,7 @@ export default {
             type: 'function',
             function: {
                 name: 'find_symbol_references',
-                description: `Finds all AST references of a symbol (function, class, variable) across a set of files. More accurate than grep as it uses AST (no false positives in comments or strings). Returns definitions and/or usages.`,
+                description: 'Finds all AST references of a symbol (function, class, variable) across a set of files. More accurate than grep as it uses AST (no false positives in comments or strings). Returns definitions and/or usages.',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -116,8 +116,8 @@ export default {
                     const results: string[] = [];
 
                     for (const filePath of paths) {
-                        const absolutePath = path.isAbsolute(filePath) 
-                            ? filePath 
+                        const absolutePath = path.isAbsolute(filePath)
+                            ? filePath
                             : path.resolve(permissionManager.sandboxDir, filePath);
 
                         if (!fs.existsSync(absolutePath)) {
@@ -155,8 +155,8 @@ export default {
                         return { success: false, message: 'Parameters "file_path" and "function_name" required.' };
                     }
 
-                    const absolutePath = path.isAbsolute(file_path) 
-                        ? file_path 
+                    const absolutePath = path.isAbsolute(file_path)
+                        ? file_path
                         : path.resolve(permissionManager.sandboxDir, file_path);
 
                     if (!fs.existsSync(absolutePath)) {
@@ -165,9 +165,9 @@ export default {
 
                     const ext = path.extname(absolutePath).toLowerCase().slice(1);
                     if (!LANGUAGE_MAP[ext]) {
-                        return { 
-                            success: false, 
-                            message: `Unsupported language: .${ext}. Supported: ${Object.keys(LANGUAGE_MAP).join(', ')}` 
+                        return {
+                            success: false,
+                            message: `Unsupported language: .${ext}. Supported: ${Object.keys(LANGUAGE_MAP).join(', ')}`
                         };
                     }
 
@@ -206,8 +206,8 @@ export default {
                     // Expand directories to file lists
                     const filePaths: string[] = [];
                     for (const searchPath of search_paths) {
-                        const absolutePath = path.isAbsolute(searchPath) 
-                            ? searchPath 
+                        const absolutePath = path.isAbsolute(searchPath)
+                            ? searchPath
                             : path.resolve(permissionManager.sandboxDir, searchPath);
 
                         if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {

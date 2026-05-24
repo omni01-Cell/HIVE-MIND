@@ -11,8 +11,8 @@ import * as fs from 'fs';
 class PersistentShell extends EventEmitter {
     private shell: ChildProcessWithoutNullStreams | null = null;
     private outputBuffer: string = '';
-    private currentCwd: string = process.env.SANDBOX_DIR 
-        ? path.resolve(process.env.SANDBOX_DIR) 
+    private currentCwd: string = process.env.SANDBOX_DIR
+        ? path.resolve(process.env.SANDBOX_DIR)
         : path.resolve(process.cwd(), 'Sandbox1');
     private sentinel: string = '__HIVE_MIND_SHELL_DONE__';
     private isExecuting: boolean = false;
@@ -58,22 +58,22 @@ class PersistentShell extends EventEmitter {
             const parts = this.outputBuffer.split(this.sentinel);
             const output = parts[0].trim();
             const remainder = parts[1] || '';
-            
+
             // Extract exit code and pwd (format: __SENTINEL__127|/path/to/cwd)
             const exitCodeMatch = remainder.match(/^(\d+)\|(.+)/);
             const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1]) : 0;
             const newCwd = exitCodeMatch ? exitCodeMatch[2].trim() : this.currentCwd;
             this.currentCwd = newCwd;
-            
+
             // Clean buffer for next execution
             this.outputBuffer = '';
             this.isExecuting = false;
-            
+
             this.executionPromise.resolve({
                 stdout: output,
-                exitCode: exitCode
+                exitCode
             });
-            
+
             this.executionPromise = null;
         }
     }

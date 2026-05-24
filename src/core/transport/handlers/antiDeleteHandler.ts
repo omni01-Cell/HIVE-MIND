@@ -22,7 +22,7 @@ export class AntiDeleteHandler {
             // 🛡️ APPROCHE 1: Stockage SYNCHRONE rapide (Redis local)
             // On ne bloque pas sur les opérations longues
             await this._fastStoreMessage(normalizedMsg);
-            
+
             // 🛡️ APPROCHE 2: Logging asynchrone (non-bloquant)
             // Métadonnées et tracking dans un second temps
             setImmediate(async () => {
@@ -58,7 +58,7 @@ export class AntiDeleteHandler {
             mediaType: normalizedMsg.type,
             timestamp: normalizedMsg.timestamp
         };
-        
+
         // Store sync rapide
         await workingMemory.storeMessage(normalizedMsg.chatId, normalizedMsg.id, minimalData);
     }
@@ -88,7 +88,7 @@ export class AntiDeleteHandler {
                     if (!storedMsg) continue;
 
                     this.logger.log(`[AntiDelete] 🗑️ Message supprimé détecté de ${storedMsg.senderName}`);
-                    
+
                     // Logger dans Supabase si nécessaire via workingMemory
                     await workingMemory.trackDeletedMessage(chatId, messageId, storedMsg);
 

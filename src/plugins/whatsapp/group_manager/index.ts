@@ -348,8 +348,8 @@ export default {
 
             case 'whatsapp_warn_user':
                 const warningResult = await filterProcessor._executeAction(
-                    transport, chatId, args.user_jid, 
-                    { keyword: 'Manual warn', severity: 'warn', id: 'manual' }, 
+                    transport, chatId, args.user_jid,
+                    { keyword: 'Manual warn', severity: 'warn', id: 'manual' },
                     { shouldAct: true, reason: args.reason || 'Admin manual warning' },
                     await configDB.get(chatId)
                 );
@@ -761,7 +761,7 @@ export default {
                 const [keywordPart, rulePart] = content.split('|').map((s: any) => s.trim());
                 const keyword = keywordPart.replace(/["']/g, '');
                 const rule = rulePart?.replace(/r[eè]gle:?\s*/i, '').replace(/["']/g, '');
-                
+
                 return { name: 'whatsapp_filter_add', args: { keyword, rule } };
             }
             if (subCmd === 'list') return { name: 'whatsapp_filter_list', args: {} };
@@ -896,7 +896,7 @@ export default {
 
             return {
                 success: true,
-                message: message
+                message
             };
         } catch (error: any) {
             return { success: false, message: `Error setting mission: ${error.message}` };
@@ -905,9 +905,9 @@ export default {
 
     /**
      * Analyzes mission text and executes immediate actions
-     * @param {string} chatId 
-     * @param {string} missionText 
-     * @param {Object} context 
+     * @param {string} chatId
+     * @param {string} missionText
+     * @param {Object} context
      */
     async _analyzeAndExecuteMission(chatId: any, missionText: any, context: any) {
         console.log(`[GroupManager] Mission analysis: "${missionText}"`);
@@ -1059,13 +1059,13 @@ export default {
             const missionAuthor = group?.founder_jid;
 
             const stats = [
-                `📊 **Group Statistics**`,
-                ``,
+                '📊 **Group Statistics**',
+                '',
                 `👥 Admins (Bot): ${adminCount}`,
                 `⚠️ Active Warnings: ${warningCount || 0}`,
                 `🔍 Configured Filters: ${filterCount || 0}`,
-                ``,
-                `📝 **Mission & Goals**`,
+                '',
+                '📝 **Mission & Goals**',
                 `> Title: ${group?.name || 'N/A'}`,
                 `> Author: ${missionAuthor ? '@' + missionAuthor.split('@')[0] : 'Unknown'}`,
                 `> Desc: ${group?.bot_mission ? (group.bot_mission.length > 50 ? group.bot_mission.substring(0, 47) + '...' : group.bot_mission) : 'Not defined'}`
@@ -1187,8 +1187,8 @@ export default {
             const memberCount = metadata.participants.length;
 
             const info = [
-                `📋 **Group Info**`,
-                ``,
+                '📋 **Group Info**',
+                '',
                 `📛 Name: ${metadata.subject}`,
                 `📝 Description: ${metadata.desc || 'None'}`,
                 `👥 Members: ${memberCount}`,

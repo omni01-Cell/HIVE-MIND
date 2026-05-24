@@ -18,9 +18,9 @@ import { Command } from 'commander';
 // --- CONFIGURATION ---
 const program = new Command();
 program
-  .option('-a, --account <type>', 'Account type (admin or user)', 'user')
-  .option('-t, --target <jid>', 'Target bot JID')
-  .parse(process.argv);
+    .option('-a, --account <type>', 'Account type (admin or user)', 'user')
+    .option('-t, --target <jid>', 'Target bot JID')
+    .parse(process.argv);
 
 const options = program.opts();
 const accountType = options.account;
@@ -35,7 +35,7 @@ let defaultAdminJid = '2250160276924@s.whatsapp.net';
 try {
     const credsBot = JSON.parse(fs.readFileSync('./session/creds.json', 'utf-8'));
     if (credsBot?.me?.id) defaultBotJid = credsBot.me.id.split(':')[0] + '@s.whatsapp.net';
-    
+
     const credsUser = JSON.parse(fs.readFileSync('./session_test_user/creds.json', 'utf-8'));
     if (credsUser?.me?.id) defaultUserJid = credsUser.me.id.split(':')[0] + '@s.whatsapp.net';
 
@@ -69,7 +69,7 @@ async function connectToWhatsApp() {
         sock.ev.on('connection.update', (update) => {
             const { connection, lastDisconnect, qr } = update;
             if (qr) qrcode.generate(qr, { small: true });
-            
+
             if (connection === 'close') {
                 const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
                 if (shouldReconnect) connectToWhatsApp().then(resolve).catch(reject);
@@ -84,7 +84,7 @@ async function connectToWhatsApp() {
 
 async function sendAndWaitForResponse(sock: any, jid: string, content: any, expectedMatch: (msg: proto.IWebMessageInfo) => boolean, timeoutMs: number = 30000): Promise<boolean> {
     console.log(`[TEST-RUNNER] 📤 Sending to ${jid}:`, typeof content === 'string' ? content : content.text);
-    
+
     if (typeof content === 'string') {
         await sock.sendMessage(jid, { text: content });
     } else {
@@ -101,11 +101,11 @@ async function sendAndWaitForResponse(sock: any, jid: string, content: any, expe
             for (const msg of upsert.messages) {
                 if (msg.key.remoteJid === jid && !msg.key.fromMe) {
                     const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-                    if (msg.message?.audioMessage) console.log(`\n[TEST-RUNNER] 📥 Received Voice Note`);
-                    else if (msg.message?.documentMessage) console.log(`\n[TEST-RUNNER] 📥 Received Document`);
-                    else if (msg.message?.imageMessage) console.log(`\n[TEST-RUNNER] 📥 Received Image`);
+                    if (msg.message?.audioMessage) console.log('\n[TEST-RUNNER] 📥 Received Voice Note');
+                    else if (msg.message?.documentMessage) console.log('\n[TEST-RUNNER] 📥 Received Document');
+                    else if (msg.message?.imageMessage) console.log('\n[TEST-RUNNER] 📥 Received Image');
                     else if (text && !shouldFilter(text)) console.log(`\n[TEST-RUNNER] 📥 Received:\n---\n${text}\n---`);
-                    
+
                     if (expectedMatch(msg)) {
                         clearTimeout(timeout);
                         sock.ev.off('messages.upsert', messageListener);
@@ -134,7 +134,7 @@ async function run() {
 
         let success = await sendAndWaitForResponse(
             sock, defaultBotJid,
-            "/ping",
+            '/ping',
             (msg) => {
                 const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
                 return text.toLowerCase().includes('pong');
@@ -150,15 +150,15 @@ async function run() {
         console.log('\n=========================================');
         console.log('🧪 STAGE 1: GROUP MANAGER PLUGIN TESTS');
         console.log('=========================================');
-        
+
         console.log('[TEST-RUNNER] 👥 Creating test group with Bot and User...');
-        const groupInfo = await sock.groupCreate("HIVE-MIND E2E Plugins", [defaultBotJid, defaultUserJid]);
+        const groupInfo = await sock.groupCreate('HIVE-MIND E2E Plugins', [defaultBotJid, defaultUserJid]);
         console.log(`[TEST-RUNNER] ✅ Group created: ${groupInfo.id}`);
-        
+
         await delay(3000);
 
         console.log('[TEST-RUNNER] 👑 Promoting Bot to admin...');
-        await sock.groupParticipantsUpdate(groupInfo.id, [defaultBotJid], "promote");
+        await sock.groupParticipantsUpdate(groupInfo.id, [defaultBotJid], 'promote');
         console.log('[TEST-RUNNER] ✅ Bot promoted to admin.');
 
         await delay(2000);
@@ -179,9 +179,9 @@ async function run() {
         console.log('\n--- Test 1.2: Ban User ---');
         success = await sendAndWaitForResponse(
             sock, groupInfo.id,
-            { 
-                text: `@${defaultBotJid.split('@')[0]} ban @${defaultUserJid.split('@')[0]} pour test automatisé`, 
-                mentions: [defaultBotJid, defaultUserJid] 
+            {
+                text: `@${defaultBotJid.split('@')[0]} ban @${defaultUserJid.split('@')[0]} pour test automatisé`,
+                mentions: [defaultBotJid, defaultUserJid]
             },
             (msg) => {
                 const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
@@ -213,7 +213,7 @@ async function run() {
         console.log('\n--- Test 2.2: Shopping ---');
         success = await sendAndWaitForResponse(
             sock, defaultBotJid,
-            "Cherche moi un clavier mécanique logitech sur amazon avec le plugin shopping",
+            'Cherche moi un clavier mécanique logitech sur amazon avec le plugin shopping',
             (msg) => {
                 const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
                 return text.toLowerCase().includes('logitech') || text.toLowerCase().includes('clavier');
@@ -237,7 +237,7 @@ async function run() {
         console.log('\n--- Test 2.4: Visual Reporter ---');
         success = await sendAndWaitForResponse(
             sock, defaultBotJid,
-            "Génère un rapport pdf de nos derniers échanges avec le plugin visual reporter.",
+            'Génère un rapport pdf de nos derniers échanges avec le plugin visual reporter.',
             (msg) => {
                 // Should return a document (PDF)
                 return !!msg.message?.documentMessage;
@@ -249,7 +249,7 @@ async function run() {
         console.log('\n--- Test 2.5: Send Email ---');
         success = await sendAndWaitForResponse(
             sock, defaultBotJid,
-            "Envoie un email de test à lender926@gmail.com en disant que le test E2E fonctionne parfaitement.",
+            'Envoie un email de test à lender926@gmail.com en disant que le test E2E fonctionne parfaitement.',
             (msg) => {
                 const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
                 return text.toLowerCase().includes('envoyé') || text.toLowerCase().includes('succès');

@@ -59,7 +59,7 @@ describe('Event System Unit Tests', () => {
     describe('EventInboxService', () => {
         it('should push events to the queue and publish to eventBus', async () => {
             const publishSpy = jest.spyOn(eventBus, 'publish');
-            
+
             await eventInboxService.pushEvent('test_type', 'test_source', { foo: 'bar' });
 
             const queue = await eventInboxService.getUnreadEvents();
@@ -81,9 +81,9 @@ describe('Event System Unit Tests', () => {
         it('should clear the queue correctly', async () => {
             await eventInboxService.pushEvent('t1', 's1', {});
             await eventInboxService.pushEvent('t2', 's2', {});
-            
+
             expect(await eventInboxService.getUnreadEvents()).toHaveLength(2);
-            
+
             await eventInboxService.clearInbox();
             expect(await eventInboxService.getUnreadEvents()).toHaveLength(0);
         });
@@ -92,12 +92,12 @@ describe('Event System Unit Tests', () => {
     describe('MailboxWatcher', () => {
         it('should start interval and push simulation events periodically', async () => {
             const pushSpy = jest.spyOn(eventInboxService, 'pushEvent').mockResolvedValue(undefined as any);
-            
+
             mailboxWatcher.start();
-            
+
             // Fast-forward 30 minutes
             await jest.advanceTimersByTimeAsync(30 * 60 * 1000);
-            
+
             expect(pushSpy).toHaveBeenCalledWith(
                 'system_notification',
                 'cron_simulator',
@@ -107,13 +107,13 @@ describe('Event System Unit Tests', () => {
 
         it('should stop interval on stop()', async () => {
             const pushSpy = jest.spyOn(eventInboxService, 'pushEvent').mockResolvedValue(undefined as any);
-            
+
             mailboxWatcher.start();
             mailboxWatcher.stop();
-            
+
             // Fast-forward 30 minutes
             await jest.advanceTimersByTimeAsync(30 * 60 * 1000);
-            
+
             expect(pushSpy).not.toHaveBeenCalled();
         });
     });

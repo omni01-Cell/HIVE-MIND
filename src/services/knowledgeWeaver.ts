@@ -5,8 +5,8 @@ import { tryParseJson } from '../utils/ResponseFormatEnforcer.js';
 export const knowledgeWeaver = {
     /**
      * Analyse un message ou une conversation pour extraire du savoir structuré
-     * @param {string} chatId 
-     * @param {string} text 
+     * @param {string} chatId
+     * @param {string} text
      */
     async weave(chatId: any, text: any) {
         if (!text || text.length < 10) return;

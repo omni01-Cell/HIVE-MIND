@@ -115,13 +115,13 @@ export default {
         }
 
         if (!apiKey || apiKey.startsWith('YOUR_') || apiKey === 'fc-YOUR-API-KEY' || apiKey === 'fc-YOUR-API-KEY-HERE') {
-            return { success: false, message: "⚠️ Firecrawl API key not configured. Please set FIRECRAWL_API_KEY in your environment variables." };
+            return { success: false, message: '⚠️ Firecrawl API key not configured. Please set FIRECRAWL_API_KEY in your environment variables.' };
         }
 
-        const baseUrl = "https://api.firecrawl.dev/v2";
+        const baseUrl = 'https://api.firecrawl.dev/v2';
         const headers = {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json"
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
         };
 
         const ensureAbsoluteUrl = (u: unknown) => {
@@ -162,8 +162,8 @@ export default {
 
     async apiFetch(url: string, options: any) {
         const res = await fetch(url, options);
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
             throw new Error(`API error: non-JSON response (Status ${res.status}). Service potentially unavailable.`);
         }
         return await res.json();
@@ -174,13 +174,13 @@ export default {
         const json = await this.apiFetch(`${baseUrl}/scrape`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ url, formats: ["markdown"] })
+            body: JSON.stringify({ url, formats: ['markdown'] })
         });
-        if (!json.success) throw new Error(json.error || "Scraping failed");
-        
-        const markdown = json.data.markdown || "";
-        const truncated = markdown.length > 25000 ? markdown.substring(0, 25000) + "\n\n[...Content truncated due to length...]" : markdown;
-        
+        if (!json.success) throw new Error(json.error || 'Scraping failed');
+
+        const markdown = json.data.markdown || '';
+        const truncated = markdown.length > 25000 ? markdown.substring(0, 25000) + '\n\n[...Content truncated due to length...]' : markdown;
+
         return {
             success: true,
             llmOutput: truncated,
@@ -197,7 +197,7 @@ export default {
             headers,
             body: JSON.stringify({ url, limit })
         });
-        if (!startJson.success) throw new Error(startJson.error || "Crawl start failed");
+        if (!startJson.success) throw new Error(startJson.error || 'Crawl start failed');
 
         const jobId = startJson.id;
         return await this.pollJob(jobId, 'crawl', headers, baseUrl, transport, chatId);
@@ -210,15 +210,15 @@ export default {
             headers,
             body: JSON.stringify({ url })
         });
-        if (!json.success) throw new Error(json.error || "Mapping failed");
-        
+        if (!json.success) throw new Error(json.error || 'Mapping failed');
+
         const maxLinks = 100;
         const total = json.links?.length || 0;
         let linksDisp = json.links || [];
         if (linksDisp.length > maxLinks) {
             linksDisp = linksDisp.slice(0, maxLinks);
         }
-        
+
         const linksTxt = linksDisp.map((l: any) => `- ${l.url} (${l.title || 'untitled'})`).join('\n');
         let msg = `🗺️ Sitemap for ${url} (${total} links found):\n\n${linksTxt}`;
         if (total > maxLinks) {
@@ -232,9 +232,9 @@ export default {
         const json = await this.apiFetch(`${baseUrl}/search`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ query, limit, scrapeOptions: { formats: ["markdown"] } })
+            body: JSON.stringify({ query, limit, scrapeOptions: { formats: ['markdown'] } })
         });
-        if (!json.success) throw new Error(json.error || "Search failed");
+        if (!json.success) throw new Error(json.error || 'Search failed');
 
         if (!Array.isArray(json.data)) {
             return { success: true, message: `🔍 Search result for "${query}": No results found or invalid response format.` };
@@ -242,7 +242,7 @@ export default {
 
         const results = json.data.map((d: any) => {
             let md = d.markdown || 'No markdown content';
-            if (md.length > 5000) md = md.substring(0, 5000) + "...";
+            if (md.length > 5000) md = md.substring(0, 5000) + '...';
             return `### ${d.title}\nURL: ${d.url}\n\n${md}\n---`;
         }).join('\n\n');
         return { success: true, message: `🔍 Firecrawl results for "${query}":\n\n${results}` };
@@ -250,14 +250,14 @@ export default {
 
     async handleExtract(urls: string[], prompt: string, headers: any, baseUrl: string, transport: any, chatId?: string) {
         console.log(`[CrawlFire] 🧪 Extracting from ${urls?.length} URLs`);
-        if (transport) await transport.sendText(chatId, `🧪 Extracting structured data...`);
+        if (transport) await transport.sendText(chatId, '🧪 Extracting structured data...');
 
         const json = await this.apiFetch(`${baseUrl}/extract`, {
             method: 'POST',
             headers,
             body: JSON.stringify({ urls, prompt })
         });
-        if (!json.success) throw new Error(json.error || "Extraction failed");
+        if (!json.success) throw new Error(json.error || 'Extraction failed');
 
         if (json.data && json.status === 'completed') {
             return { success: true, message: `🧪 Extracted data:\n\n\`\`\`json\n${JSON.stringify(json.data, null, 2)}\n\`\`\`` };
@@ -282,7 +282,7 @@ export default {
                     const count = json.data?.length || 0;
                     let combinedMarkdown = json.data?.map((d: any) => `#### ${d.metadata?.title || d.metadata?.sourceURL}\n${d.markdown || ''}`).join('\n\n---\n\n') || '';
                     if (combinedMarkdown.length > 30000) {
-                        combinedMarkdown = combinedMarkdown.substring(0, 30000) + "\n\n[...Content truncated due to length...]";
+                        combinedMarkdown = combinedMarkdown.substring(0, 30000) + '\n\n[...Content truncated due to length...]';
                     }
                     return { success: true, message: `✅ Crawl finished (${count} pages found).\n\n${combinedMarkdown}\n\n[Job ID: ${jobId}]` };
                 } else {

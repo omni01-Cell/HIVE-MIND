@@ -319,7 +319,7 @@ export default {
             if (entries.length === 0) {
                 return {
                     success: true,
-                    message: `NO_FACTS: I haven't memorized any information for this user yet.`
+                    message: 'NO_FACTS: I haven\'t memorized any information for this user yet.'
                 };
             }
 

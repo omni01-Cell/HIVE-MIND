@@ -9,7 +9,7 @@ export {
     getFunction,
     findSymbolReferences,
     type SymbolDefinition,
-    type SymbolReference,
+    type SymbolReference
 } from './TreeSitterService.js';
 
 export { LANGUAGE_MAP } from './queries.js';

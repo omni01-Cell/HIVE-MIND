@@ -3,7 +3,7 @@ import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 // Mock imports
 jest.unstable_mockModule('../../../providers/index.js', () => ({
     providerRouter: {
-        callServiceRecipe: jest.fn(),
+        callServiceRecipe: jest.fn()
     }
 }));
 
@@ -36,7 +36,7 @@ describe('AIRuntimeInfrastructure', () => {
 
             // Record some usage: let's record enough to consume 50% of the budget ($0.50)
             runtime.finOps.currentSessionCost = 0.50; // budget is 1.0
-            
+
             // At 50% usage: (0.5)^4 = 0.0625
             expect(runtime.finOps.calculateLambda()).toBeCloseTo(0.0625, 4);
 

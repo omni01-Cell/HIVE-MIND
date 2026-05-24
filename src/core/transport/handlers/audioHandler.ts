@@ -56,7 +56,7 @@ export class AudioHandler {
     async _handlePvAudio(msg: any, normalizedMsg: any) {
         const pvAudioDisabled = await workingMemory.isPvAudioDisabled();
         if (pvAudioDisabled) {
-            this.logger.log(`[AudioHandler] ⏭️ Audio PV ignoré (désactivé globalement)`);
+            this.logger.log('[AudioHandler] ⏭️ Audio PV ignoré (désactivé globalement)');
             return null;
         }
 
@@ -84,7 +84,7 @@ export class AudioHandler {
         const mode = groupSettings?.audio_mode || 'mention_only';
 
         if (mode === 'off') {
-            this.logger.log(`[AudioHandler] ⏭️ Audio Groupe ignoré (Mode OFF)`);
+            this.logger.log('[AudioHandler] ⏭️ Audio Groupe ignoré (Mode OFF)');
             return null;
         }
 
@@ -120,12 +120,12 @@ export class AudioHandler {
     async _downloadAudio(msg: any) {
         try {
             return await downloadMediaMessage(
-                msg, 
-                'buffer', 
-                {}, 
-                { 
-                    reuploadRequest: this.transport.sock.updateMediaMessage, 
-                    logger: pino({ level: 'silent' }) 
+                msg,
+                'buffer',
+                {},
+                {
+                    reuploadRequest: this.transport.sock.updateMediaMessage,
+                    logger: pino({ level: 'silent' })
                 }
             );
         } catch (err: any) {

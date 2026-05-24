@@ -88,7 +88,7 @@ export function splitAnchor(rawAnchor: string): { anchor: string; content: strin
     }
     return {
         anchor: rawAnchor.substring(0, delimiterIndex).trim(),
-        content: rawAnchor.substring(delimiterIndex + ANCHOR_DELIMITER.length),
+        content: rawAnchor.substring(delimiterIndex + ANCHOR_DELIMITER.length)
     };
 }
 

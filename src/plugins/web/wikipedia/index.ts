@@ -63,7 +63,7 @@ export default {
 
         try {
             const apiUrl = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
-            
+
             const response = await fetch(apiUrl, {
                 headers: {
                     'User-Agent': 'HiveMindBot/1.0 (https://github.com/railway/hive-mind; contact@example.com)'

@@ -14,7 +14,7 @@ export const discordTransport = {
         }
 
         discordTransport.client = new Client({
-            checkUpdate: false,
+            checkUpdate: false
         });
 
         discordTransport.client.on('ready', () => {
@@ -33,7 +33,7 @@ export const discordTransport = {
                     senderName: msg.author.username,
                     text: msg.content,
                     isGroup: msg.channel.type === 'GUILD_TEXT' || msg.channel.type === 'GROUP_DM',
-                    timestamp: Math.floor(msg.createdTimestamp / 1000),
+                    timestamp: Math.floor(msg.createdTimestamp / 1000)
                     // raw: msg // Optional if needed
                 };
                 discordTransport.messageCallback(messageData);
@@ -75,9 +75,9 @@ export const discordTransport = {
         if (!discordTransport.client) return;
         const channel = await discordTransport.client.channels.fetch(chatId);
         if (channel && channel.isText()) {
-            return await channel.send({ 
+            return await channel.send({
                 content: caption,
-                files: [{ attachment: filePath, name: fileName }] 
+                files: [{ attachment: filePath, name: fileName }]
             });
         }
     },
@@ -125,9 +125,9 @@ export const discordTransport = {
 
     sendUniversalResponse: async (chatId: string, response: any, options: any = {}) => {
         // Discord supports full markdown natively, so we prefer the markdown property
-        let text = response.markdown || response.plainText;
+        const text = response.markdown || response.plainText;
         if (!text) return;
-        
+
         // Split text if it exceeds Discord's 2000 character limit
         if (text.length > 2000) {
             const chunks = text.match(/[\s\S]{1,1990}/g) || [];

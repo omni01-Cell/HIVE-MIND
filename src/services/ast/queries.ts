@@ -123,5 +123,5 @@ export const LANGUAGE_MAP: Record<string, { langName: string; query: string }> =
     tsx: { langName: 'tsx', query: typescriptQuery },
     js:  { langName: 'javascript', query: javascriptQuery },
     jsx: { langName: 'javascript', query: javascriptQuery },
-    py:  { langName: 'python', query: pythonQuery },
+    py:  { langName: 'python', query: pythonQuery }
 };

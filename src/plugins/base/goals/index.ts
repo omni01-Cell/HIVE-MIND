@@ -135,108 +135,108 @@ export default {
         const { goalsService } = await import('../../../services/goalsService.js');
 
         switch (toolName) {
-        case 'create_goal': {
-            const createArgs = args as CreateGoalArgs;
-            const { title, description, executeIn = '1h', waitForUser, waitForKeyword } = createArgs;
+            case 'create_goal': {
+                const createArgs = args as CreateGoalArgs;
+                const { title, description, executeIn = '1h', waitForUser, waitForKeyword } = createArgs;
 
-            // Determine trigger type
-            let triggerType = 'TIME';
-            let triggerEvent: any = null;
-            let triggerCondition: any = {};
-            let executeAt: any = null;
+                // Determine trigger type
+                let triggerType = 'TIME';
+                let triggerEvent: any = null;
+                let triggerCondition: any = {};
+                let executeAt: any = null;
 
-            if (waitForUser || waitForKeyword) {
-                triggerType = 'EVENT';
-                triggerEvent = 'WAIT_FOR_MESSAGE';
-                triggerCondition = {};
-                if (waitForUser) triggerCondition.from_user = waitForUser;
-                if (waitForKeyword) triggerCondition.contains = waitForKeyword;
+                if (waitForUser || waitForKeyword) {
+                    triggerType = 'EVENT';
+                    triggerEvent = 'WAIT_FOR_MESSAGE';
+                    triggerCondition = {};
+                    if (waitForUser) triggerCondition.from_user = waitForUser;
+                    if (waitForKeyword) triggerCondition.contains = waitForKeyword;
 
-                // Set a far date (2099) for events to avoid Time Scheduler triggering
-                executeAt = new Date('2099-12-31T23:59:59Z');
-            } else {
+                    // Set a far date (2099) for events to avoid Time Scheduler triggering
+                    executeAt = new Date('2099-12-31T23:59:59Z');
+                } else {
                 // Time based
-                executeAt = goalsService.parseDuration(executeIn);
-            }
+                    executeAt = goalsService.parseDuration(executeIn);
+                }
 
-            // Create the goal
-            const goal = await goalsService.createGoal({
-                title,
-                description,
-                executeAt,
-                targetChatId: chatId,
-                origin: 'self',
-                triggerType,
-                triggerEvent,
-                triggerCondition
-            });
+                // Create the goal
+                const goal = await goalsService.createGoal({
+                    title,
+                    description,
+                    executeAt,
+                    targetChatId: chatId,
+                    origin: 'self',
+                    triggerType,
+                    triggerEvent,
+                    triggerCondition
+                });
 
-            let validMsg = '';
-            if (triggerType === 'EVENT') {
-                validMsg = `Execution on event: ${waitForUser ? `From "${waitForUser}"` : ''} ${waitForKeyword ? `Containing "${waitForKeyword}"` : ''}`;
-            } else {
-                validMsg = `Scheduled execution: ${executeAt.toLocaleString('en-US')}`;
-            }
+                let validMsg = '';
+                if (triggerType === 'EVENT') {
+                    validMsg = `Execution on event: ${waitForUser ? `From "${waitForUser}"` : ''} ${waitForKeyword ? `Containing "${waitForKeyword}"` : ''}`;
+                } else {
+                    validMsg = `Scheduled execution: ${executeAt.toLocaleString('en-US')}`;
+                }
 
-            return {
-                success: true,
-                message: `✅ Goal created: "${title}"\n${validMsg}\nID: ${goal.id}`
-            };
-        }
-
-        case 'list_goals': {
-            const listArgs = args as ListGoalsArgs;
-            const { status = 'all' } = listArgs;
-            const allGoals = await goalsService.getChatGoals(chatId);
-
-            const filtered = status === 'all'
-                ? allGoals
-                : allGoals.filter((g: any) => g.status === status);
-
-            if (filtered.length === 0) {
                 return {
                     success: true,
-                    message: 'No goals found.'
+                    message: `✅ Goal created: "${title}"\n${validMsg}\nID: ${goal.id}`
                 };
             }
 
-            const list = filtered.map((g: any) =>
-                `- [${g.status}] ${g.title}\n  Execution: ${new Date(g.execute_at).toLocaleString('en-US')}\n  ID: ${g.id}`
-            ).join('\n\n');
+            case 'list_goals': {
+                const listArgs = args as ListGoalsArgs;
+                const { status = 'all' } = listArgs;
+                const allGoals = await goalsService.getChatGoals(chatId);
 
-            return {
-                success: true,
-                message: `📋 Goals (${filtered.length}):\n\n${list}`
-            };
+                const filtered = status === 'all'
+                    ? allGoals
+                    : allGoals.filter((g: any) => g.status === status);
+
+                if (filtered.length === 0) {
+                    return {
+                        success: true,
+                        message: 'No goals found.'
+                    };
+                }
+
+                const list = filtered.map((g: any) =>
+                    `- [${g.status}] ${g.title}\n  Execution: ${new Date(g.execute_at).toLocaleString('en-US')}\n  ID: ${g.id}`
+                ).join('\n\n');
+
+                return {
+                    success: true,
+                    message: `📋 Goals (${filtered.length}):\n\n${list}`
+                };
+            }
+
+            case 'complete_goal': {
+                const completeArgs = args as CompleteGoalArgs;
+                const { goalId, result } = completeArgs;
+                await goalsService.completeGoal(goalId, result);
+
+                return {
+                    success: true,
+                    message: `✅ Goal ${goalId} marked as COMPLETED.`
+                };
+            }
+
+            case 'cancel_goal': {
+                const cancelArgs = args as CancelGoalArgs;
+                const { goalId } = cancelArgs;
+                await goalsService.cancelGoal(goalId);
+
+                return {
+                    success: true,
+                    message: `❌ Goal ${goalId} cancelled.`
+                };
+            }
+
+            default:
+                return {
+                    success: false,
+                    message: 'Unknown tool.'
+                };
         }
-
-        case 'complete_goal': {
-            const completeArgs = args as CompleteGoalArgs;
-            const { goalId, result } = completeArgs;
-            await goalsService.completeGoal(goalId, result);
-
-            return {
-                success: true,
-                message: `✅ Goal ${goalId} marked as COMPLETED.`
-            };
-        }
-
-        case 'cancel_goal': {
-            const cancelArgs = args as CancelGoalArgs;
-            const { goalId } = cancelArgs;
-            await goalsService.cancelGoal(goalId);
-
-            return {
-                success: true,
-                message: `❌ Goal ${goalId} cancelled.`
-            };
-        }
-
-        default:
-            return {
-                success: false,
-                message: 'Unknown tool.'
-            };
     }
-}
 };

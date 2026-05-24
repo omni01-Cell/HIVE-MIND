@@ -7,19 +7,19 @@ describe('AgentBlueprint & BlueprintManager', () => {
             metadata: {
                 id: 'test_agent',
                 name: 'Test Agent',
-                version: '1.0.0',
+                version: '1.0.0'
             },
             mindos: {
-                drives: ['Test drive 1', 'Test drive 2'],
+                drives: ['Test drive 1', 'Test drive 2']
             },
             action_space: {
-                allowed_tools: ['tool_1', 'tool_2'],
+                allowed_tools: ['tool_1', 'tool_2']
             },
             constraints: {
                 read_only_fs: true,
                 max_budget_usd: 0.75,
-                max_iterations: 8,
-            },
+                max_iterations: 8
+            }
         };
 
         const result = AgenticFormatSchema.safeParse(correctData);
@@ -34,13 +34,13 @@ describe('AgentBlueprint & BlueprintManager', () => {
             metadata: {
                 id: 'minimal_agent',
                 name: 'Minimal Agent',
-                version: '0.1',
+                version: '0.1'
             },
             mindos: {
-                drives: [],
+                drives: []
             },
             action_space: {
-                allowed_tools: [],
+                allowed_tools: []
             },
             constraints: {} // Empty constraints to trigger defaults
         };
@@ -57,8 +57,8 @@ describe('AgentBlueprint & BlueprintManager', () => {
     it('should reject blueprint when required fields are missing', () => {
         const badData = {
             metadata: {
-                id: 'bad_agent',
-            },
+                id: 'bad_agent'
+            }
             // Missing mindos, action_space
         };
 
@@ -85,19 +85,19 @@ describe('AgentBlueprint & BlueprintManager', () => {
             metadata: {
                 id: 'ephemeral_agent_123',
                 name: 'Ephemeral Agent',
-                version: '1.0.0',
+                version: '1.0.0'
             },
             mindos: {
-                drives: ['Obey order'],
+                drives: ['Obey order']
             },
             action_space: {
-                allowed_tools: ['tool_x'],
+                allowed_tools: ['tool_x']
             },
             constraints: {
                 read_only_fs: true,
                 max_budget_usd: 0.1,
-                max_iterations: 3,
-            },
+                max_iterations: 3
+            }
         };
 
         const registeredId = blueprintManager.registerEphemeral(ephemeralData);

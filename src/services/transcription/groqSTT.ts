@@ -5,7 +5,7 @@
 // Base URL: https://api.groq.com/openai/v1/audio/transcriptions
 
 import fs from 'fs';
-import FormData from 'form-data'; // Built-in in Node 18+ fetch? No, need manual boundary or fetch-blob/form-data polyfill usually. 
+import FormData from 'form-data'; // Built-in in Node 18+ fetch? No, need manual boundary or fetch-blob/form-data polyfill usually.
 // Actually Node 18+ has native fetch but constructing multipart/form-data for file upload is tricky without a lib or pure construction.
 // Let's use 'fluent-ffmpeg' for conversion if needed, but for upload we need to send the file.
 
@@ -33,8 +33,8 @@ export class GroqTranscriptionService {
         const model = this.config.model || 'whisper-large-v3';
 
         // Construction du Multipart (Node.js native approach usually requires 'form-data' package or Blob/File from buffer)
-        // Since we are in an ES Module env with recent Node, we can use `fetch` with `FormData` if available, 
-        // BUT Node's native FormData is limited. 
+        // Since we are in an ES Module env with recent Node, we can use `fetch` with `FormData` if available,
+        // BUT Node's native FormData is limited.
         // Let's manually construct the body using 'form-data' package if available or just import it.
         // CHECK: package.json didn't list 'form-data'. It's standard to install it or use the one from 'undici' (node built-in).
         // Let's try Node 20+ style 'openAsBlob' (fs) -> FormData.
@@ -48,7 +48,7 @@ export class GroqTranscriptionService {
 
             const transcription = await groq.audio.transcriptions.create({
                 file: fs.createReadStream(filePath),
-                model: model,
+                model,
                 language: this.config.language || 'fr',
                 response_format: 'json'
             });

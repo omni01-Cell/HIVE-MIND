@@ -2,11 +2,11 @@ import { jest, describe, it, expect } from '@jest/globals';
 import { detectResponseDefects, sanitizeResponse } from '../../../utils/responseSanitizer.js';
 
 describe('Response Sanitizer Utility', () => {
-    
+
     describe('Layer 1: detectResponseDefects', () => {
-        
+
         it('should return 0 defects for a clean, natural response with thoughts', () => {
-            const text = `<thought>\nI will use the browser tool.\n</thought>\nHere is what I found on the website.`;
+            const text = '<thought>\nI will use the browser tool.\n</thought>\nHere is what I found on the website.';
             const result = detectResponseDefects(text);
             expect(result.defectCount).toBe(0);
             expect(result.hasNoThoughts).toBe(false);
@@ -16,20 +16,20 @@ describe('Response Sanitizer Utility', () => {
         });
 
         it('should detect missing <thought> tags', () => {
-            const text = `Here is your answer without any reasoning first.`;
+            const text = 'Here is your answer without any reasoning first.';
             const result = detectResponseDefects(text);
             expect(result.hasNoThoughts).toBe(true);
             expect(result.defectCount).toBe(1);
         });
 
         it('should detect leaked tool_code_execution(...) syntax', () => {
-            const text = `<thought>Executing code</thought>\ntool_code_execution(code="""print("Hello")""")`;
+            const text = '<thought>Executing code</thought>\ntool_code_execution(code="""print("Hello")""")';
             const result = detectResponseDefects(text);
             expect(result.hasLeakedToolCalls).toBe(true);
         });
 
         it('should detect leaked JSON tool objects', () => {
-            const text = `<thought>Sending message</thought>\n{"name": "send_message", "arguments": {"text": "hello"}}`;
+            const text = '<thought>Sending message</thought>\n{"name": "send_message", "arguments": {"text": "hello"}}';
             const result = detectResponseDefects(text);
             expect(result.hasJsonToolObject).toBe(true);
         });
@@ -57,18 +57,18 @@ describe('Response Sanitizer Utility', () => {
     });
 
     describe('Layer 2: sanitizeResponse', () => {
-        
+
         const FALLBACK = "J'ai rencontré un problème technique en traitant cette tâche. Peux-tu reformuler ta demande ?";
 
         it('should return text unchanged if no leaked tools exist', () => {
-            const text = "Voici le résultat de ma recherche sur Google.";
+            const text = 'Voici le résultat de ma recherche sur Google.';
             const result = sanitizeResponse(text);
             expect(result.wasModified).toBe(false);
             expect(result.cleaned).toBe(text);
         });
 
         it('should strip triple-quote tool_code_execution', () => {
-            const text = `Je vais le faire.\ntool_code_execution(code="""import os\nprint("hi")""")`;
+            const text = 'Je vais le faire.\ntool_code_execution(code="""import os\nprint("hi")""")';
             const result = sanitizeResponse(text);
             expect(result.wasModified).toBe(true);
             expect(result.strippedItems).toContain('triple_quote_tool_call');
@@ -76,28 +76,28 @@ describe('Response Sanitizer Utility', () => {
         });
 
         it('should strip single-quote code_execution', () => {
-            const text = `code_execution(code="print('hi')")\nTerminé.`;
+            const text = 'code_execution(code="print(\'hi\')")\nTerminé.';
             const result = sanitizeResponse(text);
             expect(result.wasModified).toBe(true);
             expect(result.cleaned).toBe('Terminé.');
         });
 
         it('should strip generic tool_<name>(...)', () => {
-            const text = `tool_browser_screenshot(url="https://example.com")\nRegarde l'image.`;
+            const text = 'tool_browser_screenshot(url="https://example.com")\nRegarde l\'image.';
             const result = sanitizeResponse(text);
             expect(result.wasModified).toBe(true);
             expect(result.cleaned).toBe('Regarde l\'image.');
         });
 
         it('should strip JSON tool objects', () => {
-            const text = `Voici l'action:\n{"name": "browser_screenshot", "arguments": {"url": "x"}}\nC'est fait.`;
+            const text = 'Voici l\'action:\n{"name": "browser_screenshot", "arguments": {"url": "x"}}\nC\'est fait.';
             const result = sanitizeResponse(text);
             expect(result.wasModified).toBe(true);
             expect(result.cleaned).toBe('Voici l\'action:\n\nC\'est fait.');
         });
 
         it('should fallback if entire response is stripped', () => {
-            const text = `tool_code_execution(code="""print(1)""")`;
+            const text = 'tool_code_execution(code="""print(1)""")';
             const result = sanitizeResponse(text);
             expect(result.wasModified).toBe(true);
             expect(result.cleaned).toBe(FALLBACK);
@@ -110,7 +110,7 @@ describe('Response Sanitizer Utility', () => {
             expect(result.wasModified).toBe(true);
             expect(result.cleaned).toBe(FALLBACK);
         });
-        
+
         it('should NOT strip code blocks that are part of an explanation', () => {
             const code = 'a'.repeat(100);
             const text = `Voici comment faire une boucle en Python:\n\`\`\`python\n${code}\n\`\`\`\nC'est très utile !`;

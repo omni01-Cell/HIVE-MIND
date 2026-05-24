@@ -34,7 +34,7 @@ export const cliTransport = {
                     chatId: 'cli_chat',
                     sender: 'cli_user',
                     senderName: 'Admin CLI',
-                    text: text,
+                    text,
                     isGroup: false,
                     isSystem: false,
                     raw: { text }
@@ -70,11 +70,11 @@ export const cliTransport = {
      */
     sendUniversalResponse: async (chatId: string, response: any, options: any = {}) => {
         const text = response.markdown;
-        
+
         // Pour le moment on affiche juste le markdown
         // On pourrait ajouter des couleurs ici si chalk était installé
         console.log(`\n🤖 HIVE-MIND [CLI] >\n${text}\n`);
-        
+
         if (cliTransport.rl) {
             cliTransport.rl.prompt();
         }
@@ -96,7 +96,7 @@ export const cliTransport = {
      * Envoie un sticker
      */
     sendSticker: async (chatId: string, stickerBuffer: any) => {
-        console.log(`\n🤖 HIVE-MIND > [STICKER ENVOYÉ]\n`);
+        console.log('\n🤖 HIVE-MIND > [STICKER ENVOYÉ]\n');
         if (cliTransport.rl) {
             cliTransport.rl.prompt();
         }
@@ -107,7 +107,7 @@ export const cliTransport = {
      * Envoie une note vocale
      */
     sendVoiceNote: async (chatId: string, audio: any) => {
-        console.log(`\n🤖 HIVE-MIND > [VOCAL ENVOYÉ]\n`);
+        console.log('\n🤖 HIVE-MIND > [VOCAL ENVOYÉ]\n');
         if (cliTransport.rl) {
             cliTransport.rl.prompt();
         }

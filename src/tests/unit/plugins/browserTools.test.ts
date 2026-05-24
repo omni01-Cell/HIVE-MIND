@@ -15,8 +15,8 @@ const snapshotMock = jest.fn<BrowserSnapshotFn>();
 jest.unstable_mockModule('../../../services/browser/BrowserService.js', () => ({
     browserService: {
         getSessionName: getSessionNameMock,
-        snapshot: snapshotMock,
-    },
+        snapshot: snapshotMock
+    }
 }));
 
 const { default: BrowserTools } = await import('../../../plugins/base/dev_tools/BrowserTools.js');
@@ -33,7 +33,7 @@ describe('BrowserTools', () => {
             snapshotMock.mockResolvedValue({
                 success: true,
                 snapshot: 'A'.repeat(20_000),
-                refs: {},
+                refs: {}
             });
             const context = { chatId: 'chat_1' };
 

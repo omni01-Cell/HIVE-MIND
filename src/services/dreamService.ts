@@ -60,7 +60,7 @@ Lessons:`;
         // 🛡️ CORRECTION: Retry avec backoff exponentiel
         let retries = 0;
         const maxRetries = 3;
-        
+
         while (retries < maxRetries) {
             try {
                 const response = await providerRouter.callServiceRecipe('DREAM_SERVICE', [
@@ -74,16 +74,16 @@ Lessons:`;
 ${response.content}`;
                     writeFileSync(LESSONS_PATH, newLessons);
                     console.log('[DreamService] ✅ Rêve terminé. Nouvelles leçons enregistrées.');
-                    
+
                     // 🛡️ Sync Embeddings des outils (Audit #20)
                     await this.syncToolEmbeddings().catch(e => console.warn('[DreamService] Embeddings sync failed:', e.message));
-                    
+
                     return; // Succès, on sort
                 }
 
             } catch (error: any) {
                 retries++;
-                
+
                 if (retries < maxRetries) {
                     const delay = 5000 * Math.pow(2, retries); // Backoff: 5s, 10s, 20s
                     console.warn(`[DreamService] ⚠️ Tentative ${retries}/${maxRetries} échouée, retry dans ${delay/1000}s...`);
@@ -100,24 +100,24 @@ ${response.content}`;
      */
     async syncToolEmbeddings() {
         if (!supabase) return;
-        
+
         try {
             console.log('[DreamService] 🔄 Synchronisation des embeddings d\'outils...');
             const { data: tools, error } = await supabase.from('bot_tools').select('name, definition, embedding');
-            
+
             if (error) throw error;
             if (!tools || tools.length === 0) return;
-            
+
             const embeddings = container.get('embeddings');
             if (!embeddings) return;
-            
+
             for (const tool of tools) {
                 // Si pas d'embedding, on le génère
                 if (!tool.embedding) {
                     console.log(`[DreamService] 💎 Génération embedding pour outil: ${tool.name}`);
                     const textToEmbed = `${tool.definition.name}: ${tool.definition.description}`;
                     const vector = await embeddings.embed(textToEmbed);
-                    
+
                     if (vector) {
                         await supabase.from('bot_tools')
                             .update({ embedding: vector })
@@ -137,7 +137,7 @@ ${response.content}`;
         try {
             return readFileSync(LESSONS_PATH, 'utf-8');
         } catch {
-            return "";
+            return '';
         }
     },
 

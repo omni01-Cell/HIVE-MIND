@@ -75,7 +75,8 @@
         "web-tree-sitter": "^0.26.8",
         "wikipedia": "^2.1.2",
         "ws": "^8.19.0",
-        "zod": "^4.3.6"
+        "zod": "^4.3.6",
+        "zod-to-json-schema": "^3.25.2"
     },
     "devDependencies": {
         "@types/cli-progress": "^3.11.6",

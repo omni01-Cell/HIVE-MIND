@@ -1,7 +1,7 @@
 /**
  * Fonctions utilitaires défensives injectées dans le sandbox VM
  * Inspiré de programmatic-tool-calling/lib/sandbox.ts
- * 
+ *
  * WHY: Les résultats des tools sont imprévisibles (objets, arrays, strings, null).
  * Ces helpers permettent au code généré par le LLM de manipuler les données
  * sans crasher sur des cas limites.

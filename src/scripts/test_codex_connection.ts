@@ -19,25 +19,25 @@ function decodeJwt(token: string): any {
 async function refreshIfNeeded(tokens: any) {
     const accessToken = tokens.access_token;
     const refreshToken = tokens.refresh_token;
-    
+
     if (!accessToken) {
         console.log('Pas d\'access token, refresh requis.');
         return await refresh(refreshToken);
     }
-    
+
     const payload = decodeJwt(accessToken);
     if (!payload || !payload.exp) {
         console.log('JWT invalide ou sans exp, refresh requis.');
         return await refresh(refreshToken);
     }
-    
+
     const nowSec = Math.floor(Date.now() / 1000);
     console.log(`Token expire dans ${(payload.exp - nowSec) / 60} minutes.`);
     if (payload.exp - nowSec < 300) {
         console.log('Token expire bientôt, refresh...');
         return await refresh(refreshToken);
     }
-    
+
     return tokens;
 }
 
@@ -52,18 +52,18 @@ async function refresh(refreshToken: string) {
             refresh_token: refreshToken
         })
     });
-    
+
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Refresh failed: ${res.status} ${text}`);
     }
-    
+
     const data = await res.json();
     console.log('Refresh réussi !');
     return {
         access_token: data.access_token,
         refresh_token: data.refresh_token || refreshToken,
-        account_id: decodeJwt(data.access_token)?.["https://api.openai.com/auth"]?.chatgpt_account_id
+        account_id: decodeJwt(data.access_token)?.['https://api.openai.com/auth']?.chatgpt_account_id
     };
 }
 
@@ -72,15 +72,15 @@ async function main() {
         console.error(`Fichier ${AUTH_FILE_PATH} introuvable !`);
         process.exit(1);
     }
-    
+
     const authData = JSON.parse(readFileSync(AUTH_FILE_PATH, 'utf8'));
     const tokens = authData.tokens;
-    
+
     console.log('Tokens chargés de auth.json :');
     console.log(`- Account ID: ${tokens.account_id}`);
-    
+
     const updatedTokens = await refreshIfNeeded(tokens);
-    
+
     const modelsToTest = [
         'gpt-5.5',
         'gpt-5.4',

@@ -66,7 +66,7 @@ async function runTests() {
             result: { output: 'success' },
             error: null,
             duration_ms: 100,
-            chatId: chatId,
+            chatId,
             timestamp: Date.now()
         };
 

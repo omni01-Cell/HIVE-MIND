@@ -166,7 +166,7 @@ export default {
                     const tools = pluginLoader.getToolDefinitions();
 
                     // Formatter properly for AI
-                    let summary = "Here is the exhaustive list of my capabilities:\n\n";
+                    let summary = 'Here is the exhaustive list of my capabilities:\n\n';
 
                     plugins.forEach((p: any) => {
                         summary += `📂 **Plugin: ${p.name}** (v${p.version})\n   Description: ${p.description}\n`;
@@ -189,8 +189,8 @@ export default {
                     // [PTC] Manually add dynamic code_execution meta-tool
                     const ptcEnabled = process.env.PTC_ENABLED !== 'false';
                     if (ptcEnabled) {
-                        summary += `\n📂 **Meta-Features (System)**\n`;
-                        summary += `   - 🛠️ code_execution: Executes JavaScript code to orchestrate MULTIPLE tool calls at once (Programmatic Tool Calling).\n`;
+                        summary += '\n📂 **Meta-Features (System)**\n';
+                        summary += '   - 🛠️ code_execution: Executes JavaScript code to orchestrate MULTIPLE tool calls at once (Programmatic Tool Calling).\n';
                     }
 
                     return {
@@ -270,7 +270,7 @@ export default {
                     const msgArgs = args as SendMessageArgs;
                     const { text } = msgArgs;
                     if (!text) return { success: false, message: 'Empty text.' };
-                    
+
                     const msgTargetChannel = msgArgs.target_channel || context.sourceChannel;
                     const msgTargetChatId = msgArgs.target_chat_id || chatId;
 
@@ -295,7 +295,7 @@ export default {
                     if (!isUrl) {
                         const sandboxDir = process.env.SANDBOX_DIR || process.cwd();
                         finalPath = path.isAbsolute(filePath) ? filePath : path.join(sandboxDir, filePath);
-                        
+
                         const fs = await import('fs');
                         if (!fs.existsSync(finalPath)) {
                             return { success: false, message: `File not found: ${finalPath}` };

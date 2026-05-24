@@ -22,7 +22,7 @@ const disallowedSmallChatModels = new Set([
     'llama-3.1-8b-instant',
     'openai/gpt-oss-20b',
     'meta-llama/llama-4-scout-17b-16e-instruct',
-    'microsoft/Phi-4-multimodal-instruct',
+    'microsoft/Phi-4-multimodal-instruct'
 ]);
 
 const readModelsConfig = (): ModelsConfig => {
@@ -39,12 +39,12 @@ describe('Models Config Policy', () => {
                 .filter(([serviceName]) => serviceName !== 'TAG_SERVICE')
                 .flatMap(([serviceName, recipe]) => [
                     [`service_recipes.${serviceName}.model`, recipe.model],
-                    [`service_recipes.${serviceName}.fallback`, recipe.fallback],
+                    [`service_recipes.${serviceName}.fallback`, recipe.fallback]
                 ]);
             const chatEntries = Object.entries(modelsConfig.reglages_generaux.chat_recipes.categories)
                 .flatMap(([categoryName, recipe]) => [
                     [`chat_recipes.categories.${categoryName}.primary`, recipe.primary],
-                    [`chat_recipes.categories.${categoryName}.fallback`, recipe.fallback],
+                    [`chat_recipes.categories.${categoryName}.fallback`, recipe.fallback]
                 ]);
 
             // Act

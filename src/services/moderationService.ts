@@ -81,11 +81,11 @@ export class ModerationService {
                 .insert({
                     group_jid: chatId,
                     user_jid: userJid,
-                    reason: reason
+                    reason
                 });
 
             if (error) throw error;
-            
+
             const count = await this.getWarningCount(chatId, userJid);
             return { success: true, warnCount: count };
         } catch (error: any) {
@@ -103,7 +103,7 @@ export class ModerationService {
             .select('*', { count: 'exact', head: true })
             .eq('group_jid', chatId)
             .eq('user_jid', userJid);
-        
+
         if (error) return 0;
         return count || 0;
     }
@@ -135,13 +135,13 @@ export class ModerationService {
             .from('group_filters')
             .insert({
                 group_jid: chatId,
-                keyword: keyword,
-                severity: severity,
+                keyword,
+                severity,
                 context_rule: rule,
                 created_by: creator
             })
             .select();
-        
+
         if (error) throw error;
         return data[0];
     }
@@ -154,7 +154,7 @@ export class ModerationService {
             .from('group_filters')
             .select('*')
             .eq('group_jid', chatId);
-        
+
         if (error) return [];
         return data;
     }
@@ -170,7 +170,7 @@ export class ModerationService {
                 user_jid: userJid,
                 added_by: addedBy
             });
-        
+
         if (error) throw error;
         return true;
     }
@@ -185,7 +185,7 @@ export class ModerationService {
             .eq('group_jid', chatId)
             .eq('user_jid', userJid)
             .maybeSingle();
-        
+
         return !!data;
     }
 
@@ -198,7 +198,7 @@ export class ModerationService {
             .insert({
                 group_jid: chatId,
                 user_jid: userJid,
-                action: action
+                action
             });
     }
 

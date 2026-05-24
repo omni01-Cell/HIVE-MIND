@@ -227,10 +227,10 @@ export default {
 
                     // Wait for any pending animations or lazy-loaded content
                     await delay(2000);
-                    
+
                     // Prevent transparent backgrounds from rendering as black
                     await browserService.evaluate('if(!document.body.style.backgroundColor) document.body.style.backgroundColor = "white";', session);
-                    
+
                     let baseName = args.name;
                     if (!baseName) {
                         try {
@@ -239,11 +239,11 @@ export default {
                                 baseName = titleResult.data.result.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 30);
                             }
                         } catch(e) {}
-                        if (!baseName) baseName = "page_capture";
+                        if (!baseName) baseName = 'page_capture';
                     }
 
                     const fileName = `screenshot_${baseName}_${Date.now()}.png`;
-                    
+
                     result = await browserService.screenshot(session, fileName, args.full_page);
                     break;
                 case 'browser_get_text':

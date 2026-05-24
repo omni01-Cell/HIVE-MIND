@@ -262,7 +262,7 @@ export default {
             } else {
                 return {
                     success: false,
-                    message: `❌ User not found or already deleted.`
+                    message: '❌ User not found or already deleted.'
                 };
             }
         } catch (error: any) {
@@ -345,8 +345,8 @@ export default {
                 return {
                     success: true,
                     message: `🎤 Current transcription mode: **${currentMode.toUpperCase()}**\n\n` +
-                        `• *restricted*: Transcribes only voice notes replying to the bot\n` +
-                        `• *full*: Transcribes all voice notes (checks for bot name)`
+                        '• *restricted*: Transcribes only voice notes replying to the bot\n' +
+                        '• *full*: Transcribes all voice notes (checks for bot name)'
                 };
             }
 
@@ -354,7 +354,7 @@ export default {
             if (!['restricted', 'full'].includes(mode)) {
                 return {
                     success: false,
-                    message: `Invalid mode. Use: .voice restricted | .voice full | .voice status`
+                    message: 'Invalid mode. Use: .voice restricted | .voice full | .voice status'
                 };
             }
 
@@ -370,8 +370,8 @@ export default {
                 success: true,
                 message: `✅ Transcription mode changed: **${mode.toUpperCase()}**\n` +
                     (mode === 'restricted'
-                        ? `Voice notes will be transcribed only if they reply to the bot.`
-                        : `All voice notes will be transcribed (if the bot name is mentioned).`)
+                        ? 'Voice notes will be transcribed only if they reply to the bot.'
+                        : 'All voice notes will be transcribed (if the bot name is mentioned).')
             };
         } catch (error: any) {
             return { success: false, message: `Error: ${error.message}` };
@@ -391,11 +391,11 @@ export default {
             if (!isGroup) {
                 return {
                     success: false,
-                    message: `❌ This command only works in **groups**.\n\n` +
-                        `To manage private chat audio, use:\n` +
-                        `• \`.pv.audio.status\` - View status\n` +
-                        `• \`.pv.audio.off\` - Disable (Global Admin)\n` +
-                        `• \`.pv.audio.on\` - Enable (Global Admin)`
+                    message: '❌ This command only works in **groups**.\n\n' +
+                        'To manage private chat audio, use:\n' +
+                        '• `.pv.audio.status` - View status\n' +
+                        '• `.pv.audio.off` - Disable (Global Admin)\n' +
+                        '• `.pv.audio.on` - Enable (Global Admin)'
                 };
             }
 
@@ -410,10 +410,10 @@ export default {
                 return {
                     success: true,
                     message: `🔊 **Audio Permissions (Group)**\n\n${permLabels[currentPerm as keyof typeof permLabels] || permLabels['all']}\n\n` +
-                        `Commands:\n` +
-                        `• \`.mute.audio_for_none\` - Block non-admins\n` +
-                        `• \`.mute.audio_for_all\` - Block everyone\n` +
-                        `• \`.allow.audio_for_all\` - Allow everyone`
+                        'Commands:\n' +
+                        '• `.mute.audio_for_none` - Block non-admins\n' +
+                        '• `.mute.audio_for_all` - Block everyone\n' +
+                        '• `.allow.audio_for_all` - Allow everyone'
                 };
             }
 
@@ -451,12 +451,12 @@ export default {
                 const isDisabled = await workingMemory.isPvAudioDisabled();
                 return {
                     success: true,
-                    message: `🎤 **Private Chat Voice Notes**\n\n` +
+                    message: '🎤 **Private Chat Voice Notes**\n\n' +
                         `Status: ${isDisabled ? '🔴 DISABLED globally' : '🟢 ENABLED'}\n\n` +
-                        `In private chats, voice notes are transcribed directly without mode restrictions.\n` +
+                        'In private chats, voice notes are transcribed directly without mode restrictions.\n' +
                         (isGlobalAdmin
-                            ? `\nGlobal Admin Commands:\n• \`.pv.audio.off\` - Disable\n• \`.pv.audio.on\` - Enable`
-                            : `\n_(Only Global Admins can modify this setting)_`)
+                            ? '\nGlobal Admin Commands:\n• `.pv.audio.off` - Disable\n• `.pv.audio.on` - Enable'
+                            : '\n_(Only Global Admins can modify this setting)_')
                 };
             }
 
@@ -464,7 +464,7 @@ export default {
             if (!isGlobalAdmin) {
                 return {
                     success: false,
-                    message: `❌ **Access denied**\n\nOnly **Global Admins** can enable/disable private chat voice notes.`
+                    message: '❌ **Access denied**\n\nOnly **Global Admins** can enable/disable private chat voice notes.'
                 };
             }
 
@@ -474,8 +474,8 @@ export default {
             return {
                 success: true,
                 message: disable
-                    ? `🔴 **Private Chat Voice Notes DISABLED**\n\nVoice notes in private messages will no longer be transcribed.`
-                    : `🟢 **Private Chat Voice Notes ENABLED**\n\nVoice notes in private messages will be transcribed again.`
+                    ? '🔴 **Private Chat Voice Notes DISABLED**\n\nVoice notes in private messages will no longer be transcribed.'
+                    : '🟢 **Private Chat Voice Notes ENABLED**\n\nVoice notes in private messages will be transcribed again.'
             };
         } catch (error: any) {
             return { success: false, message: `Error: ${error.message}` };
@@ -494,12 +494,12 @@ export default {
                 const isEnabled = await workingMemory.isAntiDeleteEnabled(chatId);
                 return {
                     success: true,
-                    message: `🗑️ **Anti-Delete**\n\n` +
+                    message: '🗑️ **Anti-Delete**\n\n' +
                         `Status: ${isEnabled ? '🟢 ENABLED' : '🔴 DISABLED'}\n\n` +
-                        `When enabled, deleted messages are automatically reposted.\n\n` +
-                        `• \`.antidelete on\` - Enable\n` +
-                        `• \`.antidelete off\` - Disable\n` +
-                        `• \`.deleted\` - View deleted messages`
+                        'When enabled, deleted messages are automatically reposted.\n\n' +
+                        '• `.antidelete on` - Enable\n' +
+                        '• `.antidelete off` - Disable\n' +
+                        '• `.deleted` - View deleted messages'
                 };
             }
 
@@ -509,8 +509,8 @@ export default {
             return {
                 success: true,
                 message: enable
-                    ? `✅ **Anti-Delete ENABLED**\n\nDeleted messages will be automatically reposted.`
-                    : `✅ **Anti-Delete DISABLED**\n\nDeleted messages will no longer be reposted.`
+                    ? '✅ **Anti-Delete ENABLED**\n\nDeleted messages will be automatically reposted.'
+                    : '✅ **Anti-Delete DISABLED**\n\nDeleted messages will no longer be reposted.'
             };
         } catch (error: any) {
             return { success: false, message: `Error: ${error.message}` };
@@ -529,7 +529,7 @@ export default {
             if (deletedMessages.length === 0) {
                 return {
                     success: true,
-                    message: `📋 No deleted messages recorded for this group.`
+                    message: '📋 No deleted messages recorded for this group.'
                 };
             }
 

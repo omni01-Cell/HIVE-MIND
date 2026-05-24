@@ -135,16 +135,26 @@ Score:`;
                 { role: 'user', content: prompt }
             ]);
 
-            if (!response?.content) return 0.5;
+            let score = 0.5;
+            if (response?.content) {
+                const text = response.content.trim();
+                const match = text.match(/\d+(?:\.\d+)?/);
+                const parsed = match ? parseFloat(match[0]) : NaN;
+                if (!isNaN(parsed)) score = parsed;
+            }
 
-            const text = response.content.trim();
-            const match = text.match(/\d+(?:\.\d+)?/);
-            const score = match ? parseFloat(match[0]) : NaN;
-            return isNaN(score) ? 0.5 : Math.max(0, Math.min(1, score));
+            // [GLOBAL TOOL RETRY SYSTEM] Pénaliser si l'LLM a dû s'auto-corriger (hallucination)
+            if (action.retries && action.retries > 0) {
+                console.log(`[ActionEvaluator] 📉 Pénalité de retry appliquée (-0.2) pour ${action.retries} auto-corrections.`);
+                score -= 0.2;
+            }
 
+            return Math.max(0, Math.min(1, score));
         } catch (e: any) {
             // Fallback sans IA
-            return action.result ? 0.7 : 0.3;
+            let score = action.result ? 0.7 : 0.3;
+            if (action.retries && action.retries > 0) score -= 0.2;
+            return Math.max(0, Math.min(1, score));
         }
     }
 

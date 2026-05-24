@@ -60,7 +60,7 @@ async function fixMissingUsernames() {
         }
     }
 
-    console.log(`\n📈 Résumé:`);
+    console.log('\n📈 Résumé:');
     console.log(`   - Corrigés: ${fixed}`);
     console.log(`   - Sans nom en cache: ${notFound}`);
     console.log(`   - Total traités: ${usersWithoutName.length}`);

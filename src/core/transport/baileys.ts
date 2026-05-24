@@ -230,7 +230,7 @@ class BaileysTransport extends EventEmitter {
             auth: self.state,
             logger: pino({ level: 'silent' }),
             printQRInTerminal: true,
-            browser: [config.bot_name || "HIVE-MIND", "Chrome", "1.0.0"],
+            browser: [config.bot_name || 'HIVE-MIND', 'Chrome', '1.0.0'],
             // Augmenter le timeout pour éviter les déconnexions intempestives
             connectTimeoutMs: 60000,
             defaultQueryTimeoutMs: 60000,
@@ -238,7 +238,7 @@ class BaileysTransport extends EventEmitter {
             emitOwnEvents: true,
             markOnlineOnConnect: true,
             retryRequestDelayMs: 5000,
-            version: version,
+            version,
             syncFullAppState: false // Désactivé pour éviter les logs verbeux
         });
 
@@ -435,7 +435,7 @@ class BaileysTransport extends EventEmitter {
                             eventBus.publish(BotEvents.MESSAGE_RECEIVED, normalizedMsg);
                             self.emit('message', normalizedMsg);
                         }).catch(err => {
-                            console.error(`[Baileys] 💥 Error processing message in Swarm:`, err);
+                            console.error('[Baileys] 💥 Error processing message in Swarm:', err);
                         });
                     }
 
@@ -641,7 +641,6 @@ class BaileysTransport extends EventEmitter {
     }
 
 
-
     /**
      * Envoie un message texte avec résolution automatique des @mentions
      */
@@ -656,13 +655,13 @@ class BaileysTransport extends EventEmitter {
      */
     async sendUniversalResponse(chatId: any, response: any, options: any = {}) {
         let text = response.plainText || response.markdown;
-        
+
         // 1. Sanitize
         text = sanitizeForWhatsApp(text);
-        
+
         // 2. Format
         text = formatToWhatsApp(text);
-        
+
         return this._executeSendText(chatId, text, options);
     }
 
@@ -675,7 +674,7 @@ class BaileysTransport extends EventEmitter {
         try {
             const type = options.type || 'image';
             const message: any = {};
-            const mediaSource = (typeof media === 'string' || Buffer.isBuffer(media)) 
+            const mediaSource = (typeof media === 'string' || Buffer.isBuffer(media))
                 ? (typeof media === 'string' && (media.startsWith('http') || media.startsWith('/') || media.includes('./')) ? { url: media } : media)
                 : media;
 
@@ -693,7 +692,7 @@ class BaileysTransport extends EventEmitter {
             }
 
             if (options.caption) message.caption = options.caption;
-            
+
             const socketOptions: any = {};
             if (options.reply) socketOptions.quoted = options.reply;
 
@@ -740,7 +739,7 @@ class BaileysTransport extends EventEmitter {
         if (!message || !message.quotedMsg || !message.raw) {
             return null;
         }
-        
+
         const contextInfo = message.raw.message?.extendedTextMessage?.contextInfo ||
                             message.raw.message?.imageMessage?.contextInfo ||
                             message.raw.message?.videoMessage?.contextInfo ||
@@ -771,7 +770,7 @@ class BaileysTransport extends EventEmitter {
         try {
             const metadata = await this.getGroupMetadata(groupId);
             if (!metadata || !metadata.participants) return false;
-            
+
             const participant = metadata.participants.find((p: any) => p.id === userId);
             return participant ? (participant.admin === 'admin' || participant.admin === 'superadmin') : false;
         } catch (error) {
@@ -822,7 +821,7 @@ class BaileysTransport extends EventEmitter {
                         const { resolveMentionsInText, resolveImplicitMentions } = await import('../../utils/fuzzyMatcher.js');
 
                         // 1. Résolution Explicite (@Nom)
-                        let resolved = resolveMentionsInText(formattedText, members);
+                        const resolved = resolveMentionsInText(formattedText, members);
                         if (resolved.mentions.length > 0) {
                             formattedText = resolved.text;
                             mentions = [...mentions, ...resolved.mentions];
@@ -866,9 +865,9 @@ class BaileysTransport extends EventEmitter {
 
     /**
      * Envoie une réaction (emoji) sur un message
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {Object} key - Clé du message cible
-     * @param {string} emoji 
+     * @param {string} emoji
      */
     async sendReaction(chatId: any, key: any, emoji: any) {
         if (!this.sock) return false;
@@ -876,7 +875,7 @@ class BaileysTransport extends EventEmitter {
             await this.sock.sendMessage(chatId, {
                 react: {
                     text: emoji,
-                    key: key
+                    key
                 }
             });
             return true;
@@ -957,9 +956,9 @@ class BaileysTransport extends EventEmitter {
         try {
             await this.sock.sendMessage(chatId, {
                 document: { url: filePath },
-                fileName: fileName,
+                fileName,
                 mimetype: 'application/pdf',
-                caption: caption
+                caption
             });
             return true;
         } catch (error: any) {
@@ -978,7 +977,7 @@ class BaileysTransport extends EventEmitter {
 
             const text = customMessage
                 ? `📢 *Annonce Groupe*\n${formatToWhatsApp(customMessage)}`
-                : `📢 *Tag All*`;
+                : '📢 *Tag All*';
 
             await this.sock.sendMessage(groupId, {
                 text,
@@ -993,7 +992,7 @@ class BaileysTransport extends EventEmitter {
 
     /**
      * (UX/UI) Envoie un sondage natif
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {string} name - Titre du sondage
      * @param {string} values - Options de réponse
      * @param {number} selectableCount - Nombre de choix possibles (défaut: 1)
@@ -1002,9 +1001,9 @@ class BaileysTransport extends EventEmitter {
         try {
             return await this.sock.sendMessage(chatId, {
                 poll: {
-                    name: name,
-                    values: values,
-                    selectableCount: selectableCount
+                    name,
+                    values,
+                    selectableCount
                 }
             });
         } catch (error: any) {
@@ -1015,7 +1014,7 @@ class BaileysTransport extends EventEmitter {
 
     /**
      * (UX/UI) Envoie une fiche contact
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {string} displayName - Nom affiché
      * @param {string} phoneNumber - Numéro (format international sans +)
      */
@@ -1025,13 +1024,13 @@ class BaileysTransport extends EventEmitter {
             const vcard = 'BEGIN:VCARD\n' // metadata of the contact card
                 + 'VERSION:3.0\n'
                 + `FN:${displayName}\n` // full name
-                + `ORG:Contact;\n` // the organization of the contact
+                + 'ORG:Contact;\n' // the organization of the contact
                 + `TEL;type=CELL;type=VOICE;waid=${phoneNumber}:${phoneNumber}\n` // WhatsApp ID + phone number
                 + 'END:VCARD';
 
             return await this.sock.sendMessage(chatId, {
                 contacts: {
-                    displayName: displayName,
+                    displayName,
                     contacts: [{ vcard }]
                 }
             });
@@ -1043,7 +1042,7 @@ class BaileysTransport extends EventEmitter {
 
     /**
      * (UX/UI) Édite un message existant (Le bot ne peut éditer que ses propres messages)
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {Object} key - Clé unique du message à éditer
      * @param {string} newText - Nouveau texte
      */
@@ -1061,7 +1060,7 @@ class BaileysTransport extends EventEmitter {
 
     /**
      * Définit le statut de présence (typing, recording, etc.)
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {string} type - 'composing' | 'recording' | 'paused'
      */
     async setPresence(chatId: any, type: any) {
@@ -1109,7 +1108,7 @@ class BaileysTransport extends EventEmitter {
                 const lidNumber = participant.split('@')[0];
                 // Chercher dans les participants du groupe
                 const metadata = await this.getGroupMetadata(groupId);
-                console.log(`[DEBUG Ban] Participants du groupe:`, metadata.participants.map((p: any) => ({ id: p.id, lid: p.lid })));
+                console.log('[DEBUG Ban] Participants du groupe:', metadata.participants.map((p: any) => ({ id: p.id, lid: p.lid })));
 
                 const found = metadata.participants.find((p: any) =>
                     p.id.includes(lidNumber) || p.lid?.includes(lidNumber)
@@ -1131,7 +1130,7 @@ class BaileysTransport extends EventEmitter {
             await this.sock.groupParticipantsUpdate(
                 groupId,
                 [userJid],
-                "remove"
+                'remove'
             );
             return true;
         } catch (error: any) {
@@ -1145,7 +1144,7 @@ class BaileysTransport extends EventEmitter {
      */
     async promoteUser(groupId: any, userJid: any) {
         try {
-            await this.sock.groupParticipantsUpdate(groupId, [userJid], "promote");
+            await this.sock.groupParticipantsUpdate(groupId, [userJid], 'promote');
             return true;
         } catch (error: any) {
             console.error('[Baileys] Erreur Promote:', error);
@@ -1158,7 +1157,7 @@ class BaileysTransport extends EventEmitter {
      */
     async demoteUser(groupId: any, userJid: any) {
         try {
-            await this.sock.groupParticipantsUpdate(groupId, [userJid], "demote");
+            await this.sock.groupParticipantsUpdate(groupId, [userJid], 'demote');
             return true;
         } catch (error: any) {
             console.error('[Baileys] Erreur Demote:', error);
@@ -1220,22 +1219,22 @@ class BaileysTransport extends EventEmitter {
         if (!this.sock) return;
 
         console.log('[Baileys] 🔌 Déconnexion demandée...');
-        
+
         try {
             // 1. Désactiver le monitoring
             this._stopListenerMonitoring();
 
             // 2. Notifier WhatsApp (optionnel mais recommandé pour le statut)
             await this.sock.sendPresenceUpdate('unavailable');
-            
+
             // 3. Fermer le socket proprement
             // Note: end(undefined) permet une fermeture propre sans erreur levée
             this.sock.end(undefined);
-            
+
             // 4. Nettoyer les listeners
             this.sock.ev.removeAllListeners();
             this.sock = null;
-            
+
             console.log('[Baileys] ✅ Connexion fermée proprement.');
         } catch (error: any) {
             console.error('[Baileys] ⚠️ Erreur lors de la déconnexion:', error.message);

@@ -40,7 +40,7 @@ export class ServiceContainer {
         // 1. Charger la Configuration
         const credentialsPath = join(__dirname, '..', 'config', 'credentials.json');
         const modelsPath = join(__dirname, '..', 'config', 'models_config.json');
-        
+
         let rawCredentials, rawModelsConfig;
         try {
             rawCredentials = JSON.parse(readFileSync(credentialsPath, 'utf-8'));
@@ -100,7 +100,7 @@ export class ServiceContainer {
             model: primaryEmbedding.model || 'gemini-embedding-001',
             dimensions: primaryEmbedding.dimensions || 1024
         };
-        
+
         this.register('embeddings', () => {
             console.log('[ServiceContainer] 🔄 Création EmbeddingsService singleton...');
             return new EmbeddingsService(embeddingConfig);
@@ -158,7 +158,7 @@ export class ServiceContainer {
         // where container.get('runtime') could throw if called before import resolved.
         const [dreamModule, runtimeModule] = await Promise.all([
             import('../services/dreamService.js'),
-            import('../services/runtime/RuntimeInfrastructure.js'),
+            import('../services/runtime/RuntimeInfrastructure.js')
         ]);
         this.register('dream', dreamModule.dreamService);
         this.register('runtime', () => new runtimeModule.AIRuntimeInfrastructure(), { singleton: true });
@@ -188,29 +188,29 @@ export class ServiceContainer {
      */
     public register(name: string, factory: any, options: { singleton?: boolean } = {}): this {
         const { singleton = false } = options;
-        
+
         if (!factory) {
             console.error(`[ServiceContainer] ❌ Tentative d'enregistrement de service NULL: ${name}`);
             return this;
         }
-        
+
         if (this.services.has(name)) {
             console.warn(`[ServiceContainer] Service ${name} déjà enregistré - remplacement`);
         }
-        
+
         const factoryFn = typeof factory === 'function' ? factory : () => factory;
-        
+
         this.services.set(name, {
             factory: factoryFn,
-            singleton: singleton,
+            singleton,
             instance: null
         });
-        
+
         // Auto-injection si factory est une instance (pas singleton ici car instance est direct)
         if (!singleton && typeof factory.setContainer === 'function') {
             factory.setContainer(this);
         }
-        
+
         return this;
     }
 
@@ -222,19 +222,19 @@ export class ServiceContainer {
         if (!service) {
             throw new Error(`[ServiceContainer] Service non trouvé: ${name}`);
         }
-        
+
         if (service.singleton) {
             if (!service.instance) {
                 console.log(`[ServiceContainer] 🔄 Création singleton: ${name}`);
                 service.instance = service.factory();
-                
+
                 if (service.instance && typeof service.instance.setContainer === 'function') {
                     service.instance.setContainer(this);
                 }
             }
             return service.instance;
         }
-        
+
         const instance = service.factory();
         if (instance && typeof instance.setContainer === 'function') {
             instance.setContainer(this);

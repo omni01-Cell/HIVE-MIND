@@ -3,8 +3,8 @@
 // ============================================================================
 // UTILITAIRE DE RÉPARATION DE SESSION
 // ============================================================================
-// Nettoie les fichiers de cache de session Baileys tout en gardant 
-// les identifiants principaux (creds.json). 
+// Nettoie les fichiers de cache de session Baileys tout en gardant
+// les identifiants principaux (creds.json).
 // À utiliser en cas de "MessageCounterError".
 
 import { existsSync, readdirSync, unlinkSync, statSync } from 'fs';
@@ -37,7 +37,7 @@ files.forEach(file => {
     }
 
     const filePath = join(SESSION_DIR, file);
-    
+
     try {
         if (statSync(filePath).isFile()) {
             unlinkSync(filePath);
@@ -50,5 +50,5 @@ files.forEach(file => {
 
 console.log('---');
 console.log(`✅ Réparation terminée. ${cleanedCount} fichiers de cache supprimés.`);
-console.log(`🚀 Tu peux maintenant relancer le bot : npm start`);
-console.log(`💡 Tes identifiants QR Code ont été conservés.`);
+console.log('🚀 Tu peux maintenant relancer le bot : npm start');
+console.log('💡 Tes identifiants QR Code ont été conservés.');

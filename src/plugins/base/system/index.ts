@@ -141,7 +141,7 @@ export default {
 
         return {
             success: true,
-            message: `💻 **SYSTEM STATUS**\n` +
+            message: '💻 **SYSTEM STATUS**\n' +
                 `- Uptime: ${Math.floor(uptime / 60)} min\n` +
                 `- RAM: ${formatBytes(memUsage.rss)} (Heap: ${formatBytes(memUsage.heapUsed)})\n` +
                 `- OS Mem: ${(freeMem / 1024 / 1024 / 1024).toFixed(1)}GB free / ${(totalMem / 1024 / 1024 / 1024).toFixed(1)}GB\n` +
@@ -155,7 +155,7 @@ export default {
      * Shutdown / Restart
      */
     async _shutdown(args: OsShutdownArgs, transport: any, chatId: string) {
-        // Need chatId passed correctly. 
+        // Need chatId passed correctly.
         // Note: The execute method didn't extract chatId. Fixing logic here assuming context availability issues.
 
         const delay = 3000;

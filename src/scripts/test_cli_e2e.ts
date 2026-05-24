@@ -16,28 +16,28 @@ async function simulateIncomingMessage(text: string) {
         chatId: 'cli_chat_e2e',
         sender: 'test_user',
         senderName: 'Tester',
-        text: text,
+        text,
         isGroup: false,
         isSystem: false,
         raw: { text },
         authorityLevel: 'DIVIN (SuperUser)'
     };
-    
+
     // Find the transport manager and emit message
     const transportManager = botCore.transport;
-    
+
     return new Promise((resolve) => {
         // Wait for the bot to respond on the cli transport
         setTimeout(() => {
             resolve(true);
         }, 300000); // Wait 5 minutes for the complex agentic loop to finish
-        
+
         const transport = transportManager.getTransport('cli');
         if (transport && transport.messageCallback) {
-             transport.messageCallback(messageObj);
+            transport.messageCallback(messageObj);
         } else if (transport && transport.handleMessage) {
             // For ink-cli it might be different
-             transport.handleMessage(messageObj);
+            transport.handleMessage(messageObj);
         }
     });
 }
@@ -50,8 +50,8 @@ async function runTests() {
         await botCore.init();
 
         // Intense Agentic Task to stress test the Smart Router V2 RPM
-        const intensePrompt = `Va sur le site Hacker News (news.ycombinator.com), lis le titre des 3 premiers articles. Ensuite, utilise tes outils développeur pour créer un script Python qui génère un rapport au format PDF résumant ces 3 articles. Exécute ce script et donne moi le rapport final. Fais-le étape par étape et montre moi tes reflexions.`;
-        
+        const intensePrompt = 'Va sur le site Hacker News (news.ycombinator.com), lis le titre des 3 premiers articles. Ensuite, utilise tes outils développeur pour créer un script Python qui génère un rapport au format PDF résumant ces 3 articles. Exécute ce script et donne moi le rapport final. Fais-le étape par étape et montre moi tes reflexions.';
+
         await simulateIncomingMessage(intensePrompt);
         await delay(300000); // 5 min delay to observe all logs, RPM exhaustion, and key rotation
 

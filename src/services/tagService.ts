@@ -6,7 +6,7 @@ const ALLOWED_TAGS = new Set(['preference', 'fact', 'opinion', 'task', 'emotion'
 export const tagService = {
     /**
      * Génère des tags pour un contenu donné
-     * @param {string} content 
+     * @param {string} content
      * @returns {Promise<string[]>}
      */
     async generateTags(content: any): Promise<string[]> {

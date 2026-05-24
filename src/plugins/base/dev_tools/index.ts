@@ -12,6 +12,7 @@ import ASTTools from './ASTTools.js';
 import SystemScratchpadTool from './SystemScratchpadTool.js';
 import SpawnSubAgentTool from './SpawnSubAgentTool.js';
 import BrowserTools from './BrowserTools.js';
+import LSPTool from './LSPTool.js';
 
 interface DevToolsContext {
     transport?: any;
@@ -49,6 +50,7 @@ const AGGREGATED_TOOL_DEFINITIONS = [
     ...SystemScratchpadTool.toolDefinitions,
     ...SpawnSubAgentTool.toolDefinitions,
     ...BrowserTools.toolDefinitions,
+    ...LSPTool.toolDefinitions
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -57,13 +59,14 @@ const AGGREGATED_TOOL_DEFINITIONS = [
 const TOOL_ROUTER: Record<string, any> = {};
 
 const tools = [
-    BashTool, 
-    FileEditTool, 
-    SearchTools, 
-    ASTTools, 
-    SystemScratchpadTool, 
+    BashTool,
+    FileEditTool,
+    SearchTools,
+    ASTTools,
+    SystemScratchpadTool,
     SpawnSubAgentTool,
-    BrowserTools
+    BrowserTools,
+    LSPTool
 ];
 
 for (const toolModule of tools) {
@@ -95,13 +98,13 @@ export default {
      * @param toolName   - Nom de l'outil à exécuter
      */
     async execute(args: unknown, context: DevToolsContext, toolName: string) {
-         // Déstructuration défensive du contexte
-         const { transport, chatId } = context || {};
+        // Déstructuration défensive du contexte
+        const { transport, chatId } = context || {};
 
-         // ── Textual admin commands ──────────────────────────────────────
-         if (toolName === 'shutdown_bot') {
-             console.log('🛑 Shutdown requested via .shutdown command');
-             if (transport) {
+        // ── Textual admin commands ──────────────────────────────────────
+        if (toolName === 'shutdown_bot') {
+            console.log('🛑 Shutdown requested via .shutdown command');
+            if (transport) {
                 await transport.sendText(chatId, '🛑 System shutting down...');
                 // setPresence is the standard method from TransportManager
                 await transport.setPresence(chatId, 'unavailable').catch(() => {});

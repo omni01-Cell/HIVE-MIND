@@ -90,7 +90,7 @@ async function getOrRefreshTokens(): Promise<{ accessToken: string; accountId: s
         refreshToken = data.refresh_token || refreshToken;
 
         const decoded = decodeJwt(accessToken!);
-        accountId = decoded?.["https://api.openai.com/auth"]?.chatgpt_account_id || accountId;
+        accountId = decoded?.['https://api.openai.com/auth']?.chatgpt_account_id || accountId;
 
         console.log('[Codex] Jeton d\'accès OAuth rafraîchi avec succès.');
 

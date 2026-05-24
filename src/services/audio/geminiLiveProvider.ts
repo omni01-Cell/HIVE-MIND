@@ -12,7 +12,7 @@ import { envResolver } from '../envResolver.js';
 /**
  * GeminiLiveProvider
  * Gère les conversations audio en temps réel avec Gemini 2.5 Flash
- * 
+ *
  * Flux: OGG/Opus (WhatsApp) → PCM 16kHz (Gemini) → PCM 24kHz (réponse) → OGG (WhatsApp)
  */
 export class GeminiLiveProvider {
@@ -230,7 +230,7 @@ export class GeminiLiveProvider {
      * Envoyer de l'audio au modèle
      * Accepte un buffer OGG/Opus (WhatsApp) OU un buffer PCM brut.
      * La conversion OGG→PCM est gérée automatiquement.
-     * 
+     *
      * Utilise `realtimeInput.mediaChunks` (format requis par le Live API).
      * Puis signale `turnComplete` via `clientContent`.
      */

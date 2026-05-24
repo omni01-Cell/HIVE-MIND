@@ -37,9 +37,9 @@ async function getEmbeddingsService() {
 export const semanticMemory = {
     /**
      * Stocke un message avec son embedding et auto-tagging
-     * @param {string} chatId 
-     * @param {string} content 
-     * @param {'user'|'assistant'} role 
+     * @param {string} chatId
+     * @param {string} content
+     * @param {'user'|'assistant'} role
      * @param {Object} options - { msgId }
      */
     async store(chatId: any, content: any, role: any, options: any = {}) {
@@ -72,7 +72,7 @@ export const semanticMemory = {
         // 3. Préparer les metadata pour le feedback loop
         const metadata = {
             msgId: options.msgId,
-            tags: tags,
+            tags,
             storedAt: new Date().toISOString()
         };
 
@@ -94,7 +94,7 @@ export const semanticMemory = {
                 content: content.substring(0, 2000),
                 role,
                 embedding: vector,
-                metadata: metadata
+                metadata
             });
 
         if (error) console.error('[Memory] Erreur store:', error);
@@ -103,9 +103,9 @@ export const semanticMemory = {
     /**
      * Recherche les souvenirs similaires (RAG) avec contexte temporel
      * Utilise la recherche vectorielle pour trouver des messages pertinents
-     * @param {string} chatId 
-     * @param {string} query 
-     * @param {number} limit 
+     * @param {string} chatId
+     * @param {string} query
+     * @param {number} limit
      * @returns {Promise<Array>}
      */
     async recall(chatId: any, query: any, limit: any = 5) {
@@ -227,7 +227,7 @@ export const semanticMemory = {
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
         if (diffDays === 0) return "Aujourd'hui";
-        if (diffDays === 1) return "Hier";
+        if (diffDays === 1) return 'Hier';
         if (diffDays < 7) return `Il y a ${diffDays} jours`;
         if (diffDays < 30) return `Il y a ${Math.floor(diffDays / 7)} semaines`;
         if (diffDays < 365) return `Il y a ${Math.floor(diffDays / 30)} mois`;
@@ -237,8 +237,8 @@ export const semanticMemory = {
     /**
      * Récupère le contexte récent d'une conversation (Supabase)
      * FALLBACK: Utilisé si Redis (workingMemory) n'est pas disponible
-     * @param {string} chatId 
-     * @param {number} limit 
+     * @param {string} chatId
+     * @param {number} limit
      */
     async getRecentContext(chatId: any, limit: any = 10) {
         if (!supabase) return '';
@@ -261,7 +261,7 @@ export const semanticMemory = {
     /**
      * Résume les anciennes conversations via IA
      * Compresse les vieux messages en faits pour économiser l'espace
-     * @param {string} chatId 
+     * @param {string} chatId
      * @param {number} keepLast - Nombre de messages récents à garder intacts
      */
     async summarize(chatId: any, keepLast: any = 50) {
@@ -357,8 +357,8 @@ Few-shot examples:
     /**
      * Nettoie les vieux souvenirs (garbage collection)
      * Appelé via le job scheduler quotidien 'memoryCleanup'
-     * @param {string} chatId 
-     * @param {number} keepLast 
+     * @param {string} chatId
+     * @param {number} keepLast
      */
     async cleanup(chatId: any, keepLast: any = 50) {
         if (!supabase) return;

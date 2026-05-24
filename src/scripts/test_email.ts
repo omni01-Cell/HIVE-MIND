@@ -7,7 +7,7 @@ async function testRealEmail() {
         header: 'Test from HIVE-MIND-RAILWAY 🤖',
         message: '<p>Hello Léandre,</p><p>This is a real test email sent by the Agent during the testing phase.</p><p>Best regards,<br/>AntiGravity</p>'
     });
-    
+
     console.log('Result:', result);
 }
 

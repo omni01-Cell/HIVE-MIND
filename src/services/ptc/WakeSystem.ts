@@ -128,7 +128,7 @@ export class HiveWakeSystem extends EventEmitter {
             prompt,
             createdAtMs: now,
             backgroundCommandId,
-            checkEveryMs,
+            checkEveryMs
         };
 
         await ensureConnected();
@@ -146,7 +146,7 @@ export class HiveWakeSystem extends EventEmitter {
             type: 'SLEEP_SCHEDULED',
             wakeEventId: id,
             wakeAtMs,
-            message: `Wake event enregistré dans la DB. Réveil dans ${Math.round(delayMs / 1000)}s.`,
+            message: `Wake event enregistré dans la DB. Réveil dans ${Math.round(delayMs / 1000)}s.`
         };
     }
 
@@ -197,7 +197,7 @@ export class HiveWakeSystem extends EventEmitter {
                         type: 'SLEEP_ERROR',
                         wakeEventId: '',
                         wakeAtMs: 0,
-                        message: `[HIVE.sleepAndWake] Erreur: delayMs doit être un nombre positif (reçu: ${delayMs})`,
+                        message: `[HIVE.sleepAndWake] Erreur: delayMs doit être un nombre positif (reçu: ${delayMs})`
                     };
                 }
                 if (!wakePrompt || typeof wakePrompt !== 'string') {
@@ -205,7 +205,7 @@ export class HiveWakeSystem extends EventEmitter {
                         type: 'SLEEP_ERROR',
                         wakeEventId: '',
                         wakeAtMs: 0,
-                        message: '[HIVE.sleepAndWake] Erreur: wakePrompt est obligatoire',
+                        message: '[HIVE.sleepAndWake] Erreur: wakePrompt est obligatoire'
                     };
                 }
                 // Plafonner à 24h pour éviter les oublis
@@ -218,7 +218,7 @@ export class HiveWakeSystem extends EventEmitter {
                 // Le tick() vérifiera le commandId et re-planifiera si toujours en cours.
                 const clampedInterval = Math.max(checkEveryMs, 3_000); // Min 3s
                 return await self.scheduleWake(chatId, clampedInterval, wakePrompt, commandId, clampedInterval);
-            },
+            }
         };
     }
 

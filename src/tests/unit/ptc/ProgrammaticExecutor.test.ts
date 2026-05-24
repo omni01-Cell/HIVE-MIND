@@ -10,7 +10,7 @@ describe('ProgrammaticExecutor', () => {
             const executor = new ProgrammaticExecutor();
             const availableTools: readonly OpenAIToolDefinition[] = [
                 createToolDefinition('execute_bash_command', 'Execute terminal commands'),
-                createToolDefinition('read_file', 'Read a file'),
+                createToolDefinition('read_file', 'Read a file')
             ];
 
             // Act
@@ -31,8 +31,8 @@ function createToolDefinition(name: string, description: string): OpenAIToolDefi
             description,
             parameters: {
                 type: 'object',
-                properties: {},
-            },
-        },
+                properties: {}
+            }
+        }
     };
 }

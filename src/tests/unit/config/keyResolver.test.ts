@@ -40,8 +40,8 @@ describe('keyResolver', () => {
             process.env.GEMINI_KEY_1 = 'gemini_live_key';
             const credentials = {
                 familles_ia: {
-                    gemini: '${GEMINI_KEY}',
-                },
+                    gemini: '${GEMINI_KEY}'
+                }
             };
 
             // Act

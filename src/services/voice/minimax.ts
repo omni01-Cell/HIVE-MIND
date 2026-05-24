@@ -51,8 +51,8 @@ export class MinimaxVoiceService {
         // TODO: Implémenter le cache ici (MD5 du texte + voiceId)
 
         const payload = {
-            model: model,
-            text: text,
+            model,
+            text,
             stream: false,
             voice_setting: {
                 voice_id: selectedVoiceId,
@@ -63,7 +63,7 @@ export class MinimaxVoiceService {
             audio_setting: {
                 sample_rate: 32000,
                 bitrate: 128000,
-                format: "mp3", // Minimax output format
+                format: 'mp3', // Minimax output format
                 channel: 1
             }
         };

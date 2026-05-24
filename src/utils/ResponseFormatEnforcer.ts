@@ -31,7 +31,7 @@ export function tryParseJson<T>(content: string): T {
     // 4. Recherche globale robuste de blocs JSON (objets ou tableaux)
     const rawContent = content;
     const candidates: string[] = [];
-    
+
     // Trouver tous les indices de '{' et '['
     for (let i = 0; i < rawContent.length; i++) {
         const char = rawContent[i];

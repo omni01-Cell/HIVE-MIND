@@ -11,7 +11,7 @@ const consolidationLocks = new Set();
 export const consolidationService = {
     /**
      * Consolide la mémoire à court terme d'un chat précis
-     * @param {string} chatId 
+     * @param {string} chatId
      */
     async consolidate(chatId: any) {
         if (consolidationLocks.has(chatId)) {

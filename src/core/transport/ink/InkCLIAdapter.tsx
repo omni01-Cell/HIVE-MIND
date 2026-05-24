@@ -7,7 +7,7 @@ export const InkCLIAdapter = {
     messageCallback: null as any,
     groupEventCallback: null as any,
     messages: [] as any[],
-    
+
     // Hook exposé par le composant React pour mettre à jour l'état interne
     updateMessages: null as ((messages: any[]) => void) | null,
 
@@ -27,10 +27,10 @@ export const InkCLIAdapter = {
     connect: async () => {
         // Au lieu d'utiliser readline, on lance l'application Ink
         // Pour pouvoir mettre à jour l'état depuis l'extérieur, on crée un composant conteneur
-        
+
         const Container = () => {
             const [messages, setMessages] = React.useState<any[]>(InkCLIAdapter.messages);
-            
+
             // On expose le setter
             React.useEffect(() => {
                 InkCLIAdapter.updateMessages = setMessages;
@@ -53,7 +53,7 @@ export const InkCLIAdapter = {
                         chatId: 'cli_chat',
                         sender: 'cli_user',
                         senderName: 'Admin CLI',
-                        text: text,
+                        text,
                         isGroup: false,
                         isSystem: false,
                         raw: { text }
@@ -93,7 +93,7 @@ export const InkCLIAdapter = {
     sendUniversalResponse: async (chatId: string, response: any, options: any = {}) => {
         // On récupère le markdown complet
         const text = response.markdown || response.plain_text;
-        
+
         InkCLIAdapter.addMessage({ id: 'sent_' + Date.now(), sender: 'agent', text });
         return { id: 'sent_' + Date.now() };
     },
@@ -110,7 +110,7 @@ export const InkCLIAdapter = {
      * Envoie un sticker
      */
     sendSticker: async (chatId: string, stickerBuffer: any) => {
-        InkCLIAdapter.addMessage({ id: 'sent_' + Date.now(), sender: 'agent', text: `[STICKER ENVOYÉ]` });
+        InkCLIAdapter.addMessage({ id: 'sent_' + Date.now(), sender: 'agent', text: '[STICKER ENVOYÉ]' });
         return { id: 'sent_sticker_' + Date.now() };
     },
 

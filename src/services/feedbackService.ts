@@ -34,7 +34,7 @@ export const feedbackService = {
             // Et on utilise context_id plutôt que chat_id legacy si possible
             const { db } = await import('./supabase.js');
             const resolved = await db.resolveContextFromLegacyId(chatId);
-            
+
             const { data: memories, error } = await supabase
                 .from('memories')
                 .select('id, metadata')
@@ -45,10 +45,10 @@ export const feedbackService = {
 
             if (memories && memories.length > 0) {
                 const memory = memories[0];
-                const newMetadata = { 
-                    ...memory.metadata, 
-                    feedback: isPositive ? 'positive' : 'negative', 
-                    last_reaction: reaction 
+                const newMetadata = {
+                    ...memory.metadata,
+                    feedback: isPositive ? 'positive' : 'negative',
+                    last_reaction: reaction
                 };
                 await supabase.from('memories').update({ metadata: newMetadata }).eq('id', memory.id);
             }

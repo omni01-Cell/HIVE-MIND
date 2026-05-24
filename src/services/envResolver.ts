@@ -200,7 +200,7 @@ export class EnvResolver {
      * @private
      */
     _isPlaceholder(value: any) {
-        return value.startsWith('${') || 
+        return value.startsWith('${') ||
                value.startsWith('YOUR_') ||
                value === 'undefined' ||
                value === 'null';
@@ -242,7 +242,7 @@ export class EnvResolver {
         console.log(`  Cache: ${stats.cacheSize} entrées`);
         console.log(`  Hit Rate: ${(stats.hitRate * 100).toFixed(1)}%`);
         console.log(`  Hits: ${stats.hits}, Misses: ${stats.misses}`);
-        
+
         if (stats.warnings.length > 0) {
             console.log(`\n  ⚠️ Warnings (${stats.warnings.length}):`);
             stats.warnings.slice(0, 5).forEach((w: any) => console.log(`    - ${w}`));

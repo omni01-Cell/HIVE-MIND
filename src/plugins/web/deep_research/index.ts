@@ -56,13 +56,13 @@ export default {
                 const agent = new DeepResearchAgent(sender, chatId);
                 const reportMarkdown = await agent.start(topic);
 
-                 // 3. Génération du PDF via visual_reporter
-                 // On récupère le plugin visual_reporter dynamiquement
-                 const { pluginLoader } = await import('../../loader.js');
-                 const visualReporter = pluginLoader.get('visual_reporter');
+                // 3. Génération du PDF via visual_reporter
+                // On récupère le plugin visual_reporter dynamiquement
+                const { pluginLoader } = await import('../../loader.js');
+                const visualReporter = pluginLoader.get('visual_reporter');
 
                 if (visualReporter) {
-                    await transport.sendText(chatId, `📝 **Analysis finished.** Generating PDF report...`);
+                    await transport.sendText(chatId, '📝 **Analysis finished.** Generating PDF report...');
 
                     // Call the visual_reporter plugin
                     const pdfResult = await visualReporter.execute('generate_pdf_report', {
@@ -71,7 +71,7 @@ export default {
                     }, context);
 
                     if (pdfResult.success) {
-                        return { success: true, message: `[DeepSearch] PDF report generated and sent successfully.` };
+                        return { success: true, message: '[DeepSearch] PDF report generated and sent successfully.' };
                     } else {
                         // Fallback: send raw text if PDF fails
                         return { success: true, message: reportMarkdown };
@@ -83,11 +83,11 @@ export default {
 
             } catch (error: any) {
                 console.error('[DeepResearch] Fatal Error:', error);
-                return { success: false, message: "Deep research failed. Check logs." };
+                return { success: false, message: 'Deep research failed. Check logs.' };
             }
         }
 
-        return { success: false, message: "Unknown tool" };
+        return { success: false, message: 'Unknown tool' };
     }
 };
 

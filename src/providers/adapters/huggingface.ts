@@ -25,8 +25,8 @@ class HuggingFaceAdapter {
 
             if (token && !token.startsWith('VOTRE')) {
                 this.client = new OpenAI({
-                    baseURL: "https://router.huggingface.co/v1",
-                    apiKey: token,
+                    baseURL: 'https://router.huggingface.co/v1',
+                    apiKey: token
                 });
             } else {
                 console.warn('[HuggingFace] Token HF_TOKEN manquant ou placeholder');
@@ -38,15 +38,15 @@ class HuggingFaceAdapter {
 
     async chat(messages: any, options: any = {}) {
         if (!this.client) {
-            throw new Error("HuggingFace Adapter non initialisé (Token manquant)");
+            throw new Error('HuggingFace Adapter non initialisé (Token manquant)');
         }
 
         try {
             const completion = await this.client.chat.completions.create({
-                model: options.model || "meta-llama/Meta-Llama-3-8B-Instruct",
-                messages: messages,
+                model: options.model || 'meta-llama/Meta-Llama-3-8B-Instruct',
+                messages,
                 max_tokens: options.max_tokens || 1000,
-                temperature: options.temperature || 0.7,
+                temperature: options.temperature || 0.7
             });
 
             return {
@@ -59,7 +59,7 @@ class HuggingFaceAdapter {
         } catch (error: any) {
             console.error(`[HuggingFace] Error: ${error.message}`);
             if (error.status === 429) {
-                throw new Error("Quota Hugging Face dépassé (Rate Limit)");
+                throw new Error('Quota Hugging Face dépassé (Rate Limit)');
             }
             throw error;
         }

@@ -14,7 +14,7 @@ async function run() {
     const sock = makeWASocket({
         version,
         auth: state,
-        logger: pino({ level: 'silent' }) as any,
+        logger: pino({ level: 'silent' }) as any
     });
 
     sock.ev.on('creds.update', saveCreds);

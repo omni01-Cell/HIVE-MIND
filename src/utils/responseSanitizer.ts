@@ -23,7 +23,7 @@ const KNOWN_TOOL_PREFIXES = [
     'read_file', 'edit_file', 'grep_search',
     'google_ai_search', 'firecrawl_scrape',
     'get_file_skeleton', 'get_function',
-    'get_my_capabilities', 'use_tool', 'spawn_sub_agent',
+    'get_my_capabilities', 'use_tool', 'spawn_sub_agent'
 ];
 
 export interface ResponseDefects {
@@ -65,7 +65,7 @@ export function detectResponseDefects(text: string | null | undefined): Response
         hasRawCodeDominance: false,
         hasJsonToolObject: false,
         defectCount: 0,
-        details: [],
+        details: []
     };
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -207,7 +207,7 @@ export function sanitizeResponse(text: string | null | undefined): SanitizeResul
     return {
         cleaned,
         wasModified: strippedItems.length > 0,
-        strippedItems,
+        strippedItems
     };
 }
 

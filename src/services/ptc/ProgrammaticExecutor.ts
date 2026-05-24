@@ -1,10 +1,10 @@
 /**
  * ProgrammaticExecutor — Cœur du Programmatic Tool Calling (PTC)
- * 
+ *
  * WHY: Remplace la boucle ReAct multi-round-trip par une exécution unique.
  * Le LLM génère un script JS → on l'exécute dans un VM sandbox → seul le résultat final
  * revient au LLM. Économise ~80% de tokens sur les requêtes multi-tools.
- * 
+ *
  * ARCHITECTURE:
  *   1. Le LLM reçoit un meta-tool `code_execution` en plus des tools normaux
  *   2. S'il décide de l'utiliser, il génère du code JS orchestrant N tools
@@ -19,7 +19,7 @@ import type {
     PTCExecutionResult,
     PTCConfig,
     ToolFunction,
-    OpenAIToolDefinition,
+    OpenAIToolDefinition
 } from './types.js';
 import { SANDBOX_HELPERS_SOURCE } from './SandboxHelpers.js';
 import { validateCode, autoRepairCode } from './SafeScriptValidator.js';
@@ -27,7 +27,7 @@ import type { HiveWakeBridge, SleepResult } from './WakeSystem.js';
 
 const DEFAULT_CONFIG: PTCConfig = {
     timeoutMs: 30_000,
-    baseContextTokens: 7_000,
+    baseContextTokens: 7_000
 };
 
 export class ProgrammaticExecutor {
@@ -46,19 +46,19 @@ export class ProgrammaticExecutor {
      * La description inclut la liste des tools disponibles pour guider le LLM.
      */
     buildCodeExecutionToolDef(
-        availableTools: readonly OpenAIToolDefinition[],
+        availableTools: readonly OpenAIToolDefinition[]
     ): OpenAIToolDefinition {
         const toolDocs = availableTools
             .map((t) => {
                 const fn = t.function;
                 const params = fn.parameters?.properties
                     ? Object.entries(fn.parameters.properties)
-                          .map(([key, val]: [string, any]) => {
-                              const type = val.type || 'any';
-                              const desc = val.description || '';
-                              return `    - ${key}: ${type}${desc ? ` — ${desc}` : ''}`;
-                          })
-                          .join('\n')
+                        .map(([key, val]: [string, any]) => {
+                            const type = val.type || 'any';
+                            const desc = val.description || '';
+                            return `    - ${key}: ${type}${desc ? ` — ${desc}` : ''}`;
+                        })
+                        .join('\n')
                     : '    (pas de paramètres)';
                 return `• ${fn.name}: ${fn.description}\n${params}`;
             })
@@ -124,12 +124,12 @@ return result; // Type SLEEP_SCHEDULED
                         code: {
                             type: 'string',
                             description:
-                                'Code JavaScript à exécuter. Peut utiliser async/await. Les outils sont disponibles comme fonctions globales. Retourner le résultat final avec return.',
-                        },
+                                'Code JavaScript à exécuter. Peut utiliser async/await. Les outils sont disponibles comme fonctions globales. Retourner le résultat final avec return.'
+                        }
                     },
-                    required: ['code'],
-                },
-            },
+                    required: ['code']
+                }
+            }
         };
     }
 
@@ -144,7 +144,7 @@ return result; // Type SLEEP_SCHEDULED
     async execute(
         code: string,
         toolFunctions: ReadonlyMap<string, ToolFunction>,
-        hiveBridge?: HiveWakeBridge,
+        hiveBridge?: HiveWakeBridge
     ): Promise<PTCExecutionResult> {
         const startTime = Date.now();
         const toolCalls: ToolCallRecord[] = [];
@@ -152,7 +152,7 @@ return result; // Type SLEEP_SCHEDULED
 
         // ── Guard : Rejeter si le code n'appelle qu'un seul outil ──
         // Le PTC est rentable à partir de 2+ appels d'outils.
-        // Bien que le Tool Calling natif soit plus adapté pour 1 seul appel, 
+        // Bien que le Tool Calling natif soit plus adapté pour 1 seul appel,
         // jeter une erreur ici forcerait un nouveau round-trip LLM (~2-5s).
         // Il est beaucoup plus rapide d'exécuter la VM (~5ms) et d'ajouter un warning au résultat.
         const { countToolCalls } = await import('./SafeScriptValidator.js');
@@ -219,7 +219,7 @@ ${SANDBOX_HELPERS_SOURCE}
         const tokenSavings = this.calculateTokenSavings(toolCalls);
 
         console.log(
-            `[PTC] ✅ Exécution terminée: ${toolCalls.length} tool calls en ${executionTime}ms, ~${tokenSavings.totalSaved} tokens économisés`,
+            `[PTC] ✅ Exécution terminée: ${toolCalls.length} tool calls en ${executionTime}ms, ~${tokenSavings.totalSaved} tokens économisés`
         );
 
         // Sérialiser le résultat
@@ -243,7 +243,7 @@ ${SANDBOX_HELPERS_SOURCE}
                 sandboxToolCalls: toolCalls,
                 sleepScheduled: capturedSleep,
                 ...(toolCallCount < 2 ? { warning: "ATTENTION: Tu n'as appelé qu'un seul outil. À l'avenir, n'utilise 'code_execution' QUE pour 2+ outils. Utilise le Tool Calling natif pour un seul outil." } : {})
-            },
+            }
         };
     }
 
@@ -259,14 +259,14 @@ ${SANDBOX_HELPERS_SOURCE}
     private buildSandboxContext(
         toolFunctions: ReadonlyMap<string, ToolFunction>,
         toolCalls: ToolCallRecord[],
-        hiveBridge?: HiveWakeBridge,
+        hiveBridge?: HiveWakeBridge
     ): Record<string, unknown> {
         const globals: Record<string, unknown> = {
             // Standard JS globals nécessaires dans le VM
             console: {
                 log: (...args: unknown[]) => console.log('[PTC:sandbox]', ...args),
                 warn: (...args: unknown[]) => console.warn('[PTC:sandbox]', ...args),
-                error: (...args: unknown[]) => console.error('[PTC:sandbox]', ...args),
+                error: (...args: unknown[]) => console.error('[PTC:sandbox]', ...args)
             },
             setTimeout,
             Promise,
@@ -289,7 +289,7 @@ ${SANDBOX_HELPERS_SOURCE}
             encodeURIComponent,
             decodeURIComponent,
             encodeURI,
-            decodeURI,
+            decodeURI
         };
 
         // Injecter chaque outil comme fonction globale
@@ -329,7 +329,7 @@ ${SANDBOX_HELPERS_SOURCE}
                     const result = await hiveBridge.waitForBackground(commandId, checkEveryMs, wakePrompt);
                     globals['__hiveSleepResult'] = result;
                     return result;
-                },
+                }
             };
         } else {
             // Si pas de bridge, injecter un stub no-op qui ne crash pas
@@ -338,14 +338,14 @@ ${SANDBOX_HELPERS_SOURCE}
                     type: 'SLEEP_ERROR',
                     wakeEventId: '',
                     wakeAtMs: 0,
-                    message: '[HIVE] WakeSystem non disponible dans ce contexte.',
+                    message: '[HIVE] WakeSystem non disponible dans ce contexte.'
                 }),
                 waitForBackground: async (_commandId: string, _checkEveryMs: number, _wakePrompt: string) => ({
                     type: 'SLEEP_ERROR',
                     wakeEventId: '',
                     wakeAtMs: 0,
-                    message: '[HIVE] WakeSystem non disponible dans ce contexte.',
-                }),
+                    message: '[HIVE] WakeSystem non disponible dans ce contexte.'
+                })
             };
         }
 
@@ -360,7 +360,7 @@ ${SANDBOX_HELPERS_SOURCE}
      * pour toute variable non injectée. Empêche les bugs silencieux.
      */
     private createGuardedContext(
-        globals: Record<string, unknown>,
+        globals: Record<string, unknown>
     ): Record<string, unknown> {
         return new Proxy(globals, {
             get(target, prop: string | symbol) {
@@ -374,7 +374,7 @@ ${SANDBOX_HELPERS_SOURCE}
                 // Variable non définie → erreur explicite
                 throw new ReferenceError(
                     `[SafeScript] "${String(prop)}" n'est pas défini. ` +
-                    `Vérifiez le nom de la variable ou de l'outil.`,
+                    'Vérifiez le nom de la variable ou de l\'outil.'
                 );
             },
             set(target, prop: string | symbol, value) {
@@ -386,7 +386,7 @@ ${SANDBOX_HELPERS_SOURCE}
                 // Retourner true pour forcer le VM à passer par get()
                 // au lieu de ReferenceError silencieux
                 return true;
-            },
+            }
         });
     }
 
@@ -396,7 +396,7 @@ ${SANDBOX_HELPERS_SOURCE}
      */
     private runInVM(
         code: string,
-        sandboxGlobals: Record<string, unknown>,
+        sandboxGlobals: Record<string, unknown>
     ): Promise<unknown> {
         return new Promise((resolve, reject) => {
             // Injecter les callbacks de résolution dans le sandbox
@@ -411,7 +411,7 @@ ${SANDBOX_HELPERS_SOURCE}
 
             const context = createContext(sandboxGlobals);
             const script = new Script(code, {
-                filename: 'ptc-execution.js',
+                filename: 'ptc-execution.js'
             });
 
             // Timeout de sécurité global
@@ -429,7 +429,7 @@ ${SANDBOX_HELPERS_SOURCE}
 
             try {
                 script.runInContext(context, {
-                    timeout: this.config.timeoutMs,
+                    timeout: this.config.timeoutMs
                 });
             } catch (err) {
                 cleanup();
@@ -456,8 +456,8 @@ ${SANDBOX_HELPERS_SOURCE}
                 results: toolCalls.map((tc) => ({
                     tool: tc.toolName,
                     success: !tc.error,
-                    result: tc.result,
-                })),
+                    result: tc.result
+                }))
             };
         }
 
@@ -481,12 +481,12 @@ ${SANDBOX_HELPERS_SOURCE}
 
     /**
      * Calcule les tokens économisés par rapport à la boucle ReAct classique.
-     * 
+     *
      * En ReAct, chaque tool call = 1 round-trip LLM complet :
      *   - Re-envoi de tout le contexte (system + history + résultats précédents)
      *   - Le LLM décide "quoi faire ensuite" (tokens de décision)
      *   - Overhead JSON de la structure tool_call
-     * 
+     *
      * En PTC, tout ça est remplacé par 1 exécution locale.
      */
     private calculateTokenSavings(toolCalls: ToolCallRecord[]): {
@@ -504,7 +504,7 @@ ${SANDBOX_HELPERS_SOURCE}
                 roundTripContext: 0,
                 toolCallOverhead: 0,
                 llmDecisions: 0,
-                totalSaved: 0,
+                totalSaved: 0
             };
         }
 
