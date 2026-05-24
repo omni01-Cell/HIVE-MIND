@@ -6,14 +6,16 @@ import { Buffer } from 'buffer';
 import { impersonatedRequest } from '../../utils/TlsImpersonator.js';
 import { ClearcutSimulator } from '../../services/telemetry/ClearcutSimulator.js';
 
-const AUTH_FILE_PATH = '/home/omni/.antigravity/auth.json';
+// --- CONFIGURATION D'AUTHENTIFICATION (IDENTIFIANTS GOOGLE OAUTH CLIENT) ---
+// Note de sécurité : Le "Client ID" est un identifiant public permettant à Google de reconnaître l'application client.
+// Il est chargé depuis .env pour des raisons de conformité technique (Push Protection).
 const CLIENT_ID = process.env.ANTIGRAVITY_CLIENT_ID || '';
-const CLIENT_SECRET = process.env.ANTIGRAVITY_CLIENT_SECRET || '';
-const DEFAULT_PROJECT_ID = process.env.ANTIGRAVITY_PROJECT_ID || 'rising-fact-p41fc';
 
-const GEMINI_CLI_AUTH_FILE_PATH = '/home/omni/.gemini/oauth_creds.json';
-const GEMINI_CLI_CLIENT_ID = process.env.GEMINI_CLI_CLIENT_ID || '';
-const GEMINI_CLI_CLIENT_SECRET = process.env.GEMINI_CLI_CLIENT_SECRET || '';
+// Le "Client Secret" de l'application est privé et sensible. Il est importé de manière étanche depuis les variables d'environnement.
+const CLIENT_SECRET = process.env.ANTIGRAVITY_CLIENT_SECRET || '';
+
+// L'identifiant du projet Google Cloud ciblé.
+const DEFAULT_PROJECT_ID = process.env.ANTIGRAVITY_PROJECT_ID || 'rising-fact-p41fc';
 
 interface TokenData {
     accessToken: string | null;
@@ -61,18 +63,16 @@ function isTokenExpired(accessToken: string | null): boolean {
     return payload.exp - nowSec < 300;
 }
 
-async function refreshOAuthToken(refreshToken: string, useGeminiCliClient: boolean): Promise<{ access_token: string; refresh_token: string }> {
+async function refreshOAuthToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string }> {
     if (!refreshToken || typeof refreshToken !== 'string') throw new Error('Invalid refresh token');
-    const clientId = useGeminiCliClient ? GEMINI_CLI_CLIENT_ID : CLIENT_ID;
-    const clientSecret = useGeminiCliClient ? GEMINI_CLI_CLIENT_SECRET : CLIENT_SECRET;
 
     const res = await impersonatedRequest('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
             grant_type: 'refresh_token',
-            client_id: clientId,
-            client_secret: clientSecret,
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
             refresh_token: refreshToken
         }).toString()
     });
@@ -121,7 +121,7 @@ async function getTokens(endpoint: string): Promise<{ accessToken: string; proje
     let projectId = tokens.projectId;
 
     if (isTokenExpired(accessToken)) {
-        const refreshed = await refreshOAuthToken(refreshToken, false);
+        const refreshed = await refreshOAuthToken(refreshToken);
         accessToken = refreshed.access_token;
         refreshToken = refreshed.refresh_token;
         if (!projectId) {

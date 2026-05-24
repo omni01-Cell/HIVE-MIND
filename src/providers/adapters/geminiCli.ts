@@ -4,9 +4,15 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { Buffer } from 'buffer';
 
-const AUTH_FILE_PATH = '/home/omni/.gemini/oauth_creds.json';
+// --- CONFIGURATION D'AUTHENTIFICATION (IDENTIFIANTS GOOGLE OAUTH CLIENT) ---
+// Note de sécurité : Le "Client ID" est un identifiant public permettant à Google de reconnaître l'application client.
+// Il est chargé depuis .env pour des raisons de conformité technique (Push Protection).
 const CLIENT_ID = process.env.GEMINI_CLI_CLIENT_ID || '';
+
+// Le "Client Secret" de l'application est privé et sensible. Il est importé de manière étanche depuis les variables d'environnement.
 const CLIENT_SECRET = process.env.GEMINI_CLI_CLIENT_SECRET || '';
+
+// L'identifiant du projet Google Cloud ciblé.
 const DEFAULT_PROJECT_ID = process.env.GEMINI_CLI_PROJECT_ID || 'rising-fact-p41fc';
 
 interface TokenData {
