@@ -183,13 +183,25 @@ export class MemoryDecaySystem {
     
     try {
       const { providerRouter } = await import('../../providers/index.js');
+      
+      const systemPrompt = `You are a high-level cognitive synthesizer of HIVE-MIND.
+Your mission is to consolidate archived memories into a single high-level Gist.
+
+<output_format>
+Format: A single dense factual sentence or maximum 2 sentences. No greetings, no introductions, no explanations.
+
+Few-shot examples:
+- The user is troubleshooting a Node.js project deployment on Railway using GitHub actions.
+- The administrator configured sticker generation capabilities for group members.
+</output_format>`;
+
       const response = await providerRouter.chat([
-        { role: 'system', content: 'You are a high-level cognitive synthesizer. Output only the consolidated gist.' },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
       ], { category: 'FAST_CHAT', temperature: 0.2 });
       
       if (response && response.content) {
-        const { default: memoryService } = await import('./memory.js');
+        const { default: memoryService } = await import('../memory.js');
         const semanticMemory = memoryService.semanticMemory;
         
         await semanticMemory.store(chatId, `[CONSOLIDATED GIST] ${response.content}`, 'system');

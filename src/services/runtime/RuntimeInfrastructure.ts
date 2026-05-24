@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { providerRouter } from '../../providers/index.js';
 import { eventBus, BotEvents } from '../../core/events.js';
 import { AgentBlueprint } from '../../core/blueprint/AgentBlueprint.js';
+import { enforceFormat } from '../../utils/ResponseFormatEnforcer.js';
 
 const localDirname = dirname(fileURLToPath(import.meta.url));
 const SYSTEM_PROMPT_PATH = join(localDirname, '..', '..', 'persona', 'prompts', 'system.md');
@@ -273,17 +274,58 @@ Respond in JSON only:
   "reason": "brief explanation of risk or violation if disallowed, else null",
   "intervention_prompt": "suggested safe path, command correction, or alternative if disallowed, else null"
 }
+
+Few-shot examples:
+Example 1: Safe request
+{
+  "allowed": true,
+  "risk_level": "low",
+  "reason": null,
+  "intervention_prompt": null
+}
+
+Example 2: Unsafe request
+{
+  "allowed": false,
+  "risk_level": "high",
+  "reason": "Execution of sudo is strictly prohibited on non-admin user sessions.",
+  "intervention_prompt": "Please request permission from the system owner to run administrative tasks."
+}
 </output_format>`;
 
-            const response = await providerRouter.callServiceRecipe('SAFETY_SENTINEL', [
-                { role: 'system', content: 'You are the HIVE-MIND VIGIL safety sentinel. Output clean JSON only.' },
-                { role: 'user', content: prompt }
-            ]);
+            interface SentinelResult {
+                allowed: boolean;
+                risk_level: string;
+                reason: string | null;
+                intervention_prompt: string | null;
+            }
 
-            if (response?.content) {
-                const cleanedContent = response.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim();
-                const result = JSON.parse(cleanedContent);
+            const enforcerResult = await enforceFormat<SentinelResult>(
+                async (retryPromptModifier) => {
+                    const messages = [
+                        { role: 'system', content: 'You are the HIVE-MIND VIGIL safety sentinel. Output clean JSON only.' },
+                        { role: 'user', content: prompt }
+                    ];
+                    if (retryPromptModifier) {
+                        messages.push({ role: 'user', content: retryPromptModifier });
+                    }
+                    const response = await providerRouter.callServiceRecipe('SAFETY_SENTINEL', messages);
+                    return response?.content || '';
+                },
+                {
+                    validate: (parsed) => {
+                        if (typeof parsed.allowed !== 'boolean') return 'Property "allowed" must be a boolean';
+                        if (!['low', 'medium', 'high', 'critical'].includes(parsed.risk_level)) {
+                            return 'Property "risk_level" must be low, medium, high, or critical';
+                        }
+                        return true;
+                    },
+                    maxRetries: 2
+                }
+            );
 
+            if (enforcerResult.success && enforcerResult.data) {
+                const result = enforcerResult.data;
                 if (result.risk_level === 'low') {
                     return { allowed: true, reason: null, risk_level: 'low', intervention_prompt: null };
                 }
@@ -296,7 +338,7 @@ Respond in JSON only:
                 };
             }
 
-            throw new Error('Empty response from safety model');
+            throw new Error(enforcerResult.error || 'Empty or invalid response from safety model');
 
         } catch (error: any) {
             console.error('[Runtime:VIGIL] 🚨 Error during evaluation:', error.message);
@@ -362,17 +404,53 @@ Respond in JSON only:
   "laziness_detected": true/false,
   "kickback_message": "if lazy, write a firm system directive telling the agent exactly what they left unfinished and commanding them to continue and complete it. Otherwise null."
 }
+
+Few-shot examples:
+Example 1: Task fully completed without laziness
+{
+  "is_complete": true,
+  "laziness_detected": false,
+  "kickback_message": null
+}
+
+Example 2: Lazy agent leaving stubs
+{
+  "is_complete": false,
+  "laziness_detected": true,
+  "kickback_message": "[SYSTEM REJECTION] You left '// TODO: implement later' on line 45 of src/core/index.ts. You must fully write the implementation as instructed. No placeholders or incomplete code are allowed. Complete the task now."
+}
 </output_format>`;
 
-            const response = await providerRouter.callServiceRecipe('CRITIC', [
-                { role: 'system', content: 'You are RALPH. Detect laziness and force agents to complete tasks. Output clean JSON only.' },
-                { role: 'user', content: prompt }
-            ]);
+            interface RalphResult {
+                is_complete: boolean;
+                laziness_detected: boolean;
+                kickback_message: string | null;
+            }
 
-            if (response?.content) {
-                const cleanedContent = response.content.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim();
-                const result = JSON.parse(cleanedContent);
+            const enforcerResult = await enforceFormat<RalphResult>(
+                async (retryPromptModifier) => {
+                    const messages = [
+                        { role: 'system', content: 'You are RALPH. Detect laziness and force agents to complete tasks. Output clean JSON only.' },
+                        { role: 'user', content: prompt }
+                    ];
+                    if (retryPromptModifier) {
+                        messages.push({ role: 'user', content: retryPromptModifier });
+                    }
+                    const response = await providerRouter.callServiceRecipe('CRITIC', messages);
+                    return response?.content || '';
+                },
+                {
+                    validate: (parsed) => {
+                        if (typeof parsed.is_complete !== 'boolean') return 'Property "is_complete" must be a boolean';
+                        if (typeof parsed.laziness_detected !== 'boolean') return 'Property "laziness_detected" must be a boolean';
+                        return true;
+                    },
+                    maxRetries: 2
+                }
+            );
 
+            if (enforcerResult.success && enforcerResult.data) {
+                const result = enforcerResult.data;
                 return {
                     is_complete: !!result.is_complete,
                     laziness_detected: !!result.laziness_detected,
@@ -380,7 +458,7 @@ Respond in JSON only:
                 };
             }
 
-            throw new Error('Empty response from RALPH');
+            throw new Error(enforcerResult.error || 'Empty or invalid response from RALPH');
 
         } catch (error: any) {
             console.error('[Runtime:RALPH] 🚨 Error during completion check:', error.message);

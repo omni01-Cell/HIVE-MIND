@@ -61,7 +61,7 @@ export const semanticMemory = {
         }
 
         // 2. [LEVEL 5] Auto-Tagging
-        let tags = [];
+        let tags: string[] = [];
         try {
             const { tagService } = await import('./tagService.js');
             tags = await tagService.generateTags(content);
@@ -305,9 +305,18 @@ export const semanticMemory = {
             const response = await providerRouter.chat([
                 {
                     role: 'system',
-                    content: `Tu es un assistant de mémorisation. Résume cette conversation en 3-5 points clés.
-Format: Liste à puces des faits importants (noms, préférences, événements mentionnés).
-Ne garde que les informations factuelles et utiles pour des conversations futures.`
+                    content: `Tu es un assistant de mémorisation de HIVE-MIND.
+Ta mission est de résumer cette conversation en points clés factuels uniquement.
+
+<output_format>
+Format: Liste à puces Markdown uniquement. Pas d'introduction, d'explication ou de salutation.
+Chaque point doit être une déclaration à la troisième personne sur l'utilisateur ou la situation.
+
+Few-shot examples:
+- L'utilisateur s'appelle Alex et préfère coder en TypeScript strict.
+- La base de données de production rencontre des lenteurs de RAG pgvector le soir.
+- Un script de test de stickers a été exécuté avec succès par l'administrateur.
+</output_format>`
                 },
                 {
                     role: 'user',

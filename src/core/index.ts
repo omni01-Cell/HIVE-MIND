@@ -1591,13 +1591,33 @@ RULES:
 
                         let retryInstruction = '';
                         if (defects.hasNoThoughts) {
-                            retryInstruction = 'You forgot to use your mandatory <thought> tags. You must ALWAYS think out loud inside <thought> tags before answering. Retry.';
+                            retryInstruction = `You did not include the required <thought> block in your response. You must always think step-by-step before answering.
+Example of expected layout:
+<thought>
+I need to calculate the sum of 2 and 2.
+</thought>
+The sum is 4.`;
                         } else if (defects.hasLeakedToolCalls) {
-                            retryInstruction = 'CRITICAL ERROR: You wrote tool call syntax (e.g. tool_code_execution) directly in your text response. You must use the structured tool call API provided by the system. Never write tool code in plain text. Correct your error immediately.';
+                            retryInstruction = `You wrote a tool call name directly in your text response. Tool calls must be invoked strictly through the system's tool-calling mechanism, never written as plain text.
+Example of expected layout:
+<thought>
+I will read the directory contents. I need to call the list_directory tool.
+</thought>
+[The tool call is automatically dispatched by the system, do not write the tool name in the text response]`;
                         } else if (defects.hasRawCodeDominance) {
-                            retryInstruction = 'ERROR: Your response contains only raw code. If you want to execute this code, use the structured `code_execution` tool. Do not send it directly to the user as plain text.';
+                            retryInstruction = `Your response contains raw code without executing it. If you want to execute code, use the \`code_execution\` tool. If you want to show code to the user, wrap it in standard markdown blocks and explain it.
+Example of displaying code:
+Here is the code:
+\`\`\`javascript
+console.log("Hello");
+\`\`\``;
                         } else if (defects.hasJsonToolObject) {
-                            retryInstruction = 'ERROR: You returned a JSON tool call object in the text. You must use the structured tool call API. Retry.';
+                            retryInstruction = `You wrote a raw JSON tool call object in your text response. You must call tools using the structured tool-calling API, not by outputting JSON text.
+Example of expected layout:
+<thought>
+I need to write a file using write_to_file.
+</thought>
+[The tool call is automatically dispatched by the system, do not write the raw JSON block in the text response]`;
                         }
 
                         history.push({

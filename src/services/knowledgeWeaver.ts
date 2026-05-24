@@ -1,8 +1,6 @@
-// services/knowledgeWeaver.js
-// Service d'extraction d'entités et de relations (Knowledge Graph)
-
 import { providerRouter } from '../providers/index.js';
 import { graphMemory } from './graphMemory.js';
+import { tryParseJson } from '../utils/ResponseFormatEnforcer.js';
 
 export const knowledgeWeaver = {
     /**
@@ -27,6 +25,7 @@ RÈGLES :
 2. Si une entité existe déjà (ex: mentionnée avant), réutilise son nom exact.
 3. Sois concis dans les descriptions.
 
+<output_format>
 RÉPONDS UNIQUEMENT EN JSON :
 {
   "entities": [
@@ -35,10 +34,23 @@ RÉPONDS UNIQUEMENT EN JSON :
   "relationships": [
     { "source": "NomSource", "target": "NomCible", "type": "TypeRelation" }
   ]
-}`;
+}
+
+Few-shot example:
+{
+  "entities": [
+    { "name": "Alex", "type": "Personne", "description": "Développeur TypeScript et créateur de HIVE-MIND" },
+    { "name": "Railway", "type": "Organisation", "description": "Plateforme d'hébergement cloud" }
+  ],
+  "relationships": [
+    { "source": "Alex", "target": "Railway", "type": "utilise" }
+  ]
+}
+</output_format>`;
 
             const response = await providerRouter.chat([
-                { role: 'system', content: systemPrompt },
+                { role: 'system', content: 'Tu es le Knowledge Weaver de HIVE-MIND. Output JSON only.' },
+                { role: 'user', content: systemPrompt },
                 { role: 'user', content: `Texte à analyser :\n"${text}"` }
             ], {
                 family: 'kimi',
@@ -48,9 +60,7 @@ RÉPONDS UNIQUEMENT EN JSON :
 
             if (!response?.content) return;
 
-            // Nettoyage et parse JSON
-            const jsonText = response.content.replace(/```json|```/g, '').trim();
-            const data = JSON.parse(jsonText);
+            const data = tryParseJson<any>(response.content);
 
             // 1. Enregistrer les entités
             const entityMap = new Map();

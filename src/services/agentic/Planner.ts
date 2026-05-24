@@ -9,6 +9,7 @@
 import { providerRouter } from '../../providers/index.js';
 import { actionMemory } from '../memory/ActionMemory.js';
 import { supabase } from '../supabase.js';
+import { tryParseJson } from '../../utils/ResponseFormatEnforcer.js';
 
 // ============================================================================
 // STEP VARIABLES INTERPOLATION UTILITIES
@@ -276,44 +277,17 @@ export class ExplicitPlanner {
         let cleanedJson = planText.trim();
 
         try {
-            // 1. Charger les bibliothèques JSON robustes
-            const libs = await loadJsonLibraries();
-            
-            // 2. Extraire JSON des balises markdown si présentes
-            const markdownMatch = cleanedJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (markdownMatch && markdownMatch[1]) {
-                cleanedJson = markdownMatch[1];
-            } else {
-                // Sinon, chercher le premier { et le dernier }
-                const jsonMatch = cleanedJson.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    cleanedJson = jsonMatch[0];
-                }
-            }
-
             let parsedPlan: any;
-
-            // 3. Tenter parsing avec bibliothèques robustes
-            if (libs) {
-                try {
-                    // 3a. Réparer avec json-repair (corrige les malformations)
-                    const repairedJson = libs.jsonRepair.jsonrepair(cleanedJson);
-                    
-                    // 3b. Parser avec json5 (plus tolérant)
-                    parsedPlan = libs.json5.parse(repairedJson);
-                    
-                    console.log('[Planner] ✅ JSON réparé avec json-repair + json5');
-                } catch (libError: any) {
-                    console.warn('[Planner] ⚠️ Bibliothèques JSON ont échoué, fallback natif:', libError.message);
-                    // Fallback natif au lieu de re-throw
-                    parsedPlan = this._parseJsonFallback(cleanedJson);
-                    if (!parsedPlan) return null;
-                }
-            } else {
-                // Fallback: parsing natif avec nettoyage manuel
-                parsedPlan = this._parseJsonFallback(cleanedJson);
+            try {
+                parsedPlan = tryParseJson<any>(planText);
+                console.log('[Planner] ✅ JSON parsé avec succès via tryParseJson');
+            } catch (err: any) {
+                console.warn('[Planner] ⚠️ tryParseJson a échoué, tentative de nettoyage manuel:', err.message);
+                parsedPlan = this._parseJsonFallback(planText);
                 if (!parsedPlan) return null;
             }
+
+            const libs = await loadJsonLibraries();
 
             // 4. Valider contre le schéma (Ajv est déjà le constructor grâce au .default)
             if (libs && Ajv) {
@@ -472,17 +446,23 @@ Count tools needed:
 </estimation_criteria>
 
 <output_format>
-Respond with ONLY an integer number (e.g., 2)
+Respond with ONLY an integer number representing the estimate. Do not include any other text, reasoning, or markdown.
+
+Few-shot examples:
+- Estimate: 1
+- Estimate: 3
 </output_format>
 
 Estimate:`;
 
             const response = await providerRouter.chat([
-                { role: 'system', content: 'Tu es un estimateur de complexité.' },
+                { role: 'system', content: 'Tu es un estimateur de complexité. Tu réponds uniquement par un chiffre.' },
                 { role: 'user', content: prompt }
             ], { temperature: 0.1, maxTokens: 5 });
 
-            const estimate = parseInt(response.content.trim());
+            const text = response.content.trim();
+            const match = text.match(/\d+/);
+            const estimate = match ? parseInt(match[0], 10) : NaN;
             return !isNaN(estimate) && estimate >= this.complexityThreshold;
 
         } catch (e: any) {

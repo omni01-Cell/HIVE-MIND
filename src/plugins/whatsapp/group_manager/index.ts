@@ -5,6 +5,7 @@
 import { filterDB, whitelistDB, warningsDB, configDB } from './database.js';
 import { filterProcessor } from './processor.js';
 import { extractNumericId, jidMatch, formatForDisplay } from '../../../utils/jidHelper.js';
+import { tryParseJson } from '../../../utils/ResponseFormatEnforcer.js';
 
 export default {
     name: 'group_manager',
@@ -925,12 +926,18 @@ export default {
         If the mission contains clear orders (e.g.: "Ban @12345", "Add filter 'casino'"), generate a structured JSON.
         If the mission is just descriptive (e.g.: "Welcome people"), return empty JSON.
         
-        EXPECTED RESPONSE FORMAT (PURE JSON):
+        <output_format>
+        Answer ONLY in JSON matching this format:
         {
           "actions": [
             { "tool": "whatsapp_ban_user", "args": { "user_jid": "123456@s.whatsapp.net" } }
           ]
         }
+        
+        Few-shot examples:
+        - {"actions": []}
+        - {"actions": [{"tool": "whatsapp_filter_add", "args": {"keyword": "casino", "severity": "warn"}}]}
+        </output_format>
         
         IMPORTANT:
         - Convert mentions e.g.: "@123" -> attempt to guess or request raw. The user has context.
@@ -948,9 +955,7 @@ export default {
                 jsonMode: true // Force JSON if supported, otherwise the prompt asks for it
             });
 
-            // Potential JSON Markdown cleanup
-            let cleanJson = response.content.replace(/```json/g, '').replace(/```/g, '').trim();
-            const plan = JSON.parse(cleanJson);
+            const plan = tryParseJson<any>(response.content);
 
             const results = [];
 

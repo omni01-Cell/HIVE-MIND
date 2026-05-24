@@ -2,6 +2,7 @@
 import { providerRouter } from '../../providers/index.js';
 import { factsMemory } from '../memory.js';
 import { workingMemory } from '../workingMemory.js';
+import { tryParseJson } from '../../utils/ResponseFormatEnforcer.js';
 
 export const learningEngine = {
   async extractInsights(chatId: string): Promise<void> {
@@ -24,19 +25,35 @@ Categories:
 Conversation:
 ${transcript}
 
-Return ONLY a valid JSON array:
-[{"type": "fact|pref|goal", "key": "short_name", "value": "detailed insight"}]`;
+<output_format>
+Return ONLY a valid JSON array matching this schema:
+[{"type": "fact|pref|goal", "key": "short_name", "value": "detailed insight"}]
+
+Few-shot examples:
+[
+  {"type": "fact", "key": "preferred_language", "value": "TypeScript"},
+  {"type": "pref", "key": "tone_preference", "value": "Prefers detailed technical explanations with code snippets"},
+  {"type": "goal", "key": "current_project", "value": "Deploying HIVE-MIND on Railway infrastructure"}
+]
+</output_format>`;
     
     try {
       const response = await providerRouter.chat([
-        { role: 'system', content: 'You are an objective data extractor.' },
+        { role: 'system', content: 'You are an objective data extractor. Output JSON only.' },
         { role: 'user', content: prompt }
       ], { category: 'FAST_CHAT', temperature: 0.1 });
       
-      const jsonMatch = response.content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) return;
-      
-      const insights = JSON.parse(jsonMatch[0]);
+      if (!response?.content) return;
+
+      let insights: any[] = [];
+      try {
+          insights = tryParseJson<any[]>(response.content);
+      } catch (err) {
+          // Fallback avec expression régulière en cas de bruit autour
+          const jsonMatch = response.content.match(/\[[\s\S]*\]/);
+          if (!jsonMatch) return;
+          insights = tryParseJson<any[]>(jsonMatch[0]);
+      }
       
       // 3. Sauvegarder dans la DB avec la taxonomie MAPLE
       for (const insight of insights) {

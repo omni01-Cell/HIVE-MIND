@@ -1,8 +1,6 @@
-// services/socialCueWatcher.js
-// Module d'écoute passive des signaux sociaux
-
 import { workingMemory } from './workingMemory.js';
 import { providerRouter } from '../providers/index.js';
+import { tryParseJson } from '../utils/ResponseFormatEnforcer.js';
 
 /**
  * Social Cue Watcher - Analyse passive des groupes pour détecter les situations nécessitant intervention
@@ -36,7 +34,7 @@ export const socialCueWatcher = {
                 .join('\n');
 
             // 3. Prompt d'analyse LLM
-            const analysisPrompt = `Tu es un observateur social silencieux.
+            const analysisPrompt = `Tu es un observateur social silencieux de HIVE-MIND.
 Analyse cette conversation de groupe WhatsApp :
 
 ${conversationSnippet}
@@ -46,6 +44,7 @@ DÉTECTE:
 2. Question restée sans réponse claire
 3. Quelqu'un qui demande de l'aide technique/conseil
 
+<output_format>
 Réponds en JSON strict :
 {
   "conflict": true/false,
@@ -53,10 +52,30 @@ Réponds en JSON strict :
   "needsHelp": true/false,
   "sentiment": "positive"/"neutral"/"negative",
   "reason": "Explication courte"
-}`;
+}
+
+Few-shot examples:
+Example 1:
+{
+  "conflict": false,
+  "unansweredQuestion": true,
+  "needsHelp": false,
+  "sentiment": "neutral",
+  "reason": "The user asked about sticker creation tool availability but received no replies."
+}
+
+Example 2:
+{
+  "conflict": true,
+  "unansweredQuestion": false,
+  "needsHelp": false,
+  "sentiment": "negative",
+  "reason": "Users are arguing over python code formats with aggressive tone."
+}
+</output_format>`;
 
             const response = await providerRouter.chat([
-                { role: 'system', content: 'Tu es un analyseur de sentiment social.' },
+                { role: 'system', content: 'Tu es un analyseur de sentiment social de HIVE-MIND. Output JSON only.' },
                 { role: 'user', content: analysisPrompt }
             ], {
                 family: 'kimi',
@@ -64,21 +83,27 @@ Réponds en JSON strict :
                 temperature: 0.1
             });
 
-            // Parse JSON response
-            const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const analysis = JSON.parse(jsonMatch[0]);
-                analysis.shouldIntervene = analysis.conflict || analysis.unansweredQuestion || analysis.needsHelp;
-                return analysis;
+            if (!response?.content) {
+                return {
+                    sentiment: 'neutral',
+                    conflict: false,
+                    unansweredQuestion: false,
+                    needsHelp: false,
+                    shouldIntervene: false
+                };
             }
 
-            return {
-                sentiment: 'neutral',
-                conflict: false,
-                unansweredQuestion: false,
-                needsHelp: false,
-                shouldIntervene: false
-            };
+            let analysis: any;
+            try {
+                analysis = tryParseJson<any>(response.content);
+            } catch (err) {
+                const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) throw err;
+                analysis = tryParseJson<any>(jsonMatch[0]);
+            }
+
+            analysis.shouldIntervene = analysis.conflict || analysis.unansweredQuestion || analysis.needsHelp;
+            return analysis;
 
         } catch (error: any) {
             console.error('[SocialCueWatcher] Erreur analyzeGroupPulse:', error.message);

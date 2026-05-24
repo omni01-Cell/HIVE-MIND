@@ -42,13 +42,18 @@ Focus on: recurring issues, wrong tool selections, parameter mistakes, technical
 Create 3-5 CRITICAL, ACTIONABLE lessons to prevent repetition.
 </task>
 
-<output_constraints>
-- Format: Markdown bullet points ONLY
-- Length: Maximum 10 bullet points total
-- Style: Concise, imperative (e.g., "Avoid X when Y", "Always check Z before...")
-- NO verbose explanations, NO introductions, NO conclusions
-- Focus ONLY on specific, actionable lessons
-</output_constraints>
+<output_format>
+Format: Markdown bullet points ONLY. Do not write introductions, explanations, or conclusions. Just the bullet points.
+
+Style: Concise, imperative sentences starting with a verb (e.g., "Avoid", "Always").
+Length: Maximum 10 bullet points total.
+Focus ONLY on specific, actionable lessons.
+
+Few-shot examples:
+- Avoid executing heavy NPM operations in parallel to prevent system memory overload.
+- Always check list_directory output before reading a file to ensure it exists.
+- Never hardcode dynamic API keys; read them from process.env.
+</output_format>
 
 Lessons:`;
 

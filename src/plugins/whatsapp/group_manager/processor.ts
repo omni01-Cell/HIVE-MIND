@@ -4,6 +4,7 @@
 
 import { filterDB, whitelistDB, warningsDB, configDB } from './database.js';
 import { moderationActions } from './actions.js';
+import { tryParseJson } from '../../../utils/ResponseFormatEnforcer.js';
 
 /**
  * Hybrid filtering processor
@@ -137,12 +138,20 @@ DETECTED KEYWORD: "${filter.keyword}"
 ADMIN RULE: "${filter.context_rule || 'Forbid any serious use, tolerate humor.'}"
 DEFAULT SEVERITY: ${filter.severity}
 
-QUESTION: Does this message violate the rule? Answer ONLY in JSON:
+QUESTION: Does this message violate the rule?
+
+<output_format>
+Answer ONLY in JSON matching this format:
 {
-    "shouldAct": true/false,
+    "shouldAct": true,
     "reason": "short explanation",
-    "severity": "warn" or "ban" or "ignore"
-}`;
+    "severity": "warn"
+}
+
+Few-shot examples:
+- {"shouldAct": true, "reason": "Severe hate speech matched forbidden keyword.", "severity": "ban"}
+- {"shouldAct": false, "reason": "Keyword used in a harmless educational context.", "severity": "ignore"}
+</output_format>`;
 
         try {
             const { providerRouter } = await import('../../../providers/index.js');
@@ -150,10 +159,9 @@ QUESTION: Does this message violate the rule? Answer ONLY in JSON:
                 { role: 'user', content: prompt }
             ], { temperature: 0.1 }); // Low temperature for consistency
 
-            // Parse JSON from response
-            const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
+            const parsed = tryParseJson<any>(response.content);
+            if (parsed && typeof parsed === 'object') {
+                return parsed;
             }
 
             // Fallback if no valid JSON
@@ -209,8 +217,13 @@ QUESTION: Does this message violate the rule? Answer ONLY in JSON:
     async generateVariants(keyword: any) {
         const prompt = `Generate possible variants and bypasses for the forbidden word "${keyword}".
 Include: intentional typos, leetspeak, spaces, special characters.
-Answer ONLY with a JSON array of regex patterns, example:
-["h.?i.?t.?l.?e.?r", "h1tl3r", "adolf"]`;
+
+<output_format>
+Answer ONLY with a JSON array of regex patterns. No introduction, no explanations.
+
+Few-shot example:
+["h.?i.?t.?l.?e.?r", "h1tl3r", "adolf"]
+</output_format>`;
 
         try {
             const { providerRouter } = await import('../../../providers/index.js');
@@ -218,9 +231,9 @@ Answer ONLY with a JSON array of regex patterns, example:
                 { role: 'user', content: prompt }
             ], { temperature: 0.3 });
 
-            const jsonMatch = response.content.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
+            const parsed = tryParseJson<any[]>(response.content);
+            if (Array.isArray(parsed)) {
+                return parsed;
             }
             return [];
         } catch (error: any) {

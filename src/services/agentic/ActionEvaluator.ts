@@ -122,18 +122,24 @@ Calibration examples:
 <output_format>
 Respond with ONLY a decimal number between 0.0 and 1.0 (e.g., 0.75).
 No explanation, no text, just the score.
+
+Few-shot examples:
+- Score: 0.85
+- Score: 0.30
 </output_format>
 
 Score:`;
 
             const response = await providerRouter.callServiceRecipe('ACTION_EVALUATOR', [
-                { role: 'system', content: 'Tu es un évaluateur de qualité objectif.' },
+                { role: 'system', content: 'Tu es un évaluateur de qualité objectif. Tu réponds uniquement par un chiffre décimal.' },
                 { role: 'user', content: prompt }
             ]);
 
             if (!response?.content) return 0.5;
 
-            const score = parseFloat(response.content.trim());
+            const text = response.content.trim();
+            const match = text.match(/\d+(?:\.\d+)?/);
+            const score = match ? parseFloat(match[0]) : NaN;
             return isNaN(score) ? 0.5 : Math.max(0, Math.min(1, score));
 
         } catch (e: any) {
