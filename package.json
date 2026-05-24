@@ -3,24 +3,24 @@
     "version": "1.0.0",
     "description": "Bot WhatsApp modulaire avec architecture Brick-Like et multi-modèles IA",
     "type": "module",
-    "main": "bot.ts",
+    "main": "src/bin/hive-mind.ts",
     "bin": {
-        "hive-mind": "./bin/hive-mind.ts"
+        "hive-mind": "./src/bin/hive-mind.ts"
     },
     "scripts": {
-        "start": "tsx bin/hive-mind.ts start",
-        "dev": "tsx --watch bin/hive-mind.ts start",
+        "start": "tsx src/bin/hive-mind.ts start",
+        "dev": "tsx --watch src/bin/hive-mind.ts start",
         "build": "tsc --noEmit",
         "lint": "eslint . --ext .js,.ts",
         "lint:fix": "eslint . --ext .js,.ts --fix",
-        "cli": "ACTIVE_TRANSPORT=cli APP_ENV=local tsx bin/hive-mind.ts start",
-        "repair": "tsx scripts/repair-session.ts",
-        "audit:group": "tsx scripts/audit-group.ts",
-        "fix:usernames": "tsx scripts/fix-missing-usernames.ts",
+        "cli": "ACTIVE_TRANSPORT=cli APP_ENV=local tsx src/bin/hive-mind.ts start",
+        "repair": "tsx src/scripts/repair-session.ts",
+        "audit:group": "tsx src/scripts/audit-group.ts",
+        "fix:usernames": "tsx src/scripts/fix-missing-usernames.ts",
         "test": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest --forceExit",
-        "test:unit": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/unit",
-        "test:integration": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/integration",
-        "test:e2e": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest tests/e2e",
+        "test:unit": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest src/tests/unit",
+        "test:integration": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest src/tests/integration",
+        "test:e2e": "NODE_ENV=test SUPABASE_URL=http://localhost:54321 SUPABASE_KEY=dummy REDIS_URL=redis://localhost:6379 NODE_OPTIONS='--experimental-vm-modules' jest src/tests/e2e",
         "postinstall": "npx playwright install chromium"
     },
     "keywords": [
@@ -88,6 +88,7 @@
         "jest": "^30.3.0",
         "ts-jest": "^29.4.9",
         "tsx": "^4.21.0",
-        "typescript": "^6.0.3"
+        "typescript": "^6.0.3",
+        "typescript-eslint": "^8.59.4"
     }
 }
