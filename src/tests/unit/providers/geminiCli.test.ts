@@ -12,7 +12,7 @@ describe('Gemini CLI Provider Adapter', () => {
         mockFetch.mockReset();
         process.env.GEMINI_CLI_ACCESS_TOKEN = '';
         process.env.GEMINI_CLI_REFRESH_TOKEN = 'dummy_gemini_cli_refresh';
-        process.env.GEMINI_CLI_PROJECT_ID = 'dummy_gemini_cli_project';
+        process.env.GE_DEFAULT_PROJECT_ID = 'dummy_gemini_cli_project';
     });
 
     it('should successfully call chat with correct parameters and thought signature bypass', async () => {
