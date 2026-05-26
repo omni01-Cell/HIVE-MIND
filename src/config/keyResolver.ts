@@ -34,14 +34,17 @@ function inferProviderName(credentialValue: string): string | null {
 /**
  * Résout un objet credentials complet (notamment les familles_ia)
  */
-export function resolveCredentials(credentials: Record<string, any>): Record<string, any> {
+export function resolveCredentials(credentials: Record<string, unknown>): Record<string, unknown> {
     if (!credentials) return {};
     const resolved = { ...credentials };
 
-    if (resolved.familles_ia) {
-        resolved.familles_ia = { ...resolved.familles_ia };
-        for (const [family, key] of Object.entries(resolved.familles_ia as Record<string, string>)) {
-            resolved.familles_ia[family] = resolveApiKey(key, family);
+    if (resolved.familles_ia && typeof resolved.familles_ia === 'object') {
+        const familles = { ...(resolved.familles_ia as Record<string, unknown>) };
+        resolved.familles_ia = familles;
+        for (const [family, key] of Object.entries(familles)) {
+            if (typeof key === 'string') {
+                familles[family] = resolveApiKey(key, family);
+            }
         }
     }
 

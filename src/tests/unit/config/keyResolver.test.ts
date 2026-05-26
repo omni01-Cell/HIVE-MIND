@@ -48,7 +48,8 @@ describe('keyResolver', () => {
             const resolvedCredentials = resolveCredentials(credentials);
 
             // Assert
-            expect(resolvedCredentials.familles_ia.gemini).toBe('gemini_live_key');
+            const familles = resolvedCredentials.familles_ia as Record<string, string>;
+            expect(familles.gemini).toBe('gemini_live_key');
         });
     });
 });

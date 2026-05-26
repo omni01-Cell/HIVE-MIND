@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import { NewMessage } from 'telegram/events/index.js';
@@ -51,7 +50,9 @@ export const telegramTransport = {
                 try {
                     const sender = await msg.getSender();
                     senderName = sender?.username || sender?.firstName || 'Unknown';
-                } catch (e) { }
+                } catch (_error) {
+                    // Ignorer les erreurs d'extraction du sender
+                }
 
                 const chatId = msg.peerId?.userId?.toString() || msg.peerId?.chatId?.toString() || msg.peerId?.channelId?.toString();
 
@@ -91,7 +92,7 @@ export const telegramTransport = {
         return await telegramTransport.client.sendMessage(chatId, {
             file: audio,
             voice: true
-        });
+        } as any);
     },
 
     sendFile: async (chatId: string, filePath: string, fileName: string, caption: string = '') => {
@@ -101,7 +102,7 @@ export const telegramTransport = {
             forceDocument: true,
             attributes: fileName ? [new Api.DocumentAttributeFilename({ fileName })] : [],
             message: caption
-        });
+        } as any);
     },
 
     sendSticker: async (chatId: any, stickerBuffer: any) => {

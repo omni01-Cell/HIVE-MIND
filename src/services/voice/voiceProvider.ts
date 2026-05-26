@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/voice/voiceProvider.js
 // Unified Voice Provider - Routes TTS/STT to appropriate adapters
 // Features: Dynamic quota-based switching, multi-model support
@@ -48,7 +47,7 @@ export class VoiceProvider {
      * @param {Object} config Configuration from models_config.json voice_provider section
      * @param {Object} quotaManager Reference to QuotaManager instance (optional)
      */
-    constructor(config, quotaManager = null) {
+    constructor(config: any, quotaManager: any = null) {
         this.config = config || {};
         this.quotaManager = quotaManager;
         this.adapters = new Map();

@@ -110,7 +110,7 @@ export default {
                     : configService.plugins?.crawlfire_web;
                 if (pluginConfig?.apiKey) apiKey = pluginConfig.apiKey;
             }
-        } catch (e: any) {
+        } catch {
             // Silencieux
         }
 
@@ -132,25 +132,30 @@ export default {
 
         try {
             switch (toolName) {
-                case 'firecrawl_scrape':
+                case 'firecrawl_scrape': {
                     const scrapeArgs = args as FirecrawlScrapeArgs;
                     ensureAbsoluteUrl(scrapeArgs.url);
                     return await this.handleScrape(scrapeArgs.url, headers, baseUrl);
-                case 'firecrawl_crawl':
+                }
+                case 'firecrawl_crawl': {
                     const crawlArgs = args as FirecrawlCrawlArgs;
                     ensureAbsoluteUrl(crawlArgs.url);
                     return await this.handleCrawl(crawlArgs.url, crawlArgs.limit || 10, headers, baseUrl, transport, chatId);
-                case 'firecrawl_map':
+                }
+                case 'firecrawl_map': {
                     const mapArgs = args as FirecrawlMapArgs;
                     ensureAbsoluteUrl(mapArgs.url);
                     return await this.handleMap(mapArgs.url, headers, baseUrl);
-                case 'firecrawl_search':
+                }
+                case 'firecrawl_search': {
                     const searchArgs = args as FirecrawlSearchArgs;
                     return await this.handleSearch(searchArgs.query, searchArgs.limit || 3, headers, baseUrl);
-                case 'firecrawl_extract':
+                }
+                case 'firecrawl_extract': {
                     const extractArgs = args as FirecrawlExtractArgs;
                     if (extractArgs.urls) extractArgs.urls.forEach(ensureAbsoluteUrl);
                     return await this.handleExtract(extractArgs.urls, extractArgs.prompt, headers, baseUrl, transport, chatId);
+                }
                 default:
                     return { success: false, message: `Unknown Firecrawl tool: ${toolName}` };
             }

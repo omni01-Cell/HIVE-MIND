@@ -385,6 +385,30 @@ export const db = {
     },
 
     /**
+     * Enregistre un événement de membre de groupe (join, leave, etc.)
+     */
+    async recordMemberEvent(groupJid: any, userJid: any, action: any) {
+        if (!supabase) return null;
+        const groupRes = await this.resolveContextFromLegacyId(groupJid);
+        const userRes = await this.resolveContextFromLegacyId(userJid);
+
+        if (!groupRes || !userRes) return null;
+
+        const { data, error } = await supabase
+            .from('group_member_history')
+            .insert({
+                group_id: groupRes.context_id,
+                user_id: userRes.context_id,
+                action
+            })
+            .select()
+            .single();
+
+        if (error) console.error('[DB] Erreur recordMemberEvent:', error);
+        return data;
+    },
+
+    /**
      * Vérifie si un utilisateur a déjà quitté le groupe
      */
     async hasLeftBefore(groupJid: any, userJid: any) {

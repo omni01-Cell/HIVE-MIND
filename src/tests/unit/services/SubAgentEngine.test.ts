@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { describe, beforeEach, it, expect, jest } from '@jest/globals';
 import * as path from 'path';
 

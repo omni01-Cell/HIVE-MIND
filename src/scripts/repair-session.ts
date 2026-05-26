@@ -1,4 +1,3 @@
-// @ts-nocheck
 // scripts/repair-session.js
 // ============================================================================
 // UTILITAIRE DE RÉPARATION DE SESSION
@@ -43,7 +42,7 @@ files.forEach(file => {
             unlinkSync(filePath);
             cleanedCount++;
         }
-    } catch (e) {
+    } catch (e: any) {
         console.warn(`⚠️ Impossible de supprimer ${file}: ${e.message}`);
     }
 });

@@ -1,11 +1,10 @@
-// @ts-nocheck
 import { workingMemory } from '../../../services/workingMemory.js';
 
 export class AntiDeleteHandler {
     transport: any;
     logger: any;
 
-    constructor(transport, logger) {
+    constructor(transport: any, logger: any) {
         this.transport = transport;
         this.logger = logger;
     }

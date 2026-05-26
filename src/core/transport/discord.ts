@@ -1,6 +1,4 @@
-// @ts-nocheck
 import { Client } from 'discord.js-selfbot-v13';
-import { TransportInterface } from './interface.js';
 
 export const discordTransport = {
     client: null as Client | null,
@@ -15,7 +13,7 @@ export const discordTransport = {
 
         discordTransport.client = new Client({
             checkUpdate: false
-        });
+        } as any);
 
         discordTransport.client.on('ready', () => {
             console.log(`[DiscordTransport] Connected to Discord as ${discordTransport.client?.user?.username}`);
@@ -50,7 +48,7 @@ export const discordTransport = {
         }
     },
 
-    sendText: async (chatId: string, text: string, options: any = {}) => {
+    sendText: async (chatId: string, text: string, _options: any = {}) => {
         if (!discordTransport.client) return;
         const channel = await discordTransport.client.channels.fetch(chatId);
         if (channel && channel.isText()) {
@@ -58,7 +56,7 @@ export const discordTransport = {
         }
     },
 
-    sendMedia: async (chatId: string, media: any, options: any = {}) => {
+    sendMedia: async (chatId: string, media: any, _options: any = {}) => {
         if (!discordTransport.client) return;
         const channel = await discordTransport.client.channels.fetch(chatId);
         if (channel && channel.isText()) {
@@ -82,7 +80,7 @@ export const discordTransport = {
         }
     },
 
-    sendSticker: async (chatId: any, stickerBuffer: any) => {
+    sendSticker: async (_chatId: any, _stickerBuffer: any) => {
         console.warn('[DiscordTransport] sendSticker not implemented fully');
     },
 
@@ -100,7 +98,7 @@ export const discordTransport = {
         return null;
     },
 
-    downloadMedia: async (message: any) => {
+    downloadMedia: async (_message: any) => {
         // Simple download media logic or return null
         return null;
     },
@@ -139,11 +137,11 @@ export const discordTransport = {
         }
     },
 
-    isAdmin: async (groupId: any, userId: any) => {
+    isAdmin: async (_groupId: any, _userId: any) => {
         return false; // Basic implementation for selfbot
     },
 
-    sendReaction: async (chatId: string, key: any, emoji: string) => {
+    sendReaction: async (_chatId: string, _key: any, _emoji: string) => {
         console.warn('[DiscordTransport] sendReaction not fully implemented');
         return false;
     }

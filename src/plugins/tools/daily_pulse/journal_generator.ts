@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { container } from '../../../core/container.js';
 import { workingMemory } from '../../../services/workingMemory.js';
 

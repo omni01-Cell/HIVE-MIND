@@ -1,4 +1,3 @@
-// @ts-nocheck
 // plugins/tts/index.js
 // Text-to-Speech Plugin - Uses unified VoiceProvider
 

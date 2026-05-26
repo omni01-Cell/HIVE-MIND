@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/agentMemory.js
 // Mémoire épisodique des actions de l'agent
 // Utilise la table Supabase agent_actions pour tracer et apprendre de chaque action
@@ -130,7 +129,7 @@ export const agentMemory = {
 
             if (error) throw error;
 
-            const stats = {};
+            const stats: Record<string, any> = {};
             for (const row of (data || [])) {
                 if (!stats[row.tool_name]) {
                     stats[row.tool_name] = { success: 0, error: 0 };

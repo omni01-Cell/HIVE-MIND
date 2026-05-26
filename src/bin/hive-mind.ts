@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 import 'dotenv/config';
 import { Command } from 'commander';
 import { acquireLock, releaseLock } from '../utils/pidLock.js';
@@ -33,11 +32,11 @@ program
         acquireLock();
 
         // --- Gestion des arrêts propres (Déclaré AVANT l'init pour attraper les SIGINT immédiats) ---
-        process.on('uncaughtException', (error: any) => {
+        process.on('uncaughtException', (error: unknown) => {
             console.error('❌ Exception non capturée:', error);
         });
 
-        process.on('unhandledRejection', (reason: any) => {
+        process.on('unhandledRejection', (reason: unknown) => {
             console.error('❌ Promesse rejetée:', reason);
         });
 
@@ -58,8 +57,9 @@ program
                 releaseLock();
                 clearTimeout(forceExitTimeout);
                 process.exit(0);
-            } catch (err: any) {
-                console.error('❌ Erreur pendant le shutdown:', err.message);
+            } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : String(err);
+                console.error('❌ Erreur pendant le shutdown:', errorMessage);
                 process.exit(1);
             }
         };
@@ -80,7 +80,7 @@ program
                 StateManager.processSyncQueue().catch(() => { });
             }, 30000);
 
-        } catch (error: any) {
+        } catch (error) {
             console.error('❌ Erreur fatale:', error);
             process.exit(1);
         }
@@ -90,7 +90,7 @@ program
 // HELPER POUR LES COMMANDES ADMIN (Init Container)
 // ============================================================================
 async function initAdminEnv() {
-    await container.init({ mode: 'cli' });
+    await container.init({ mode: 'minimal' });
     return {
         redis: container.get('redis'),
         adminService: container.get('adminService'),
@@ -165,7 +165,7 @@ redisCmd.command('flush').description('Efface TOUT le cache Redis').option('-y, 
         console.log('⚠️ ATTENTION: Utilisez --yes pour confirmer.');
     } else {
         console.log('💾 Tentative de sync avant flush...');
-        try { await StateManager.processSyncQueue(1000); } catch (e) { }
+        try { await StateManager.processSyncQueue(1000); } catch { /* ignore */ }
         const result = await logger.flushRedisCache(redis);
         console.log('Résultat:', result);
     }
@@ -191,8 +191,9 @@ stateCmd.command('sync').description('Force la synchronisation Redis -> Supabase
     try {
         await StateManager.processSyncQueue(1000);
         console.log('✅ Terminé.');
-    } catch (e: any) {
-        console.error('❌ Erreur sync:', e.message);
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error('❌ Erreur sync:', errorMessage);
     }
     process.exit(0);
 });
@@ -229,7 +230,10 @@ adminCmd.command('list').description('Liste les admins globaux').action(async ()
     const { adminService } = await initAdminEnv();
     const admins = await adminService.listAdmins();
     console.log('👑 Admins globaux:');
-    admins.forEach((a: any) => console.log(`   - ${a.jid} (${a.role})`));
+    admins.forEach((a: unknown) => {
+        const admin = a as { jid: string; role: string };
+        console.log(`   - ${admin.jid} (${admin.role})`);
+    });
     process.exit(0);
 });
 
@@ -272,8 +276,9 @@ program.command('tools:index').description('Indexe tous les outils du bot').acti
             }
         }
         console.log(`✅ ${indexed}/${tools.length} outils indexés.`);
-    } catch (e: any) {
-        console.error('❌ Erreur indexation:', e.message);
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error('❌ Erreur indexation:', errorMessage);
     }
     process.exit(0);
 });
@@ -286,11 +291,13 @@ program.command('db:reset-data').description('Réinitialise les tables de la BDD
     const { supabase, adminService } = await initAdminEnv();
     console.log('🛑 DÉMARRAGE DU NETTOYAGE DB...');
     try {
-        const adminJids = (await adminService.listAdmins()).map((a: any) => a.jid);
+        const adminJids = (await adminService.listAdmins()).map((a: unknown) => (a as { jid: string }).jid);
         let tablesToFlush = ['memories', 'facts', 'groups'];
         try {
-            tablesToFlush = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'db-reset-tables.json'), 'utf-8'));
-        } catch {}
+            tablesToFlush = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'db-reset-tables.json'), 'utf-8')) as string[];
+        } catch {
+            /* ignore */
+        }
 
         for (const table of tablesToFlush) {
             console.log(`🗑️ Vidage de ${table}...`);
@@ -307,15 +314,15 @@ program.command('db:reset-data').description('Réinitialise les tables de la BDD
             await supabase.from('users').delete().neq('jid', 'x');
         }
         console.log('✅ Base de données réinitialisée !');
-    } catch (e: any) {
+    } catch (e) {
         console.error('❌ Erreur:', e);
     }
     process.exit(0);
 });
 
 program.command('status').description('Affiche l\'état du système').action(async () => {
-    const { redis, supabase, adminService } = await initAdminEnv();
-    const status = await logger.systemStatus({ redis, supabase, adminService });
+    const { redis, adminService } = await initAdminEnv();
+    const status = await logger.systemStatus({ redis, adminService });
     console.log('\n📊 État du système:\n', JSON.stringify(status, null, 2));
     process.exit(0);
 });

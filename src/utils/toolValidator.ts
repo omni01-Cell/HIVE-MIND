@@ -10,45 +10,45 @@ import Ajv from 'ajv';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 
-export function validateToolArgs(
-    toolName: string,
-    toolArgs: string,
-    toolDefs: Array<{ function?: { name?: string; parameters?: { required?: string[]; properties?: Record<string, unknown> } } }>
-): { valid: boolean; missing: string[]; schema: unknown; formattedError?: string } {
-    const toolDef = toolDefs.find((t) => t.function?.name === toolName);
+export interface ToolDefParameter {
+    type?: string;
+    additionalProperties?: boolean;
+    required?: string[];
+    properties?: Record<string, unknown>;
+}
 
-    if (!toolDef?.function?.parameters) {
-        return { valid: true, missing: [], schema: null };
-    }
+export interface ToolDef {
+    function?: {
+        name?: string;
+        parameters?: ToolDefParameter;
+    };
+}
 
-    let parsedArgs: Record<string, unknown> = {};
-    if (toolArgs && toolArgs.trim() !== '') {
-        try {
-            parsedArgs = JSON.parse(toolArgs);
-            // Preprocess to strip empty strings and nulls, forcing 'required' to fail
-            for (const key of Object.keys(parsedArgs)) {
-                if (parsedArgs[key] === '' || parsedArgs[key] === null) {
-                    delete parsedArgs[key];
-                }
-            }
-        } catch {
-            return {
-                valid: false,
-                missing: ['(unparseable JSON)'],
-                schema: toolDef.function.parameters,
-                formattedError: '<tool_use_error>InputValidationError: Failed to parse tool arguments as JSON.</tool_use_error>'
-            };
+function cleanupEmptyArgs(args: Record<string, unknown>): void {
+    for (const key of Object.keys(args)) {
+        if (args[key] === '' || args[key] === null) {
+            delete args[key];
         }
-    } else if (Array.isArray(toolDef.function.parameters.required) && toolDef.function.parameters.required.length > 0) {
-        // missing all required because empty string
-        parsedArgs = {};
     }
+}
 
-    const schema = { ...toolDef.function.parameters } as any;
+function parseAndCleanupArgs(toolArgs: string): Record<string, unknown> | null {
+    if (!toolArgs || toolArgs.trim() === '') return {};
+    try {
+        const parsed = JSON.parse(toolArgs) as Record<string, unknown>;
+        cleanupEmptyArgs(parsed);
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function prepareSchema(toolName: string, parameters: ToolDefParameter): Record<string, unknown> {
+    const schema = { ...parameters } as Record<string, unknown>;
 
     // [FALLBACK] Dynamically remove 'name' constraint for browser_screenshot
     if (toolName === 'browser_screenshot' && Array.isArray(schema.required)) {
-        schema.required = schema.required.filter((param: string) => param !== 'name');
+        schema.required = schema.required.filter((param) => param !== 'name');
     }
 
     // Enforce no additional properties to detect LLM hallucinations
@@ -56,35 +56,64 @@ export function validateToolArgs(
         schema.additionalProperties = false;
     }
 
-    const validate = ajv.compile(schema);
-    const valid = validate(parsedArgs);
+    return schema;
+}
 
-    if (valid) {
-        return { valid: true, missing: [], schema };
+function formatSingleAjvError(
+    err: { keyword: string; params: Record<string, unknown>; instancePath: string; message?: string },
+    parsedArgs: Record<string, unknown>
+): string {
+    if (err.keyword === 'required') {
+        return `The required parameter '${err.params.missingProperty}' is missing.`;
     }
+    if (err.keyword === 'additionalProperties') {
+        return `An unexpected parameter '${err.params.additionalProperty}' was provided.`;
+    }
+    if (err.keyword === 'type') {
+        const prop = err.instancePath.replace(/^\//, '');
+        const providedType = prop && parsedArgs[prop] !== undefined ? typeof parsedArgs[prop] : 'undefined';
+        return `The parameter '${prop}' type is expected as '${err.params.type}' but provided as '${providedType}'.`;
+    }
+    return `Parameter error at '${err.instancePath}': ${err.message}.`;
+}
 
+function formatAjvErrors(errors: unknown[] | null, parsedArgs: Record<string, unknown>): { missing: string[]; formattedError: string } {
     const missing: string[] = [];
     const errorMessages: string[] = [];
+    const errList = (errors || []) as Array<{ keyword: string; params: Record<string, unknown>; instancePath: string; message?: string }>;
 
-    for (const err of validate.errors || []) {
-        if (err.keyword === 'required') {
-            const prop = err.params.missingProperty;
-            missing.push(prop);
-            errorMessages.push(`The required parameter '${prop}' is missing.`);
-        } else if (err.keyword === 'additionalProperties') {
-            const prop = err.params.additionalProperty;
-            errorMessages.push(`An unexpected parameter '${prop}' was provided.`);
-        } else if (err.keyword === 'type') {
-            const prop = err.instancePath.replace(/^\//, '');
-            const expectedType = err.params.type;
-            const providedType = prop && parsedArgs[prop] !== undefined ? typeof parsedArgs[prop] : 'undefined';
-            errorMessages.push(`The parameter '${prop}' type is expected as '${expectedType}' but provided as '${providedType}'.`);
-        } else {
-            errorMessages.push(`Parameter error at '${err.instancePath}': ${err.message}.`);
+    for (const err of errList) {
+        if (err.keyword === 'required' && err.params.missingProperty) {
+            missing.push(err.params.missingProperty as string);
         }
+        errorMessages.push(formatSingleAjvError(err, parsedArgs));
     }
 
     const formattedError = `<tool_use_error>InputValidationError: ${errorMessages.join(' ')}</tool_use_error>`;
+    return { missing, formattedError };
+}
 
+export function validateToolArgs(
+    toolName: string,
+    toolArgs: string,
+    toolDefs: ToolDef[]
+): { valid: boolean; missing: string[]; schema: unknown; formattedError?: string } {
+    const toolDef = toolDefs.find((t) => t.function?.name === toolName);
+    if (!toolDef?.function?.parameters) return { valid: true, missing: [], schema: null };
+
+    const parsedArgs = parseAndCleanupArgs(toolArgs);
+    if (!parsedArgs) {
+        return {
+            valid: false, missing: ['(unparseable JSON)'], schema: toolDef.function.parameters,
+            formattedError: '<tool_use_error>InputValidationError: Failed to parse JSON.</tool_use_error>'
+        };
+    }
+
+    const schema = prepareSchema(toolName, toolDef.function.parameters);
+    const validate = ajv.compile(schema);
+    if (validate(parsedArgs)) return { valid: true, missing: [], schema };
+
+    const { missing, formattedError } = formatAjvErrors(validate.errors || null, parsedArgs);
     return { valid: false, missing, schema, formattedError };
 }
+

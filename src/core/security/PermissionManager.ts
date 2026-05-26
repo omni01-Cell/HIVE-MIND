@@ -234,7 +234,7 @@ export class PermissionManager {
         const numericId = this.requestCounter;
         const requestId = `perm_${Date.now()}_${numericId}`;
 
-        return new Promise(async (resolvePromise) => {
+        return new Promise((resolvePromise) => {
             const pending: PendingRequest = {
                 id: requestId,
                 numericId,
@@ -249,45 +249,51 @@ export class PermissionManager {
             this.pendingRequests.set(requestId, pending);
             this.numericIdMap.set(numericId, requestId);
 
-            // ── LOGIC 0: CLI / TUI (Local Admin) ──
-            // The user physically at the terminal is the admin by default.
-            if (sourceChannel === 'cli') {
-                console.log('[Permission] 💻 Local CLI request, asking directly in terminal.');
-                await this._startInBandFallback(pending, true);
-                return;
-            }
-
-            // ── LOGIC 1: Admin Hub (Out-of-Band) ──
-            if (this.SECURITY_HUB_ID) {
-                try {
-                    await this._sendHubRequest(pending);
-                    console.log(`[Permission] 🏢 Request #${numericId} sent to Hub (${this.SECURITY_TRANSPORT})`);
-
-                    // Notify the end user that we're waiting for admin approval
-                    await transportManager.sendText(
-                        chatId,
-                        `⏳ _Une action sensible a été détectée. En attente de validation par l'administrateur système (Requête #${numericId})..._\n_A sensitive action was detected. Waiting for system administrator approval (Request #${numericId})..._`,
-                        {},
-                        sourceChannel
-                    ).catch(() => {}); // Non-bloquant
-
-                    // Timeout Hub → Fallback to LOGIC 2
-                    setTimeout(() => {
-                        if (this.pendingRequests.has(requestId)) {
-                            console.log(`[Permission] ⏰ Hub timeout for #${numericId}, escalating to LOGIC 2 (In-Band)`);
-                            this._startInBandFallback(pending, false);
-                        }
-                    }, this.HUB_TIMEOUT_MS);
-
-                    return; // Promise will be resolved by handleAdminCommand or fallback
-                } catch (hubErr) {
-                    console.warn('[Permission] ⚠️ Hub unavailable, direct fallback to LOGIC 2:', hubErr);
-                    // Fallthrough → LOGIC 2
+            (async () => {
+                // ── LOGIC 0: CLI / TUI (Local Admin) ──
+                // The user physically at the terminal is the admin by default.
+                if (sourceChannel === 'cli') {
+                    console.log('[Permission] 💻 Local CLI request, asking directly in terminal.');
+                    await this._startInBandFallback(pending, true);
+                    return;
                 }
-            }
 
-            // ── LOGIC 2: In-Band with Escalation (direct or fallback) ──
-            await this._startInBandFallback(pending, false);
+                // ── LOGIC 1: Admin Hub (Out-of-Band) ──
+                if (this.SECURITY_HUB_ID) {
+                    try {
+                        await this._sendHubRequest(pending);
+                        console.log(`[Permission] 🏢 Request #${numericId} sent to Hub (${this.SECURITY_TRANSPORT})`);
+
+                        // Notify the end user that we're waiting for admin approval
+                        await transportManager.sendText(
+                            chatId,
+                            `⏳ _Une action sensible a été détectée. En attente de validation par l'administrateur système (Requête #${numericId})..._\n_A sensitive action was detected. Waiting for system administrator approval (Request #${numericId})..._`,
+                            {},
+                            sourceChannel
+                        ).catch(() => {}); // Non-bloquant
+
+                        // Timeout Hub → Fallback to LOGIC 2
+                        setTimeout(() => {
+                            if (this.pendingRequests.has(requestId)) {
+                                console.log(`[Permission] ⏰ Hub timeout for #${numericId}, escalating to LOGIC 2 (In-Band)`);
+                                this._startInBandFallback(pending, false).catch(() => {});
+                            }
+                        }, this.HUB_TIMEOUT_MS);
+
+                        return; // Promise will be resolved by handleAdminCommand or fallback
+                    } catch (hubErr) {
+                        console.warn('[Permission] ⚠️ Hub unavailable, direct fallback to LOGIC 2:', hubErr);
+                        // Fallthrough → LOGIC 2
+                    }
+                }
+
+                // ── LOGIC 2: In-Band with Escalation (direct or fallback) ──
+                await this._startInBandFallback(pending, false);
+            })().catch((err) => {
+                console.error('[Permission] 💥 Uncaught error in permission executor:', err);
+                this._cleanup(requestId, numericId);
+                resolvePromise({ granted: false, feedback: `Internal security system error: ${err.message}` });
+            });
         });
     }
 

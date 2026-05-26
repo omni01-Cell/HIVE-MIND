@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/state/LockManager.js
 import { redis } from '../redisClient.js';
 
@@ -9,7 +8,7 @@ export class LockManager {
     prefix: any;
     ttl: any;
 
-    constructor(resourcePrefix, ttlMs = 5000) {
+    constructor(resourcePrefix: any, ttlMs = 5000) {
         this.prefix = resourcePrefix;
         this.ttl = ttlMs;
     }

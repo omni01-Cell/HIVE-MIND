@@ -1,4 +1,3 @@
-// @ts-nocheck
 // core/transport/interface.js
 // Interface générique pour l'abstraction du transport (WhatsApp, Telegram, Discord...)
 
@@ -30,7 +29,7 @@ export const TransportInterface = {
      * @param {Object} options - Options (mentions, reply, etc.)
      * @returns {Promise<Object>} - Message envoyé
      */
-    sendText: async (chatId, text, options = {}) => {
+    sendText: async (_chatId: any, _text: any, _options: any = {}) => {
         throw new Error('sendText() must be implemented');
     },
 
@@ -41,7 +40,7 @@ export const TransportInterface = {
      * @param {Object} options - { type, caption, filename }
      * @returns {Promise<Object>}
      */
-    sendMedia: async (chatId, media, options = {}) => {
+    sendMedia: async (_chatId: any, _media: any, _options: any = {}) => {
         throw new Error('sendMedia() must be implemented');
     },
 
@@ -51,7 +50,7 @@ export const TransportInterface = {
      * @param {Buffer|string} audio - Buffer ou URL/Path
      * @param {Object} options
      */
-    sendVoiceNote: async (chatId: any, audio: any, options: any = {}) => {
+    sendVoiceNote: async (_chatId: any, _audio: any, _options: any = {}) => {
         throw new Error('sendVoiceNote() must be implemented');
     },
 
@@ -62,7 +61,7 @@ export const TransportInterface = {
      * @param {string} fileName
      * @param {string} caption
      */
-    sendFile: async (chatId: any, filePath: any, fileName: any, caption: any = '') => {
+    sendFile: async (_chatId: any, _filePath: any, _fileName: any, _caption: any = '') => {
         throw new Error('sendFile() must be implemented');
     },
 
@@ -72,7 +71,7 @@ export const TransportInterface = {
      * @param {Buffer} stickerBuffer
      * @returns {Promise<Object>}
      */
-    sendSticker: async (chatId: any, stickerBuffer: any) => {
+    sendSticker: async (_chatId: any, _stickerBuffer: any) => {
         throw new Error('sendSticker() must be implemented');
     },
 
@@ -81,7 +80,7 @@ export const TransportInterface = {
      * @param {string} groupId
      * @returns {Promise<Object>} - { name, participants, admins, ... }
      */
-    getGroupMetadata: async (groupId: any) => {
+    getGroupMetadata: async (_groupId: any) => {
         throw new Error('getGroupMetadata() must be implemented');
     },
 
@@ -90,7 +89,7 @@ export const TransportInterface = {
      * @param {Object} message
      * @returns {Promise<Buffer>}
      */
-    downloadMedia: async (message: any) => {
+    downloadMedia: async (_message: any) => {
         throw new Error('downloadMedia() must be implemented');
     },
 
@@ -98,7 +97,7 @@ export const TransportInterface = {
      * Définit le callback pour les nouveaux messages
      * @param {Function} callback - (message: any) => void
      */
-    onMessage: (callback: any) => {
+    onMessage: (_callback: any) => {
         throw new Error('onMessage() must be implemented');
     },
 
@@ -106,7 +105,7 @@ export const TransportInterface = {
      * Définit le callback pour les événements de groupe
      * @param {Function} callback - (event: any) => void
      */
-    onGroupEvent: (callback: any) => {
+    onGroupEvent: (_callback: any) => {
         throw new Error('onGroupEvent() must be implemented');
     },
 
@@ -115,7 +114,7 @@ export const TransportInterface = {
      * @param {string} chatId
      * @param {string} presence - 'composing' | 'paused' | 'available'
      */
-    setPresence: async (chatId: any, presence: any) => {
+    setPresence: async (_chatId: any, _presence: any) => {
         throw new Error('setPresence() must be implemented');
     },
 
@@ -125,7 +124,7 @@ export const TransportInterface = {
      * @param {Object} response - { markdown, plainText, visual, data }
      * @param {Object} options
      */
-    sendUniversalResponse: async (chatId, response, options = {}) => {
+    sendUniversalResponse: async (_chatId: any, _response: any, _options: any = {}) => {
         throw new Error('sendUniversalResponse() must be implemented');
     },
 
@@ -135,7 +134,7 @@ export const TransportInterface = {
      * @param {string} userId
      * @returns {Promise<boolean>}
      */
-    isAdmin: async (groupId: any, userId: any) => {
+    isAdmin: async (_groupId: any, _userId: any) => {
         throw new Error('isAdmin() must be implemented');
     },
 
@@ -146,7 +145,7 @@ export const TransportInterface = {
      * @param {string} emoji
      * @returns {Promise<boolean>}
      */
-    sendReaction: async (chatId: any, key: any, emoji: any) => {
+    sendReaction: async (_chatId: any, _key: any, _emoji: any) => {
         throw new Error('sendReaction() must be implemented');
     }
 };

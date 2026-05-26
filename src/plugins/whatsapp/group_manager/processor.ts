@@ -1,10 +1,42 @@
-// @ts-nocheck
-// plugins/group_manager/processor.js
+// plugins/group_manager/processor.ts
 // Hybrid Processor: Local Regex → Contextual LLM (cost-effective)
 
 import { filterDB, whitelistDB, warningsDB, configDB } from './database.js';
-import { moderationActions } from './actions.js';
+import { moderationActions, type ModerationTransport, type ModerationActionResult } from './actions.js';
 import { tryParseJson } from '../../../utils/ResponseFormatEnforcer.js';
+
+export interface GroupFilter {
+    id: string;
+    group_jid?: string;
+    keyword: string;
+    severity: 'warn' | 'kick' | 'ban' | 'mute';
+    context_rule?: string;
+    regex_variants?: string[];
+    created_at?: string;
+}
+
+export interface GroupConfig {
+    group_jid?: string;
+    is_filtering_active?: boolean;
+    warning_limit?: number;
+    auto_ban?: boolean;
+    created_at?: string;
+}
+
+export interface SuspiciousMessage {
+    chatId: string;
+    sender: string;
+    text: string;
+    isGroup: boolean;
+    mentionedJids?: string[];
+    botJid?: string;
+}
+
+export interface ModerationDecision {
+    shouldAct: boolean;
+    reason: string;
+    severity?: 'warn' | 'kick' | 'ban' | 'mute';
+}
 
 /**
  * Hybrid filtering processor
@@ -12,8 +44,8 @@ import { tryParseJson } from '../../../utils/ResponseFormatEnforcer.js';
  * Level 1: Contextual LLM (if keyword detected)
  */
 export class FilterProcessor {
-    cache: any;
-    cacheExpiry: any;
+    cache: Map<string, { filters: GroupFilter[]; time: number }>;
+    cacheExpiry: number;
 
     constructor() {
         this.cache = new Map(); // Cache des filtres par groupe
@@ -24,7 +56,7 @@ export class FilterProcessor {
      * Main entry point - analyzes a message
      * @returns {Object|null} Action to execute or null if OK
      */
-    async process(message: any, transport: any) {
+    async process(message: SuspiciousMessage, transport: ModerationTransport): Promise<ModerationActionResult | null> {
         const { chatId: groupJid, sender, text, isGroup } = message;
 
         // Groups only
@@ -78,7 +110,7 @@ export class FilterProcessor {
     /**
      * Gets filters with cache
      */
-    async _getFiltersWithCache(groupJid: any) {
+    async _getFiltersWithCache(groupJid: string): Promise<GroupFilter[]> {
         const cached = this.cache.get(groupJid);
         if (cached && Date.now() - cached.time < this.cacheExpiry) {
             return cached.filters;
@@ -86,20 +118,20 @@ export class FilterProcessor {
 
         const filters = await filterDB.getFilters(groupJid);
         this.cache.set(groupJid, { filters, time: Date.now() });
-        return filters;
+        return filters as GroupFilter[];
     }
 
     /**
      * Invalidates a group's cache
      */
-    invalidateCache(groupJid: any) {
+    invalidateCache(groupJid: string): void {
         this.cache.delete(groupJid);
     }
 
     /**
      * LEVEL 0: Local Regex Match (Free)
      */
-    _regexMatch(text: any, filters: any) {
+    _regexMatch(text: string, filters: GroupFilter[]): GroupFilter | null {
         const textLower = text.toLowerCase();
 
         for (const filter of filters) {
@@ -116,7 +148,7 @@ export class FilterProcessor {
                         if (regex.test(text)) {
                             return filter;
                         }
-                    } catch (e: any) {
+                    } catch {
                         // Invalid regex, ignore
                     }
                 }
@@ -129,7 +161,7 @@ export class FilterProcessor {
     /**
      * LEVEL 1: Contextual Analysis via LLM
      */
-    async _contextualAnalysis(text: any, filter: any) {
+    async _contextualAnalysis(text: string, filter: GroupFilter): Promise<ModerationDecision> {
         const prompt = `You are a WhatsApp group moderator. Analyze this message:
 
 MESSAGE: "${text}"
@@ -159,7 +191,10 @@ Few-shot examples:
                 { role: 'user', content: prompt }
             ], { temperature: 0.1 }); // Low temperature for consistency
 
-            const parsed = tryParseJson<any>(response.content);
+            if (!response.content) {
+                throw new Error('Réponse vide reçue du modèle pour l\'analyse contextuelle');
+            }
+            const parsed = tryParseJson<ModerationDecision>(response.content);
             if (parsed && typeof parsed === 'object') {
                 return parsed;
             }
@@ -167,7 +202,7 @@ Few-shot examples:
             // Fallback if no valid JSON
             return { shouldAct: false, reason: 'AI response not parseable' };
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Filter] Contextual analysis error:', error);
             // On API error, apply default rule
             return {
@@ -181,7 +216,14 @@ Few-shot examples:
     /**
      * Executes the appropriate moderation action
      */
-    async _executeAction(transport: any, groupJid: any, userJid: any, filter: any, decision: any, config: any) {
+    async _executeAction(
+        transport: ModerationTransport,
+        groupJid: string,
+        userJid: string,
+        filter: GroupFilter,
+        decision: ModerationDecision,
+        config: GroupConfig
+    ): Promise<ModerationActionResult> {
         const severity = decision.severity || filter.severity;
         const reason = `${filter.keyword}: ${decision.reason}`;
 
@@ -214,7 +256,7 @@ Few-shot examples:
      * Generates keyword variants via AI
      * (For periodic updates)
      */
-    async generateVariants(keyword: any) {
+    async generateVariants(keyword: string): Promise<string[]> {
         const prompt = `Generate possible variants and bypasses for the forbidden word "${keyword}".
 Include: intentional typos, leetspeak, spaces, special characters.
 
@@ -231,12 +273,15 @@ Few-shot example:
                 { role: 'user', content: prompt }
             ], { temperature: 0.3 });
 
-            const parsed = tryParseJson<any[]>(response.content);
+            if (!response.content) {
+                throw new Error('Réponse vide reçue du modèle pour la génération de variantes');
+            }
+            const parsed = tryParseJson<string[]>(response.content);
             if (Array.isArray(parsed)) {
                 return parsed;
             }
             return [];
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Filter] Variant generation error:', error);
             return [];
         }
@@ -245,3 +290,4 @@ Few-shot example:
 
 export const filterProcessor = new FilterProcessor();
 export default filterProcessor;
+

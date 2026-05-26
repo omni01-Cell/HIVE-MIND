@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { downloadMediaMessage } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { join, dirname } from 'path';
@@ -14,7 +13,7 @@ export class AudioHandler {
     transport: any;
     logger: any;
 
-    constructor(transport, logger) {
+    constructor(transport: any, logger: any) {
         this.transport = transport; // Reference to BaileysTransport
         this.logger = logger;
     }
@@ -60,7 +59,7 @@ export class AudioHandler {
             return null;
         }
 
-        const audioStrategy = globalConfig.models?.reglages_generaux?.audio_strategy || {};
+        const audioStrategy: any = globalConfig.models?.reglages_generaux?.audio_strategy || {};
         const useNativeAudio = audioStrategy.prefer_native && this.transport.container?.has('geminiLiveProvider');
 
         if (useNativeAudio) {
@@ -91,7 +90,7 @@ export class AudioHandler {
         const buffer = await this._downloadAudio(msg);
         if (!buffer) return null;
 
-        const audioStrategy = globalConfig.models?.reglages_generaux?.audio_strategy || {};
+        const audioStrategy: any = globalConfig.models?.reglages_generaux?.audio_strategy || {};
         const useNativeAudio = audioStrategy.prefer_native && this.transport.container?.has('geminiLiveProvider');
 
         // Check if reply to bot

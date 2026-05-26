@@ -2,9 +2,9 @@
 
 export class ToolExecutionError extends Error {
     public readonly toolName: string;
-    public readonly params: any;
+    public readonly params: unknown;
 
-    constructor(message: string, toolName: string, params: any) {
+    constructor(message: string, toolName: string, params: unknown) {
         super(message);
         this.name = 'ToolExecutionError';
         this.toolName = toolName;

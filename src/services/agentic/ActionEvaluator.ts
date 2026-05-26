@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/agentic/ActionEvaluator.js
 // ============================================================================
 // POST-ACTION EVALUATOR - Système d'évaluation et apprentissage continu
@@ -254,7 +253,7 @@ Score:`;
                 // Pour l'instant, juste log
             }
 
-            console.log(`[ActionEvaluator] ✅ Top tools: ${stats.slice(0, 5).map((s) => `${s.tool} (${s.avg_score.toFixed(2)})`).join(', ')}`);
+            console.log(`[ActionEvaluator] ✅ Top tools: ${stats.slice(0, 5).map((s: any) => `${s.tool} (${s.avg_score.toFixed(2)})`).join(', ')}`);
 
         } catch (error: any) {
             console.error('[ActionEvaluator] Erreur updateToolSelection:', error.message);

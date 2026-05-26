@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/audio/geminiLiveProvider.ts
 // Provider pour Gemini 2.5 Flash Native Audio (Live API)
 // Support: Audio streaming, Function calling, Émotions préservées
@@ -256,7 +255,7 @@ export class GeminiLiveProvider {
             writeFileSync(tempOgg, audioBuffer);
 
             try {
-                pcmBuffer = await convertOggToPcm(tempOgg);
+                pcmBuffer = await convertOggToPcm(tempOgg) as Buffer;
             } finally {
                 import('fs/promises').then(fsp => fsp.unlink(tempOgg).catch(() => {}));
             }

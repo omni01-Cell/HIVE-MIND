@@ -24,7 +24,7 @@ export function tryParseJson<T>(content: string): T {
     // 3. Si on a extrait un bloc ```json ... ```, on essaie de le parser directement
     try {
         return parseCleanedJson<T>(cleaned);
-    } catch (e) {
+    } catch {
         // Si cela échoue ou qu'il n'y avait pas de bloc, on continue avec la recherche robuste
     }
 
@@ -107,13 +107,14 @@ export async function enforceFormat<T>(
             }
 
             return { success: true, data: parsed, rawResponse };
-        } catch (error: any) {
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
             attempt++;
             if (attempt > maxRetries) {
-                return { success: false, rawResponse, error: error.message || 'Parsing failed' };
+                return { success: false, rawResponse, error: err.message || 'Parsing failed' };
             }
 
-            const errorMsg = error.message || 'Malformed JSON format';
+            const errorMsg = err.message || 'Malformed JSON format';
             retryPromptModifier = `[SYSTEM REJECTION]
 Votre réponse précédente est invalide. Elle doit être au format JSON strict et respecter le schéma.
 Erreur d'analyse/validation : ${errorMsg}

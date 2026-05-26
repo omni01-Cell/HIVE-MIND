@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/state/StateManager.js
 // ============================================================================
 // GESTIONNAIRE D'ÉTAT DISTRIBUÉ (Redis + Supabase)
@@ -168,7 +167,7 @@ export const StateManager = {
         const results = await pipeline.exec();
 
         for (let i = 0; i < uuids.length; i++) {
-            const data = results[i];
+            const data: any = results[i];
 
             if (data && Object.keys(data).length > 0) {
                 updates.push({
@@ -195,7 +194,7 @@ export const StateManager = {
 
     // Helpers privés pour gérer les types Redis (tout est string)
     _flattenForRedis(obj: any) {
-        const flat = {};
+        const flat: Record<string, string> = {};
         for (const [k, v] of Object.entries(obj)) {
             if (v !== null && v !== undefined) flat[k] = String(v);
         }
@@ -252,6 +251,6 @@ export const StateManager = {
     async getUserGroupScore(groupJid: any, userJid: any) {
         const key = `group:${groupJid}:leaderboard`;
         const score = await redis.zScore(key, userJid);
-        return parseInt(score || 0);
+        return score || 0;
     }
 };

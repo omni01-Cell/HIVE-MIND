@@ -25,7 +25,7 @@ export function splitMessage(text: string | null | undefined, maxLength: number 
                 parts.push(section.trim());
             }
         }
-        return parts.filter((p: any) => p.length > 0);
+        return parts.filter(p => p.length > 0);
     }
 
     // 2. Sinon couper par paragraphe
@@ -33,39 +33,43 @@ export function splitMessage(text: string | null | undefined, maxLength: number 
 }
 
 /**
+ * Accumule un paragraphe dans l'état de découpage.
+ */
+function accumulateParagraph(para: string, state: { current: string; parts: string[] }, maxLength: number): void {
+    const trimmedPara = para.trim();
+    if (!trimmedPara) return;
+
+    if (trimmedPara.length > maxLength) {
+        if (state.current) {
+            state.parts.push(state.current.trim());
+            state.current = '';
+        }
+        state.parts.push(...splitBySentence(trimmedPara, maxLength));
+        return;
+    }
+
+    if ((state.current + '\n\n' + trimmedPara).length > maxLength) {
+        if (state.current) state.parts.push(state.current.trim());
+        state.current = trimmedPara;
+    } else {
+        state.current += (state.current ? '\n\n' : '') + trimmedPara;
+    }
+}
+
+/**
  * Découpe par double saut de ligne (paragraphes)
  */
 function splitByParagraph(text: string, maxLength: number): string[] {
     const paragraphs = text.split(/\n\n+/);
-    const parts: string[] = [];
-    let current = '';
+    const state = { current: '', parts: [] as string[] };
 
     for (const para of paragraphs) {
-        const trimmedPara = para.trim();
-        if (!trimmedPara) continue;
-
-        // Si le paragraphe seul dépasse la limite, le couper par phrase
-        if (trimmedPara.length > maxLength) {
-            if (current) {
-                parts.push(current.trim());
-                current = '';
-            }
-            parts.push(...splitBySentence(trimmedPara, maxLength));
-            continue;
-        }
-
-        // Si ajouter ce paragraphe dépasse, on sauvegarde le courant
-        if ((current + '\n\n' + trimmedPara).length > maxLength) {
-            if (current) parts.push(current.trim());
-            current = trimmedPara;
-        } else {
-            current += (current ? '\n\n' : '') + trimmedPara;
-        }
+        accumulateParagraph(para, state, maxLength);
     }
 
-    if (current.trim()) parts.push(current.trim());
+    if (state.current.trim()) state.parts.push(state.current.trim());
 
-    return parts.filter((p: any) => p.length > 0);
+    return state.parts.filter(p => p.length > 0);
 }
 
 /**

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/adminService.js
 // Service sécurisé pour les admins globaux (DTC Phase 1)
 // Source de vérité: Supabase global_admins
@@ -15,7 +14,7 @@ const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
  * Service d'administration globale
  */
 export const adminService = {
-    container: null,
+    container: null as any,
 
     setContainer(container: any) {
         this.container = container;

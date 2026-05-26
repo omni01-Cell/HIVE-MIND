@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/audio/audioConverter.js
 // Convertit les formats audio entre WhatsApp (OGG Opus) et Gemini (PCM 16kHz mono)
 
@@ -14,9 +13,9 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path);
  * @param {string} inputPath - Chemin du fichier OGG
  * @returns {Promise<Buffer>} Buffer PCM
  */
-export async function convertOggToPcm(inputPath) {
+export async function convertOggToPcm(inputPath: string): Promise<Buffer> {
     return new Promise((resolve: any, reject: any) => {
-        const chunks = [];
+        const chunks: Buffer[] = [];
 
         ffmpeg(inputPath)
             .audioCodec('pcm_s16le') // PCM 16-bit little endian
@@ -43,7 +42,7 @@ export async function convertOggToPcm(inputPath) {
  * @param {string} outputPath - Chemin de sortie OGG
  * @returns {Promise<string>} Chemin du fichier OGG
  */
-export async function convertPcmToOgg(inputPath, outputPath, sampleRate = 24000) {
+export async function convertPcmToOgg(inputPath: string, outputPath: string, sampleRate = 24000): Promise<string> {
     return new Promise((resolve: any, reject: any) => {
         ffmpeg(inputPath)
             .inputOptions([
@@ -74,7 +73,11 @@ export async function convertPcmToOgg(inputPath, outputPath, sampleRate = 24000)
  * @param {string} outputOgg - Fichier OGG de sortie
  * @param {Function} processCallback - Fonction de traitement (reçoit PCM buffer)
  */
-export async function processAudioPipeline(inputOgg, outputOgg, processCallback) {
+export async function processAudioPipeline(
+    inputOgg: string,
+    outputOgg: string,
+    processCallback: (buffer: Buffer) => Promise<string>
+): Promise<string> {
     let pcmBuffer: any = null;
     let tempPcmPath: any = null;
 

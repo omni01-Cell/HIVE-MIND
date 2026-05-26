@@ -1,4 +1,3 @@
-// @ts-nocheck
 // plugins/group_manager/database.ts
 // Interface Supabase pour la gestion des configurations de groupe (Omni-Channel Ready)
 
@@ -26,7 +25,7 @@ async function getUserId(userJid: string): Promise<string> {
  * Gestion des filtres de groupe
  */
 export const filterDB = {
-    async addFilter(groupJid: any, keyword: any, contextRule: any, severity: any = 'warn', createdBy: any) {
+    async addFilter(groupJid: string, keyword: string, contextRule: string | null, severity: string = 'warn', createdBy: string | null) {
         if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const creatorId = createdBy ? await getUserId(createdBy) : null;
@@ -47,7 +46,7 @@ export const filterDB = {
         return data;
     },
 
-    async getFilters(groupJid: any) {
+    async getFilters(groupJid: string) {
         if (!supabase) return [];
         const groupId = await getGroupId(groupJid);
 
@@ -60,7 +59,7 @@ export const filterDB = {
         return data || [];
     },
 
-    async removeFilter(filterId: any) {
+    async removeFilter(filterId: string) {
         if (!supabase) throw new Error('Supabase non connecté');
 
         const { error } = await supabase
@@ -72,7 +71,7 @@ export const filterDB = {
         return true;
     },
 
-    async updateVariants(filterId: any, variants: any) {
+    async updateVariants(filterId: string, variants: string[]) {
         if (!supabase) throw new Error('Supabase non connecté');
 
         const { error } = await supabase
@@ -89,7 +88,7 @@ export const filterDB = {
  * Gestion de la whitelist
  */
 export const whitelistDB = {
-    async add(groupJid: any, userJid: any, addedBy: any, reason: any = '') {
+    async add(groupJid: string, userJid: string, addedBy: string | null, reason: string = '') {
         if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const userId = await getUserId(userJid);
@@ -108,7 +107,7 @@ export const whitelistDB = {
         return true;
     },
 
-    async isWhitelisted(groupJid: any, userJid: any) {
+    async isWhitelisted(groupJid: string, userJid: string) {
         if (!supabase) return false;
         try {
             const groupId = await getGroupId(groupJid);
@@ -123,12 +122,12 @@ export const whitelistDB = {
 
             if (error && error.code !== 'PGRST116') throw error;
             return !!data;
-        } catch (e) {
+        } catch {
             return false;
         }
     },
 
-    async remove(groupJid: any, userJid: any) {
+    async remove(groupJid: string, userJid: string) {
         if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const userId = await getUserId(userJid);
@@ -148,7 +147,7 @@ export const whitelistDB = {
  * Gestion des warnings
  */
 export const warningsDB = {
-    async add(groupJid: any, userJid: any, reason: any, filterId: any = null) {
+    async add(groupJid: string, userJid: string, reason: string, filterId: string | null = null) {
         if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const userId = await getUserId(userJid);
@@ -166,7 +165,7 @@ export const warningsDB = {
         return true;
     },
 
-    async count(groupJid: any, userJid: any) {
+    async count(groupJid: string, userJid: string) {
         if (!supabase) return 0;
         try {
             const groupId = await getGroupId(groupJid);
@@ -183,13 +182,13 @@ export const warningsDB = {
                 console.error('[GroupManager] Erreur count warnings:', error);
                 return 0;
             }
-            return data || 0;
-        } catch (e) {
+            return (data as number) || 0;
+        } catch {
             return 0;
         }
     },
 
-    async reset(groupJid: any, userJid: any) {
+    async reset(groupJid: string, userJid: string) {
         if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
         const userId = await getUserId(userJid);
@@ -209,7 +208,7 @@ export const warningsDB = {
  * Gestion des configs de groupe
  */
 export const configDB = {
-    async get(groupJid: any) {
+    async get(groupJid: string) {
         if (!supabase) return null;
         try {
             const groupId = await getGroupId(groupJid);
@@ -221,13 +220,13 @@ export const configDB = {
                 .single();
 
             if (error && error.code !== 'PGRST116') throw error;
-            return data;
-        } catch (e) {
+            return data as { is_filtering_active?: boolean; warning_limit?: number; auto_ban?: boolean } | null;
+        } catch {
             return null;
         }
     },
 
-    async update(groupJid: any, updates: any) {
+    async update(groupJid: string, updates: Record<string, unknown>) {
         if (!supabase) throw new Error('Supabase non connecté');
         const groupId = await getGroupId(groupJid);
 
@@ -243,15 +242,15 @@ export const configDB = {
         return true;
     },
 
-    async setFilteringActive(groupJid: any, active: any) {
+    async setFilteringActive(groupJid: string, active: boolean) {
         return this.update(groupJid, { is_filtering_active: active });
     },
 
-    async setWarningLimit(groupJid: any, limit: any) {
+    async setWarningLimit(groupJid: string, limit: number) {
         return this.update(groupJid, { warning_limit: limit });
     },
 
-    async setAutoBan(groupJid: any, enabled: any) {
+    async setAutoBan(groupJid: string, enabled: boolean) {
         return this.update(groupJid, { auto_ban: enabled });
     }
 };

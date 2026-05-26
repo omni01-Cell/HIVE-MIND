@@ -1,5 +1,4 @@
 
-// @ts-nocheck
 import { redis as redisClient } from '../services/redisClient.js';
 
 async function checkRedis() {
@@ -25,7 +24,7 @@ async function checkRedis() {
             await redisClient.del(testKey);
 
             console.log('🔍 Redis Buffer/Memory verified.');
-        } catch (e) {
+        } catch (e: any) {
             console.error('❌ Redis Operation Error:', e.message);
         }
     } else {

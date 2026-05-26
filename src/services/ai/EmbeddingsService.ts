@@ -6,8 +6,8 @@
 export interface EmbeddingConfig {
   geminiKey?: string;
   openaiKey?: string;
-  model: string;
-  dimensions: number;
+  model?: string;
+  dimensions?: number;
 }
 
 export interface IEmbeddingsService {

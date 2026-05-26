@@ -47,9 +47,10 @@ class BlueprintManager {
             const rawContent = readFileSync(path, 'utf-8');
             const parsed = JSON.parse(rawContent);
             return AgenticFormatSchema.parse(parsed);
-        } catch (e: any) {
-            console.error(`[BlueprintManager] Failed parsing blueprint "${blueprintId}":`, e.message);
-            throw new Error(`[BlueprintManager] Invalid blueprint format for "${blueprintId}": ${e.message}`);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.error(`[BlueprintManager] Failed parsing blueprint "${blueprintId}":`, message);
+            throw new Error(`[BlueprintManager] Invalid blueprint format for "${blueprintId}": ${message}`);
         }
     }
 
@@ -57,14 +58,15 @@ class BlueprintManager {
      * Registers a dynamically generated blueprint to RAM.
      * Returns the registered blueprint ID.
      */
-    public registerEphemeral(blueprintData: any): string {
+    public registerEphemeral(blueprintData: unknown): string {
         try {
             const validated = AgenticFormatSchema.parse(blueprintData);
             this.ephemeralRegistry.set(validated.metadata.id, validated);
             return validated.metadata.id;
-        } catch (e: any) {
-            console.error('[BlueprintManager] Ephemeral registration rejected:', e.message);
-            throw new Error(`[BlueprintManager] Ephemeral schema validation failed: ${e.message}`);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.error('[BlueprintManager] Ephemeral registration rejected:', message);
+            throw new Error(`[BlueprintManager] Ephemeral schema validation failed: ${message}`);
         }
     }
 

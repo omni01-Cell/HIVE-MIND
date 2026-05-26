@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { SubAgentEngine } from '../../../services/agentic/SubAgentEngine.js';
 
 /**
@@ -10,7 +9,7 @@ export class ShoppingAgent {
     chatId: any;
     engine: SubAgentEngine;
 
-    constructor(userId, chatId) {
+    constructor(userId: any, chatId: any) {
         this.userId = userId;
         this.chatId = chatId;
 

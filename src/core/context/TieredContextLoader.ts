@@ -1,4 +1,3 @@
-// @ts-nocheck
 // core/context/TieredContextLoader.ts
 // ============================================================================
 // UNIFIED CONTEXT LOADER — V3 Dynamic Context Engineering
@@ -26,6 +25,75 @@ import { TOOL_USE_GUIDELINES, ERROR_HANDLING_RULES, FEW_SHOT_EXAMPLES } from '..
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+interface WorkingMemoryService {
+    getContext(chatId: string, limit: number): Promise<Array<{ role: string; content: string }>>;
+    getPassport(sender: string): Promise<Passport | null>;
+    getScratchpad(chatId: string): Promise<string | null>;
+    getActionHistory(chatId: string): Promise<unknown>;
+    formatPassport(passport: Passport): string;
+    formatActionHistory(actionHistory: unknown): string;
+    setPassport(sender: string, passport: Passport): Promise<void>;
+}
+
+interface UserService {
+    getProfile(sender: string): Promise<{ names?: string[]; language?: string; timezone?: string; interaction_count?: number; last_seen?: unknown }>;
+}
+
+interface GroupService {
+    getContext(chatId: string, _arg2: null, _arg3: null): Promise<{ group?: { name: string; description?: string; member_count?: number; bot_mission?: string; blueprint_id?: string; blueprintId?: string } } | null>;
+}
+
+interface AdminService {
+    isSuperUser(sender: string): Promise<boolean>;
+    isGlobalAdmin(sender: string): Promise<boolean>;
+}
+
+interface Passport {
+    name: string;
+    lang: string;
+    tz: string;
+    topFacts: string[];
+    maple: {
+        facts: string[];
+        prefs: string[];
+        goals: string[];
+    };
+}
+
+interface GroupBasics {
+    name: string;
+    description: string;
+    memberCount: number;
+    botMission: string;
+    blueprintId: string;
+}
+
+interface UserSnapshot {
+    jid: string;
+    name: string;
+    interactionCount: number;
+    lastSeen?: unknown;
+}
+
+interface Authority {
+    isSuperUser: boolean;
+    isGlobalAdmin: boolean;
+    isGroupAdmin: boolean;
+    isBotAdmin: boolean;
+    level: number;
+}
+
+export interface UnifiedContext {
+    systemPrompt: string;
+    recentMessages: Array<{ role: string; content: string }>;
+    history: Array<{ role: string; content: string }>;
+    authority: Authority;
+    userSnapshot: UserSnapshot | null;
+    groupBasics: GroupBasics | null;
+    blueprint: any;
+    mode: string;
+}
+
 // Load the V3 system prompt template (contains {{PLACEHOLDERS}})
 let systemPromptTemplate = '';
 try {
@@ -43,15 +111,18 @@ try {
  * No more FAST/AGENTIC distinction. Every message gets the full Bureau de Travail.
  */
 export class TieredContextLoader {
-    workingMemory: any;
-    userService: any;
-    groupService: any;
-    adminService: any;
-    factsMemory: any;
-    browser: any;
-    localCache: any;
-    authorityCache: any;
-    AUTHORITY_CACHE_TTL: any;
+    workingMemory: WorkingMemoryService | null;
+    userService: UserService | null;
+    groupService: GroupService | null;
+    adminService: AdminService | null;
+    factsMemory: { getAll(sender: string): Promise<Record<string, unknown>> } | null;
+    browser: unknown;
+    localCache: {
+        botIdentity: { name: string };
+        systemPromptTemplate: string;
+    };
+    authorityCache: Map<string, { data: Authority; timestamp: number }>;
+    AUTHORITY_CACHE_TTL: number;
 
     constructor() {
         this.workingMemory = null;
@@ -76,16 +147,17 @@ export class TieredContextLoader {
      */
     init() {
         try {
-            this.workingMemory = container.get('workingMemory');
-            this.userService = container.get('userService');
-            this.groupService = container.get('groupService');
-            this.adminService = container.get('adminService');
-            this.factsMemory = container.get('facts');
+            this.workingMemory = container.get('workingMemory') as WorkingMemoryService;
+            this.userService = container.get('userService') as UserService;
+            this.groupService = container.get('groupService') as GroupService;
+            this.adminService = container.get('adminService') as AdminService;
+            this.factsMemory = container.get('facts') as { getAll(sender: string): Promise<Record<string, unknown>> };
             this.browser = container.get('browser');
 
             console.log(`[TieredContext] ✅ V3 Unified Init. WM: ${!!this.workingMemory}, Browser: ${!!this.browser}`);
-        } catch (e: any) {
-            console.error('[TieredContext] ❌ Init Failed:', e.message);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.error('[TieredContext] ❌ Init Failed:', message);
         }
     }
 
@@ -105,7 +177,7 @@ export class TieredContextLoader {
      * @param {Object} message - { sender, text, sourceChannel, ... }
      * @returns {Promise<UnifiedContext>}
      */
-    async load(chatId: any, message: any) {
+    async load(chatId: string, message: { sender: string; sourceChannel?: string; [key: string]: any }): Promise<UnifiedContext> {
         const startTime = Date.now();
         const isGroup = chatId?.endsWith('@g.us');
 
@@ -162,7 +234,7 @@ export class TieredContextLoader {
         // ── HYDRATE SYSTEM PROMPT TEMPLATE ──
         const systemPrompt = await this._hydrateTemplate({
             channel: message.sourceChannel || 'whatsapp',
-            passport,
+            passport: passport || { name: 'Unknown', lang: 'auto', tz: 'auto', topFacts: [], maple: { facts: [], prefs: [], goals: [] } },
             scratchpad: scratchpad || '(Empty. Use update_scratchpad to write here.)',
             actionHistory: this.workingMemory.formatActionHistory(actionHistory),
             userSnapshot,
@@ -175,7 +247,7 @@ export class TieredContextLoader {
         const context = {
             systemPrompt,
             recentMessages: recentMessages || [],
-            history: (recentMessages || []).map((m: any) => ({
+            history: (recentMessages || []).map((m: { role: string; content: string }) => ({
                 role: m.role,
                 content: m.content
             })),
@@ -197,7 +269,11 @@ export class TieredContextLoader {
     /**
      * Gets passport from Redis L1 cache, or builds it on miss.
      */
-    async _getOrBuildPassport(sender: any) {
+    async _getOrBuildPassport(sender: string): Promise<Passport> {
+        if (!this.workingMemory || !this.userService || !this.factsMemory) {
+            return { name: 'Unknown', lang: 'auto', tz: 'auto', topFacts: [], maple: { facts: [], prefs: [], goals: [] } };
+        }
+
         let passport = await this.workingMemory.getPassport(sender);
         if (passport) return passport;
 
@@ -233,13 +309,18 @@ export class TieredContextLoader {
             // Cache in Redis L1 (1h TTL)
             await this.workingMemory.setPassport(sender, passport);
             return passport;
-        } catch (e: any) {
-            console.warn('[TieredContext] Passport build failed:', e.message);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.warn('[TieredContext] Passport build failed:', message);
             return { name: 'Unknown', lang: 'auto', tz: 'auto', topFacts: [], maple: { facts: [], prefs: [], goals: [] } };
         }
     }
 
-    async _getCachedUserProfile(sender: any) {
+    async _getCachedUserProfile(sender: string): Promise<UserSnapshot> {
+        if (!this.userService) {
+            return { jid: sender, name: 'Unknown', interactionCount: 0 };
+        }
+
         try {
             const profile = await this.userService.getProfile(sender);
             return {
@@ -253,11 +334,15 @@ export class TieredContextLoader {
         }
     }
 
-    async _getAuthority(sender: any, chatId: any) {
+    async _getAuthority(sender: string, _chatId: string): Promise<Authority> {
         // Check local cache first
         const cached = this.authorityCache.get(sender);
         if (cached && (Date.now() - cached.timestamp) < this.AUTHORITY_CACHE_TTL) {
             return cached.data;
+        }
+
+        if (!this.adminService) {
+            return { isSuperUser: false, isGlobalAdmin: false, isGroupAdmin: false, isBotAdmin: false, level: 0 };
         }
 
         try {
@@ -285,7 +370,9 @@ export class TieredContextLoader {
         }
     }
 
-    async _getGroupBasics(chatId: any) {
+    async _getGroupBasics(chatId: string): Promise<GroupBasics | null> {
+        if (!this.groupService) return null;
+
         try {
             const groupContext = await this.groupService.getContext(chatId, null, null);
             if (groupContext?.group) {
@@ -313,14 +400,14 @@ export class TieredContextLoader {
      */
     async _hydrateTemplate(data: {
         channel: string;
-        passport: any;
+        passport: Passport;
         scratchpad: string;
         actionHistory: string;
-        userSnapshot: any;
-        authority: any;
-        groupBasics: any;
+        userSnapshot: UserSnapshot;
+        authority: Authority;
+        groupBasics: GroupBasics | null;
         chatId: string;
-        blueprint?: any;
+        blueprint?: unknown;
     }): Promise<string> {
         const now = new Date();
 
@@ -329,7 +416,9 @@ export class TieredContextLoader {
         // 1. Replace dynamic context placeholders
         prompt = prompt.replace('{{CURRENT_CHANNEL}}', data.channel);
         prompt = prompt.replace('{{CURRENT_TIMESTAMP}}', now.toISOString());
-        prompt = prompt.replace('{{USER_PASSPORT}}', this.workingMemory.formatPassport(data.passport));
+        if (this.workingMemory) {
+            prompt = prompt.replace('{{USER_PASSPORT}}', this.workingMemory.formatPassport(data.passport));
+        }
         prompt = prompt.replace('{{SCRATCHPAD}}', data.scratchpad);
         prompt = prompt.replace('{{ACTION_HISTORY}}', data.actionHistory);
 
@@ -354,18 +443,19 @@ export class TieredContextLoader {
 
         // 6. Build MindOS Drives and Economic Constraints XML blocks
         let mindosDrives = '';
-        if (data.blueprint && data.blueprint.mindos?.drives && data.blueprint.mindos.drives.length > 0) {
-            mindosDrives = `\n<mindos_drives>\n${data.blueprint.mindos.drives.map((d: string) => `- ${d}`).join('\n')}\n</mindos_drives>\n`;
+        const bp = data.blueprint as { mindos?: { drives?: string[] } } | undefined;
+        if (bp && bp.mindos?.drives && bp.mindos.drives.length > 0) {
+            mindosDrives = `\n<mindos_drives>\n${bp.mindos.drives.map((d: string) => `- ${d}`).join('\n')}\n</mindos_drives>\n`;
         }
 
         let economicConstraint = '';
-        if (data.blueprint && data.blueprint.constraints) {
-            const c = data.blueprint.constraints;
+        const bpFull = data.blueprint as { constraints?: { read_only_fs?: boolean; max_budget_usd?: number; max_iterations?: number } } | undefined;
+        if (bpFull && bpFull.constraints) {
+            const c = bpFull.constraints;
 
-            // Resolve dynamic KKT lambda to detect budget panic
             let lambda = 0;
             try {
-                const runtime = container.get('runtime') as any;
+                const runtime = container.get('runtime') as { finOps?: { calculateLambda(): number } } | null;
                 if (runtime && runtime.finOps) {
                     lambda = runtime.finOps.calculateLambda();
                 }
@@ -393,6 +483,8 @@ export class TieredContextLoader {
             const { actionMemory } = await import('../../services/memory/ActionMemory.js');
             let harness = '';
 
+            if (!this.workingMemory) return '';
+
             // 1. Carnet de bord (Scratchpad)
             const scratchpad = await this.workingMemory.getScratchpad(chatId);
             if (scratchpad) {
@@ -402,7 +494,7 @@ export class TieredContextLoader {
             // 2. Tâche longue en cours (ActionMemory)
             const activeAction = await actionMemory.getActiveAction(chatId);
             if (activeAction) {
-                const steps = activeAction.steps.map((s: any) => `- ${s.step}`).join('\n');
+                const steps = activeAction.steps.map((s: { step: string }) => `- ${s.step}`).join('\n');
                 harness += `
 <execution_harness>
   <ongoing_goal>${activeAction.goal}</ongoing_goal>
@@ -414,8 +506,9 @@ ${steps || 'None yet'}
             }
 
             return harness;
-        } catch (e: any) {
-            console.error('[TieredContext] Error building harness context:', e.message);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.error('[TieredContext] Error building harness context:', message);
             return '';
         }
     }
@@ -423,7 +516,7 @@ ${steps || 'None yet'}
     /**
      * Builds the execution engine block (sandbox paths, tool directives, etc.)
      */
-    _buildExecutionBlock(data: any): string {
+    _buildExecutionBlock(_data: { blueprint?: unknown }): string {
         let block = '<execution_engine>\n';
 
         block += '### 🛠️ TOOLS AND CAPABILITIES\nYou have native tools (functions) that you can call.\nIMPORTANT: If the user asks about your capabilities, your functions, or if you have a specific tool, **IMMEDIATELY CALL the `get_my_capabilities` tool**.\n';
@@ -461,7 +554,7 @@ ${steps || 'None yet'}
     /**
      * Builds a compact social context block.
      */
-    _buildSocialContext(data: any): string {
+    _buildSocialContext(data: { groupBasics: GroupBasics | null; userSnapshot: UserSnapshot; authority: Authority }): string {
         const now = new Date();
         let block = '<current_consciousness_state>\n';
         block += `  <timestamp>${now.getTime()}</timestamp>\n`;
@@ -481,7 +574,7 @@ ${steps || 'None yet'}
     /**
      * Fallback context when WorkingMemory is completely unavailable.
      */
-    _buildFallbackContext(chatId: any, message: any) {
+    _buildFallbackContext(_chatId: string, message: { sender: string }): UnifiedContext {
         return {
             systemPrompt: this.localCache.systemPromptTemplate,
             recentMessages: [],

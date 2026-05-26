@@ -44,29 +44,29 @@ export class Logger {
         return new Date().toISOString().substring(11, 19);
     }
 
-    private _format(level: LogLevel, color: string, message: any, ...args: any[]): void {
+    private _format(level: LogLevel, color: string, message: unknown, ...args: unknown[]): void {
         const ts = this._timestamp();
         const pre = this.prefix ? `[${this.prefix}]` : '';
         console.log(`${color}[${ts}] ${level}${pre}${COLORS.reset}`, message, ...args);
     }
 
-    public info(message: any, ...args: any[]): void {
+    public info(message: unknown, ...args: unknown[]): void {
         this._format('INFO', COLORS.cyan, message, ...args);
     }
 
-    public success(message: any, ...args: any[]): void {
+    public success(message: unknown, ...args: unknown[]): void {
         this._format('✓', COLORS.green, message, ...args);
     }
 
-    public warn(message: any, ...args: any[]): void {
+    public warn(message: unknown, ...args: unknown[]): void {
         this._format('WARN', COLORS.yellow, message, ...args);
     }
 
-    public error(message: any, ...args: any[]): void {
+    public error(message: unknown, ...args: unknown[]): void {
         this._format('ERROR', COLORS.red, message, ...args);
     }
 
-    public debug(category: DebugCategory, message: any, ...args: any[]): void {
+    public debug(category: DebugCategory, message: unknown, ...args: unknown[]): void {
         if (!debugState.enabled) return;
         if (!debugState.categories.has('all') && !debugState.categories.has(category)) return;
 
@@ -135,8 +135,8 @@ export async function clearGroupCache(redis: RedisClient | null, groupJid: strin
         for (const key of keys) await redis.del(key);
         console.log(`✅ [Logger] Cache groupe effacé: ${groupJid}`);
         return { success: true };
-    } catch (err: any) {
-        return { success: false, error: err.message };
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 }
 
@@ -152,8 +152,8 @@ export async function flushRedisCache(redis: RedisClient | null): Promise<{ succ
         for (const key of allKeys) await redis.del(key);
         console.log(`✅ [Logger] Cache Redis nettoyé: ${allKeys.length} clés`);
         return { success: true, keysDeleted: allKeys.length };
-    } catch (err: any) {
-        return { success: false, error: err.message };
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 }
 
@@ -165,8 +165,8 @@ export async function redisStats(redis: RedisClient | null): Promise<{ groups?: 
         const users = (await redis.keys('user:*')).length;
         const wm = (await redis.keys('wm:*')).length;
         return { groups, users, workingMemory: wm, total: groups + users + wm };
-    } catch (err: any) {
-        return { error: err.message };
+    } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) };
     }
 }
 
@@ -185,17 +185,19 @@ export async function refreshAdminCache(adminService: AdminService | null): Prom
         await adminService.refresh();
         console.log('✅ [Logger] Cache admin rafraîchi');
         return true;
-    } catch (err: any) {
-        console.error('❌ [Logger] Erreur refreshAdminCache:', err.message);
+    } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error('❌ [Logger] Erreur refreshAdminCache:', errorMsg);
         return false;
     }
 }
 
-export async function systemStatus(services: { redis?: RedisClient; adminService?: AdminService } = {}): Promise<any> {
-    const status: any = {
+export async function systemStatus(services: { redis?: RedisClient; adminService?: AdminService } = {}): Promise<Record<string, unknown>> {
+    const status = {
         timestamp: new Date().toISOString(),
         debug: debugStatus(),
-        services: {}
+        services: {} as Record<string, string>,
+        redisStats: undefined as unknown
     };
 
     if (services.redis) {

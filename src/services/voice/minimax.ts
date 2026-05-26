@@ -1,4 +1,3 @@
-// @ts-nocheck
 
 // services/voice/minimax.js
 // Service d'intégration vocale Minimax (T2A)
@@ -22,7 +21,7 @@ export class MinimaxVoiceService {
     config: any;
     cacheDir: any;
 
-    constructor(apiKey, config = {}) {
+    constructor(apiKey: any, config: any = {}) {
         this.apiKey = apiKey;
         this.baseUrl = 'https://api.minimax.io/v1/t2a_v2';
         this.config = config; // { voice_id, model, speed, ... }

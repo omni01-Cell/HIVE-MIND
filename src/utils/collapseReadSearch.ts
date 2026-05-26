@@ -1,4 +1,3 @@
-/* eslint-disable */
 export interface Message {
     id: string;
     sender: 'user' | 'agent';
@@ -68,8 +67,8 @@ export function collapseMessages(messages: Message[]): Message[] {
             if (readCount > 0) actions.push(`${readCount} file read(s)`);
             if (otherCount > 0) actions.push(`${otherCount} other exploration(s)`);
 
-            const filesList = filesTouched.size > 0 
-                ? ` [Touched: ${Array.from(filesTouched).join(', ')}]` 
+            const filesList = filesTouched.size > 0
+                ? ` [Touched: ${Array.from(filesTouched).join(', ')}]`
                 : '';
 
             const summaryText = `🔍 *Exploration Suite* — Completed ${explorationGroup.length} actions: ${actions.join(', ')}${filesList}`;

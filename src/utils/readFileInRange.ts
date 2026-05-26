@@ -1,4 +1,3 @@
-/* eslint-disable */
 // src/utils/readFileInRange.ts
 
 import { createReadStream, fstat } from 'fs';
@@ -146,7 +145,7 @@ interface StreamState {
     maxBytes: number | undefined;
     truncateOnByteLimit: boolean;
     resolve: (value: ReadFileRangeResult) => void;
-    reject: (err: any) => void;
+    reject: (err: unknown) => void;
     totalBytesRead: number;
     selectedBytes: number;
     truncatedByBytes: boolean;
@@ -165,20 +164,21 @@ function streamOnOpen(this: StreamState, fd: number): void {
 }
 
 function streamOnData(this: StreamState, chunk: string): void {
+    let cleanChunk = chunk;
     if (this.isFirstChunk) {
         this.isFirstChunk = false;
-        if (chunk.charCodeAt(0) === 0xfeff) {
-            chunk = chunk.slice(1);
+        if (cleanChunk.charCodeAt(0) === 0xfeff) {
+            cleanChunk = cleanChunk.slice(1);
         }
     }
 
-    this.totalBytesRead += Buffer.byteLength(chunk, 'utf8');
+    this.totalBytesRead += Buffer.byteLength(cleanChunk, 'utf8');
     if (!this.truncateOnByteLimit && this.maxBytes !== undefined && this.totalBytesRead > this.maxBytes) {
         this.stream.destroy(new FileTooLargeError(this.totalBytesRead, this.maxBytes));
         return;
     }
 
-    const data = this.partial.length > 0 ? this.partial + chunk : chunk;
+    const data = this.partial.length > 0 ? this.partial + cleanChunk : cleanChunk;
     this.partial = '';
 
     let startPos = 0;

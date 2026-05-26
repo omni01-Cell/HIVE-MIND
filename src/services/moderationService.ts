@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { supabase } from './supabase.js';
 import { redis } from './redisClient.js';
 import { workingMemory } from './workingMemory.js';
@@ -7,7 +6,7 @@ export class ModerationService {
     logger: any;
     container: any;
 
-    constructor(logger) {
+    constructor(logger?: any) {
         this.logger = logger || console;
         this.container = null;
     }

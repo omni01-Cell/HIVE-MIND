@@ -21,7 +21,13 @@ export default {
             }),
             execute: async (args, context) => {
                 const { command } = args;
-                const { chatId, sourceChannel } = context;
+                const ctx = context as {
+                    chatId: string;
+                    sourceChannel?: string;
+                    message?: { sender?: string };
+                    onProgress?: (msg: string) => void;
+                };
+                const { chatId, sourceChannel } = ctx;
 
                 // 1. Security Validation (Sandbox)
                 const validation = permissionManager.validateBashCommand(command, persistentShell.getCwd());
@@ -38,7 +44,7 @@ export default {
                         chatId,
                         `Execute Bash (Non-Sandboxed): ${command}`,
                         sourceChannel,
-                        context.message?.sender || 'system'
+                        ctx.message?.sender || 'system'
                     );
 
                     if (!permResult.granted) {
@@ -59,11 +65,11 @@ export default {
                 try {
                     console.log(`[BashTool] 🐚 Executing: ${command}`);
 
-                    if (context.onProgress) context.onProgress(`Executing: ${command}`);
+                    if (ctx.onProgress) ctx.onProgress(`Executing: ${command}`);
 
                     const { stdout, exitCode } = await persistentShell.execute(command);
 
-                    if (context.onProgress) context.onProgress(`Finished (Code: ${exitCode})`);
+                    if (ctx.onProgress) ctx.onProgress(`Finished (Code: ${exitCode})`);
 
                     let finalOutput = stdout;
                     if (stdout.length > MAX_OUTPUT_LENGTH) {
@@ -94,13 +100,23 @@ export default {
         })
     ],
 
-    async execute(args: any, context: any, toolName: string) {
+    async execute(args: unknown, context: unknown, toolName: string): Promise<{
+        success: boolean;
+        message?: string;
+        llmOutput?: unknown;
+        userOutput?: string;
+    } | null> {
         // Le routage est maintenant géré dynamiquement, mais pour compatibilité avec le vieux système (pluginLoader)
         // on délègue au "_execute" injecté par defineZodTool.
         const toolDef = this.toolDefinitions.find(t => t.function.name === toolName);
         if (!toolDef || !toolDef._execute) return null;
 
         // args are assumed to be already validated if coming from executeZodTool wrapper
-        return await toolDef._execute(args, context);
+        return await toolDef._execute(args as never, context as never) as Promise<{
+            success: boolean;
+            message?: string;
+            llmOutput?: unknown;
+            userOutput?: string;
+        } | null>;
     }
 };

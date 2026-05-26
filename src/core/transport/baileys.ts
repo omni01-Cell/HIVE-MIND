@@ -77,24 +77,9 @@ async function generateWaveformFromFile(audioPath: string): Promise<Uint8Array |
 // import { groupService } from '../../services/groupService.js'; // REMOVED FOR DI
 import { eventBus, BotEvents } from '../events.js';
 import { formatToWhatsApp, sanitizeForWhatsApp } from '../../utils/helpers.js';
-import { workingMemory } from '../../services/workingMemory.js';
-import { botIdentity } from '../../utils/botIdentity.js';
-import { resolveMentionsInText } from '../../utils/fuzzyMatcher.js';
 import { AudioHandler } from './handlers/audioHandler.js';
 import { AntiDeleteHandler } from './handlers/antiDeleteHandler.js';
 import { IdentityMap } from '../../services/state/IdentityMap.js';
-
-const BAILEYS_ERRORS = {
-    CONNECTION_LOST: 'CONNECTION_LOST',
-    SESSION_CONFLICT: 'SESSION_CONFLICT', // Code 440
-    MEDIA_DOWNLOAD_FAILED: 'MEDIA_DOWNLOAD_FAILED',
-    RECOGNITION_FAILED: 'RECOGNITION_FAILED',
-    MESSAGE_SEND_FAILED: 'MESSAGE_SEND_FAILED'
-};
-
-// NOUVEAU: Import config centralisée pour Audio Strategy
-
-import { config as globalConfig } from '../../config/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isDebug = process.env.DEBUG === 'true';
@@ -325,7 +310,7 @@ class BaileysTransport extends EventEmitter {
         });
 
         // 🛡️ Monitor encryption errors (to detect MessageCounterError)
-        self.sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        self.sock.ev.on('messages.upsert', async ({ messages, type: _type }) => {
             for (const msg of messages) {
                 if (msg.messageStubType === 'CIPHERTEXT' || msg.message?.protocolMessage?.type === 'EPHEMERAL_SETTING') {
                     // Possible decryption error metadata or protocol noisiness
@@ -339,7 +324,6 @@ class BaileysTransport extends EventEmitter {
 
             for (const msg of messages) {
                 try {
-                    const msgType = msg.message ? Object.keys(msg.message)[0] : 'NO_MESSAGE';
                     const remoteJid = msg.key?.remoteJid || 'UNKNOWN';
 
                     // [FIX] Ignorer les statuts WhatsApp (Stories)
@@ -358,7 +342,6 @@ class BaileysTransport extends EventEmitter {
 
                     // Extraction des variables de base immédiate (remoteJid déjà déclaré plus haut)
                     const sender = msg.key.participant || msg.key.remoteJid;
-                    const senderName = msg.pushName || sender.split('@')[0];
 
                     // Vérification de sécurité supplémentaire (cas edge)
                     if (!msg.message) {
@@ -818,7 +801,7 @@ class BaileysTransport extends EventEmitter {
                     const members = await groupService.getGroupMembers(chatId);
 
                     if (members && members.length > 0) {
-                        const { resolveMentionsInText, resolveImplicitMentions } = await import('../../utils/fuzzyMatcher.js');
+                        const { resolveMentionsInText } = await import('../../utils/fuzzyMatcher.js');
 
                         // 1. Résolution Explicite (@Nom)
                         const resolved = resolveMentionsInText(formattedText, members);

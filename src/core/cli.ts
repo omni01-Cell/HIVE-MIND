@@ -1,13 +1,13 @@
 import readline from 'readline';
 import { exec } from 'child_process';
-import { db, supabase } from '../services/supabase.js';
+import { supabase } from '../services/supabase.js';
 
 /**
  * Terminal Interface Implementation
  * Handles local commands during bot execution
  */
 class CliInterface {
-    rl: any;
+    rl: readline.Interface;
 
     constructor() {
         this.rl = readline.createInterface({
@@ -16,92 +16,101 @@ class CliInterface {
             prompt: 'BOT> '
         });
 
-        this.rl.on('line', (line: any) => {
-            this.handleCommand(line.trim());
+        this.rl.on('line', (line: string) => {
+            this.handleCommand(line.trim()).catch((err) => {
+                console.error('[CLI] Command execution error:', err);
+            });
         });
 
         console.log('[CLI] Terminal interface ready. Type "help" for commands.');
         this.rl.prompt();
     }
 
-    async handleCommand(cmd: any) {
+    async handleCommand(cmd: string) {
         if (!cmd) {
             this.rl.prompt();
             return;
         }
 
         const [command, ...args] = cmd.split(' ');
+        await this.dispatchCommand(command.toLowerCase(), args);
+        this.rl.prompt();
+    }
 
-        switch (command.toLowerCase()) {
-            case 'help':
-                console.log(`
+    private async dispatchCommand(command: string, args: string[]) {
+        if (command === 'help') {
+            this.showHelp();
+        } else if (command === 'exit') {
+            console.log('Shutting down...');
+            process.exit(0);
+        } else if (command === 'doc') {
+            await this.handleDocCommand(args);
+        } else {
+            console.log(`Unknown command: ${command}`);
+        }
+    }
+
+    private showHelp() {
+        console.log(`
 📚 Available Commands:
   doc ingest   - Run document ingestion script
   doc clear    - Clear "global" knowledge base
   doc status   - Check knowledge base stats
   exit         - Stop the bot
-                `);
-                break;
-
-            case 'exit':
-                console.log('Shutting down...');
-                process.exit(0);
-                break;
-
-            case 'doc':
-                await this.handleDocCommand(args);
-                break;
-
-            default:
-                console.log(`Unknown command: ${command}`);
-        }
-
-        this.rl.prompt();
+        `);
     }
 
-    async handleDocCommand(args: any) {
+    async handleDocCommand(args: string[]) {
         const subCmd = args[0]?.toLowerCase();
 
         if (subCmd === 'ingest') {
-            console.log('⚙️ Starting ingestion script...');
-            exec('node scripts/ingest_docs.js', (error, stdout, stderr) => {
-                if (error) console.error(`[Ingest Error] ${error.message}`);
-                // if (stderr) console.error(`[Ingest Stderr] ${stderr}`);
-                if (stdout) console.log(stdout);
-                console.log('✅ Ingestion process finished.');
-                this.rl.prompt(); // Re-prompt after async op
-            });
-            return; // Return early, prompt handled in callback
+            this.ingestDocs();
+        } else if (subCmd === 'clear') {
+            await this.clearDocs();
+        } else if (subCmd === 'status') {
+            await this.statusDocs();
+        } else {
+            console.log('Unknown doc subcommand. Try: ingest, clear, status');
         }
+    }
 
-        if (subCmd === 'clear') {
-            if (!supabase) {
-                console.error('❌ Supabase not connected.');
-            } else {
-                console.log('🗑️ Clearing global knowledge base...');
-                const { error, count } = await supabase
-                    .from('memories')
-                    .delete({ count: 'exact' })
-                    .eq('chat_id', 'global');
+    private ingestDocs() {
+        console.log('⚙️ Starting ingestion script...');
+        exec('node scripts/ingest_docs.js', (error, stdout) => {
+            if (error) console.error(`[Ingest Error] ${error.message}`);
+            if (stdout) console.log(stdout);
+            console.log('✅ Ingestion process finished.');
+            this.rl.prompt();
+        });
+    }
 
-                if (error) console.error(`❌ Error: ${error.message}`);
-                else console.log(`✅ Cleared ${count} items.`);
-            }
+    private async clearDocs() {
+        if (!supabase) {
+            console.error('❌ Supabase not connected.');
+            return;
         }
+        console.log('🗑️ Clearing global knowledge base...');
+        const { error, count } = await supabase
+            .from('memories')
+            .delete({ count: 'exact' })
+            .eq('chat_id', 'global');
 
-        if (subCmd === 'status') {
-            if (!supabase) {
-                console.error('❌ Supabase not connected.');
-            } else {
-                const { error, count } = await supabase
-                    .from('memories')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('chat_id', 'global');
+        if (error) console.error(`❌ Error: ${error.message}`);
+        else console.log(`✅ Cleared ${count} items.`);
+    }
 
-                if (error) console.error(`❌ Error: ${error.message}`);
-                else console.log(`📚 Knowledge Base Status: ${count} documents (chunks).`);
-            }
+    private async statusDocs() {
+        if (!supabase) {
+            console.error('❌ Supabase not connected.');
+            return;
         }
+        const { error, count } = await supabase
+            .from('memories')
+            .select('*', { count: 'exact', head: true })
+            .eq('chat_id', 'global');
+
+        if (error) console.error(`❌ Error: ${error.message}`);
+        else console.log(`📚 Knowledge Base Status: ${count} documents (chunks).`);
     }
 }
 

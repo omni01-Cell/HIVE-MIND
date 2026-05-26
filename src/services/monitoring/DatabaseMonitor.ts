@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/monitoring/DatabaseMonitor.js
 // ============================================================================
 // Service de monitoring de la base de données avec alerting
@@ -14,6 +13,7 @@ export class DatabaseMonitor {
     thresholds: any;
     alertedTables: any;
     monitoringActive: any;
+    supabase: any;
 
     constructor() {
         this.thresholds = {
@@ -25,6 +25,7 @@ export class DatabaseMonitor {
 
         this.alertedTables = new Set(); // Tracker les tables déjà alertées
         this.monitoringActive = false;
+        this.supabase = supabase;
     }
 
     /**
@@ -243,7 +244,7 @@ export class DatabaseMonitor {
         await this.checkConstraintsHealth();
 
         // Générer rapport
-        await this.generateHealthReport();
+        return await this.generateHealthReport();
     }
 
     /**
@@ -433,7 +434,7 @@ export class DatabaseMonitor {
                 recommendations.push({
                     type: 'performance',
                     priority: 'medium',
-                    tables: indexes.map((i) => i.table_name),
+                    tables: indexes.map((i: any) => i.table_name),
                     message: 'Tables sans index détectées',
                     action: 'add_indexes'
                 });
@@ -564,7 +565,7 @@ export class DatabaseMonitor {
             next.setDate(next.getDate() + 1);
         }
 
-        return next - now;
+        return next.getTime() - now.getTime();
     }
 
     /**

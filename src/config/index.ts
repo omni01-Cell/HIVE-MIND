@@ -48,8 +48,9 @@ function loadAndValidateConfig<T>(filename: string, schema: import('zod').ZodSch
         }
 
         return validated.data;
-    } catch (e: any) {
-        console.error(`[Config] Critical error in ${filename}:`, e.message);
+    } catch (e: unknown) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        console.error(`[Config] Critical error in ${filename}:`, errorMessage);
         throw e; // Block startup if configuration is corrupted
     }
 }
@@ -57,11 +58,11 @@ function loadAndValidateConfig<T>(filename: string, schema: import('zod').ZodSch
 /**
  * Loads a JSON file without validation (legacy support).
  */
-function loadJsonConfig(filename: string): any {
+function loadJsonConfig(filename: string): Record<string, unknown> {
     const filePath = join(__dirname, filename);
     if (!existsSync(filePath)) return {};
     try {
-        return JSON.parse(readFileSync(filePath, 'utf-8'));
+        return JSON.parse(readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
     } catch {
         return {};
     }
@@ -76,9 +77,14 @@ function resolveEnvValue(value: string | undefined | null): string | undefined {
     return resolved !== null ? resolved : undefined;
 }
 
+interface IACredentials {
+    familles_ia?: Record<string, string>;
+    [key: string]: unknown;
+}
+
 // 1. Load Base Configurations
 const baseConfig = loadAndValidateConfig<AppConfig>('config.json', AppConfigSchema);
-const credentials = loadJsonConfig('credentials.json');
+const credentials = loadJsonConfig('credentials.json') as IACredentials;
 const modelsConfig = loadAndValidateConfig<ModelsConfig>('models_config.json', ModelsConfigSchema);
 const schedulerConfig = loadAndValidateConfig<SchedulerConfig>('scheduler.json', SchedulerSchema);
 
@@ -114,7 +120,7 @@ export interface HIVEConfig {
       dimensions: number;
     };
   };
-  voice: any;
+  voice: Record<string, unknown>;
   scheduler: SchedulerConfig;
   app: AppConfig & { version: string };
   hasApiKey(provider: string): boolean;
@@ -167,7 +173,7 @@ export const config: HIVEConfig = {
     } as AppConfig & { version: string },
 
     hasApiKey(provider: string): boolean {
-        return !!(this.apiKeys as any)[provider];
+        return !!(this.apiKeys as Record<string, string | undefined>)[provider];
     },
 
     getFirstAvailableFamily(): string | null {

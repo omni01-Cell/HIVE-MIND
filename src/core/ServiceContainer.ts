@@ -12,6 +12,7 @@ import { config as appConfig } from '../config/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ServiceInstance = any;
 
 interface ServiceEntry {
@@ -22,6 +23,13 @@ interface ServiceEntry {
 
 export interface ContainerInitOptions {
     mode: 'full' | 'minimal';
+}
+
+interface ServiceStats {
+    total: number;
+    singletons: number;
+    instances: number;
+    services: Record<string, { singleton: boolean; created: boolean }>;
 }
 
 /**
@@ -37,29 +45,45 @@ export class ServiceContainer {
         if (this.initialized) return;
         this.mode = options.mode;
 
-        // 1. Charger la Configuration
+        const { credentials, modelsConfig } = this.loadConfig();
+
+        await this.registerBaseServices();
+        await this.registerCoreMemoriesAndConsciousness();
+
+        this.registerEmbeddingService(credentials, modelsConfig);
+
+        await this.registerVoiceServices(credentials, modelsConfig);
+        await this.registerMemoryServices();
+
+        const geminiKey = resolveApiKey(credentials.familles_ia?.gemini || '', 'gemini');
+        await this.registerLiveAndDreamServices(geminiKey);
+        await this.registerBrowserAndProviderRouter();
+
+        this.initialized = true;
+    }
+
+    private loadConfig(): { credentials: Credentials; modelsConfig: ModelsConfig } {
         const credentialsPath = join(__dirname, '..', 'config', 'credentials.json');
         const modelsPath = join(__dirname, '..', 'config', 'models_config.json');
 
-        let rawCredentials, rawModelsConfig;
         try {
-            rawCredentials = JSON.parse(readFileSync(credentialsPath, 'utf-8'));
-            rawModelsConfig = JSON.parse(readFileSync(modelsPath, 'utf-8'));
-        } catch (e: any) {
-            console.error('[ServiceContainer] Erreur lecture config:', e.message);
+            const rawCredentials = JSON.parse(readFileSync(credentialsPath, 'utf-8'));
+            const rawModelsConfig = JSON.parse(readFileSync(modelsPath, 'utf-8'));
+            return {
+                credentials: CredentialsSchema.parse(rawCredentials),
+                modelsConfig: ModelsConfigSchema.parse(rawModelsConfig)
+            };
+        } catch (e) {
+            console.error('[ServiceContainer] Erreur lecture config:', e instanceof Error ? e.message : String(e));
             throw e;
         }
+    }
 
-        // Validation Zod
-        const credentials = CredentialsSchema.parse(rawCredentials);
-        const modelsConfig = ModelsConfigSchema.parse(rawModelsConfig);
-
-        // 2. Enregistrer les Services de Base
+    private async registerBaseServices() {
         this.register('logger', logger);
         this.register('supabase', db);
         this.register('config', appConfig);
 
-        // 2b. Services Dynamiques (ESM)
         const { redis } = await import('../services/redisClient.js');
         this.register('redis', redis);
 
@@ -72,7 +96,9 @@ export class ServiceContainer {
 
         const { agentMemory } = await import('../services/agentMemory.js');
         this.register('agentMemory', agentMemory);
+    }
 
+    private async registerCoreMemoriesAndConsciousness() {
         const { actionMemory } = await import('../services/memory/ActionMemory.js');
         this.register('actionMemory', actionMemory);
 
@@ -87,60 +113,62 @@ export class ServiceContainer {
 
         const { moderationService } = await import('../services/moderationService.js');
         this.register('moderation', moderationService);
+    }
 
-        // 3. Service Embeddings
-        const geminiKey = resolveApiKey(credentials.familles_ia?.gemini || '', 'gemini');
-        const openaiKey = resolveApiKey(credentials.familles_ia?.openai || '', 'openai');
-
-        const primaryEmbedding = modelsConfig.reglages_generaux.embeddings.primary;
+    private registerEmbeddingService(credentials: Credentials, modelsConfig: ModelsConfig) {
+        const keyGemini = credentials.familles_ia?.gemini ?? '';
+        const keyOpenai = credentials.familles_ia?.openai ?? '';
+        const cfg = modelsConfig.reglages_generaux.embeddings.primary;
 
         const embeddingConfig: EmbeddingConfig = {
-            geminiKey: geminiKey || undefined,
-            openaiKey: openaiKey || undefined,
-            model: primaryEmbedding.model || 'gemini-embedding-001',
-            dimensions: primaryEmbedding.dimensions || 1024
+            geminiKey: resolveApiKey(keyGemini, 'gemini') ?? undefined,
+            openaiKey: resolveApiKey(keyOpenai, 'openai') ?? undefined,
+            model: cfg.model,
+            dimensions: cfg.dimensions
         };
 
-        this.register('embeddings', () => {
-            console.log('[ServiceContainer] 🔄 Création EmbeddingsService singleton...');
-            return new EmbeddingsService(embeddingConfig);
-        }, { singleton: true });
+        this.register('embeddings', () => new EmbeddingsService(embeddingConfig), { singleton: true });
+    }
 
-        // 3b. Service Quotas
+    private async registerVoiceServices(credentials: Credentials, modelsConfig: ModelsConfig) {
         const { quotaManager } = await import('../services/quotaManager.js');
         await quotaManager.init();
         this.register('quotaManager', quotaManager);
 
-        // 3c. Voice Providers
         const { VoiceProvider } = await import('../services/voice/voiceProvider.js');
         const voiceProviderConfig = modelsConfig.voice_provider || {};
-        const voiceProvider = new VoiceProvider(voiceProviderConfig, quotaManager as any);
+        const voiceProvider = new VoiceProvider(voiceProviderConfig, quotaManager as unknown as ConstructorParameters<typeof VoiceProvider>[1]);
         this.register('voiceProvider', voiceProvider);
 
-        // Legacy Voice
+        await this.registerMinimaxVoice(credentials, modelsConfig);
+        await this.registerGroqSTT(credentials, modelsConfig);
+    }
+
+    private async registerMinimaxVoice(credentials: Credentials, modelsConfig: ModelsConfig) {
         const { MinimaxVoiceService } = await import('../services/voice/minimax.js');
-        const minimaxKey = resolveApiKey(credentials.familles_ia?.minimax || '', 'minimax');
-        const voiceConfig = modelsConfig.voice_provider?.minimax_config || {};
-        const voiceService = new MinimaxVoiceService(minimaxKey || '', voiceConfig);
-        this.register('voiceService', voiceService);
+        const rawKey = credentials.familles_ia?.minimax ?? '';
+        const minimaxKey = resolveApiKey(rawKey, 'minimax') ?? '';
+        const voiceConfig = modelsConfig.voice_provider?.minimax_config ?? {};
+        this.register('voiceService', new MinimaxVoiceService(minimaxKey, voiceConfig));
+    }
 
-        // Transcription
+    private async registerGroqSTT(credentials: Credentials, modelsConfig: ModelsConfig) {
         const { GroqTranscriptionService } = await import('../services/transcription/groqSTT.js');
-        const groqKey = resolveApiKey(credentials.familles_ia?.groq || '', 'groq');
-        const sttConfig = modelsConfig.voice_provider?.stt_models?.[0] || {};
-        const sttService = new GroqTranscriptionService(groqKey || '', sttConfig);
-        this.register('transcriptionService', sttService);
+        const rawKey = credentials.familles_ia?.groq ?? '';
+        const groqKey = resolveApiKey(rawKey, 'groq') ?? '';
+        const sttConfig = modelsConfig.voice_provider?.stt_models?.[0] ?? {};
+        this.register('transcriptionService', new GroqTranscriptionService(groqKey, sttConfig));
+    }
 
-        // 4. Semantic Memory (RAG)
+    private async registerMemoryServices() {
         const memoryDeps: SemanticMemoryDependencies = {
-            supabase: this.get('supabase').client, // Needs the raw client
-            embeddings: this.get('embeddings'),
-            logger: this.get('logger')
+            supabase: (this.get('supabase') as typeof db).client,
+            embeddings: this.get('embeddings') as EmbeddingsService,
+            logger: this.get('logger') as typeof logger
         };
         const memory = new SemanticMemory(memoryDeps);
         this.register('memory', memory);
 
-        // 5. Level 5 Services
         const { graphMemory } = await import('../services/graphMemory.js');
         this.register('graphMemory', graphMemory);
 
@@ -149,13 +177,12 @@ export class ServiceContainer {
 
         const { consolidationService } = await import('../services/consolidationService.js');
         this.register('consolidationService', consolidationService);
+    }
 
+    private async registerLiveAndDreamServices(geminiKey: string | null) {
         const { GeminiLiveProvider } = await import('../services/audio/geminiLiveProvider.js');
         this.register('geminiLiveProvider', new GeminiLiveProvider({ apiKey: geminiKey || '' }));
 
-        // 7. Reflection & Runtime Infrastructure
-        // WHY: These MUST be awaited. Fire-and-forget .then() caused a race condition
-        // where container.get('runtime') could throw if called before import resolved.
         const [dreamModule, runtimeModule] = await Promise.all([
             import('../services/dreamService.js'),
             import('../services/runtime/RuntimeInfrastructure.js')
@@ -166,51 +193,37 @@ export class ServiceContainer {
         const { factsMemory, workspaceMemory } = await import('../services/memory.js');
         this.register('facts', factsMemory);
         this.register('workspace', workspaceMemory);
+    }
 
-        // [BROWSER] Browser Agent Service
+    private async registerBrowserAndProviderRouter() {
         const { browserService } = await import('../services/browser/BrowserService.js');
         this.register('browser', browserService);
 
-        // 8. Provider Router (singleton global — utilisé par ShoppingAgent, DeepResearch, JournalGenerator)
         const providerModule = await import('../providers/index.js');
-        // WHY: loadAdapters() runs at module level as fire-and-forget. We must await it
-        // to guarantee all adapters are registered before the container is marked ready.
         if (typeof providerModule.loadAdapters === 'function') {
             await providerModule.loadAdapters();
         }
         this.register('providerRouter', providerModule.providerRouter);
-
-        this.initialized = true;
     }
 
     /**
      * Enregistre un service
      */
-    public register(name: string, factory: any, options: { singleton?: boolean } = {}): this {
+    public register(name: string, factory: unknown, options: { singleton?: boolean } = {}): this {
         const { singleton = false } = options;
-
         if (!factory) {
             console.error(`[ServiceContainer] ❌ Tentative d'enregistrement de service NULL: ${name}`);
             return this;
         }
-
         if (this.services.has(name)) {
             console.warn(`[ServiceContainer] Service ${name} déjà enregistré - remplacement`);
         }
-
-        const factoryFn = typeof factory === 'function' ? factory : () => factory;
-
-        this.services.set(name, {
-            factory: factoryFn,
-            singleton,
-            instance: null
-        });
-
-        // Auto-injection si factory est une instance (pas singleton ici car instance est direct)
-        if (!singleton && typeof factory.setContainer === 'function') {
-            factory.setContainer(this);
+        const factoryFn = typeof factory === 'function' ? (factory as () => ServiceInstance) : () => factory;
+        this.services.set(name, { factory: factoryFn, singleton, instance: null });
+        const factoryObj = factory as { setContainer?: (container: ServiceContainer) => void };
+        if (!singleton && typeof factoryObj.setContainer === 'function') {
+            factoryObj.setContainer(this);
         }
-
         return this;
     }
 
@@ -222,32 +235,35 @@ export class ServiceContainer {
         if (!service) {
             throw new Error(`[ServiceContainer] Service non trouvé: ${name}`);
         }
-
         if (service.singleton) {
-            if (!service.instance) {
-                console.log(`[ServiceContainer] 🔄 Création singleton: ${name}`);
-                service.instance = service.factory();
-
-                if (service.instance && typeof service.instance.setContainer === 'function') {
-                    service.instance.setContainer(this);
-                }
-            }
-            return service.instance;
+            return this.getSingleton(name, service);
         }
-
         const instance = service.factory();
-        if (instance && typeof instance.setContainer === 'function') {
-            instance.setContainer(this);
+        const instObj = instance as { setContainer?: (container: ServiceContainer) => void } | null;
+        if (instObj && typeof instObj.setContainer === 'function') {
+            instObj.setContainer(this);
         }
         return instance;
+    }
+
+    private getSingleton(name: string, service: ServiceEntry): ServiceInstance {
+        if (!service.instance) {
+            console.log(`[ServiceContainer] 🔄 Création singleton: ${name}`);
+            service.instance = service.factory();
+            const instObj = service.instance as { setContainer?: (container: ServiceContainer) => void } | null;
+            if (instObj && typeof instObj.setContainer === 'function') {
+                instObj.setContainer(this);
+            }
+        }
+        return service.instance;
     }
 
     public has(name: string): boolean {
         return this.services.has(name);
     }
 
-    public getStats(): any {
-        const stats: any = {
+    public getStats(): ServiceStats {
+        const stats: ServiceStats = {
             total: this.services.size,
             singletons: 0,
             instances: 0,
@@ -268,3 +284,4 @@ export class ServiceContainer {
 }
 
 export const container = new ServiceContainer();
+export default container;

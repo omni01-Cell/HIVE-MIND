@@ -1,4 +1,3 @@
-// @ts-nocheck
 // core/handlers/groupHandler.js
 // Gère les événements de groupe (join, leave, promote, demote)
 // Extrait de core/index.js pour modularité
@@ -14,7 +13,7 @@ export class GroupHandler {
     transport: any;
     welcomeHandler: any;
 
-    constructor(transport, welcomeHandler = null) {
+    constructor(transport: any, welcomeHandler: any = null) {
         this.transport = transport;
         this.welcomeHandler = welcomeHandler;
     }
@@ -117,7 +116,7 @@ export class GroupHandler {
      * Envoie les notifications de groupe
      */
     async _sendNotification(groupId: any, participants: any, action: any) {
-        const messages = {
+        const messages: Record<string, string> = {
             remove: `👋 Au revoir @${participants[0].split('@')[0]}...`,
             promote: `🎉 Félicitations @${participants[0].split('@')[0]} est maintenant admin !`,
             demote: `📉 @${participants[0].split('@')[0]} n'est plus admin.`

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // core/handlers/schedulerHandler.js
 // Gère les tâches planifiées du scheduler
 // Extrait de core/index.js pour modularité
@@ -19,7 +18,7 @@ export class SchedulerHandler {
     transport: any;
     messageHandler: any;
 
-    constructor(transport, messageHandler = null) {
+    constructor(transport: any, messageHandler: any = null) {
         this.transport = transport;
         this.messageHandler = messageHandler;
     }
@@ -201,7 +200,7 @@ export class SchedulerHandler {
 
             if (cronExpr) {
                 try {
-                    const parser = (await import('cron-parser')).default;
+                    const parser: any = (await import('cron-parser')).default;
                     // Use the original remind_at as the reference point to avoid drifting next dates when the bot is offline
                     const interval = parser.parseExpression(cronExpr, { currentDate: new Date(reminder.remind_at) });
                     const nextDate = interval.next().toDate();
@@ -220,7 +219,6 @@ export class SchedulerHandler {
     async _handleMemoryConsolidation() {
         console.log('[Scheduler] 🧶 Consolidation de la mémoire et Tissage du savoir...');
         try {
-            const { redis } = await import('../../services/redisClient.js');
             const keys = await redis.keys('chat:*:context');
             const chatIds = keys.map((k: any) => k.split(':')[1]);
 
@@ -233,7 +231,7 @@ export class SchedulerHandler {
             const consolidationService = container.get('consolidationService');
 
             for (const chatId of chatIds) {
-                consolidationService.consolidate(chatId).catch(err =>
+                consolidationService.consolidate(chatId).catch((err: any) =>
                     console.error(`[Scheduler] Erreur consolidation ${chatId}:`, err.message)
                 );
             }
@@ -327,7 +325,7 @@ ${textToAnalyze}
                         try {
                             const json5 = (await import('json5')).default;
                             events = json5.parse(jsonStr);
-                        } catch (e) {
+                        } catch {
                             events = JSON.parse(jsonStr);
                         }
 
@@ -345,11 +343,11 @@ ${textToAnalyze}
 
                                 if (ev.cron) {
                                     try {
-                                        const parser = (await import('cron-parser')).default;
+                                        const parser: any = (await import('cron-parser')).default;
                                         const interval = parser.parseExpression(ev.cron);
                                         targetDate = interval.next().toISOString();
                                         finalMessage = `[CRON: ${ev.cron}] ${ev.message}`;
-                                    } catch (err) {
+                                    } catch {
                                         console.error('[Scheduler] Cron invalide ignoré:', ev.cron);
                                         continue;
                                     }

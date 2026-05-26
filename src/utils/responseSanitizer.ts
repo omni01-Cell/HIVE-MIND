@@ -58,6 +58,46 @@ const FALLBACK_MESSAGE = "J'ai rencontré un problème technique en traitant cet
  *
  * Invariant: returns a defects object with accurate counts. Never throws.
  */
+function checkThoughts(text: string, defects: ResponseDefects): void {
+    if (!/<(think|thought|thinking)>/i.test(text)) {
+        defects.hasNoThoughts = true;
+        defects.defectCount++;
+        defects.details.push('Missing mandatory <thought> tags');
+    }
+}
+
+function checkLeakedToolCalls(text: string, defects: ResponseDefects): void {
+    if (hasLeakedToolCallPatterns(text)) {
+        defects.hasLeakedToolCalls = true;
+        defects.defectCount++;
+        defects.details.push('Leaked tool call syntax in text');
+    }
+}
+
+function checkRawCodeAndJson(text: string, defects: ResponseDefects): void {
+    if (hasRawCodeDominance(text)) {
+        defects.hasRawCodeDominance = true;
+        defects.defectCount++;
+        defects.details.push('Raw code block dominates response (>80%)');
+    }
+    if (hasJsonToolObject(text)) {
+        defects.hasJsonToolObject = true;
+        defects.defectCount++;
+        defects.details.push('JSON tool call object in response text');
+    }
+}
+
+function checkXmlToolTags(text: string, defects: ResponseDefects): void {
+    const xmlToolTagPattern = /<(?:tool_code|code_execution|tool_call)\b[^>]*>[\s\S]*?<\/(?:tool_code|code_execution|tool_call)>/i;
+    if (xmlToolTagPattern.test(text)) {
+        defects.hasLeakedToolCalls = true;
+        if (!defects.details.includes('Leaked tool call syntax in text')) {
+            defects.defectCount++;
+            defects.details.push('XML tool invocation tags in text');
+        }
+    }
+}
+
 export function detectResponseDefects(text: string | null | undefined): ResponseDefects {
     const defects: ResponseDefects = {
         hasNoThoughts: false,
@@ -67,148 +107,105 @@ export function detectResponseDefects(text: string | null | undefined): Response
         defectCount: 0,
         details: []
     };
+    if (!text || typeof text !== 'string' || text.trim().length === 0) return defects;
 
-    if (!text || typeof text !== 'string' || text.trim().length === 0) {
-        return defects;
-    }
-
-    // 1. Check for missing <thought> tags
-    const thoughtPattern = /<(think|thought|thinking)>/i;
-    if (!thoughtPattern.test(text)) {
-        defects.hasNoThoughts = true;
-        defects.defectCount++;
-        defects.details.push('Missing mandatory <thought> tags');
-    }
-
-    // 2. Check for leaked tool call syntax: tool_<name>(...) or <toolName>(...)
-    if (hasLeakedToolCallPatterns(text)) {
-        defects.hasLeakedToolCalls = true;
-        defects.defectCount++;
-        defects.details.push('Leaked tool call syntax in text');
-    }
-
-    // 3. Check for raw code dominance (>80% code block, no surrounding explanation)
-    if (hasRawCodeDominance(text)) {
-        defects.hasRawCodeDominance = true;
-        defects.defectCount++;
-        defects.details.push('Raw code block dominates response (>80%)');
-    }
-
-    // 4. Check for JSON tool call objects
-    if (hasJsonToolObject(text)) {
-        defects.hasJsonToolObject = true;
-        defects.defectCount++;
-        defects.details.push('JSON tool call object in response text');
-    }
-
-    // 5. Check for XML-style tool invocation tags (<tool_code>, <code_execution>)
-    // WHY: gemini-3.1-flash-lite sometimes wraps tool calls in XML tags instead
-    // of using the structured tool API. These leak into user-facing text.
-    const xmlToolTagPattern = /<(?:tool_code|code_execution|tool_call)\b[^>]*>[\s\S]*?<\/(?:tool_code|code_execution|tool_call)>/i;
-    if (xmlToolTagPattern.test(text)) {
-        defects.hasLeakedToolCalls = true;
-        if (!defects.details.includes('Leaked tool call syntax in text')) {
-            defects.defectCount++;
-            defects.details.push('XML tool invocation tags in text');
-        }
-    }
+    checkThoughts(text, defects);
+    checkLeakedToolCalls(text, defects);
+    checkRawCodeAndJson(text, defects);
+    checkXmlToolTags(text, defects);
 
     return defects;
 }
 
-/**
- * Layer 2: Strip leaked tool calls, orphan code blocks, and JSON tool objects
- * from the final response. Last line of defense before sending to user.
- *
- * Invariant: returned `cleaned` is always a non-empty string (fallback if empty).
- */
+function stripQuoteToolCalls(state: { cleaned: string; strippedItems: string[] }): void {
+    const triplePattern = /(?:tool_)?(?:code_execution)\s*\(\s*(?:code\s*=\s*)?"""[\s\S]*?"""\s*\)/g;
+    if (triplePattern.test(state.cleaned)) {
+        state.strippedItems.push('triple_quote_tool_call');
+        state.cleaned = state.cleaned.replace(triplePattern, '');
+    }
+
+    const singlePattern = /(?:tool_)?(?:code_execution)\s*\(\s*(?:code\s*=\s*)?(?:"[^"]*"|'[^']*')\s*\)/g;
+    if (singlePattern.test(state.cleaned)) {
+        state.strippedItems.push('single_quote_tool_call');
+        singlePattern.lastIndex = 0;
+        state.cleaned = state.cleaned.replace(singlePattern, '');
+    }
+}
+
+function stripArbitraryToolCalls(state: { cleaned: string; strippedItems: string[] }): void {
+    const toolCallTextPattern = buildToolCallPattern();
+    const matches = state.cleaned.match(toolCallTextPattern);
+    if (matches) {
+        state.strippedItems.push(`tool_call_text(${matches.length})`);
+        state.cleaned = state.cleaned.replace(toolCallTextPattern, '');
+    }
+}
+
+function stripJsonToolObjects(state: { cleaned: string; strippedItems: string[] }): void {
+    const jsonToolPattern = /\{[\s\n]*"name"\s*:\s*"[a-zA-Z_]+"\s*,[\s\n]*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g;
+    const jsonMatches = state.cleaned.match(jsonToolPattern);
+    if (jsonMatches) {
+        for (const jsonMatch of jsonMatches) {
+            const nameMatch = jsonMatch.match(/"name"\s*:\s*"([a-zA-Z_]+)"/);
+            if (nameMatch && isKnownTool(nameMatch[1])) {
+                state.strippedItems.push(`json_tool_object(${nameMatch[1]})`);
+                state.cleaned = state.cleaned.replace(jsonMatch, '');
+            }
+        }
+    }
+}
+
+function stripOrphanCodeBlocks(state: { cleaned: string; strippedItems: string[] }): void {
+    if (hasRawCodeDominance(state.cleaned)) {
+        const codeBlockRegex = /```[\s\S]*?```/g;
+        const codeBlocks = state.cleaned.match(codeBlockRegex);
+        if (codeBlocks) {
+            const nonCodeText = state.cleaned.replace(codeBlockRegex, '').trim();
+            if (nonCodeText.length < 50) {
+                state.strippedItems.push(`orphan_code_blocks(${codeBlocks.length})`);
+                state.cleaned = nonCodeText;
+            }
+        }
+    }
+}
+
+function stripXmlToolTags(state: { cleaned: string; strippedItems: string[] }): void {
+    const xmlPattern = /<(?:tool_code|code_execution|tool_call)\b[^>]*>[\s\S]*?<\/(?:tool_code|code_execution|tool_call)>/gi;
+    const xmlMatches = state.cleaned.match(xmlPattern);
+    if (xmlMatches) {
+        state.strippedItems.push(`xml_tool_tags(${xmlMatches.length})`);
+        state.cleaned = state.cleaned.replace(xmlPattern, '');
+    }
+}
+
+function fallbackOrClean(state: { cleaned: string; strippedItems: string[] }): SanitizeResult {
+    state.cleaned = state.cleaned.replace(/\n{3,}/g, '\n\n').trim();
+    if (!state.cleaned || state.cleaned.length < 5) {
+        state.cleaned = FALLBACK_MESSAGE;
+        if (!state.strippedItems.includes('empty_after_strip')) {
+            state.strippedItems.push('empty_after_strip');
+        }
+    }
+    return {
+        cleaned: state.cleaned,
+        wasModified: state.strippedItems.length > 0,
+        strippedItems: state.strippedItems
+    };
+}
+
 export function sanitizeResponse(text: string | null | undefined): SanitizeResult {
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
         return { cleaned: FALLBACK_MESSAGE, wasModified: true, strippedItems: ['empty_response'] };
     }
 
-    let cleaned = text;
-    const strippedItems: string[] = [];
+    const state = { cleaned: text, strippedItems: [] as string[] };
+    stripQuoteToolCalls(state);
+    stripArbitraryToolCalls(state);
+    stripJsonToolObjects(state);
+    stripOrphanCodeBlocks(state);
+    stripXmlToolTags(state);
 
-    // 1. Strip tool_<name>(code="""...""") — triple-quote Python style
-    const tripleQuoteToolPattern = /(?:tool_)?(?:code_execution)\s*\(\s*(?:code\s*=\s*)?"""[\s\S]*?"""\s*\)/g;
-    if (tripleQuoteToolPattern.test(cleaned)) {
-        strippedItems.push('triple_quote_tool_call');
-        cleaned = cleaned.replace(tripleQuoteToolPattern, '');
-    }
-
-    // 2. Strip tool_<name>(code="...") — single-quote style
-    const singleQuoteToolPattern = /(?:tool_)?(?:code_execution)\s*\(\s*(?:code\s*=\s*)?(?:"[^"]*"|'[^']*')\s*\)/g;
-    if (singleQuoteToolPattern.test(cleaned)) {
-        strippedItems.push('single_quote_tool_call');
-        // Reset lastIndex since test() advances it
-        singleQuoteToolPattern.lastIndex = 0;
-        cleaned = cleaned.replace(singleQuoteToolPattern, '');
-    }
-
-    // 3. Strip any tool_<name>(...) or known_tool(...) with arbitrary content
-    // WHY: Match known tool names followed by parenthesized content
-    const toolCallTextPattern = buildToolCallPattern();
-    const toolCallMatches = cleaned.match(toolCallTextPattern);
-    if (toolCallMatches) {
-        strippedItems.push(`tool_call_text(${toolCallMatches.length})`);
-        cleaned = cleaned.replace(toolCallTextPattern, '');
-    }
-
-    // 4. Strip JSON tool call objects: {"name": "<tool>", "arguments": {...}}
-    const jsonToolPattern = /\{[\s\n]*"name"\s*:\s*"[a-zA-Z_]+"\s*,[\s\n]*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g;
-    const jsonMatches = cleaned.match(jsonToolPattern);
-    if (jsonMatches) {
-        // Only strip if the "name" value matches a known tool
-        for (const jsonMatch of jsonMatches) {
-            const nameMatch = jsonMatch.match(/"name"\s*:\s*"([a-zA-Z_]+)"/);
-            if (nameMatch && isKnownTool(nameMatch[1])) {
-                strippedItems.push(`json_tool_object(${nameMatch[1]})`);
-                cleaned = cleaned.replace(jsonMatch, '');
-            }
-        }
-    }
-
-    // 5. Strip orphan code blocks that dominate the response
-    // Only if the remaining text is >80% code block with no natural language around it
-    if (hasRawCodeDominance(cleaned)) {
-        const codeBlockRegex = /```[\s\S]*?```/g;
-        const codeBlocks = cleaned.match(codeBlockRegex);
-        if (codeBlocks) {
-            const nonCodeText = cleaned.replace(codeBlockRegex, '').trim();
-            // Only strip if there's essentially no natural language outside the code blocks
-            if (nonCodeText.length < 50) {
-                strippedItems.push(`orphan_code_blocks(${codeBlocks.length})`);
-                cleaned = nonCodeText;
-            }
-        }
-    }
-
-    // 6. Strip XML-style tool invocation tags: <tool_code>...</tool_code>, <code_execution>...</code_execution>
-    // WHY: gemini-3.1-flash-lite wraps tool calls in XML tags that leak to the user.
-    const xmlToolTagStripPattern = /<(?:tool_code|code_execution|tool_call)\b[^>]*>[\s\S]*?<\/(?:tool_code|code_execution|tool_call)>/gi;
-    const xmlMatches = cleaned.match(xmlToolTagStripPattern);
-    if (xmlMatches) {
-        strippedItems.push(`xml_tool_tags(${xmlMatches.length})`);
-        cleaned = cleaned.replace(xmlToolTagStripPattern, '');
-    }
-
-    // Final cleanup: collapse excessive whitespace
-    cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
-
-    // If everything was stripped, use fallback
-    if (!cleaned || cleaned.length < 5) {
-        cleaned = FALLBACK_MESSAGE;
-        if (!strippedItems.includes('empty_after_strip')) {
-            strippedItems.push('empty_after_strip');
-        }
-    }
-
-    return {
-        cleaned,
-        wasModified: strippedItems.length > 0,
-        strippedItems
-    };
+    return fallbackOrClean(state);
 }
 
 // ──────────────────── Internal helpers ────────────────────

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/dreamService.js
 // Module de Rêve : Analyse des actions passées pour l'auto-apprentissage
 

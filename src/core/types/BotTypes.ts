@@ -1,8 +1,8 @@
 export interface UniversalResponse {
-    data?: any;             // Raw data (JSON)
+    data?: unknown;             // Raw data (JSON)
     markdown: string;      // Standard Markdown (Pivot format)
     plainText?: string;     // Sanitized text for WhatsApp (concise)
-    visual?: any;          // Rich components (Rich CLI, Discord Embeds)
+    visual?: unknown;          // Rich components (Rich CLI, Discord Embeds)
 }
 
 export interface MessageData {
@@ -12,12 +12,12 @@ export interface MessageData {
     text: string;
     isGroup: boolean;
     mediaType?: string;
-    quotedMsg?: any;
+    quotedMsg?: unknown;
     hasImage?: boolean;
-    image?: any;
+    image?: unknown;
     useNativeAudio?: boolean;
     audioBuffer?: Buffer;
-    raw?: any;
+    raw?: unknown;
     id?: string;
     sourceChannel?: string; // Origin (whatsapp, cli, etc.)
 }
@@ -25,20 +25,20 @@ export interface MessageData {
 export interface BotEvent {
     type: 'message' | 'scheduled' | 'proactive' | 'group_event';
     chatId?: string;
-    data: MessageData | any;
+    data: MessageData | unknown;
     priority?: number;
     sourceChannel?: string;
 }
 
 export interface ContextData {
     systemPrompt: string;
-    messages: any[];
+    messages: unknown[];
     refusalPrompt?: string;
 }
 
 export interface ToolCall {
     name: string;
-    args: Record<string, any>;
+    args: Record<string, unknown>;
 }
 
 export interface ActionRecord {

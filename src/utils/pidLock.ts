@@ -8,42 +8,39 @@ import path from 'path';
 
 const PID_FILE = path.join(process.cwd(), '.hive-mind.pid');
 
+function getRunningPid(filePath: string): number | undefined {
+    if (!fs.existsSync(filePath)) return undefined;
+    try {
+        const pid = parseInt(fs.readFileSync(filePath, 'utf8'), 10);
+        if (isNaN(pid)) return undefined;
+        process.kill(pid, 0);
+        return pid;
+    } catch (e) {
+        const err = e as { code?: string };
+        if (err.code === 'EPERM') {
+            console.error('\x1b[31m[CRITICAL] Another instance is running but we lack permissions.\x1b[0m');
+            process.exit(1);
+        }
+        if (err.code !== 'ESRCH') throw e;
+    }
+    return undefined;
+}
+
 /**
  * Acquiert un verrou PID pour empêcher l'exécution de plusieurs instances
  * @throws {Error} Si une autre instance est déjà en cours.
  */
 export function acquireLock(): void {
-    if (fs.existsSync(PID_FILE)) {
-        let oldPid: number | undefined;
-        try {
-            oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8'));
-        } catch (e: any) {
-            // Si le fichier existe mais est illisible, on l'écrasera
-        }
-
-        if (oldPid) {
-            // Vérifier si le processus est réellement en cours
-            try {
-                // Signal 0 ne tue pas le processus, mais vérifie s'il existe
-                process.kill(oldPid, 0);
-                console.error(`\x1b[31m[CRITICAL] Another instance of HIVE-MIND is already running (PID: ${oldPid}).\x1b[0m`);
-                console.error('\x1b[31m[CRITICAL] Starting a second instance would cause WhatsApp session conflicts.\x1b[0m');
-                process.exit(1);
-            } catch (e: any) {
-                // ESRCH signifie que le processus n'a pas été trouvé, donc le fichier PID est obsolète
-                // EPERM signifie que le processus existe mais nous n'avons pas la permission de lui envoyer un signal
-                if (e.code === 'EPERM') {
-                    console.error(`\x1b[31m[CRITICAL] Another instance is running (PID: ${oldPid}) but we lack permissions to signal it.\x1b[0m`);
-                    process.exit(1);
-                }
-                if (e.code !== 'ESRCH') {
-                    throw e;
-                }
-                console.log(`[Startup] Found stale PID file (PID: ${oldPid}). Cleaning up...`);
-            }
-        }
+    const oldPid = getRunningPid(PID_FILE);
+    if (oldPid) {
+        console.error(`\x1b[31m[CRITICAL] Another instance of HIVE-MIND is already running (PID: ${oldPid}).\x1b[0m`);
+        console.error('\x1b[31m[CRITICAL] Starting a second instance would cause WhatsApp session conflicts.\x1b[0m');
+        process.exit(1);
     }
 
+    if (fs.existsSync(PID_FILE)) {
+        console.log('[Startup] Found stale PID file. Cleaning up...');
+    }
     fs.writeFileSync(PID_FILE, process.pid.toString());
 }
 
@@ -54,13 +51,13 @@ export function releaseLock(): void {
     try {
         if (fs.existsSync(PID_FILE)) {
             const content = fs.readFileSync(PID_FILE, 'utf8');
-            const currentPid = parseInt(content);
+            const currentPid = parseInt(content, 10);
             if (currentPid === process.pid) {
                 fs.unlinkSync(PID_FILE);
             }
         }
-    } catch (e: any) {
-    // Échec silencieux lors de la fermeture
+    } catch {
+        // Échec silencieux lors de la fermeture
     }
 }
 
@@ -71,10 +68,10 @@ export function isLocked(): boolean {
     if (!fs.existsSync(PID_FILE)) return false;
     try {
         const content = fs.readFileSync(PID_FILE, 'utf8');
-        const oldPid = parseInt(content);
+        const oldPid = parseInt(content, 10);
         process.kill(oldPid, 0);
         return true;
-    } catch (e: any) {
+    } catch {
         return false;
     }
 }

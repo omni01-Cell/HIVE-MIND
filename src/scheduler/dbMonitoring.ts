@@ -1,4 +1,3 @@
-// @ts-nocheck
 // scheduler/dbMonitoring.js
 // ============================================================================
 // Tâches schedulées pour le monitoring de la base de données
@@ -29,15 +28,16 @@ export async function monitorDatabaseHealth() {
             message: 'Monitoring terminé avec succès'
         };
 
-    } catch (error: any) {
-        console.error('[Scheduler] ❌ Erreur monitoring DB:', error.message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[Scheduler] ❌ Erreur monitoring DB:', errorMessage);
 
         // Envoyer une alerte critique
         await databaseMonitor.sendCriticalAlert('monitoring_task', 0);
 
         return {
             success: false,
-            error: error.message,
+            error: errorMessage,
             message: 'Erreur lors du monitoring'
         };
     }
@@ -52,7 +52,7 @@ export async function cleanupOldData() {
 
     try {
         // Appeler la fonction de cleanup via Supabase
-        const { data, error } = await databaseMonitor.supabase.rpc('cleanup_old_data');
+        const { error } = await databaseMonitor.supabase.rpc('cleanup_old_data');
 
         if (error) {
             console.error('[Scheduler] Erreur cleanup:', error.message);
@@ -68,11 +68,12 @@ export async function cleanupOldData() {
             message: 'Nettoyage effectué avec succès'
         };
 
-    } catch (error: any) {
-        console.error('[Scheduler] ❌ Erreur cleanup:', error.message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[Scheduler] ❌ Erreur cleanup:', errorMessage);
         return {
             success: false,
-            error: error.message
+            error: errorMessage
         };
     }
 }
@@ -93,11 +94,12 @@ export async function analyzePerformance() {
             message: 'Analyse effectuée avec succès'
         };
 
-    } catch (error: any) {
-        console.error('[Scheduler] ❌ Erreur analyse performance:', error.message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[Scheduler] ❌ Erreur analyse performance:', errorMessage);
         return {
             success: false,
-            error: error.message
+            error: errorMessage
         };
     }
 }
@@ -133,11 +135,12 @@ export async function generateWeeklyReport() {
             message: 'Rapport généré avec succès'
         };
 
-    } catch (error: any) {
-        console.error('[Scheduler] ❌ Erreur génération rapport:', error.message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[Scheduler] ❌ Erreur génération rapport:', errorMessage);
         return {
             success: false,
-            error: error.message
+            error: errorMessage
         };
     }
 }
@@ -165,11 +168,12 @@ export async function forceHealthCheck() {
             message: 'Vérification forcée terminée'
         };
 
-    } catch (error: any) {
-        console.error('[Scheduler] ❌ Erreur vérification forcée:', error.message);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[Scheduler] ❌ Erreur vérification forcée:', errorMessage);
         return {
             success: false,
-            error: error.message
+            error: errorMessage
         };
     }
 }

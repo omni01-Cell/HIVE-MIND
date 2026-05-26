@@ -93,6 +93,9 @@ export const BotEvents = {
     // Événements asynchrones externes (Inbox)
     EVENT_INBOX: 'event:inbox',
 
+    // Déclencheurs proactifs
+    PROACTIVE_TRIGGER: 'proactive:trigger',
+
     // Système (Kill Switch, erreurs critiques)
     SYSTEM_ERROR: 'system:error'
 };

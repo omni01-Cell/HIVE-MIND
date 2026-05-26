@@ -1,5 +1,4 @@
 
-// @ts-nocheck
 // scripts/health-check.js
 import { ServiceContainer } from '../core/ServiceContainer.js';
 import { providerRouter } from '../providers/index.js';
@@ -11,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function runHealthCheck() {
     console.log('🏥 Lancement du Diagnostic Système Complet (V3/V4)...\n');
-    const report = {
+    const report: any = {
         config: {},
         credentials: {},
         services: {},
@@ -22,25 +21,25 @@ async function runHealthCheck() {
     // 1. CONFIGURATION
     console.log('--- 1. Configuration & Credentials ---');
     try {
-        const modelsConfig = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'models_config.json')));
-        const credentials = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'credentials.json')));
+        const modelsConfig = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'models_config.json'), 'utf-8'));
+        const credentials = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'credentials.json'), 'utf-8'));
 
         report.config.status = '✅ Loaded';
         report.config.providers_defined = Object.keys(modelsConfig.familles).join(', ');
 
-        const keys = credentials.familles_ia || {};
-        const maskedKeys = {};
-        for (const [k, v] of Object.entries(keys)) {
+        const keys: any = credentials.familles_ia || {};
+        const maskedKeys: any = {};
+        for (const [k, v] of Object.entries(keys) as [string, any][]) {
             // Résoudre les env vars avant de vérifier
             let resolvedValue = v;
-            if (v && v.startsWith('VOTRE_') && process.env[v]) {
+            if (v && typeof v === 'string' && v.startsWith('VOTRE_') && process.env[v]) {
                 resolvedValue = process.env[v];
             }
-            maskedKeys[k] = resolvedValue && resolvedValue.length > 10 && !resolvedValue.startsWith('VOTRE') ? '✅ Present' : '❌ Missing/Placeholder';
+            maskedKeys[k] = resolvedValue && typeof resolvedValue === 'string' && resolvedValue.length > 10 && !resolvedValue.startsWith('VOTRE') ? '✅ Present' : '❌ Missing/Placeholder';
         }
         report.credentials = maskedKeys;
         console.table(maskedKeys);
-    } catch (e) {
+    } catch (e: any) {
         console.error('❌ Config Error:', e.message);
         process.exit(1);
     }
@@ -61,7 +60,7 @@ async function runHealthCheck() {
         const { data, error } = await supabase.from('logs').select('count').limit(1);
         report.infrastructure.supabase_ping = error ? `❌ Error: ${error.message}` : '✅ Connected';
 
-    } catch (e) {
+    } catch (e: any) {
         console.error('❌ Service Init Error:', e.message);
     }
     console.table(report.services);
@@ -78,10 +77,10 @@ async function runHealthCheck() {
         try {
             const res = await providerRouter.chat(
                 [{ role: 'user', content: 'Ping' }],
-                { family: p, model: null }
+                { family: p }
             );
             report.providers[p] = res.content ? '✅ OK' : '⚠️ No Content';
-        } catch (e) {
+        } catch (e: any) {
             report.providers[p] = `❌ Failed: ${e.message.slice(0, 50)}...`;
         }
     }

@@ -23,88 +23,109 @@ export interface ToolCallStats {
   byName: Record<string, number>;
 }
 
+interface ExtractMatchResult {
+  toolName: string;
+  argsText: string;
+}
+
+interface OpenAIFunction {
+  name: string;
+  arguments: string;
+}
+
+interface OpenAIToolCall {
+  id?: string;
+  type?: string;
+  function?: OpenAIFunction;
+}
+
+function parseSystemMatchXml(match: RegExpExecArray): ExtractMatchResult | null {
+    const EXCLUDED_TAGS = ['thought', 'think', 'thought_process'];
+    if (match[6]) {
+        if (EXCLUDED_TAGS.includes(match[6].toLowerCase())) return null;
+        return { toolName: match[6], argsText: match[7] ?? '' };
+    }
+    return null;
+}
+
+function parseSystemMatch(match: RegExpExecArray): ExtractMatchResult | null {
+    if (match[1]) return { toolName: match[1], argsText: match[2] ?? '' };
+    if (match[3]) return { toolName: match[3], argsText: '{}' };
+    if (match[4]) return { toolName: match[4], argsText: match[5] ?? '' };
+    return parseSystemMatchXml(match);
+}
+
+function parseNonSystemMatchXml(match: RegExpExecArray): ExtractMatchResult | null {
+    const EXCLUDED_TAGS = ['thought', 'think', 'thought_process'];
+    if (match[4]) {
+        if (EXCLUDED_TAGS.includes(match[4].toLowerCase())) return null;
+        return { toolName: match[4], argsText: match[5] ?? '' };
+    }
+    return null;
+}
+
+function parseNonSystemMatch(match: RegExpExecArray): ExtractMatchResult | null {
+    if (match[1]) return { toolName: match[1], argsText: match[2] ?? '' };
+    if (match[3]) return { toolName: match[3], argsText: '{}' };
+    return parseNonSystemMatchXml(match);
+}
+
+function getPattern(includeSystemInteraction: boolean): RegExp {
+    return includeSystemInteraction
+        ? /(?:print\()?sys_interaction\.\)?([a-zA-Z0-9_]+)\(([\s\S]*?)\)|<function>([a-zA-Z0-9_]+)<\/function>|<tool_call>\s*([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*<\/tool_call>|<([a-zA-Z0-9_]+)>([\s\S]*?)<\/\6>/g
+        : /(?:print\()?([a-zA-Z0-9_]+)\(([\s\S]*?)\)|<function>([a-zA-Z0-9_]+)<\/function>|<([a-zA-Z0-9_]+)>([\s\S]*?)<\/\4>/g;
+}
+
 /**
  * Extrait les appels d'outils depuis du texte
  * Supporte deux formats:
  * - Avec sys_interaction: sys_interaction.toolName(params)
  * - Sans sys_interaction: toolName(params)
  */
-export function extractToolCallsFromText(text: string | null | undefined, includeSystemInteraction = true): ToolCallRaw[] {
+export function extractToolCallsFromText(text: string | null | undefined, includeSys = true): ToolCallRaw[] {
     if (!text || typeof text !== 'string') return [];
-
     try {
-        const pattern = includeSystemInteraction
-            ? /(?:print\()?sys_interaction\.\)?([a-zA-Z0-9_]+)\(([\s\S]*?)\)|<function>([a-zA-Z0-9_]+)<\/function>|<tool_call>\s*([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*<\/tool_call>|<([a-zA-Z0-9_]+)>([\s\S]*?)<\/\6>/g
-            : /(?:print\()?([a-zA-Z0-9_]+)\(([\s\S]*?)\)|<function>([a-zA-Z0-9_]+)<\/function>|<([a-zA-Z0-9_]+)>([\s\S]*?)<\/\4>/g;
-
+        const pattern = getPattern(includeSys);
         const matches: ToolCallRaw[] = [];
         let match: RegExpExecArray | null;
-
         while ((match = pattern.exec(text)) !== null) {
-            let toolName: string | undefined;
-            let argsText: string | undefined;
-            const EXCLUDED_TAGS = ['thought', 'think', 'thought_process'];
-
-            if (includeSystemInteraction) {
-                if (match[1]) {
-                    toolName = match[1];
-                    argsText = match[2];
-                } else if (match[3]) {
-                    toolName = match[3];
-                    argsText = '{}';
-                } else if (match[4]) {
-                    toolName = match[4];
-                    argsText = match[5];
-                } else if (match[6]) { // Generic XML
-                    if (EXCLUDED_TAGS.includes(match[6].toLowerCase())) continue;
-                    toolName = match[6];
-                    argsText = match[7];
-                }
-            } else {
-                if (match[1]) {
-                    toolName = match[1];
-                    argsText = match[2];
-                } else if (match[3]) {
-                    toolName = match[3];
-                    argsText = '{}';
-                } else if (match[4]) { // Generic XML
-                    if (EXCLUDED_TAGS.includes(match[4].toLowerCase())) continue;
-                    toolName = match[4];
-                    argsText = match[5];
-                }
-            }
-
-            if (toolName && argsText !== undefined) {
-                matches.push({
-                    name: toolName,
-                    arguments: argsText.trim(),
-                    raw: match[0],
-                    index: match.index
-                });
+            const res = includeSys ? parseSystemMatch(match) : parseNonSystemMatch(match);
+            if (res) {
+                matches.push({ name: res.toolName, arguments: res.argsText.trim(), raw: match[0], index: match.index });
             }
         }
-
         return matches;
-    } catch (error: any) {
-        console.error('[ToolCallExtractor] Erreur extraction:', error.message);
+    } catch {
         return [];
     }
+}
+
+function toToolCall(call: Partial<OpenAIToolCall>): ToolCall | null {
+    const fn = call.function;
+    if (!fn || !fn.name || !fn.arguments) return null;
+    return {
+        id: call.id,
+        name: fn.name,
+        arguments: fn.arguments,
+        type: call.type ?? 'function'
+    };
 }
 
 /**
  * Extrait les appels d'outils depuis des tool_calls OpenAI
  */
-export function extractToolCallsFromOpenAI(toolCalls: any[]): ToolCall[] {
+export function extractToolCallsFromOpenAI(toolCalls: unknown[] | null | undefined): ToolCall[] {
     if (!Array.isArray(toolCalls)) return [];
+    const results: ToolCall[] = [];
+    for (const call of toolCalls) {
+        const res = toToolCall(call as Partial<OpenAIToolCall>);
+        if (res) results.push(res);
+    }
+    return results;
+}
 
-    return toolCalls
-        .filter((call: any) => call?.function)
-        .map((call: any) => ({
-            id: call.id,
-            name: call.function.name,
-            arguments: call.function.arguments,
-            type: call.type || 'function'
-        }));
+function isValidName(name: unknown): name is string {
+    return typeof name === 'string' && name.length > 0 && name.length <= 100 && /^[a-zA-Z0-9_]+$/.test(name);
 }
 
 /**
@@ -112,54 +133,43 @@ export function extractToolCallsFromOpenAI(toolCalls: any[]): ToolCall[] {
  */
 export function isValidToolCall(toolCall: Partial<ToolCall>): boolean {
     if (!toolCall || typeof toolCall !== 'object') return false;
-    if (!toolCall.name || typeof toolCall.name !== 'string') return false;
-    if (toolCall.name.length === 0 || toolCall.name.length > 100) return false;
-    if (!toolCall.arguments || typeof toolCall.arguments !== 'string') return false;
+    return isValidName(toolCall.name) && typeof toolCall.arguments === 'string';
+}
 
-    // Vérifier que le nom ne contient que des caractères valides
-    if (!/^[a-zA-Z0-9_]+$/.test(toolCall.name)) return false;
+function attemptRepairArguments<T>(text: string): T | null {
+    try {
+        const cleaned = text
+            .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+            .replace(/'/g, '"')
+            .replace(/,\s*([}\]])/g, '$1');
 
-    return true;
+        return JSON.parse(cleaned) as T;
+    } catch {
+        console.error('[ToolCallExtractor] Impossible de réparer les arguments:', text.substring(0, 50));
+        if (!text.includes('{')) {
+            return { text, message: text, query: text } as unknown as T;
+        }
+        return null;
+    }
 }
 
 /**
  * Parse les arguments JSON d'un appel d'outil
  */
-export function parseToolArguments<T = any>(argsText: string | null | undefined): T | null {
+export function parseToolArguments<T = unknown>(argsText: string | null | undefined): T | null {
     if (!argsText || typeof argsText !== 'string') return null;
 
     let preCleaned = argsText.trim();
-
     if (!preCleaned.startsWith('{')) {
         const jsonMatch = preCleaned.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            preCleaned = jsonMatch[0];
-        }
+        if (jsonMatch) preCleaned = jsonMatch[0];
     }
 
     try {
-        return JSON.parse(preCleaned);
-    } catch (e: any) {
+        return JSON.parse(preCleaned) as T;
+    } catch {
         console.warn('[ToolCallExtractor] Arguments JSON invalides, tentative de réparation...');
-
-        try {
-            // Nettoyage agressif pour les LLMs
-            const cleaned = preCleaned
-                .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
-                .replace(/'/g, '"')
-                .replace(/,\s*([}\]])/g, '$1');
-
-            return JSON.parse(cleaned);
-        } catch (repairError: any) {
-            console.error('[ToolCallExtractor] Impossible de réparer les arguments:', argsText.substring(0, 50));
-
-            if (!preCleaned.includes('{')) {
-                // Fallback: Enrobage du texte brut
-                return { text: preCleaned, message: preCleaned, query: preCleaned } as any;
-            }
-
-            return null;
-        }
+        return attemptRepairArguments<T>(preCleaned);
     }
 }
 
@@ -187,7 +197,7 @@ export function deduplicateToolCalls<T extends ToolCall>(toolCalls: T[]): T[] {
     if (!Array.isArray(toolCalls)) return [];
 
     const seen = new Set<string>();
-    return toolCalls.filter((call: any) => {
+    return toolCalls.filter((call: T) => {
         if (!call || !call.name) return false;
 
         const key = `${call.name}:${call.arguments}`;
@@ -204,10 +214,10 @@ export function deduplicateToolCalls<T extends ToolCall>(toolCalls: T[]): T[] {
 export function getToolCallStats(toolCalls: Partial<ToolCall>[]): ToolCallStats {
     if (!Array.isArray(toolCalls)) return { total: 0, valid: 0, unique: 0, byName: {} };
 
-    const validCalls = toolCalls.filter((call: any) => isValidToolCall(call)) as ToolCall[];
+    const validCalls = toolCalls.filter((call: Partial<ToolCall>): call is ToolCall => isValidToolCall(call));
     const byName: Record<string, number> = {};
 
-    validCalls.forEach((call: any) => {
+    validCalls.forEach((call: ToolCall) => {
         byName[call.name] = (byName[call.name] || 0) + 1;
     });
 

@@ -226,7 +226,6 @@ ${SANDBOX_HELPERS_SOURCE}
         const serializableOutput = this.safeSerialize(output, toolCalls);
 
         // Extraire le SleepResult si HIVE.sleepAndWake() a été appelé dans le script
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const capturedSleep: SleepResult | undefined = (sandboxGlobals as any).__hiveSleepResult;
 
         return {

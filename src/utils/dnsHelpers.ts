@@ -14,7 +14,7 @@ export interface IPv4Agents {
 
 export interface DNSConfig {
   family: number;
-  lookup?: (hostname: string, options: any, callback: (err: Error | null, address: string, family: number) => void) => void;
+  lookup?: (hostname: string, options: unknown, callback: (err: Error | null, address: string, family: number) => void) => void;
 }
 
 /**
@@ -35,7 +35,7 @@ export function forceIPv4ForUrl(url: string | null | undefined): boolean {
         const urlObj = new URL(url);
         const hostname = urlObj.hostname;
 
-        const needsIPv4 = IPV4_REQUIRED_DOMAINS.some((domain: any) =>
+        const needsIPv4 = IPV4_REQUIRED_DOMAINS.some((domain) =>
             hostname === domain || hostname.endsWith('.' + domain)
         );
 
@@ -45,8 +45,9 @@ export function forceIPv4ForUrl(url: string | null | undefined): boolean {
         }
 
         return false;
-    } catch (e: any) {
-        console.warn(`[DNS] ⚠️ Erreur parsing URL ${url}:`, e.message);
+    } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        console.warn(`[DNS] ⚠️ Erreur parsing URL ${url}:`, err.message);
         return false;
     }
 }
@@ -91,7 +92,7 @@ export function getDNSConfig(providerName: string): DNSConfig | null {
 /**
  * Vérifie si une erreur de réseau pourrait être résolue par IPv4 forcing
  */
-export function shouldTryIPv4Fallback(error: any, url: string): boolean {
+export function shouldTryIPv4Fallback(error: unknown, url: string): boolean {
     if (!error || !url) return false;
 
     const errorMessages = [
@@ -102,8 +103,8 @@ export function shouldTryIPv4Fallback(error: any, url: string): boolean {
         'network error'
     ];
 
-    const errorStr = error.toString().toLowerCase();
-    const isNetworkError = errorMessages.some((msg: any) => errorStr.includes(msg.toLowerCase()));
+    const errorStr = String(error).toLowerCase();
+    const isNetworkError = errorMessages.some((msg) => errorStr.includes(msg.toLowerCase()));
 
     if (isNetworkError) {
         console.log(`[DNS] 🔄 IPv4 fallback suggéré pour: ${url}`);
@@ -116,8 +117,12 @@ export function shouldTryIPv4Fallback(error: any, url: string): boolean {
 /**
  * Wrapper fetch avec retry et IPv4 fallback intelligent
  */
-export async function fetchWithIPv4Fallback(url: string, options: any = {}, maxRetries = 2): Promise<Response> {
-    let lastError: any;
+export async function fetchWithIPv4Fallback(
+    url: string,
+    options: RequestInit & { agent?: http.Agent | https.Agent } = {},
+    maxRetries = 2
+): Promise<Response> {
+    let lastError: unknown;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -125,7 +130,7 @@ export async function fetchWithIPv4Fallback(url: string, options: any = {}, maxR
             const response = await fetch(url, options);
             return response;
 
-        } catch (error: any) {
+        } catch (error) {
             lastError = error;
 
             // Dernière tentative: IPv4 forcing
@@ -141,8 +146,9 @@ export async function fetchWithIPv4Fallback(url: string, options: any = {}, maxR
 
                     return await fetch(url, ipv4Options);
 
-                } catch (ipv4Error: any) {
-                    console.warn('[DNS] ❌ IPv4 fallback a échoué:', ipv4Error.message);
+                } catch (ipv4Error) {
+                    const err = ipv4Error instanceof Error ? ipv4Error : new Error(String(ipv4Error));
+                    console.warn('[DNS] ❌ IPv4 fallback a échoué:', err.message);
                 }
             }
 

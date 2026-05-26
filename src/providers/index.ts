@@ -11,7 +11,7 @@ import { envResolver } from '../services/envResolver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-let activeRuntime: any = null;
+let activeRuntime: unknown = null;
 async function getRuntime() {
     if (activeRuntime) return activeRuntime;
     try {
@@ -20,32 +20,87 @@ async function getRuntime() {
             activeRuntime = container.get('runtime');
             return activeRuntime;
         }
-    } catch {}
+    } catch {
+        /* ignore */
+    }
     const { AIRuntimeInfrastructure } = await import('../services/runtime/RuntimeInfrastructure.js');
     activeRuntime = new AIRuntimeInfrastructure();
     return activeRuntime;
 }
 
+interface ModelsConfigJson {
+    reglages_generaux: {
+        famille_active?: string;
+        familles_prioritaires?: string[];
+        service_recipes?: Record<string, { model: string; fallback?: string; fallback_2?: string; temperature?: number }>;
+        chat_recipes?: {
+            categories?: Record<string, { primary: string; fallback?: string; description?: string }>;
+        };
+        embeddings?: {
+            primary?: { provider: string; model: string; dimensions?: number };
+            fallback?: { provider: string; model: string };
+        };
+    };
+    familles: Record<string, {
+        nom_affiche?: string;
+        service_enabled?: boolean;
+        modeles?: { id: string; types?: string[] }[];
+    }>;
+}
+
+export interface ChatResponse {
+    content: string | null;
+    thought?: string | null;
+    toolCalls?: {
+        id: string;
+        type: string;
+        function: {
+            name: string;
+            arguments: string;
+        };
+        thought_signature?: string;
+    }[] | null;
+    finishReason?: string;
+    usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+    };
+    usedFamily?: string;
+    usedModel?: string;
+    [key: string]: unknown;
+}
+
+export interface ChatOptions {
+    family?: string;
+    model?: string;
+    fallbackFamily?: string;
+    fallbackModel?: string;
+    isServiceRecipe?: boolean;
+    category?: string;
+    temperature?: number;
+    max_tokens?: number;
+    isFallback?: boolean;
+    [key: string]: unknown;
+}
+
 // Charger les configurations
-let modelsConfig: any, credentials: any;
+let modelsConfig: ModelsConfigJson;
 try {
     modelsConfig = JSON.parse(
         readFileSync(join(__dirname, '..', 'config', 'models_config.json'), 'utf-8')
-    );
-    credentials = JSON.parse(
-        readFileSync(join(__dirname, '..', 'config', 'credentials.json'), 'utf-8')
-    );
-} catch (error: any) {
-    console.error('❌ Erreur chargement config providers:', error.message);
+    ) as ModelsConfigJson;
+} catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('❌ Erreur chargement config providers:', errorMessage);
     modelsConfig = { reglages_generaux: { famille_active: 'openai' }, familles: {} };
-    credentials = { familles_ia: {} };
 }
 
 /**
  * Interface unifiée pour tous les providers
  */
 class ProviderRouter {
-    adapters: Map<string, any>;
+    adapters: Map<string, { chat: (messages: unknown[], options: Record<string, unknown>) => Promise<unknown>; embed?: (text: string | string[], options: Record<string, unknown>) => Promise<unknown> }>;
     currentFamily: string;
     usageStats: Map<string, number>;
     circuitStats: Map<string, { failureCount: number, cooldownUntil: number }>;
@@ -63,7 +118,7 @@ class ProviderRouter {
     /**
      * Enregistre un adaptateur pour une famille
      */
-    registerAdapter(familyName: string, adapter: any) {
+    registerAdapter(familyName: string, adapter: { chat: (messages: unknown[], options: Record<string, unknown>) => Promise<unknown>; embed?: (text: string | string[], options: Record<string, unknown>) => Promise<unknown> }) {
         this.adapters.set(familyName, adapter);
     }
 
@@ -81,7 +136,7 @@ class ProviderRouter {
         for (const familyName of orderedFamilies) {
             const familyConfig = modelsConfig.familles[familyName];
             if (!familyConfig) continue;
-            const model = familyConfig.modeles?.find((m: any) => m.id === modelStr);
+            const model = familyConfig.modeles?.find((m) => m.id === modelStr);
             if (model) {
                 return { family: familyName, model: modelStr };
             }
@@ -96,7 +151,7 @@ class ProviderRouter {
      * Appel direct d'une recette de service (sans classification Level 3)
      * Utilise le modèle assigné + fallback automatique si nécessaire
      */
-    async callServiceRecipe(serviceName: string, messages: any[], options: any = {}) {
+    async callServiceRecipe(serviceName: string, messages: unknown[], options: ChatOptions = {}) {
         const recipe = modelsConfig.reglages_generaux.service_recipes?.[serviceName];
 
         if (!recipe) {
@@ -106,13 +161,13 @@ class ProviderRouter {
         console.log(`[Router] 🔧 Service Recipe: ${serviceName} → ${recipe.model}`);
 
         // Charger QuotaManager s'il est disponible
-        let quotaManager: any = null;
+        let quotaManager: { isModelAvailable: (model: string) => Promise<boolean> } | null = null;
         try {
             const { container } = await import('../core/ServiceContainer.js');
             if (container.has('quotaManager')) {
-                quotaManager = container.get('quotaManager');
+                quotaManager = container.get('quotaManager') as { isModelAvailable: (model: string) => Promise<boolean> };
             }
-        } catch (e: any) {}
+        } catch { /* ignore */ }
 
         // Préparer la cascade: primary → fallback → fallback_2
         const modelsToTry = [recipe.model];
@@ -125,7 +180,7 @@ class ProviderRouter {
 
         const fallbackModels = new Set([recipe.fallback, recipe.fallback_2].filter(Boolean));
 
-        let lastError: any = null;
+        let lastError: unknown = null;
         let triedAny = false;
 
         for (const modelStr of modelsToTry) {
@@ -167,8 +222,9 @@ class ProviderRouter {
                 }
 
                 return result;
-            } catch (error: any) {
-                console.warn(`[Router] ❌ ${serviceName}/${modelStr} échec: ${error.message}`);
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.warn(`[Router] ❌ ${serviceName}/${modelStr} échec: ${errorMessage}`);
                 lastError = error;
             }
         }
@@ -177,7 +233,8 @@ class ProviderRouter {
             throw new Error(`[Router] 🛑 Service ${serviceName} échec total : tous les modèles de la cascade sont indisponibles ou en cooldown.`);
         }
 
-        throw new Error(`[Router] 🛑 Service ${serviceName} échec total. Dernière erreur: ${lastError?.message}`);
+        const lastErrorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+        throw new Error(`[Router] 🛑 Service ${serviceName} échec total. Dernière erreur: ${lastErrorMessage}`);
     }
 
     /**
@@ -230,7 +287,7 @@ class ProviderRouter {
         const family = this.getFamilyConfig(familyName);
         if (!family?.modeles) return null;
 
-        const model = family.modeles.find((m: any) => m.types?.includes(type));
+        const model = family.modeles.find((m) => m.types?.includes(type));
         return model?.id || family.modeles[0]?.id;
     }
 
@@ -251,21 +308,25 @@ class ProviderRouter {
     /**
      * Enregistre un échec pour le Circuit Breaker
      */
-    _recordFailure(family: string, error: any) {
+    _recordFailure(family: string, error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         // Détection des erreurs de Quota / Rate Limit
-        const isQuotaError = error.message.toLowerCase().match(/(quota|limit|rate|429|insufficient)/);
+        const isQuotaError = errorMessage.toLowerCase().match(/(quota|limit|rate|429|insufficient)/);
 
         if (isQuotaError) {
             const stats = this.circuitStats.get(family) || { failureCount: 0, cooldownUntil: 0 };
-            stats.failureCount++;
+            const newStats = {
+                failureCount: stats.failureCount + 1,
+                cooldownUntil: stats.cooldownUntil
+            };
 
             // Cooldown progressif : 1min, 5min, 15min
             let cooldownMinutes = 1;
-            if (stats.failureCount === 2) cooldownMinutes = 5;
-            if (stats.failureCount >= 3) cooldownMinutes = 15;
+            if (newStats.failureCount === 2) cooldownMinutes = 5;
+            if (newStats.failureCount >= 3) cooldownMinutes = 15;
 
-            stats.cooldownUntil = Date.now() + (cooldownMinutes * 60 * 1000);
-            this.circuitStats.set(family, stats);
+            newStats.cooldownUntil = Date.now() + (cooldownMinutes * 60 * 1000);
+            this.circuitStats.set(family, newStats);
 
             console.warn(`[CircuitBreaker] ❄️ ${family} mis en cooldown pour ${cooldownMinutes}m (Erreur Quota/Limit)`);
         }
@@ -336,22 +397,31 @@ class ProviderRouter {
      * Level 2: Availability (QuotaManager — Zero-429)
      * Level 3: Category Resolution (caller-provided or default AGENTIC — NO LLM call)
      */
-    async chat(messages: any[], options: any = {}): Promise<any> {
+    async chat(messages: unknown[], options: ChatOptions = {}): Promise<ChatResponse> {
         console.log(`[Router Debug] chat called. messages type: ${typeof messages}, isArray: ${Array.isArray(messages)}`);
         // 1. Initialisation
-        const { chatId, sender } = options;
         const { container } = await import('../core/ServiceContainer.js');
-        let quotaManager: any = null;
+        let quotaManager: {
+            getHealthyFamilies: (config: unknown, thresholds: { rpm: number; tpm: number; rpd: number }) => Promise<string[]>;
+            getAvailableKeyForModel: (model: string, family: string, thresholds: { rpm: number; tpm: number; rpd: number }) => Promise<number | null>;
+            recordQuotaExceeded: (model: string, waitTime: number, keyIndex: number) => Promise<void>;
+            recordUsage: (family: string, model: string, estimatedTokens: number, keyIndex: number) => Promise<void>;
+        } | null = null;
         try {
             if (container.has('quotaManager')) {
-                quotaManager = container.get('quotaManager');
+                quotaManager = container.get('quotaManager') as {
+                    getHealthyFamilies: (config: unknown, thresholds: { rpm: number; tpm: number; rpd: number }) => Promise<string[]>;
+                    getAvailableKeyForModel: (model: string, family: string, thresholds: { rpm: number; tpm: number; rpd: number }) => Promise<number | null>;
+                    recordQuotaExceeded: (model: string, waitTime: number, keyIndex: number) => Promise<void>;
+                    recordUsage: (family: string, model: string, estimatedTokens: number, keyIndex: number) => Promise<void>;
+                };
             }
-        } catch (e: any) { console.warn('[Router] QuotaManager non dispo via container'); }
+        } catch { console.warn('[Router] QuotaManager non dispo via container'); }
 
         // =========================================================
         // NIVEAU 1: CONTEXTE (STICKY SESSION)
         // =========================================================
-        let preferredFamilies = modelsConfig.reglages_generaux.familles_prioritaires;
+        let preferredFamilies = modelsConfig.reglages_generaux.familles_prioritaires || [];
 
         if (options.family) {
             preferredFamilies = [options.family];
@@ -373,8 +443,9 @@ class ProviderRouter {
                     { rpm: 0.20, tpm: 0.10, rpd: 0.05 }
                 );
                 availableFamilies = availableFamilies.filter((f: string) => healthyFamilies.includes(f));
-            } catch (e: any) {
-                console.warn('[Router] Erreur health check, fallback sur filtre basique:', e.message);
+            } catch (e) {
+                const errorMessage = e instanceof Error ? e.message : String(e);
+                console.warn('[Router] Erreur health check, fallback sur filtre basique:', errorMessage);
             }
         }
 
@@ -395,7 +466,7 @@ class ProviderRouter {
                     if (emergencyHealthy.length > 0) {
                         availableFamilies = availableFamilies.filter((f: string) => emergencyHealthy.includes(f));
                     }
-                } catch (e: any) { /* Ignore en urgence */ }
+                } catch { /* Ignore en urgence */ }
             }
         }
 
@@ -451,7 +522,7 @@ class ProviderRouter {
         // EXÉCUTION (CASCADE)
         // =========================================================
 
-        let lastError: any = null;
+        let lastError: unknown = null;
 
         for (const family of availableFamilies) {
             // 🛑 Circuit Breaker Check (Interne Router)
@@ -469,7 +540,7 @@ class ProviderRouter {
             const familyConfig = this.getFamilyConfig(family);
 
             // Modèles à tester pour cette famille
-            let modelsToTry = [];
+            let modelsToTry: string[] = [];
 
             if (options.model && family === options.family) {
                 // Si on a un modèle spécifique forcé ET que c'est la bonne famille
@@ -488,7 +559,7 @@ class ProviderRouter {
                 const excludedTypes = ['live_api', 'tts', 'stt', 'audio', 'transcription'];
 
                 const rawModels = familyConfig?.modeles
-                    ?.filter((m: any) => {
+                    ?.filter((m) => {
                         if (!m.types?.includes('chat')) return false;
                         // Ne pas bloquer si isServiceRecipe est true (services internes peuvent bypasser le filtre)
                         if (options.isServiceRecipe) return true;
@@ -496,7 +567,7 @@ class ProviderRouter {
                         const hasExcluded = m.types.some((t: string) => excludedTypes.includes(t));
                         return !hasExcluded;
                     })
-                    .map((m: any) => m.id) || [];
+                    .map((m) => m.id) || [];
                 // [RELIABILITY] Trier par fiabilité — modèles défaillants relégués en dernier
                 modelsToTry = this._sortModelsByReliability(rawModels);
             }
@@ -525,24 +596,24 @@ class ProviderRouter {
                         }
 
                         // ── KKT Lagrangian Throttling ──
-                        const runtimeInstance = await getRuntime();
+                        const runtimeInstance = (await getRuntime()) as { finOps: { calculateLambda: () => number; recordUsage: (model: string, promptTokens: number, completionTokens: number) => { budgetSafe: boolean } } };
                         const lambda = runtimeInstance.finOps.calculateLambda();
                         const activeOptions = { ...options };
                         if (lambda > 0.05) {
-                            const baseMaxTokens = options.max_tokens || 4096;
+                            const baseMaxTokens = (options.max_tokens as number) || 4096;
                             const throttledMaxTokens = Math.max(200, Math.floor(baseMaxTokens * (1 - lambda)));
                             activeOptions.max_tokens = throttledMaxTokens;
                             console.log(`[Router:KKT] ⚠️ Budget Slack depletion detected (λ = ${lambda.toFixed(2)}). Throttling max_tokens: ${baseMaxTokens} → ${throttledMaxTokens}`);
                         }
 
                         console.log(`[Router] 🚀 Tentative: ${family} → ${model} (Clé ${keyIndex})`);
-                        const result = await adapter.chat(messages, {
+                        const result = (await adapter.chat(messages, {
                             ...activeOptions,
                             model,
-                            apiKey: this.getApiKey(family, keyIndex),
+                            apiKey: this.getApiKey(family, keyIndex) || '',
                             keyIndex, // Passer l'index pour que l'adapter puisse incrémenter le bon compteur
                             familyConfig
-                        });
+                        })) as ChatResponse;
 
                         // ✅ SUCCÈS
                         this._resetCircuit(family);
@@ -558,7 +629,10 @@ class ProviderRouter {
 
                         // 📊 Enregistrer Usage (QuotaManager) — tokens estimés si usage absent
                         const estimatedTokens = promptTokens + completionTokens ||
-                            Math.ceil(((messages.map((m: any) => m.content).join(' ').length) + (result.content || '').length) / 4);
+                            Math.ceil(((messages.map((m) => {
+                                const msg = m as { content?: string };
+                                return msg.content || '';
+                            }).join(' ').length) + (result.content || '').length) / 4);
 
                         if (quotaManager) {
                             await quotaManager.recordUsage(family, model, estimatedTokens, keyIndex);
@@ -570,19 +644,19 @@ class ProviderRouter {
                             usedModel: model
                         };
 
-                    } catch (error: any) {
-                        console.warn(`[Router] ⚠️ Échec ${family}/${model} (Clé ${keyIndex || 1}): ${error.message.substring(0, 200)}...`); // Limit length
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        console.warn(`[Router] ⚠️ Échec ${family}/${model} (Clé ${keyIndex || 1}): ${errorMessage.substring(0, 200)}...`); // Limit length
                         lastError = error;
 
-                        // Gestion intelligente des Quotas (Smart Circuit Breaker)
-                        const isQuotaError = error.message.toLowerCase().match(/(quota|limit|rate|429|insufficient)/);
+                        const isQuotaError = errorMessage.toLowerCase().match(/(quota|limit|rate|429|insufficient)/);
 
                         if (isQuotaError && quotaManager) {
                             let waitTime = 60; // Défaut 1 minute
 
                             // Tentative d'extraction du temps d'attente précis
-                            const matchWait = error.message.match(/retry in\s+([\d.]+)\s*s/i) ||
-                                error.message.match(/after\s+([\d.]+)\s*s/i);
+                            const matchWait = errorMessage.match(/retry in\s+([\d.]+)\s*s/i) ||
+                                errorMessage.match(/after\s+([\d.]+)\s*s/i);
 
                             if (matchWait && matchWait[1]) {
                                 waitTime = Math.ceil(parseFloat(matchWait[1]));
@@ -624,13 +698,14 @@ class ProviderRouter {
             } // End for (const model of modelsToTry)
         }
 
-        throw new Error(`[Router] Échec total de la cascade. Dernière erreur: ${lastError?.message}`);
+        const lastErrorMessage = lastError instanceof Error ? lastError.message : String(lastError);
+        throw new Error(`[Router] Échec total de la cascade. Dernière erreur: ${lastErrorMessage}`);
     }
 
     /**
      * Génère un embedding
      */
-    async embed(text: string | string[], options: any = {}) {
+    async embed(text: string | string[], _options: Record<string, unknown> = {}) {
         // 1. Déterminer le provider (Config > OpenAI fallback)
         const primaryConfig = modelsConfig.reglages_generaux?.embeddings?.primary;
         const providerName = primaryConfig?.provider || 'openai';
@@ -645,13 +720,13 @@ class ProviderRouter {
 
         // 2. Vérifier les quotas (si QuotaManager disponible)
         // NOTE: ProviderRouter est un singleton, on peut essayer de récupérer le container
-        let quotaManager: any = null;
+        let quotaManager: { isModelAvailable: (model: string) => Promise<boolean>; recordUsage: (family: string, model: string, estimatedTokens: number) => Promise<void> } | null = null;
         try {
             const { container } = await import('../core/ServiceContainer.js');
             if (container.has('quotaManager')) {
-                quotaManager = container.get('quotaManager');
+                quotaManager = container.get('quotaManager') as { isModelAvailable: (model: string) => Promise<boolean>; recordUsage: (family: string, model: string, estimatedTokens: number) => Promise<void> };
             }
-        } catch (e: any) { }
+        } catch { /* ignore */ }
 
         if (quotaManager) {
             const isAvailable = await quotaManager.isModelAvailable(modelId);
@@ -669,6 +744,9 @@ class ProviderRouter {
         }
 
         // 3. Exécuter
+        if (!adapter.embed) {
+            throw new Error(`L'adaptateur pour ${providerName} ne supporte pas la méthode embed`);
+        }
         try {
             const result = await adapter.embed(text, {
                 apiKey,
@@ -679,12 +757,12 @@ class ProviderRouter {
             if (quotaManager) {
                 // Estimation: 1 token ~ 4 chars (très brut)
                 // Ou utiliser usage retourné si dispo (OpenAI retourne usage.total_tokens)
-                const tokens = result.usage?.total_tokens || Math.ceil(text.length / 4);
-                quotaManager.recordUsage(providerName, modelId, tokens).catch(console.error);
+                const tokens = (result as { usage?: { total_tokens?: number } }).usage?.total_tokens || Math.ceil(text.length / 4);
+                quotaManager.recordUsage(providerName, modelId, tokens).catch(() => {});
             }
 
             return result;
-        } catch (error: any) {
+        } catch (error) {
             console.error(`[Router] Erreur embedding ${providerName}:`, error);
             throw error;
         }
@@ -693,7 +771,7 @@ class ProviderRouter {
     /**
      * Helper pour le fallback d'embedding (simplifié pour éviter récursion infinie complexe)
      */
-    async embedFallback(text: string | string[], config: any) {
+    async embedFallback(text: string | string[], config: { provider: string; model: string }) {
         const providerName = config.provider;
         const modelId = config.model;
         const adapter = this.adapters.get(providerName);
@@ -704,6 +782,7 @@ class ProviderRouter {
         // On ne revérifie pas le quota du fallback pour simplifier (Fail open ou on assume que le fallback est large)
         // Mais idéalement il faudrait.
 
+        if (!adapter.embed) throw new Error(`Provider embedding ${providerName} ne supporte pas embed`);
         const result = await adapter.embed(text, { apiKey, model: modelId });
         return result;
     }
@@ -713,10 +792,10 @@ class ProviderRouter {
      * Liste les familles disponibles
      */
     listFamilies() {
-        return Object.entries(modelsConfig.familles as Record<string, any>).map(([key, config]) => ({
+        return Object.entries(modelsConfig.familles as Record<string, { nom_affiche?: string; modeles?: { id: string }[] }>).map(([key, config]) => ({
             id: key,
             name: config.nom_affiche,
-            models: config.modeles?.map((m: any) => m.id) || [],
+            models: config.modeles?.map((m) => m.id) || [],
             hasApiKey: !!this.getApiKey(key)
         }));
     }
@@ -797,8 +876,9 @@ export async function loadAdapters(): Promise<void> {
                 for (const name of registerNames) {
                     providerRouter.registerAdapter(name, adapter.default);
                 }
-            } catch (error: any) {
-                if (error.code !== 'ERR_MODULE_NOT_FOUND' && error.code !== 'MODULE_NOT_FOUND') {
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                if (errorMessage.indexOf('ERR_MODULE_NOT_FOUND') === -1 && errorMessage.indexOf('MODULE_NOT_FOUND') === -1) {
                     console.error(`[Router Debug] Erreur de chargement pour ${fileName}:`, error);
                 }
             }

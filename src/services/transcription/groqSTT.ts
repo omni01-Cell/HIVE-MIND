@@ -1,4 +1,3 @@
-// @ts-nocheck
 
 // services/transcription/groqSTT.js
 // Service de transcription audio via Groq Whisper (OpenAI Compatible)
@@ -14,7 +13,7 @@ export class GroqTranscriptionService {
     baseUrl: any;
     config: any;
 
-    constructor(apiKey, config = {}) {
+    constructor(apiKey: any, config: any = {}) {
         this.apiKey = apiKey;
         this.baseUrl = 'https://api.groq.com/openai/v1/audio/transcriptions';
         this.config = config; // { model: 'whisper-large-v3' }

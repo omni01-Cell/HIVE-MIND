@@ -1,4 +1,3 @@
-// @ts-nocheck
 // core/concurrency/SwarmDispatcher.js
 import os from 'os';
 
@@ -11,9 +10,14 @@ import os from 'os';
  * 4. Priority Bypass : System commands skip the global queue.
  */
 class SwarmDispatcher {
-    accessMap: any;
-    globalQueue: any;
-    metrics: any;
+    private accessMap: Map<string, Promise<unknown>>;
+    private globalQueue: Array<() => void>;
+    private metrics: {
+        activeThreads: number;
+        queuedTasks: number;
+        totalProcessed: number;
+        errors: number;
+    };
 
     constructor() {
         // Map<JID, Promise>
@@ -38,7 +42,7 @@ class SwarmDispatcher {
      * Calcule le nombre max de workers simultanés selon la RAM.
      * 1 Worker ~ 250MB (Contexte + Node/V8 overhead)
      */
-    getMaxConcurrency() {
+    getMaxConcurrency(): number {
         const freeMemMB = os.freemem() / (1024 * 1024);
         const cpuCores = os.cpus().length;
 
@@ -54,7 +58,7 @@ class SwarmDispatcher {
     /**
      * Tente de dépiler une tâche globale en attente si des ressources sont dispos
      */
-    _processGlobalQueue() {
+    _processGlobalQueue(): void {
         if (this.globalQueue.length === 0) return;
 
         // On vérifie D'ABORD si on a de la place
@@ -62,8 +66,10 @@ class SwarmDispatcher {
         if (this.metrics.activeThreads < max) {
             const nextTask = this.globalQueue.shift();
             this.metrics.queuedTasks--;
-            // On lance la tâche (résolution de la promesse d'attente)
-            nextTask();
+            if (nextTask) {
+                // On lance la tâche (résolution de la promesse d'attente)
+                nextTask();
+            }
 
             // On tente d'en lancer d'autres si possible (récursif light)
             this._processGlobalQueue();
@@ -73,9 +79,10 @@ class SwarmDispatcher {
     /**
      * Checks if the message is a priority system command (bypasses global queue).
      */
-    isPriorityCommand(message: any) {
-        if (!message) return false;
-        const msgText = message.text || message.content;
+    isPriorityCommand(message: unknown): boolean {
+        if (!message || typeof message !== 'object') return false;
+        const msg = message as { text?: string; content?: string };
+        const msgText = msg.text || msg.content;
         if (!msgText || typeof msgText !== 'string') return false;
         const priorityRegex = /^!(ping|menu|help|stop|info)/i;
         return priorityRegex.test(msgText);
@@ -85,7 +92,7 @@ class SwarmDispatcher {
      * Wrapper d'exécution pour gérer la concurrence globale
      * @param {boolean} isPriority - Si true, bypass la limite de charge (Priority Lane)
      */
-    async _executeWithThrottling(jid: any, taskId: any, taskFactory: any, isPriority: any = false) {
+    async _executeWithThrottling(jid: string, taskId: string, taskFactory: () => Promise<unknown>, isPriority: boolean = false): Promise<unknown> {
         const max = this.getMaxConcurrency();
 
         // 1. Attendre les ressources globales (Global Queue)
@@ -96,7 +103,7 @@ class SwarmDispatcher {
             this.metrics.queuedTasks++;
 
             // On crée une promesse qui ne se résout que quand _processGlobalQueue nous appelle
-            await new Promise(resolve => {
+            await new Promise<void>(resolve => {
                 this.globalQueue.push(resolve);
             });
         } else if (isPriority && this.metrics.activeThreads >= max) {
@@ -112,7 +119,7 @@ class SwarmDispatcher {
             const result = await taskFactory();
             this.metrics.totalProcessed++;
             return result;
-        } catch (error: any) {
+        } catch (error: unknown) {
             this.metrics.errors++;
             console.error(`[Swarm] ❌ Error Task [${jid}:${taskId}]:`, error);
             throw error;
@@ -133,8 +140,9 @@ class SwarmDispatcher {
      * @param {Function} taskFactory - Factory retournant une Promise (ex: () => handleMessage())
      * @returns {Promise} - Résultat de la tâche
      */
-    async dispatch(jid: any, message: any, taskFactory: any) {
-        const taskId = message?.key?.id || message?.id || `Msg_${Date.now()}`;
+    async dispatch(jid: string, message: unknown, taskFactory: () => Promise<unknown>): Promise<unknown> {
+        const msg = message as { key?: { id?: string }; id?: string } | null;
+        const taskId = msg?.key?.id || msg?.id || `Msg_${Date.now()}`;
 
         // Check priority command
         const isPriority = this.isPriorityCommand(message);
@@ -145,7 +153,7 @@ class SwarmDispatcher {
         // 2. Créer la nouvelle tâche chaînée
         // On "attend" que la précédente finisse LOCALE (JID)
         // PUIS on lance _executeWithThrottling qui attend les ressources GLOBALES
-        const currentTask = previousTask.catch(err => {
+        const currentTask = previousTask.catch(() => {
             console.warn(`[Swarm] ⚠️ Previous task failed for ${jid}, continuing chain.`);
         }).then(() => {
             return this._executeWithThrottling(jid, taskId, taskFactory, isPriority);

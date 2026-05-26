@@ -131,7 +131,7 @@ export const isStorable = (text: string | null | undefined, role: string): boole
 
     // 1. Exclure les commandes (commençant par !, /, .)
     const COMMAND_PREFIXES = ['!', '/', '.', '?'];
-    if (COMMAND_PREFIXES.some((prefix: any) => cleanText.startsWith(prefix))) return false;
+    if (COMMAND_PREFIXES.some((prefix) => cleanText.startsWith(prefix))) return false;
 
     // 2. Exclure les messages trop courts (peu de valeur sémantique)
     const MIN_STORABLE_LENGTH = 5;
@@ -145,7 +145,7 @@ export const isStorable = (text: string | null | undefined, role: string): boole
         /Veuillez patienter/i,
         /Scannez le QR Code/i
     ];
-    if (NOISE_PATTERNS.some((pattern: any) => pattern.test(cleanText))) return false;
+    if (NOISE_PATTERNS.some((pattern) => pattern.test(cleanText))) return false;
 
     // 4. Exclure les messages de l'assistant qui sont des refus
     if (role === 'assistant' && (cleanText.includes('Désolé') || cleanText.includes('Je ne peux pas'))) {
@@ -181,15 +181,15 @@ export const formatToWhatsApp = (text: string | null | undefined): string => {
     }
 
     // 3. Convertir le GRAS+ITALIQUE (***text*** ou ___text___) en WhatsApp (*_text_*)
-    formatted = formatted.replace(/\*\*\*([^\*]+)\*\*\*/g, '*_$1_*');
+    formatted = formatted.replace(/\*\*\*([^*]+)\*\*\*/g, '*_$1_*');
     formatted = formatted.replace(/___([^_]+)___/g, '*_$1_*');
 
     // 4. Convertir l'ITALIQUE Markdown simple (*text*) en WhatsApp (_text_)
     // Regex : un seul astérisque, pas d'espace juste après ni juste avant
-    formatted = formatted.replace(/(?<!\*)\*(?!\s)([^\*]+?)(?<!\s)\*(?!\*)/g, '_$1_');
+    formatted = formatted.replace(/(?<!\*)\*(?!\s)([^*]+?)(?<!\s)\*(?!\*)/g, '_$1_');
 
     // 5. Convertir le GRAS Markdown (**text**) en WhatsApp (*text*)
-    formatted = formatted.replace(/\*\*([^\*]+)\*\*/g, '*$1*');
+    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '*$1*');
 
     // 6. Convertir l'italique Markdown alternatif (__text__) en WhatsApp (_text_)
     formatted = formatted.replace(/__([^_]+)__/g, '_$1_');
@@ -198,7 +198,7 @@ export const formatToWhatsApp = (text: string | null | undefined): string => {
     formatted = formatted.replace(/~~([^~]+)~~/g, '~$1~');
 
     // 8. Nettoyer les blocs de code (WhatsApp supporte ```code``` nativement, on s'assure juste de la propreté)
-    formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/gs, (_, lang, code) => `\`\`\`\n${code.trim()}\n\`\`\``);
+    formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/gs, (_, _lang, code) => `\`\`\`\n${code.trim()}\n\`\`\``);
 
     // 9. Listes et Citations : WhatsApp supporte nativement -, *, 1. et >
     // On nettoie juste les espaces superflus en début de ligne pour garantir la détection par WhatsApp

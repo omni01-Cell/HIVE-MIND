@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/groupService.js
 // ============================================================================
 // SERVICE GROUPE UNIFIÉ (Cache + Aggressive Identity Linking)
@@ -33,7 +32,7 @@ import { supabase, db as supabaseDb } from './supabase.js';
  */
 export const groupService = {
     /** @type {import('../core/ServiceContainer.js').ServiceContainer|null} */
-    container: null,
+    container: null as any,
 
     /**
      * Injecte le conteneur de services (appelé par ServiceContainer.register)
@@ -266,7 +265,7 @@ export const groupService = {
         const context = {
             type: isGroup ? 'GROUP' : 'PRIVATE',
             sender: userProfile,
-            group: null,
+            group: null as any,
             senderIsAdmin: false,
             // Passer le LID s'il est connu pour l'expéditeur (aide à la résolution downstream)
             senderLid: null

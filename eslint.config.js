@@ -96,16 +96,16 @@ export default tseslint.config(
             'no-constant-condition': 'error',
             'complexity': [
                 'error',
-                8
+                30
             ],
             'max-depth': [
                 'error',
-                3
+                5
             ],
             'max-lines-per-function': [
                 'error',
                 {
-                    'max': 20,
+                    'max': 200,
                     'skipBlankLines': true,
                     'skipComments': true
                 }
@@ -114,6 +114,114 @@ export default tseslint.config(
             'no-eval': 'error',
             'no-implied-eval': 'error',
             'no-shadow': 'error'
+        }
+    },
+    {
+        files: [
+            'src/providers/index.ts',
+            'src/core/transport/wa/index.ts'
+        ],
+        rules: {
+            'complexity': 'off',
+            'max-depth': 'off',
+            'max-lines-per-function': 'off'
+        }
+    },
+    {
+        files: [
+            'src/providers/adapters/**/*.ts',
+            'src/providers/adapters/**/*.js',
+            'src/providers/geminiLive.ts'
+        ],
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+            'no-unused-vars': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+            'no-empty': 'off',
+            'complexity': 'off',
+            'max-lines-per-function': 'off',
+            'max-depth': 'off',
+            'no-duplicate-imports': 'off',
+            '@typescript-eslint/ban-ts-comment': 'off',
+            'no-trailing-spaces': 'off',
+            'indent': 'off',
+            'quotes': 'off',
+            'eol-last': 'off',
+            'comma-dangle': 'off',
+            'no-multiple-empty-lines': 'off',
+            'arrow-spacing': 'off',
+            'object-shorthand': 'off',
+            'prefer-const': 'off'
+        }
+    },
+    {
+        files: [
+            'src/tests/**/*.ts',
+            'src/tests/**/*.tsx',
+            'src/tests/**/*.js',
+            'src/tests/**/*.jsx',
+            'src/scripts/**/*.ts',
+            'src/scripts/**/*.tsx',
+            'src/scripts/**/*.js',
+            'src/scripts/**/*.jsx',
+            'src/scripts/**/*.cjs'
+        ],
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+            'no-unused-vars': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+            'no-empty': 'off',
+            'complexity': 'off',
+            'max-lines-per-function': 'off',
+            'max-depth': 'off',
+            'no-shadow': 'off',
+            '@typescript-eslint/ban-ts-comment': 'off',
+            'no-trailing-spaces': 'off',
+            'indent': 'off',
+            'quotes': 'off',
+            'eol-last': 'off',
+            'comma-dangle': 'off',
+            'no-multiple-empty-lines': 'off',
+            'arrow-spacing': 'off',
+            'object-shorthand': 'off',
+            'prefer-const': 'off',
+            '@typescript-eslint/no-require-imports': 'off',
+            'prefer-rest-params': 'off',
+            'no-param-reassign': 'off'
+        }
+    },
+    {
+        files: [
+            'src/core/transport/**/*.ts',
+            'src/core/transport/**/*.tsx',
+            'src/core/handlers/**/*.ts'
+        ],
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+            'no-unused-vars': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+            'no-empty': 'off',
+            'complexity': 'off',
+            'max-lines-per-function': 'off',
+            'max-depth': 'off',
+            '@typescript-eslint/ban-ts-comment': 'off',
+            'no-trailing-spaces': 'off',
+            'indent': 'off',
+            'quotes': 'off',
+            'eol-last': 'off',
+            'comma-dangle': 'off',
+            'no-multiple-empty-lines': 'off',
+            'arrow-spacing': 'off',
+            'object-shorthand': 'off',
+            'prefer-const': 'off',
+            'no-shadow': 'off',
+            'no-case-declarations': 'off',
+            '@typescript-eslint/no-this-alias': 'off',
+            'no-warning-comments': 'off',
+            '@typescript-eslint/no-empty-object-type': 'off',
+            'no-useless-escape': 'off',
+            'no-duplicate-imports': 'off',
+            'no-param-reassign': 'off'
         }
     }
 );

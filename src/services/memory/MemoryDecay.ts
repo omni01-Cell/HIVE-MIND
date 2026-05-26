@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * services/memory/MemoryDecay.ts
  * Intellectual forgetting management system.
@@ -233,7 +232,7 @@ Few-shot examples:
             if (error) throw error;
 
             // Deduplicate context IDs
-            const uniqueContexts = [...new Set(activeChats.map((m: any) => m.context_id).filter(id => id !== null && id !== undefined))];
+            const uniqueContexts: string[] = [...new Set((activeChats || []).map((m: any) => m.context_id as string).filter((id: any) => id !== null && id !== undefined))] as string[];
 
             console.log(`[MemoryDecay] ${uniqueContexts.length} active contexts detected`);
 

@@ -52,7 +52,7 @@ function generateLogo(botName: string): string {
     let output = `\n${THEME.PRIMARY}╔═══════════════════════════════════════════════════════════════════════╗${THEME.RESET}\n`;
     output += `${THEME.PRIMARY}║                                                                       ║${THEME.RESET}\n`;
 
-    logo3D.forEach((line: any) => {
+    logo3D.forEach((line: string) => {
         output += `${THEME.PRIMARY}║ ${line}${THEME.PRIMARY}║${THEME.RESET}\n`;
     });
 
@@ -88,36 +88,26 @@ export class StartupDisplay {
         warn: console.warn,
         info: console.info
     };
-    private suppressedLogs: { type: 'log' | 'warn' | 'info'; args: any[] }[] = [];
+    private suppressedLogs: { type: 'log' | 'warn' | 'info'; args: unknown[] }[] = [];
     private isLoading: boolean = false;
 
     constructor() { }
 
+    private logRedirector(type: 'log' | 'warn' | 'info'): (...args: unknown[]) => void {
+        return (...args: unknown[]) => {
+            if (this.isLoading && !this.isDebug) {
+                this.suppressedLogs.push({ type, args });
+            } else {
+                this.originalConsole[type](...args);
+            }
+        };
+    }
+
     public suppressLogs(): void {
         this.isLoading = true;
-        const self = this;
-
-        console.log = (...args: any[]) => {
-            if (self.isLoading && !self.isDebug) {
-                self.suppressedLogs.push({ type: 'log', args });
-            } else {
-                self.originalConsole.log(...args);
-            }
-        };
-        console.warn = (...args: any[]) => {
-            if (self.isLoading && !self.isDebug) {
-                self.suppressedLogs.push({ type: 'warn', args });
-            } else {
-                self.originalConsole.warn(...args);
-            }
-        };
-        console.info = (...args: any[]) => {
-            if (self.isLoading && !self.isDebug) {
-                self.suppressedLogs.push({ type: 'info', args });
-            } else {
-                self.originalConsole.info(...args);
-            }
-        };
+        console.log = this.logRedirector('log');
+        console.warn = this.logRedirector('warn');
+        console.info = this.logRedirector('info');
     }
 
     public restoreLogs(): void {
@@ -160,7 +150,7 @@ export class StartupDisplay {
     }
 
     public loading(moduleId: string): void {
-        const module = this.modules.find((m: any) => m.id === moduleId);
+        const module = this.modules.find((m) => m.id === moduleId);
         if (module && this.progressBar) {
             const label = `${module.icon} ${module.name}...`;
             this.progressBar.update(this.currentStep, { module: label });
@@ -168,7 +158,7 @@ export class StartupDisplay {
     }
 
     public success(moduleId: string, detail = ''): void {
-        const module = this.modules.find((m: any) => m.id === moduleId);
+        const module = this.modules.find((m) => m.id === moduleId);
         if (module) {
             this.currentStep++;
             const statusText = detail ? `${module.icon} ${module.name} (${detail})` : `${module.icon} ${module.name}`;
@@ -181,7 +171,7 @@ export class StartupDisplay {
     }
 
     public error(moduleId: string, errorMsg: string): void {
-        const module = this.modules.find((m: any) => m.id === moduleId);
+        const module = this.modules.find((m) => m.id === moduleId);
         if (module) {
             this.currentStep++;
             this.results.set(moduleId, { status: 'error', module, error: errorMsg });
@@ -193,17 +183,18 @@ export class StartupDisplay {
         }
     }
 
-    public complete(botName = 'Bot'): void {
+    private stopProgressBar(): string {
         const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(2);
-
         if (this.progressBar) {
             this.progressBar.update(this.totalSteps, { module: `${THEME.SUCCESS}✓ Démarrage terminé!${THEME.RESET}` });
             this.progressBar.stop();
         }
-
         this.restoreLogs();
         console.log('\n');
+        return elapsed;
+    }
 
+    private printModuleResults(): void {
         for (const module of this.modules) {
             const result = this.results.get(module.id);
             if (!result) continue;
@@ -215,9 +206,10 @@ export class StartupDisplay {
                 console.log(`  ${THEME.ERROR}✗${THEME.RESET} ${module.icon} ${module.name} ${THEME.ERROR}- ${result.error}${THEME.RESET}`);
             }
         }
-
         console.log('');
+    }
 
+    private printSummaryFrame(botName: string, elapsed: string): void {
         const border = this.errors.length === 0 ? THEME.SUCCESS : THEME.SECONDARY;
         console.log(`${border}╔════════════════════════════════════════════╗${THEME.RESET}`);
         if (this.errors.length === 0) {
@@ -227,15 +219,23 @@ export class StartupDisplay {
             console.log(`${border}║  ⚠️  ${botName.substring(0, 15).padEnd(15)} : ${this.errors.length} erreur(s)  ║${THEME.RESET}`);
         }
         console.log(`${border}╚════════════════════════════════════════════╝${THEME.RESET}`);
+    }
 
+    private printErrorDetails(): void {
         if (this.errors.length > 0) {
             console.log(`\n${THEME.ERROR}Détails des erreurs:${THEME.RESET}`);
             for (const err of this.errors) {
                 console.log(`  • ${err.module}: ${err.error}`);
             }
         }
-
         console.log(`\n${THEME.SUCCESS}✅ Système actif et connecté !${THEME.RESET}\n`);
+    }
+
+    public complete(botName = 'Bot'): void {
+        const elapsed = this.stopProgressBar();
+        this.printModuleResults();
+        this.printSummaryFrame(botName, elapsed);
+        this.printErrorDetails();
     }
 }
 

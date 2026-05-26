@@ -82,7 +82,7 @@ export function findInJidMap<T>(
 /**
  * Trouve un match dans un tableau d'objets contenant des JID
  */
-export function findInJidArray<T extends Record<string, any>>(
+export function findInJidArray<T extends Record<string, unknown>>(
     searchJid: string | null | undefined,
     array: T[],
     jidField: keyof T = 'jid' as keyof T
@@ -105,7 +105,7 @@ export function jidInList(jid: string | null | undefined, jidList: string[] | Se
     if (!jid || !jidList) return false;
 
     const list = Array.isArray(jidList) ? jidList : Array.from(jidList);
-    return list.some((item: any) => jidMatch(jid, item));
+    return list.some((item) => jidMatch(jid, item));
 }
 
 /**

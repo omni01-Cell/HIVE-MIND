@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/agentic/Planner.js
 // ============================================================================
 // EXPLICIT PLANNER - Plan → Execute → Review for complex tasks
@@ -197,7 +196,7 @@ function interpolateParams(params: any, stepResults: any): any {
 
 // 🛡️ Parsing JSON robuste - bibliothèques externes
 // Ces imports seront dynamiques pour éviter les erreurs si non installées
-let json5, jsonRepair, Ajv;
+let json5: any, jsonRepair: any, Ajv: any;
 
 // Chargement dynamique des bibliothèques (évite crash si pas installées)
 async function loadJsonLibraries() {
@@ -475,7 +474,7 @@ Estimate:`;
                 { role: 'user', content: prompt }
             ], { temperature: 0.1, maxTokens: 5 });
 
-            const text = response.content.trim();
+            const text = (response.content || '').trim();
             const match = text.match(/\d+/);
             const estimate = match ? parseInt(match[0], 10) : NaN;
             return !isNaN(estimate) && estimate >= this.complexityThreshold;
@@ -618,7 +617,7 @@ Plan:`;
                     // Validation et auto-correction des outils hallucinés
                     if (!availableToolNames.has(step.tool)) {
                         console.warn(`[Planner] ⚠️ Étape ${step.id}: outil "${step.tool}" halluciné`);
-                        const closest = [...availableToolNames].find(t =>
+                        const closest = [...availableToolNames].find((t: any) =>
                             step.tool.includes(t) || t.includes(step.tool) ||
                             step.tool.replace(/_/g, '').includes(t.replace(/_/g, ''))
                         );
@@ -678,10 +677,10 @@ Plan:`;
      * @param {Object} context - {executeToolFn, chatId, message}
      * @returns {Promise<Object>} Résultat d'exécution
      */
-    async execute(plan: any, context: any, initialExecutionLog?: any) {
+    async execute(plan: any, context: any, initialExecutionLog?: any): Promise<any> {
         console.log(`[Planner] 🚀 Exécution du plan: ${plan.steps.length} étapes`);
 
-        const executionLog = {
+        const executionLog: any = {
             planId: plan.id,
             goal: plan.goal,
             plan,
@@ -791,7 +790,7 @@ Plan:`;
 
                             if (fixResponse && fixResponse.content) {
                                 const { tryParseJson } = await import('../../utils/ResponseFormatEnforcer.js');
-                                const parsed = tryParseJson(fixResponse.content);
+                                const parsed = tryParseJson(fixResponse.content || '');
                                 if (parsed) stepParams = parsed;
                             }
                         } catch (aiErr) {
@@ -860,7 +859,7 @@ Plan:`;
         if (analysis.success) {
             try {
                 const { dreamService } = await import('../dreamService.js');
-                await dreamService.recordPlanSuccess?.({
+                await (dreamService as any).recordPlanSuccess?.({
                     goal: executionLog.goal,
                     steps: executionLog.completed.length,
                     duration: executionLog.duration,
@@ -888,7 +887,7 @@ Plan:`;
     /**
      * Replanifie après échec
      */
-    async _replan(originalPlan: any, executionLog: any, context: any) {
+    async _replan(originalPlan: any, executionLog: any, context: any): Promise<any> {
         // [PRIORITY 4 FIX] Anti-rebounce guard — replan only once
         if ((executionLog as any)._replanAttempt) {
             console.warn('[Planner] 🛑 Replan already attempted, aborting to prevent infinite loop.');

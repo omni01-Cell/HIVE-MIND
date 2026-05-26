@@ -8,18 +8,28 @@ export interface ToolDefinition<T extends z.ZodTypeAny> {
     name: string;
     description: string;
     schema: T;
-    execute: (args: z.infer<T>, context: any) => Promise<any>;
+    execute: (args: z.infer<T>, context: unknown) => Promise<unknown>;
+}
+
+export interface ZodTool {
+    _zodSchema?: z.ZodTypeAny;
+    _execute?: (args: never, context: never) => Promise<unknown>;
+    function?: {
+        name: string;
+        description?: string;
+        parameters?: Record<string, unknown>;
+    };
 }
 
 /**
  * Creates a standard JSON Schema tool definition from a Zod schema.
  */
 export function defineZodTool<T extends z.ZodTypeAny>(toolDef: ToolDefinition<T>) {
-    const jsonSchema = zodToJsonSchema(toolDef.schema as any, { target: 'jsonSchema7' }) as any;
+    const jsonSchema = zodToJsonSchema(toolDef.schema as unknown as Parameters<typeof zodToJsonSchema>[0], { target: 'jsonSchema7' }) as Record<string, unknown>;
 
     // Ensure the schema doesn't allow additional properties (strict mode)
     if (jsonSchema.type === 'object') {
-        (jsonSchema as any).additionalProperties = false;
+        jsonSchema.additionalProperties = false;
     }
 
     return {
@@ -34,40 +44,44 @@ export function defineZodTool<T extends z.ZodTypeAny>(toolDef: ToolDefinition<T>
     };
 }
 
+function parseRawArgs(rawArgs: string | object): unknown {
+    if (typeof rawArgs !== 'string') return rawArgs;
+    try {
+        return JSON.parse(rawArgs);
+    } catch (e) {
+        const err = e as Error;
+        throw new ValidationRetryError(`<tool_use_error>JSONParseError: Invalid JSON format. ${err.message}</tool_use_error>`);
+    }
+}
+
+function handleExecutionError(e: unknown, toolName: string, parsedArgs: unknown): never {
+    if (e instanceof z.ZodError) {
+        const errors = e.issues.map((err) => `- ${err.path.join('.')}: ${err.message}`).join('\\n');
+        const formatted = `<tool_use_error>InputValidationError: Parameter constraints violated.\\n${errors}</tool_use_error>`;
+        throw new ValidationRetryError(formatted);
+    }
+
+    const err = e as Error;
+    throw new ToolExecutionError(err.message, toolName, parsedArgs);
+}
+
 /**
  * Wraps tool execution with strict Zod validation.
  * If validation fails, throws ValidationRetryError to trigger the prompt retry loop.
  */
-export async function executeZodTool(tool: any, rawArgs: string | object, context: any) {
+export async function executeZodTool(tool: ZodTool, rawArgs: string | object, context: unknown): Promise<unknown> {
     if (!tool._zodSchema || !tool._execute) {
         throw new Error(`[toolExecution] Tool ${tool.function?.name || 'unknown'} is not a Zod-defined tool.`);
     }
 
-    let parsedArgs: any;
-    if (typeof rawArgs === 'string') {
-        try {
-            parsedArgs = JSON.parse(rawArgs);
-        } catch (e: any) {
-            throw new ValidationRetryError(`<tool_use_error>JSONParseError: Invalid JSON format. ${e.message}</tool_use_error>`);
-        }
-    } else {
-        parsedArgs = rawArgs;
-    }
+    const parsedArgs = parseRawArgs(rawArgs);
 
     try {
-        // Strict runtime validation
         const validArgs = tool._zodSchema.parse(parsedArgs);
-
-        // Execute the tool
-        return await tool._execute(validArgs, context);
-    } catch (e: any) {
-        if (e instanceof z.ZodError) {
-            // Format precise error message for the LLM
-            const errors = e.issues.map((err: any) => `- ${err.path.join('.')}: ${err.message}`).join('\\n');
-            const formatted = `<tool_use_error>InputValidationError: Parameter constraints violated.\\n${errors}</tool_use_error>`;
-            throw new ValidationRetryError(formatted);
-        }
-
-        throw new ToolExecutionError(e.message, tool.function?.name, parsedArgs);
+        const execFn = tool._execute as (args: unknown, context: unknown) => Promise<unknown>;
+        return await execFn(validArgs, context);
+    } catch (e) {
+        handleExecutionError(e, tool.function?.name || 'unknown', parsedArgs);
     }
 }
+

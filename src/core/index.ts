@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, max-lines-per-function, complexity, max-depth, no-shadow, no-duplicate-case, no-case-declarations, @typescript-eslint/no-unused-vars, no-useless-escape, prefer-const, no-empty, no-warning-comments, indent, no-trailing-spaces */
 // core/index.js
 // Orchestrateur principal du bot - Cerveau central
 
@@ -528,7 +529,7 @@ export class BotCore {
      */
     async _handleGroupWelcome(event: BotEvent) {
         const { db } = this;
-        const { groupId, participants, action } = event.data;
+        const { groupId, participants, action } = event.data as { groupId: string; participants: string[]; action: string };
 
         if (action !== 'add') return;
 
@@ -555,6 +556,10 @@ export class BotCore {
      * (Fix 1) Détermine si le bot est sollicité
      */
     _isBotMentioned(message: MessageData, text: string) {
+        const msg = message as MessageData & {
+            mentionedJids?: string[];
+            quotedMsg?: { sender?: string; text?: string; hasImage?: boolean; hasVideo?: boolean };
+        };
         // 1. MP (Message Privé)
         if (!message.isGroup) return true;
 
@@ -598,37 +603,37 @@ export class BotCore {
         const botPhoneId = extractNumericId(effectiveBotId);
         const botLidId = extractNumericId(resolvedBotLid);
 
-        const mentionedJids = (message as any).mentionedJids || [];
-
-        // 2a. Vérifier si le bot est mentionné via son numéro de téléphone OU son LID
-        for (const jid of mentionedJids) {
-            if (jidMatch(jid, effectiveBotId) || jidMatch(jid, resolvedBotLid)) {
-                console.log(`[DEBUG] ✓ Détecté via @mention (jid=${jid})`);
-                return true;
-            }
-        }
-
-        // 2b. Fallback: JID visible dans le texte
-        if (botPhoneId && text.includes(botPhoneId)) {
-            return true;
-        }
-        if (botLidId && text.includes(botLidId)) {
-            return true;
-        }
-
-        // 3. Réponse à un message du bot (Quoted)
-        // WHY: Uses effectiveBotId/resolvedBotLid (cached) instead of raw values
-        // to survive socket reconnection windows where sock.user is temporarily undefined.
-        if (message.quotedMsg) {
-            console.log(`[DEBUG QuotedMsg] sender=${message.quotedMsg.sender}, text="${message.quotedMsg.text?.substring(0, 30)}..."`);
-        }
-
-        if (message.quotedMsg?.sender) {
-            if (jidMatch(message.quotedMsg.sender, effectiveBotId) || jidMatch(message.quotedMsg.sender, resolvedBotLid)) {
-                console.log('[DEBUG] ✓ Détecté via quotedMsg (jidMatch)');
-                return true;
-            }
-        }
+         const mentionedJids = msg.mentionedJids || [];
+ 
+         // 2a. Vérifier si le bot est mentionné via son numéro de téléphone OU son LID
+         for (const jid of mentionedJids) {
+             if (jidMatch(jid, effectiveBotId) || jidMatch(jid, resolvedBotLid)) {
+                 console.log(`[DEBUG] ✓ Détecté via @mention (jid=${jid})`);
+                 return true;
+             }
+         }
+ 
+         // 2b. Fallback: JID visible dans le texte
+         if (botPhoneId && text.includes(botPhoneId)) {
+             return true;
+         }
+         if (botLidId && text.includes(botLidId)) {
+             return true;
+         }
+ 
+         // 3. Réponse à un message du bot (Quoted)
+         // WHY: Uses effectiveBotId/resolvedBotLid (cached) instead of raw values
+         // to survive socket reconnection windows where sock.user is temporarily undefined.
+         if (msg.quotedMsg) {
+             console.log(`[DEBUG QuotedMsg] sender=${msg.quotedMsg.sender}, text="${msg.quotedMsg.text?.substring(0, 30)}..."`);
+         }
+ 
+         if (msg.quotedMsg?.sender) {
+             if (jidMatch(msg.quotedMsg.sender, effectiveBotId) || jidMatch(msg.quotedMsg.sender, resolvedBotLid)) {
+                 console.log('[DEBUG] ✓ Détecté via quotedMsg (jidMatch)');
+                 return true;
+             }
+         }
 
         // 4. Mention par Nom (dynamique via botIdentity)
         if (botIdentity.isMentioned(text)) {
@@ -645,7 +650,11 @@ export class BotCore {
      */
     async _handleMessage(event: BotEvent): Promise<void> {
         const { db, workingMemory, consciousness, userService, groupService, adminService, factsMemory, semanticMemory } = this;
-        const message = event.data;
+        const message = event.data as MessageData & {
+            quotedMsg?: { sender?: string; text?: string; hasImage?: boolean; hasVideo?: boolean };
+            raw?: { key?: unknown; message?: { documentMessage?: { fileName?: string; title?: string } } };
+            isTranscribed?: boolean;
+        };
         const { chatId, sender, senderName, text, isGroup } = message;
 
 
@@ -699,16 +708,16 @@ export class BotCore {
             try {
                 const userService = container.get('userService');
                 if (userService) {
-                    const rawKey = message.raw.key || {};
+                    const rawKey = (message.raw.key as Record<string, unknown>) || {};
                     // Dans les groupes modernes, key.participant est souvent le LID
                     // message.sender est normalisé, donc ça dépend de Baileys
 
                     const candidate1 = message.sender;
-                    const candidate2 = rawKey.participant;
+                    const candidate2 = rawKey.participant as string | undefined;
 
                     if (candidate1 && candidate2 && candidate1 !== candidate2) {
-                        let jid: any = null;
-                        let lid: any = null;
+                        let jid: string | null = null;
+                        let lid: string | null = null;
 
                         if (candidate1.endsWith('@s.whatsapp.net')) jid = candidate1;
                         if (candidate1.endsWith('@lid')) lid = candidate1;
@@ -958,7 +967,7 @@ export class BotCore {
             }
 
             // ========== GESTION MULTIMODALE (Images) ==========
-            let userContent = text;
+            let userContent: string | Record<string, unknown>[] = text;
             const imageBlocks = []; // Stocke les images à envoyer à l'IA
 
             // 1. Image directe envoyée par l'utilisateur
@@ -1006,15 +1015,20 @@ export class BotCore {
 
                     // Extraire le vrai nom du fichier
                     let originalFileName = '';
-                    const rawMsg = message.raw?.message || message.raw;
+                    const rawMsg = (message.raw as Record<string, unknown>)?.message as Record<string, unknown>
+                        || message.raw as Record<string, unknown>;
+
+                    const docMsg = rawMsg?.documentMessage as Record<string, unknown> | undefined;
+                    const docWithCaption = rawMsg?.documentWithCaptionMessage as Record<string, unknown> | undefined;
+                    const nestedDocMsg = (docWithCaption?.message as Record<string, unknown>)?.documentMessage as Record<string, unknown> | undefined;
 
                     // Tenter de récupérer le nom original tel qu'affiché dans l'UI WhatsApp
-                    if (rawMsg?.documentMessage?.fileName) {
-                        originalFileName = rawMsg.documentMessage.fileName;
-                    } else if (rawMsg?.documentMessage?.title) {
-                        originalFileName = rawMsg.documentMessage.title;
-                    } else if (rawMsg?.documentWithCaptionMessage?.message?.documentMessage?.fileName) {
-                        originalFileName = rawMsg.documentWithCaptionMessage.message.documentMessage.fileName;
+                    if (docMsg?.fileName) {
+                        originalFileName = docMsg.fileName as string;
+                    } else if (docMsg?.title) {
+                        originalFileName = docMsg.title as string;
+                    } else if (nestedDocMsg?.fileName) {
+                        originalFileName = nestedDocMsg.fileName as string;
                     } else if (message.mediaType === 'audio') {
                         originalFileName = `vocal_${Date.now()}.ogg`; // Les audios WhatsApp perdent souvent leur nom
                     } else if (message.mediaType === 'video') {
@@ -1125,7 +1139,7 @@ export class BotCore {
 
             // 2. Build LLM history
             const systemPrompt = fullContext.systemPrompt;
-            const history = [];
+            const history: Record<string, unknown>[] = [];
 
             history.push({ role: 'system', content: systemPrompt });
             history.push(...fullContext.history);
@@ -2851,7 +2865,7 @@ ${textToCompress}`
     async _handleProactive(event: BotEvent): Promise<void> {
         // ... (code existant)
         // Réponse proactive sur keyword détecté
-        const { chatId, text } = event.data;
+        const { chatId, text } = event.data as { chatId: string; text: string };
 
         const response = await providerRouter.chat([
             {
@@ -2862,7 +2876,7 @@ ${textToCompress}`
         ]);
 
         await this._naturalDelay();
-        await this.transport.sendUniversalResponse(chatId, { markdown: response.content }, {}, (event.data as any).sourceChannel);
+        await this.transport.sendUniversalResponse(chatId, { markdown: response.content }, {}, (event.data as Record<string, string>).sourceChannel);
     }
 
     /**

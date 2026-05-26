@@ -1,4 +1,3 @@
-// @ts-nocheck
 // services/graphMemory.js
 // Service d'interface pour le Knowledge Graph (Entités et Relations)
 
@@ -21,8 +20,8 @@ try {
     const openaiKey = resolveApiKey(credentials.familles_ia?.openai, 'openai');
 
     embeddings = new EmbeddingsService({
-        geminiKey,
-        openaiKey
+        geminiKey: geminiKey || undefined,
+        openaiKey: openaiKey || undefined
     });
 } catch (e: any) {
 

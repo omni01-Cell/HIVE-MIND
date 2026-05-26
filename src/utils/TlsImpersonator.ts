@@ -54,7 +54,7 @@ export function getImpersonatedAgent(target: 'chromium' | 'go' = 'go'): https.Ag
  * Effectue une requête HTTPS de manière native en utilisant l'agent impersonné,
  * garantissant à 100% la préservation de la signature TLS (JA3).
  */
-export function impersonatedRequest(urlStr: string, options: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<any> }> {
+export function impersonatedRequest(urlStr: string, options: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<unknown> }> {
     return new Promise((resolve, reject) => {
         try {
             const url = new URL(urlStr);

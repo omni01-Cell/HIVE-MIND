@@ -9,12 +9,27 @@ import { FairnessQueue } from './FairnessQueue.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+export interface QueueEvent {
+    type: string;
+    chatId: string;
+    data: unknown;
+    timestamp?: number;
+    priority?: number;
+    [key: string]: unknown;
+}
+
+interface BacklogConfig {
+    backlog_protection?: {
+        cooldown_between_responses_ms?: number;
+    };
+}
+
 // Charger la configuration de protection contre le backlog
-let config: any;
+let config: BacklogConfig;
 try {
     config = JSON.parse(
         readFileSync(join(__dirname, '..', 'config', 'config.json'), 'utf-8')
-    );
+    ) as BacklogConfig;
 } catch {
     config = {
         backlog_protection: {
@@ -26,28 +41,13 @@ try {
 // Variable locale pour la configuration active (modifiable pour les tests)
 let activeConfig = config;
 
-/**
- * Types d'événements gérés par l'orchestrateur
- * @typedef {'message' | 'scheduled' | 'proactive' | 'group_event'} EventType
- */
-
-/**
- * Structure d'un événement dans la file
- * @typedef {Object} QueueEvent
- * @property {EventType} type - Type de l'événement
- * @property {string} chatId - Identifiant de la conversation
- * @property {Object} data - Données de l'événement
- * @property {number} timestamp - Timestamp de création
- * @property {number} priority - Priorité (1 = haute, 5 = basse)
- */
-
 class Orchestrator extends EventEmitter {
-    queue: any;
-    processing: any;
-    handlers: any;
-    maxConcurrent: any;
-    activeCount: any;
-    lastProcessedTime: any;
+    queue: FairnessQueue;
+    processing: boolean;
+    handlers: Map<string, (event: QueueEvent) => Promise<unknown>>;
+    maxConcurrent: number;
+    activeCount: number;
+    lastProcessedTime: number;
 
     constructor() {
         super();
@@ -61,28 +61,24 @@ class Orchestrator extends EventEmitter {
 
     /**
      * Enregistre un handler pour un type d'événement
-     * @param {EventType} type
-     * @param {Function} handler
      */
-    registerHandler(type: any, handler: any) {
+    registerHandler(type: string, handler: (event: QueueEvent) => Promise<unknown>) {
         this.handlers.set(type, handler);
     }
 
     /**
      * Met à jour la configuration (pour les tests)
-     * @param {Object} newConfig
      */
-    setConfig(newConfig: any) {
+    setConfig(newConfig: BacklogConfig) {
         activeConfig = { ...activeConfig, ...newConfig };
         console.log('[Orchestrator] Configuration mise à jour');
     }
 
     /**
      * Ajoute un événement à la file d'attente
-     * @param {QueueEvent} event
      */
-    enqueue(event: any) {
-        const queueEvent = {
+    enqueue(event: QueueEvent) {
+        const queueEvent: QueueEvent = {
             ...event,
             timestamp: event.timestamp || Date.now(),
             priority: event.priority || 3
@@ -90,47 +86,52 @@ class Orchestrator extends EventEmitter {
 
         // Insertion intelligente via Fairness Queue
         // On considère les messages privés ou admin comme "Priority 1"
-        const isPremium = event.priority <= 1;
-        this.queue.enqueue(event.chatId, queueEvent, isPremium);
+        const isPremium = (queueEvent.priority ?? 3) <= 1;
+        this.queue.enqueue(queueEvent.chatId, queueEvent, isPremium);
 
         this.emit('queued', queueEvent);
-        this.process();
+        this.process().catch((err) => {
+            console.error('[Orchestrator] Process error:', err);
+        });
     }
 
     /**
      * Traite la file de manière asynchrone
      */
     async process() {
-        if (this.activeCount >= this.maxConcurrent || this.queue.length === 0) {
+        if (this.activeCount >= this.maxConcurrent || this.queue.size === 0) {
             return;
         }
 
         while (this.queue.size > 0 && this.activeCount < this.maxConcurrent) {
-            const event = this.queue.dequeue();
+            const event = this.queue.dequeue() as unknown as QueueEvent | null;
             if (!event) break;
 
             this.activeCount++;
-
-            // Traitement non-bloquant
-            this.handleEvent(event)
-                .then(() => {
-                    this.emit('processed', event);
-                })
-                .catch(error => {
-                    this.emit('error', { event, error });
-                })
-                .finally(() => {
-                    this.activeCount--;
-                    this.process(); // Continue le traitement
-                });
+            this.executeEventLifecycle(event);
         }
+    }
+
+    private executeEventLifecycle(event: QueueEvent) {
+        this.handleEvent(event)
+            .then(() => {
+                this.emit('processed', event);
+            })
+            .catch(error => {
+                this.emit('error', { event, error });
+            })
+            .finally(() => {
+                this.activeCount--;
+                this.process().catch((err) => {
+                    console.error('[Orchestrator] Loop process error:', err);
+                });
+            });
     }
 
     /**
      * Dispatch vers le handler approprié
-     * @param {QueueEvent} event
      */
-    async handleEvent(event: any) {
+    async handleEvent(event: QueueEvent) {
         this.emit('processing', event);
 
         const handler = this.handlers.get(event.type);
@@ -140,23 +141,24 @@ class Orchestrator extends EventEmitter {
         }
 
         try {
-            // ⚡ Cooldown : Éviter de spammer les API IA
-            if (activeConfig.backlog_protection?.cooldown_between_responses_ms) {
-                const cooldownMs = activeConfig.backlog_protection.cooldown_between_responses_ms;
-                const timeSinceLastProcess = Date.now() - this.lastProcessedTime;
-
-                if (this.lastProcessedTime > 0 && timeSinceLastProcess < cooldownMs) {
-                    const waitTime = cooldownMs - timeSinceLastProcess;
-                    console.log(`[Orchestrator] ⏳ Cooldown appliqué: ${waitTime}ms`);
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
-                }
-            }
-
+            await this.applyCooldown();
             await handler(event);
             this.lastProcessedTime = Date.now(); // Mettre à jour le timestamp
-        } catch (error: any) {
+        } catch (error) {
             console.error('[Orchestrator] Erreur lors du traitement:', error);
             throw error;
+        }
+    }
+
+    private async applyCooldown() {
+        const cooldownMs = activeConfig.backlog_protection?.cooldown_between_responses_ms;
+        if (!cooldownMs) return;
+
+        const timeSinceLastProcess = Date.now() - this.lastProcessedTime;
+        if (this.lastProcessedTime > 0 && timeSinceLastProcess < cooldownMs) {
+            const waitTime = cooldownMs - timeSinceLastProcess;
+            console.log(`[Orchestrator] ⏳ Cooldown appliqué: ${waitTime}ms`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
         }
     }
 

@@ -57,7 +57,7 @@ export const cliTransport = {
     /**
      * Envoie un message texte
      */
-    sendText: async (chatId: string, text: string, options: any = {}) => {
+    sendText: async (_chatId: string, text: string, _options: any = {}) => {
         console.log(`\n🤖 HIVE-MIND > ${text}\n`);
         if (cliTransport.rl) {
             cliTransport.rl.prompt();
@@ -68,7 +68,7 @@ export const cliTransport = {
     /**
      * Envoie une réponse universelle formatée pour le Terminal
      */
-    sendUniversalResponse: async (chatId: string, response: any, options: any = {}) => {
+    sendUniversalResponse: async (_chatId: string, response: any, _options: any = {}) => {
         const text = response.markdown;
 
         // Pour le moment on affiche juste le markdown
@@ -84,7 +84,7 @@ export const cliTransport = {
     /**
      * Envoie un média
      */
-    sendMedia: async (chatId: string, media: any, options: any = {}) => {
+    sendMedia: async (_chatId: string, _media: any, options: any = {}) => {
         console.log(`\n🤖 HIVE-MIND > [MÉDIA ENVOYÉ: ${options.caption || 'Sans légende'}]\n`);
         if (cliTransport.rl) {
             cliTransport.rl.prompt();
@@ -95,7 +95,7 @@ export const cliTransport = {
     /**
      * Envoie un sticker
      */
-    sendSticker: async (chatId: string, stickerBuffer: any) => {
+    sendSticker: async (_chatId: string, _stickerBuffer: any) => {
         console.log('\n🤖 HIVE-MIND > [STICKER ENVOYÉ]\n');
         if (cliTransport.rl) {
             cliTransport.rl.prompt();
@@ -106,7 +106,7 @@ export const cliTransport = {
     /**
      * Envoie une note vocale
      */
-    sendVoiceNote: async (chatId: string, audio: any) => {
+    sendVoiceNote: async (_chatId: string, _audio: any) => {
         console.log('\n🤖 HIVE-MIND > [VOCAL ENVOYÉ]\n');
         if (cliTransport.rl) {
             cliTransport.rl.prompt();
@@ -117,7 +117,7 @@ export const cliTransport = {
     /**
      * Envoie un fichier
      */
-    sendFile: async (chatId: string, filePath: string, fileName: string) => {
+    sendFile: async (_chatId: string, _filePath: string, fileName: string) => {
         console.log(`\n🤖 HIVE-MIND > [FICHIER ENVOYÉ: ${fileName}]\n`);
         if (cliTransport.rl) {
             cliTransport.rl.prompt();
@@ -140,7 +140,7 @@ export const cliTransport = {
     /**
      * Télécharge un média depuis un message
      */
-    downloadMedia: async (message: any) => {
+    downloadMedia: async (_message: any) => {
         return Buffer.from('');
     },
 
@@ -161,7 +161,7 @@ export const cliTransport = {
     /**
      * Met à jour la présence (typing, online, etc.)
      */
-    setPresence: async (chatId: string, presence: string) => {
+    setPresence: async (_chatId: string, presence: string) => {
         // En CLI on peut simuler un indicateur de frappe, mais c'est cosmétique
         if (presence === 'composing') {
             process.stdout.write('🤖 HIVE-MIND écrit...\r');
@@ -173,14 +173,14 @@ export const cliTransport = {
     /**
      * Vérifie si un utilisateur est admin d'un groupe
      */
-    isAdmin: async (groupId: string, userId: string) => {
+    isAdmin: async (_groupId: string, _userId: string) => {
         return true; // En CLI, l'utilisateur est toujours admin
     },
 
     /**
      * Envoie une réaction (emoji) sur un message
      */
-    sendReaction: async (chatId: string, key: any, emoji: string) => {
+    sendReaction: async (_chatId: string, _key: any, emoji: string) => {
         console.log(`\n🤖 HIVE-MIND > [RÉACTION: ${emoji}]\n`);
         if (cliTransport.rl) {
             cliTransport.rl.prompt();

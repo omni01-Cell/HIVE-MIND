@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 // scripts/audit-group.js
 // ============================================================================
 // AUDIT COMPLET : Compare WhatsApp (Live) vs Redis (Cache) vs Supabase (DB)
@@ -34,7 +33,7 @@ async function main() {
         logger: pino({ level: 'silent' }),
         version,
         syncFullAppState: false
-    });
+    } as any);
 
     sock.ev.on('creds.update', saveCreds);
 
@@ -97,13 +96,13 @@ async function main() {
                     console.log('⚠️ WhatsApp envoie un mix. Le fix doit gérer les deux.');
                 }
 
-            } catch (err) {
+            } catch (err: any) {
                 console.error('❌ Erreur:', err.message);
             } finally {
                 process.exit(0);
             }
         } else if (connection === 'close') {
-            if (lastDisconnect?.error?.output?.statusCode === 401) {
+            if ((lastDisconnect?.error as any)?.output?.statusCode === 401) {
                 console.log('❌ Session invalide. Reconnectez le bot normalement d\'abord.');
                 process.exit(1);
             }
