@@ -83,6 +83,10 @@ export class StartupDisplay {
     private progressBar: cliProgress.SingleBar | null = null;
     private isDebug: boolean = process.env.DEBUG === 'true';
 
+    private get isTest(): boolean {
+        return process.env.APP_ENV === 'test' || process.env.NODE_ENV === 'test';
+    }
+
     private originalConsole = {
         log: console.log,
         warn: console.warn,
@@ -104,6 +108,7 @@ export class StartupDisplay {
     }
 
     public suppressLogs(): void {
+        if (this.isTest) return;
         this.isLoading = true;
         console.log = this.logRedirector('log');
         console.warn = this.logRedirector('warn');
@@ -126,6 +131,10 @@ export class StartupDisplay {
     }
 
     public showLogo(): void {
+        if (this.isTest) {
+            this.originalConsole.log(`\n🧠 Initialisation de ${botIdentity.fullName} (Mode Test non-interactif)...\n`);
+            return;
+        }
         this.suppressLogs();
         if (!this.isDebug) {
             this.originalConsole.log('\x1bc');
@@ -151,7 +160,12 @@ export class StartupDisplay {
 
     public loading(moduleId: string): void {
         const module = this.modules.find((m) => m.id === moduleId);
-        if (module && this.progressBar) {
+        if (!module) return;
+        if (this.isTest) {
+            this.originalConsole.log(`  [Chargement] ${module.icon} ${module.name}...`);
+            return;
+        }
+        if (this.progressBar) {
             const label = `${module.icon} ${module.name}...`;
             this.progressBar.update(this.currentStep, { module: label });
         }
@@ -164,6 +178,10 @@ export class StartupDisplay {
             const statusText = detail ? `${module.icon} ${module.name} (${detail})` : `${module.icon} ${module.name}`;
             this.results.set(moduleId, { status: 'success', module, detail });
 
+            if (this.isTest) {
+                this.originalConsole.log(`  [Succès] ✓ ${statusText}`);
+                return;
+            }
             if (this.progressBar) {
                 this.progressBar.update(this.currentStep, { module: `\x1b[32m✓\x1b[0m ${statusText}` });
             }
@@ -177,6 +195,10 @@ export class StartupDisplay {
             this.results.set(moduleId, { status: 'error', module, error: errorMsg });
             this.errors.push({ module: module.name, error: errorMsg });
 
+            if (this.isTest) {
+                this.originalConsole.log(`  [Erreur] ✗ ${module.icon} ${module.name}: ${errorMsg}`);
+                return;
+            }
             if (this.progressBar) {
                 this.progressBar.update(this.currentStep, { module: `\x1b[31m✗\x1b[0m ${module.icon} ${module.name}` });
             }
@@ -185,6 +207,10 @@ export class StartupDisplay {
 
     private stopProgressBar(): string {
         const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(2);
+        if (this.isTest) {
+            this.originalConsole.log(`\n  ✓ Démarrage de ${botIdentity.fullName} terminé en ${elapsed}s!\n`);
+            return elapsed;
+        }
         if (this.progressBar) {
             this.progressBar.update(this.totalSteps, { module: `${THEME.SUCCESS}✓ Démarrage terminé!${THEME.RESET}` });
             this.progressBar.stop();

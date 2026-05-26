@@ -16,7 +16,7 @@ class PersistentShell extends EventEmitter {
         : path.resolve(process.cwd(), 'Sandbox1');
     private sentinel: string = '__HIVE_MIND_SHELL_DONE__';
     private isExecuting: boolean = false;
-    private executionPromise: { resolve: (val: any) => void, reject: (err: any) => void } | null = null;
+    private executionPromise: { resolve: (val: { stdout: string, exitCode: number }) => void, reject: (err: Error) => void } | null = null;
 
     constructor() {
         super();
@@ -54,15 +54,18 @@ class PersistentShell extends EventEmitter {
     private _checkSentinel() {
         if (!this.isExecuting || !this.executionPromise) return;
 
-        if (this.outputBuffer.includes(this.sentinel)) {
-            const parts = this.outputBuffer.split(this.sentinel);
-            const output = parts[0].trim();
-            const remainder = parts[1] || '';
+        // Search for the sentinel pattern: __HIVE_MIND_SHELL_DONE__<exitCode>|<cwd>
+        // We look for digits for exitCode to avoid matching raw command echo in interactive bash shells.
+        const pattern = new RegExp(`${this.sentinel}(\\d+)\\|([^\\n\\r]+)`);
+        const match = this.outputBuffer.match(pattern);
 
-            // Extract exit code and pwd (format: __SENTINEL__127|/path/to/cwd)
-            const exitCodeMatch = remainder.match(/^(\d+)\|(.+)/);
-            const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1]) : 0;
-            const newCwd = exitCodeMatch ? exitCodeMatch[2].trim() : this.currentCwd;
+        if (match) {
+            const matchIndex = match.index!;
+            // The actual stdout is everything in the buffer BEFORE the sentinel match
+            const output = this.outputBuffer.substring(0, matchIndex).trim();
+
+            const exitCode = parseInt(match[1], 10);
+            const newCwd = match[2].trim();
             this.currentCwd = newCwd;
 
             // Clean buffer for next execution
@@ -96,10 +99,7 @@ class PersistentShell extends EventEmitter {
         this.isExecuting = true;
         this.outputBuffer = '';
 
-        return new Promise((resolve, reject) => {
-            this.executionPromise = { resolve, reject };
-
-            // Security timeout
+        return new Promise<{ stdout: string, exitCode: number }>((resolve, reject) => {
             const timeout = setTimeout(() => {
                 if (this.isExecuting) {
                     this.isExecuting = false;
@@ -107,6 +107,17 @@ class PersistentShell extends EventEmitter {
                     reject(new Error(`Command timed out after ${timeoutMs}ms: ${command}`));
                 }
             }, timeoutMs);
+
+            this.executionPromise = {
+                resolve: (val) => {
+                    clearTimeout(timeout);
+                    resolve(val);
+                },
+                reject: (err) => {
+                    clearTimeout(timeout);
+                    reject(err);
+                }
+            };
 
             // Inject command + sentinel echo with exit code and pwd
             // We use ';' to ensure echo runs even if the command fails

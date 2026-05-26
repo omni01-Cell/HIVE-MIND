@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 // Set environment for CLI testing
 process.env.ACTIVE_TRANSPORTS = 'cli';
-process.env.APP_ENV = 'local';
+process.env.APP_ENV = 'test';
 
 import { botCore } from '../core/index.js';
 import { cliTransport } from '../core/transport/cli.js';

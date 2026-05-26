@@ -9,6 +9,15 @@ export const cliTransport = {
      * Connecte au service de messagerie (ici le terminal)
      */
     connect: async () => {
+        // En mode test automatisé, ne pas s'abonner à process.stdin pour éviter le blocage SIGTTIN
+        const isTest = process.env.APP_ENV === 'test' || process.env.NODE_ENV === 'test';
+        if (isTest) {
+            console.log('\n======================================');
+            console.log('🤖 HIVE-MIND CLI Transport (Mode Test - Entrée standard désactivée)');
+            console.log('======================================\n');
+            return;
+        }
+
         cliTransport.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout,

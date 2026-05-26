@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+// @ts-expect-error - ws does not have types installed
+import ws from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -34,7 +36,14 @@ if (!projKey) projKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUP
 
 if (projUrl && projUrl.startsWith('http') && projUrl !== 'https://VOTRE_PROJET.supabase.co') {
     // IMPORTANT : Utiliser service_role_key pour contourner Row Level Security
-    supabase = createClient(projUrl, projKey);
+    supabase = createClient(projUrl, projKey, {
+        auth: {
+            persistSession: false
+        },
+        realtime: {
+            transport: ws
+        }
+    });
 }
 
 /**
@@ -158,7 +167,7 @@ export const db = {
      * Legacy JID resolver for backward compatibility
      * Déduit automatiquement la plateforme depuis le format du JID WhatsApp/Telegram/Discord
      */
-    async resolveContextFromLegacyId(legacyId: string): Promise<{ context_id: string, type: 'user'|'group' } | null> {
+    async resolveContextFromLegacyId(legacyId: string): Promise<{ context_id: string, type: 'user' | 'group' } | null> {
         if (!legacyId) return null;
 
         // Heuristiques de détection

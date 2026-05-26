@@ -857,6 +857,7 @@ export async function loadAdapters(): Promise<void> {
             'geminiCli': ['gemini-cli'],
             'anthropic': ['anthropic'],
             'mistral': ['mistral'],
+            'codestral': ['codestral'],
             'kimi': ['kimi'],         // Kimi Code (API spéciale coding agents)
             'moonshot': ['moonshot'], // Moonshot AI standard
             'github': ['github'],     // GitHub Models (Free Tier)

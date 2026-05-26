@@ -2,6 +2,7 @@
 // Provider pour Gemini 2.5 Flash Native Audio (Live API)
 // Support: Audio streaming, Function calling, Émotions préservées
 
+// @ts-expect-error - ws does not have types installed
 import WebSocket from 'ws';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';

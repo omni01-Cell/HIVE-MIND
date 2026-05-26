@@ -7,6 +7,7 @@
             "openai",
             "codex",
             "mistral",
+            "codestral",
             "anthropic",
             "kimi",
             "openrouter",
@@ -48,8 +49,9 @@
         },
         "service_recipes": {
             "EXECUTOR": {
-                "family": "gemini-cli",
-                "model": "gemini-3-flash-preview",
+                "comment": "Modèle phare harnais: Codestral 90/100 agent + 10/100 modèle. Fallback gemini-3-flash-preview.",
+                "family": "codestral",
+                "model": "codestral-latest",
                 "fallback": "gemini-3-flash-preview",
                 "fallback_2": "gemini-3.5-flash-low",
                 "temperature": 0.7
@@ -69,8 +71,9 @@
                 "temperature": 0.1
             },
             "PLANNER": {
-                "family": "gemini-cli",
-                "model": "gemini-3-flash-preview",
+                "comment": "Modèle phare harnais: Codestral (chat endpoint). Fallback gemini-3-flash-preview.",
+                "family": "codestral",
+                "model": "codestral-latest",
                 "fallback": "gemini-3-flash-preview",
                 "fallback_2": "gemini-3.5-flash-low",
                 "temperature": 0.5
@@ -141,17 +144,18 @@
                     "description": "Salutations, questions simples, chat rapide avec Gemini CLI et Antigravity"
                 },
                 "MULTIMODAL": {
-                    "primary": "gemini-3.5-flash-low",
+                    "primary": "gemini-3.5-flash",
                     "fallback": "gemini-3-flash-preview",
                     "description": "Texte + Image + Audio combinés"
                 },
                 "VISION": {
-                    "primary": "gemini-3.5-flash-low",
+                    "primary": "gemini-3.5-flash",
                     "fallback": "gemini-3-flash-preview",
                     "description": "Analyse d'images, OCR, génération visuelle"
                 },
                 "AGENTIC": {
-                    "primary": "gemini-3.1-pro-preview",
+                    "comment": "Modèle phare harnais (90% harnais + 10% modèle). Codestral en primaire, gemini en fallback.",
+                    "primary": "codestral-latest",
                     "fallback": "gemini-3-flash-preview",
                     "fallback_2": "gemini-3.1-pro-high",
                     "fallback_3": "claude-opus-4-6-thinking",
@@ -554,6 +558,28 @@
                         "rpd": 10000
                     },
                     "ptc_tier": "C"
+                }
+            ]
+        },
+        "codestral": {
+            "nom_affiche": "Codestral (Mistral AI — Coding)",
+            "base_url": "https://codestral.mistral.ai/v1",
+            "modeles": [
+                {
+                    "id": "codestral-latest",
+                    "description": "Modèle spécialisé en code et en agentic par Mistral AI. Endpoint dédié codestral.mistral.ai. SOTA pour la génération, l'analyse et le raisonnement sur du code.",
+                    "types": [
+                        "chat",
+                        "coding",
+                        "agentic",
+                        "reasoning"
+                    ],
+                    "quota": {
+                        "rpm": 30,
+                        "tpm": 200000,
+                        "rpd": 2000
+                    },
+                    "ptc_tier": "A"
                 }
             ]
         },
@@ -1088,23 +1114,6 @@
         "gemini-cli": {
             "nom_affiche": "Gemini CLI Models",
             "modeles": [
-                {
-                    "id": "gemini-3.1-pro-preview",
-                    "description": "Google Gemini 3.1 Pro Preview via Gemini CLI",
-                    "types": [
-                        "chat",
-                        "reasoning",
-                        "agentic",
-                        "coding",
-                        "vision"
-                    ],
-                    "quota": {
-                        "rpm": 100,
-                        "tpm": 1000000,
-                        "rpd": 10000
-                    },
-                    "ptc_tier": "S"
-                },
                 {
                     "id": "gemini-3-flash-preview",
                     "description": "Google Gemini 3 Flash Preview via Gemini CLI",

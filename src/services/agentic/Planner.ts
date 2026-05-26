@@ -517,12 +517,26 @@ To ensure successful execution, structure your planning process according to the
    - Step 2: Process, format, write, or report the gathered data (e.g., execute_bash_command, send_file).
 3. MATCH TOOLS ACCURATELY: Choose tool names exclusively from the list of available tools. Verify that each selected tool exists exactly as defined.
 4. CHOOSE THE RIGHT TOOL:
-   - Use \`execute_bash_command\` for terminal actions, running Node scripts, and creating files in the filesystem.
-   - Reserve \`code_execution\` only for lightweight orchestration of multiple existing HIVE tools using sandboxed JavaScript. (Do not use it for require/import, npm packages, shell commands, or local file writes).
-5. DEFINE COMPLETE PARAMETERS: For every step, provide all required properties for the chosen tool.
-6. PASS DATA SEQUENTIALLY: Reuse outputs from previous steps by using the variable interpolation syntax "{{step_X_propertyName}}" (e.g., {"filePath": "{{step_1_filePath}}"} or "{{step_1_result}}").
-7. DRAFT CONCISE QUERIES: When using search tools (\`google_ai_search\`, \`duckduck_search\`, \`wikipedia\`), write a short, concise search query (maximum of 15 words) for the query parameter. Avoid passing large chunks of text or variable references like "{{step_X_result}}".
-8. JSON VALIDITY: Double-check your JSON block. Ensure there are no trailing commas, all keys and strings are wrapped in double quotes, and braces/brackets are correctly balanced.
+    - Use \`execute_bash_command\` for terminal actions, running Node scripts, and creating files in the filesystem.
+    - Reserve \`code_execution\` only for lightweight orchestration of multiple existing HIVE tools using sandboxed JavaScript. (Do not use it for require/import, npm packages, shell commands, or local file writes).
+    - INLINE CODE RESTRICTIONS: Bash commands like \`node -e "..."\` are strictly FORBIDDEN by security policies and will be blocked. To run custom Node.js logic, you MUST plan a step to CREATE a physical script file (e.g. \`storage_hm/run.cjs\`) using tools or bash commands (like echo or cat), and then plan a subsequent step to RUN it with \`node storage_hm/run.cjs\`. Never attempt to run inline code.
+    - ES MODULES & TEMPORARY SCRIPTS STRICT COMPATIBILITY: The HIVE-MIND project uses "type": "module" in its package.json. Consequently, Node.js will treat any ".js" file as an ES module, where "require()" is forbidden and will throw "ReferenceError: require is not defined". ANY temporary Node.js script file you write or generate (for example, to use a CommonJS library like pdf-parse, fs, path, etc.) MUST absolutely use the ".cjs" extension (e.g., "storage_hm/extract_text.cjs"), never ".js". You must also execute it using the exact ".cjs" filename (e.g., "node storage_hm/extract_text.cjs").
+5. NODE.JS LIBRARY VERSIONS & VARIABLES: When using npm libraries, always check their API and variable usage very carefully. For example, "pdf-parse" v2+ uses a class-based API:
+  const fs = require('fs');
+  const { PDFParse } = require('pdf-parse');
+  const dataBuffer = fs.readFileSync('storage_hm/test_document.pdf');
+  const p = new PDFParse({ data: dataBuffer });
+  p.getText().then(data => {
+      fs.writeFileSync('storage_hm/test_document.md', data.text);
+  }).catch(err => {
+      process.exitCode = 1;
+      process.exit(1);
+  });
+  NEVER reference a non-existent variable like "buffer" (e.g. { data: buffer } where you read the file into "dataBuffer"). Ensure all variables are fully defined and in scope.
+6. DEFINE COMPLETE PARAMETERS: For every step, provide all required properties for the chosen tool.
+7. PASS DATA SEQUENTIALLY: Reuse outputs from previous steps by using the variable interpolation syntax "{{step_X_propertyName}}" (e.g., {"filePath": "{{step_1_filePath}}"} or "{{step_1_result}}").
+8. DRAFT CONCISE QUERIES: When using search tools (\`google_ai_search\`, \`duckduck_search\`, \`wikipedia\`), write a short, concise search query (maximum of 15 words) for the query parameter. Avoid passing large chunks of text or variable references like "{{step_X_result}}".
+9. JSON VALIDITY: Double-check your JSON block. Ensure there are no trailing commas, all keys and strings are wrapped in double quotes, and braces/brackets are correctly balanced.
 </planning_instructions>
 
 <output_format>
@@ -552,7 +566,7 @@ The user wants to navigate to a page, take a screenshot, and then extract trendi
       "action": "Extract page content and format as markdown",
       "tool": "execute_bash_command",
       "params": {
-        "command": "node scripts/extract.js"
+        "command": "node scripts/extract.cjs"
       },
       "estimated_time": 20,
       "depends_on": [1]
@@ -754,7 +768,20 @@ Plan:`;
                         finalResult = await context.executeToolFn(toolCall, context.message);
 
                         if (finalResult && (finalResult.error === true || finalResult.success === false)) {
-                            throw new Error(finalResult.message || finalResult.error || (typeof finalResult.llmOutput === 'string' ? finalResult.llmOutput : '') || 'erreur inconnue');
+                            throw new Error(finalResult.message || finalResult.error || (typeof finalResult.llmOutput === 'string' ? finalResult.llmOutput : JSON.stringify(finalResult.llmOutput)) || 'erreur inconnue');
+                        }
+
+                        // WHY: Node.js async errors inside .then()/.catch() chains that don't call process.exit(1)
+                        // make bash return exit code 0 even when the program crashed at runtime.
+                        // We must explicitly check the exit code to catch these silent failures.
+                        if (
+                            finalResult &&
+                            finalResult.llmOutput &&
+                            typeof (finalResult.llmOutput as { exitCode?: number }).exitCode === 'number' &&
+                            (finalResult.llmOutput as { exitCode?: number }).exitCode !== 0
+                        ) {
+                            const stdout = (finalResult.llmOutput as { stdout?: string }).stdout || '';
+                            throw new Error(`[BASH EXIT CODE ${(finalResult.llmOutput as { exitCode: number }).exitCode}] Command failed.\nOutput: ${stdout.substring(0, 500)}`);
                         }
 
                         // Break out of retry loop on success
@@ -958,11 +985,14 @@ Formulate your new plan using these guidelines:
 2. DECOMPOSE THE REMAINING TASK: Split complex remaining operations into separate steps (e.g., separate data collection from processing or file creation).
 3. MATCH TOOLS ACCURATELY: Choose tool names exclusively from the list of available tools. Verify that each selected tool exists exactly as defined.
 4. CHOOSE THE RIGHT TOOL:
-   - Use \`execute_bash_command\` for terminal actions, running Node scripts, and creating files in the filesystem.
-   - Reserve \`code_execution\` only for lightweight orchestration of multiple HIVE tools.
-5. DEFINE COMPLETE PARAMETERS: For every step, provide all required properties for the chosen tool. Use exact selectors or coordinates found in the execution log if navigating/clicking.
-6. PASS DATA SEQUENTIALLY: Reuse outputs from previous steps by using the variable interpolation syntax "{{step_X_propertyName}}" (e.g., {"filePath": "{{step_1_filePath}}"} or "{{step_1_result}}").
-7. DRAFT CONCISE QUERIES: When using search tools (\`google_ai_search\`, \`duckduck_search\`, \`wikipedia\`), write a short, concise search query (maximum of 15 words) for the query parameter. Avoid passing large chunks of text or variable references like "{{step_X_result}}".
+    - Use \`execute_bash_command\` for terminal actions, running Node scripts, and creating files in the filesystem.
+    - Reserve \`code_execution\` only for lightweight orchestration of multiple existing HIVE tools.
+    - INLINE CODE RESTRICTIONS: Bash commands like \`node -e "..."\` are strictly FORBIDDEN by security policies and will be blocked. To run custom Node.js logic, you MUST plan a step to CREATE a physical script file (e.g. \`storage_hm/run.cjs\`) using tools or bash commands (like echo or cat), and then plan a subsequent step to RUN it with \`node storage_hm/run.cjs\`. Never attempt to run inline code.
+    - ES MODULES COMPATIBILITY: The HIVE-MIND project uses \`"type": "module"\` in its package.json. Therefore, any script file using CommonJS \`require()\` MUST have the \`.cjs\` extension (e.g., \`storage_hm/run.cjs\`), NOT \`.js\`. If you name it \`.js\`, Node.js will throw a ReferenceError (require is not defined). Systematically use the \`.cjs\` extension for temporary Node.js scripts.
+5. NODE.JS LIBRARY VERSIONS: When retrying with npm libraries, check their API version. For example, \`pdf-parse\` v2+ uses a class-based API: \`const { PDFParse } = require('pdf-parse'); const p = new PDFParse({ data: buffer }); const r = await p.getText();\`. NEVER use \`pdf(buffer)\`. Always add \`process.exitCode = 1; process.exit(1);\` in your \`.catch()\` blocks.
+6. DEFINE COMPLETE PARAMETERS: For every step, provide all required properties for the chosen tool. Use exact selectors or coordinates found in the execution log if navigating/clicking.
+7. PASS DATA SEQUENTIALLY: Reuse outputs from previous steps by using the variable interpolation syntax "{{step_X_propertyName}}" (e.g., {"filePath": "{{step_1_filePath}}"} or "{{step_1_result}}").
+8. DRAFT CONCISE QUERIES: When using search tools (\`google_ai_search\`, \`duckduck_search\`, \`wikipedia\`), write a short, concise search query (maximum of 15 words) for the query parameter. Avoid passing large chunks of text or variable references like "{{step_X_result}}".
 </replanning_instructions>
 
 <output_format>
