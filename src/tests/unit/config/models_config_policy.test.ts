@@ -16,14 +16,7 @@ type ModelsConfig = {
     };
 };
 
-const disallowedSmallChatModels = new Set([
-    'gemini-3.1-flash-lite-preview',
-    'gemini-2.5-flash-lite',
-    'llama-3.1-8b-instant',
-    'openai/gpt-oss-20b',
-    'meta-llama/llama-4-scout-17b-16e-instruct',
-    'microsoft/Phi-4-multimodal-instruct'
-]);
+const disallowedSmallChatModels = new Set<string>([]);
 
 const readModelsConfig = (): ModelsConfig => {
     const rawConfig = readFileSync('src/config/models_config.json', 'utf-8');
