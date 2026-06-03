@@ -97,11 +97,15 @@ describe('ExplicitPlanner', () => {
             const plan = {
                 id: 'plan_123',
                 goal: 'Test interpolation',
+                totalTime: 10,
+                complexity: 'low',
+                status: 'pending',
                 steps: [
                     {
                         id: 3,
                         action: 'Navigate to target',
                         tool: 'test_tool',
+                        estimated_time: 5,
                         params: {
                             target_url: '{{step_2_url}}',
                             file_path: '{{step_2_filePath}}'

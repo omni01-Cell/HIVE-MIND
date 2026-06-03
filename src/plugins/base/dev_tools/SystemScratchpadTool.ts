@@ -5,6 +5,14 @@
 
 import { SubAgentEngine } from '../../../services/agentic/SubAgentEngine.js';
 
+interface ScratchpadArgs {
+    instructions: string;
+}
+
+interface ScratchpadContext {
+    [key: string]: unknown;
+}
+
 export default {
     name: 'system_scratchpad',
     description: 'Isolated system scratchpad. Allows executing a complex series of read-only tools (grep, list_dir, read_file, search) in the background without polluting your main memory.',
@@ -31,7 +39,7 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: string) {
+    async execute(args: ScratchpadArgs, context: ScratchpadContext, toolName: string) {
         if (toolName !== 'run_scratchpad') return null;
 
         const { instructions } = args;

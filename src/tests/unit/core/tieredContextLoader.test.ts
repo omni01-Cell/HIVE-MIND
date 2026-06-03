@@ -118,7 +118,7 @@ describe('TieredContextLoader (MindOS & Constraints Integration)', () => {
 
         // Vérifier que le blueprint est bien exposé dans l'objet de retour
         expect(context.blueprint).toBeDefined();
-        expect(context.blueprint.metadata.id).toBe('hive_main');
+        expect((context.blueprint.metadata as Record<string, unknown>).id).toBe('hive_main');
     });
 
     it('should support dynamic blueprint resolution per group settings', async () => {
@@ -128,7 +128,7 @@ describe('TieredContextLoader (MindOS & Constraints Integration)', () => {
             sourceChannel: 'whatsapp'
         });
 
-        expect(context.blueprint.metadata.id).toBe('custom_agent');
+        expect((context.blueprint.metadata as Record<string, unknown>).id).toBe('custom_agent');
         expect(context.systemPrompt).toContain('<mindos_drives>');
         expect(context.systemPrompt).toContain('- custom_drive');
         expect(context.systemPrompt).not.toContain('- drive_a');

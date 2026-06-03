@@ -2,8 +2,59 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { permissionManager } from '../../../core/security/PermissionManager.js';
 import { fileState } from './FileState.js';
-import { AnchorStateManager, extractId, ANCHOR_DELIMITER, hashLines } from '../../../services/anchor/index.js';
+import { AnchorStateManager, extractId, hashLines } from '../../../services/anchor/index.js';
 import { fileStateCache } from '../../../utils/fileStateCache.js';
+
+// --- Type helpers ---
+
+interface ToolContext {
+    chatId?: string;
+    sourceChannel?: string;
+    message?: { sender?: string };
+}
+
+interface EditItem {
+    edit_type: string;
+    anchor: string;
+    end_anchor?: string;
+    text: string;
+}
+
+interface FileEntry {
+    path: string;
+    edits: EditItem[];
+}
+
+interface AnchorModeArgs {
+    files?: FileEntry[];
+}
+
+interface LegacyModeArgs {
+    file_path?: string;
+    old_string?: string;
+    new_string?: string;
+}
+
+type EditFileArgs = AnchorModeArgs & LegacyModeArgs;
+
+interface LegacyEditResult {
+    success: boolean;
+    message?: string;
+    llmOutput?: string;
+    userOutput?: string;
+}
+
+interface EditResult {
+    success: boolean;
+    editsApplied: number;
+    message: string;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
 
 export default {
     name: 'dev_tools_file_edit',
@@ -93,18 +144,18 @@ BATCHING: You CAN group multiple files and edits in a single call via the "files
         }
     ],
 
-    async execute(args: any, context: any, toolName: string) {
+    async execute(args: EditFileArgs, context: ToolContext, toolName: string) {
         if (toolName !== 'edit_file') return null;
 
         const { chatId, sourceChannel } = context;
 
         // ── Route: Anchor mode (multi-file) vs Legacy mode ──────────────
         if (args.files && Array.isArray(args.files)) {
-            return executeAnchorMode(args.files, chatId, sourceChannel, context);
+            return executeAnchorMode(args.files, chatId!, sourceChannel!, context);
         }
 
         // Legacy fallback
-        return executeLegacyMode(args, chatId, sourceChannel, context);
+        return executeLegacyMode(args, chatId!, sourceChannel!, context);
     }
 };
 
@@ -113,11 +164,11 @@ BATCHING: You CAN group multiple files and edits in a single call via the "files
 // ============================================================================
 
 async function executeAnchorMode(
-    files: Array<{ path: string; edits: Array<{ edit_type: string; anchor: string; end_anchor?: string; text: string }> }>,
+    files: FileEntry[],
     chatId: string,
     sourceChannel: string,
-    context: any
-): Promise<any> {
+    context: ToolContext
+): Promise<LegacyEditResult> {
     const results: Array<{ file: string; success: boolean; editsApplied: number; message: string }> = [];
 
     for (const fileEntry of files) {
@@ -193,12 +244,12 @@ async function executeAnchorMode(
                 editsApplied: result.editsApplied,
                 message: result.message
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             results.push({
                 file: fileEntry.path,
                 success: false,
                 editsApplied: 0,
-                message: `Error: ${error.message}`
+                message: `Error: ${extractErrorMessage(error)}`
             });
         }
     }
@@ -226,8 +277,8 @@ async function executeAnchorMode(
  */
 function applyAnchoredEdits(
     absolutePath: string,
-    edits: Array<{ edit_type: string; anchor: string; end_anchor?: string; text: string }>
-): { success: boolean; editsApplied: number; message: string } {
+    edits: EditItem[]
+): EditResult {
     const content = fs.readFileSync(absolutePath, 'utf8');
     const lines = content.split('\n');
 
@@ -364,7 +415,7 @@ function applyAnchoredEdits(
 // LEGACY MODE — Original old_string/new_string replacement
 // ============================================================================
 
-async function executeLegacyMode(args: any, chatId: string, sourceChannel: string, context: any): Promise<any> {
+async function executeLegacyMode(args: EditFileArgs, chatId: string, sourceChannel: string, context: ToolContext): Promise<LegacyEditResult> {
     const { file_path, old_string, new_string } = args;
 
     if (!file_path || old_string === undefined || new_string === undefined) {
@@ -407,7 +458,7 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
 
         // Staleness check
         let isStale = false;
-        const { changed, current, lastRead } = fileState.hasChanged(absolutePath);
+        const { changed, lastRead } = fileState.hasChanged(absolutePath);
         if (lastRead === undefined) {
             const cachedState = fileStateCache.get(absolutePath);
             if (cachedState) {
@@ -481,10 +532,10 @@ async function executeLegacyMode(args: any, chatId: string, sourceChannel: strin
             userOutput: `📝 *File modified*: \`${shortFileName}\`\n~ Replacement successfully performed ~`
         };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         return {
             success: false,
-            message: `Error during file editing: ${error.message}`
+            message: `Error during file editing: ${extractErrorMessage(error)}`
         };
     }
 }

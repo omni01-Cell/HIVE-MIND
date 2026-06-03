@@ -1122,6 +1122,7 @@ export default {
 
             // Get group names from Supabase
             const { supabase } = await import('../../../services/supabase.js');
+            if (!supabase) return { success: false, message: 'Database not available' };
             const { data: groupData } = await supabase
                 .from('groups')
                 .select('jid, name')
@@ -1151,6 +1152,7 @@ export default {
         try {
             const { groupService } = await import('../../../services/groupService.js');
             const { supabase } = await import('../../../services/supabase.js');
+            if (!supabase) return { success: false, message: 'Database not available' };
 
             // Count admins
             const adminCount = await groupService.countAdmins(groupJid);

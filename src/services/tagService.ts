@@ -9,7 +9,7 @@ export const tagService = {
      * @param {string} content
      * @returns {Promise<string[]>}
      */
-    async generateTags(content: any): Promise<string[]> {
+    async generateTags(content: string): Promise<string[]> {
         if (!content || content.length < 10) return [];
 
         try {
@@ -66,8 +66,8 @@ Few-shot examples:
 
             console.warn('[TagService] Échec du formatage des tags, repli vide:', result.error);
             return [];
-        } catch (error: any) {
-            console.error('[TagService] Erreur tagging:', error.message);
+        } catch (error: unknown) {
+            console.error('[TagService] Erreur tagging:', error instanceof Error ? error.message : String(error));
             return [];
         }
     }

@@ -2,10 +2,15 @@ interface FindProductArgs {
     request: string;
 }
 
+interface ShoppingTransport {
+    sendText(chatId: string, text: string): Promise<void>;
+    setPresence(chatId: string, presence: string): Promise<void>;
+}
+
 interface ShoppingContext {
     chatId?: string;
     sender?: string;
-    transport?: any;
+    transport?: ShoppingTransport;
 }
 
 export default {
@@ -51,7 +56,7 @@ export default {
             // 2. Lancement de l'agent via import dynamique
             try {
                 const { ShoppingAgent } = await import('./shopping_agent.js');
-                const agent = new ShoppingAgent(sender, chatId);
+                const agent = new ShoppingAgent(sender ?? 'unknown', chatId);
                 const result = await agent.start(request);
 
                 return {

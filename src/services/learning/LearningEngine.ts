@@ -4,6 +4,18 @@ import { factsMemory } from '../memory.js';
 import { workingMemory } from '../workingMemory.js';
 import { tryParseJson } from '../../utils/ResponseFormatEnforcer.js';
 
+interface ExtractedInsight {
+    readonly type: string;
+    readonly key: string;
+    readonly value: string;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 export const learningEngine = {
     async extractInsights(chatId: string): Promise<void> {
         console.log(`[MAPLE] 🧠 Extraction d'insights pour ${chatId}...`);
@@ -12,7 +24,7 @@ export const learningEngine = {
         const context = await workingMemory.getContext(chatId, 20);
         if (context.length < 4) return; // Pas assez de matière
 
-        const transcript = context.map((m: any) => `${m.role}: ${m.content}`).join('\n');
+        const transcript = context.map((m: { role: string; content: string }) => `${m.role}: ${m.content}`).join('\n');
 
         // 2. Prompt MAPLE strict
         const prompt = `
@@ -45,14 +57,14 @@ Few-shot examples:
 
             if (!response?.content) return;
 
-            let insights: any[] = [];
+            let insights: ExtractedInsight[] = [];
             try {
-                insights = tryParseJson<any[]>(response.content);
-            } catch (err) {
+                insights = tryParseJson<ExtractedInsight[]>(response.content);
+            } catch {
                 // Fallback avec expression régulière en cas de bruit autour
                 const jsonMatch = response.content.match(/\[[\s\S]*\]/);
                 if (!jsonMatch) return;
-                insights = tryParseJson<any[]>(jsonMatch[0]);
+                insights = tryParseJson<ExtractedInsight[]>(jsonMatch[0]);
             }
 
             // 3. Sauvegarder dans la DB avec la taxonomie MAPLE
@@ -62,8 +74,8 @@ Few-shot examples:
                 await factsMemory.remember(chatId, factKey, insight.value);
                 console.log(`[MAPLE] ✨ Appris : ${factKey} = ${insight.value}`);
             }
-        } catch (e: any) {
-            console.error('[MAPLE] Erreur extraction:', e.message);
+        } catch (error: unknown) {
+            console.error('[MAPLE] Erreur extraction:', extractErrorMessage(error));
         }
     }
 };

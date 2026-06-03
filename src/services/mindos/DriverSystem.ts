@@ -28,8 +28,8 @@ export class DriverSystem {
             let blueprint;
             try {
                 blueprint = blueprintManager.loadBlueprint(blueprintId);
-            } catch (err: any) {
-                console.error(`[DriverSystem] Failed to load blueprint "${blueprintId}":`, err.message);
+            } catch (err: unknown) {
+                console.error(`[DriverSystem] Failed to load blueprint "${blueprintId}":`, err instanceof Error ? err.message : String(err));
                 return false;
             }
 
@@ -75,8 +75,8 @@ export class DriverSystem {
             });
 
             return true;
-        } catch (error: any) {
-            console.error('[DriverSystem] Error in evaluateDrives:', error.message);
+        } catch (error: unknown) {
+            console.error('[DriverSystem] Error in evaluateDrives:', error instanceof Error ? error.message : String(error));
             return false;
         }
     }

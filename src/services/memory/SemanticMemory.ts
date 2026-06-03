@@ -25,6 +25,19 @@ export interface MemoryRecord {
   similarity: number;
 }
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return 'Unknown error';
+}
+
+interface DbMemoryRow {
+    id: number;
+    content: string;
+    role: string;
+    similarity: number;
+}
+
 export class SemanticMemory {
     private readonly supabase: SupabaseClient;
     private readonly embeddings: IEmbeddingsService;
@@ -82,8 +95,8 @@ export class SemanticMemory {
             if (error) throw error;
             this.logger?.debug('memory', `Memory stored for ${chatId} (Role: ${role})`);
 
-        } catch (error: any) {
-            this.logger?.error(`[Memory] Store Error: ${error.message}`);
+        } catch (error: unknown) {
+            this.logger?.error(`[Memory] Store Error: ${extractErrorMessage(error)}`);
         }
     }
 
@@ -110,7 +123,7 @@ export class SemanticMemory {
 
             if (error) throw error;
 
-            const results = (data as any[]).map((m: any) => ({
+            const results = (data as DbMemoryRow[]).map((m: DbMemoryRow) => ({
                 id: m.id,
                 content: m.content,
                 role: m.role,
@@ -125,8 +138,8 @@ export class SemanticMemory {
                         try {
                             await this.supabase.rpc('cma_boost_memory', { memory_ids: idsToBoost });
                             this.logger?.debug('memory', `[CMA] Renforcement de ${idsToBoost.length} souvenirs.`);
-                        } catch (e: any) {
-                            this.logger?.error(`[CMA] Error boosting memories: ${e.message}`);
+                        } catch (e: unknown) {
+                            this.logger?.error(`[CMA] Error boosting memories: ${extractErrorMessage(e)}`);
                         }
                     });
                 }
@@ -134,8 +147,8 @@ export class SemanticMemory {
 
             return results;
 
-        } catch (error: any) {
-            this.logger?.error(`[Memory] Recall Error: ${error.message}`);
+        } catch (error: unknown) {
+            this.logger?.error(`[Memory] Recall Error: ${extractErrorMessage(error)}`);
             return [];
         }
     }
@@ -158,7 +171,7 @@ export class SemanticMemory {
 
             if (!keepIds || keepIds.length === 0) return;
 
-            const ids = keepIds.map((k: any) => k.id);
+            const ids = keepIds.map((k: { id: number }) => k.id);
 
             // Delete everything else
             await this.supabase
@@ -166,8 +179,8 @@ export class SemanticMemory {
                 .delete()
                 .eq('context_id', resolved.context_id)
                 .not('id', 'in', `(${ids.join(',')})`);
-        } catch (error: any) {
-            this.logger?.error(`[Memory] Prune Error: ${error.message}`);
+        } catch (error: unknown) {
+            this.logger?.error(`[Memory] Prune Error: ${extractErrorMessage(error)}`);
         }
     }
 
@@ -181,7 +194,7 @@ export class SemanticMemory {
     /**
    * Placeholder for future LLM summarization.
    */
-    async summarize(chatId: string, limit: number = 50): Promise<null> {
+    async summarize(_chatId: string, _limit: number = 50): Promise<null> {
         this.logger?.warn('[Memory] Summarization not implemented in V2 RAG. Skipping.');
         return null;
     }

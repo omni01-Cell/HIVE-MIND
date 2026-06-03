@@ -21,6 +21,24 @@ import { LANGUAGE_MAP } from './queries.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return 'Unknown error';
+}
+
+function detectParentClass(defNode: SyntaxNode): string | undefined {
+    let parentNode: SyntaxNode | null = defNode.parent;
+    while (parentNode) {
+        if (parentNode.type.includes('class') || parentNode.type === 'class_definition') {
+            const className = parentNode.childForFieldName('name');
+            return className?.text;
+        }
+        parentNode = parentNode.parent;
+    }
+    return undefined;
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface SymbolDefinition {
@@ -99,8 +117,8 @@ async function loadLanguage(langName: string): Promise<Language> {
                 languageCache.set(langName, language);
                 return language;
             }
-        } catch (err: any) {
-            console.error(`[TreeSitterService] Error loading WASM from ${wasmPath}:`, err);
+        } catch (err: unknown) {
+            console.error(`[TreeSitterService] Error loading WASM from ${wasmPath}:`, extractErrorMessage(err));
         }
     }
     throw new Error(`[AST] WASM non trouvé pour: ${langName}. Fichier attendu: ${wasmName}`);
@@ -186,17 +204,7 @@ export async function parseDefinitions(absolutePath: string): Promise<SymbolDefi
             // Detect parent (for methods inside classes)
             let parent: string | undefined;
             if (kind === 'method' && defNode) {
-                let parentNode: SyntaxNode | null = defNode.parent;
-                while (parentNode) {
-                    if (parentNode.type.includes('class') || parentNode.type === 'class_definition') {
-                        const className = parentNode.childForFieldName('name');
-                        if (className) {
-                            parent = className.text;
-                        }
-                        break;
-                    }
-                    parentNode = parentNode.parent;
-                }
+                parent = detectParentClass(defNode);
             }
 
             definitions.push({
@@ -214,8 +222,8 @@ export async function parseDefinitions(absolutePath: string): Promise<SymbolDefi
         // Sort by line number
         definitions.sort((a, b) => a.startLine - b.startLine);
         return definitions;
-    } catch (error: any) {
-        console.warn(`[AST] Tree-sitter failed for ${absolutePath}, falling back to Regex parsing: ${error.message}`);
+    } catch (error: unknown) {
+        console.warn(`[AST] Tree-sitter failed for ${absolutePath}, falling back to Regex parsing: ${extractErrorMessage(error)}`);
         return parseDefinitionsRegexFallback(absolutePath);
     }
 }
@@ -311,11 +319,9 @@ export async function getFileSkeleton(absolutePath: string): Promise<string | nu
     const definitions = await parseDefinitions(absolutePath);
     if (!definitions || definitions.length === 0) return null;
 
-    const lines = fs.readFileSync(absolutePath, 'utf8').split('\n');
     const result: string[] = [];
 
     for (const def of definitions) {
-        const prefix = def.parent ? `${def.parent}.` : '';
         const lineCountStr = def.lineCount > 1 ? ` (${def.lineCount} lines)` : '';
         result.push(`${def.indentation}${def.signatureLine.trim()}${lineCountStr}`);
     }
@@ -428,16 +434,15 @@ export async function findSymbolReferences(
                         isDefinition
                     });
                 }
-            } catch (err: any) {
-                // Individual file Tree-sitter failure - fallback to regex for this file
+            } catch {
                 const fileRefs = findSymbolReferencesRegexFallback([filePath], symbolName, findType);
                 results.push(...fileRefs);
             }
         }
 
         return results;
-    } catch (error: any) {
-        console.warn(`[AST] Tree-sitter bulk references failed, falling back to Regex search: ${error.message}`);
+    } catch (error: unknown) {
+        console.warn(`[AST] Tree-sitter bulk references failed, falling back to Regex search: ${extractErrorMessage(error)}`);
         return findSymbolReferencesRegexFallback(filePaths, symbolName, findType);
     }
 }
@@ -448,7 +453,7 @@ function findSymbolReferencesRegexFallback(
     findType: 'definition' | 'reference' | 'both' = 'both'
 ): SymbolReference[] {
     const results: SymbolReference[] = [];
-    const escapedSymbol = symbolName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const escapedSymbol = symbolName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
     const regex = new RegExp(`\\b${escapedSymbol}\\b`);
 
     for (const filePath of filePaths) {

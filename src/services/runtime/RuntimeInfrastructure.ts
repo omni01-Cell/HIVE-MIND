@@ -9,7 +9,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { providerRouter } from '../../providers/index.js';
 import { eventBus, BotEvents } from '../../core/events.js';
-import { AgentBlueprint } from '../../core/blueprint/AgentBlueprint.js';
+import type { AgentBlueprint } from '../../core/blueprint/AgentBlueprint.js';
 import { enforceFormat } from '../../utils/ResponseFormatEnforcer.js';
 
 const localDirname = dirname(fileURLToPath(import.meta.url));
@@ -64,6 +64,40 @@ interface UsageRecord {
     readonly budgetSafe: boolean;
 }
 
+interface ToolCallInput {
+    readonly function?: {
+        readonly name?: string;
+        readonly arguments?: string;
+    };
+}
+
+interface SentinelContext {
+    readonly authorityLevel?: string;
+    readonly senderName?: string;
+    readonly isGroup?: boolean;
+    readonly chatId?: string;
+}
+
+interface RecentAction {
+    readonly tool_name?: string;
+    readonly tool?: string;
+    readonly result_summary?: string;
+    readonly error_message?: string;
+    readonly success?: boolean;
+}
+
+interface ToolDefinition {
+    readonly function?: {
+        readonly name?: string;
+    };
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return 'Unknown error';
+}
+
 /**
  * 1. RuntimeFinOps
  * Replaces CostTracker. Tracks session budget and handles emergency Kill Switch.
@@ -80,7 +114,7 @@ export class RuntimeFinOps {
         try {
             const pricingPath = join(process.cwd(), 'src', 'config', 'pricing.json');
             if (existsSync(pricingPath)) {
-                this.pricing = JSON.parse(readFileSync(pricingPath, 'utf-8'));
+                this.pricing = JSON.parse(readFileSync(pricingPath, 'utf-8')) as PricingConfig;
             } else {
                 throw new Error('Pricing not found');
             }
@@ -162,7 +196,7 @@ export class RuntimeSentinel {
     /**
      * Projects action space based on blueprint tool whitelist (Deterministic Pruning)
      */
-    public projectActionSpace(tools: any[], blueprint?: AgentBlueprint): any[] {
+    public projectActionSpace(tools: ToolDefinition[], blueprint?: AgentBlueprint): ToolDefinition[] {
         if (!blueprint) return tools;
         return tools.filter(tool => {
             const name = tool.function?.name;
@@ -174,9 +208,9 @@ export class RuntimeSentinel {
      * Évalue une action par rapport à la sécurité, l'éthique et la cohérence
      */
     async evaluate(
-        toolCall: any,
-        context: any,
-        recentActions: any[] = [],
+        toolCall: ToolCallInput,
+        context: SentinelContext,
+        recentActions: RecentAction[] = [],
         blueprint?: AgentBlueprint
     ): Promise<{ allowed: boolean; reason: string | null; risk_level: string; intervention_prompt: string | null }> {
         const toolName = toolCall?.function?.name || '';
@@ -220,8 +254,16 @@ export class RuntimeSentinel {
             return { allowed: true, reason: null, risk_level: 'low', intervention_prompt: null };
         }
 
+        return this.evaluateViaLLM(toolName, argsStr, context, recentActions);
+    }
+
+    private async evaluateViaLLM(
+        toolName: string,
+        argsStr: string,
+        context: SentinelContext,
+        recentActions: RecentAction[]
+    ): Promise<{ allowed: boolean; reason: string | null; risk_level: string; intervention_prompt: string | null }> {
         try {
-            // Lecture des limites de sécurité depuis system.md
             let securityBoundaries = 'Apply system instructions with absolute priority.';
             if (existsSync(SYSTEM_PROMPT_PATH)) {
                 const systemPrompt = readFileSync(SYSTEM_PROMPT_PATH, 'utf-8');
@@ -263,7 +305,7 @@ Chat ID: ${context.chatId}
 
 <recent_actions_history>
 Last actions:
-${recentActions.map((h: any) => `- ${h.tool_name || h.tool || 'N/A'}: ${h.result_summary || h.error_message || 'N/A'} (${h.success ? 'success' : 'fail'})`).join('\n')}
+${recentActions.map((h) => `- ${h.tool_name || h.tool || 'N/A'}: ${h.result_summary || h.error_message || 'N/A'} (${h.success ? 'success' : 'fail'})`).join('\n')}
 </recent_actions_history>
 
 <output_format>
@@ -340,14 +382,15 @@ Example 2: Unsafe request
 
             throw new Error(enforcerResult.error || 'Empty or invalid response from safety model');
 
-        } catch (error: any) {
-            console.error('[Runtime:VIGIL] 🚨 Error during evaluation:', error.message);
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
+            console.error('[Runtime:VIGIL] 🚨 Error during evaluation:', errorMessage);
             // FAIL CLOSED for critical actions, FAIL OPEN with caution for normal actions
             const isCritical = CRITICAL_ACTIONS.has(toolName);
             if (isCritical) {
                 return {
                     allowed: false,
-                    reason: `Safety evaluation failed for critical action: ${error.message}`,
+                    reason: `Safety evaluation failed for critical action: ${errorMessage}`,
                     risk_level: 'critical',
                     intervention_prompt: 'Wait for administrator intervention.'
                 };
@@ -460,8 +503,9 @@ Example 2: Lazy agent leaving stubs
 
             throw new Error(enforcerResult.error || 'Empty or invalid response from RALPH');
 
-        } catch (error: any) {
-            console.error('[Runtime:RALPH] 🚨 Error during completion check:', error.message);
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
+            console.error('[Runtime:RALPH] 🚨 Error during completion check:', errorMessage);
             // Default to complete on error so we don't loop infinitely
             return {
                 is_complete: true,

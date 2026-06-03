@@ -1,6 +1,96 @@
 // plugins/tts/index.js
 // Text-to-Speech Plugin - Uses unified VoiceProvider
 
+interface TtsMatch extends Array<string> {
+    index: number;
+    input: string;
+}
+
+interface TtsTextMatcher {
+    pattern: RegExp;
+    handler: string;
+    description: string;
+    extractArgs: (match: TtsMatch) => { text: string; provider: string };
+}
+
+interface TtsToolParameterProperty {
+    type: string;
+    description?: string;
+    enum?: string[];
+}
+
+interface TtsToolParameters {
+    type: string;
+    properties: Record<string, TtsToolParameterProperty>;
+    required: string[];
+}
+
+interface TtsToolFunction {
+    name: string;
+    description: string;
+    parameters: TtsToolParameters;
+}
+
+interface TtsToolDefinition {
+    type: string;
+    function: TtsToolFunction;
+}
+
+interface TransportLike {
+    sendMedia: (chatId: string, media: Buffer | string, options?: Record<string, unknown>) => Promise<void>;
+    sendVoiceNote: (chatId: string, audio: Buffer | string, options?: Record<string, unknown>) => Promise<void>;
+    setPresence: (chatId: string, presence: string) => Promise<void>;
+}
+
+interface MessageLike {
+    quotedMsg?: {
+        text?: string;
+    };
+}
+
+interface ContainerLike {
+    get: (name: string) => VoiceProviderLike | undefined;
+}
+
+interface VoiceProviderLike {
+    textToSpeechGttsOnly: (text: string, options: Record<string, unknown>) => Promise<SynthesizeResultLike | null>;
+    textToSpeechGeminiFirst: (text: string, options: Record<string, unknown>) => Promise<SynthesizeResultLike | null>;
+}
+
+interface SynthesizeResultLike {
+    audioBuffer: Buffer;
+    format?: string;
+    filePath?: string;
+    provider?: string;
+}
+
+interface TtsContext {
+    transport?: TransportLike;
+    chatId?: string;
+    message?: MessageLike;
+    container?: ContainerLike;
+}
+
+interface TtsArgs {
+    text?: string;
+    voice?: string;
+    style_notes?: string;
+    tone?: string;
+    accent?: string;
+    pace?: string;
+    language?: string;
+    speaker_1?: string;
+    speaker_2?: string;
+    provider?: 'auto' | 'gemini' | 'gtts';
+    send_as?: 'voice_note' | 'audio';
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 export default {
     name: 'text_to_speech',
     description: 'Gemini-first text-to-speech with GTTS fallback.',
@@ -12,15 +102,15 @@ export default {
             pattern: /^\.tts\s+([\s\S]+)$/i,
             handler: 'text_to_speech',
             description: 'Convert text to speech via Gemini TTS first, then GTTS fallback',
-            extractArgs: (match: any) => ({ text: match[1].trim(), provider: 'auto' })
+            extractArgs: (match: TtsMatch) => ({ text: match[1].trim(), provider: 'auto' })
         },
         {
             pattern: /^\.gtts\s+([\s\S]+)$/i,
             handler: 'text_to_speech',
             description: 'Convert text to speech with GTTS only',
-            extractArgs: (match: any) => ({ text: match[1].trim(), provider: 'gtts' })
+            extractArgs: (match: TtsMatch) => ({ text: match[1].trim(), provider: 'gtts' })
         }
-    ],
+    ] as TtsTextMatcher[],
 
     toolDefinition: {
         type: 'function',
@@ -86,12 +176,12 @@ export default {
                 required: ['text']
             }
         }
-    },
+    } as TtsToolDefinition,
 
-    async execute(args: any, context: any, toolName?: string) {
+    async execute(args: unknown, context: TtsContext, _toolName?: string) {
         const { transport, chatId, message, container } = context || {};
-        let {
-            text,
+        const {
+            text: rawText,
             voice = 'Aoede',
             style_notes,
             tone,
@@ -102,13 +192,13 @@ export default {
             speaker_2,
             provider = 'auto',
             send_as = 'voice_note'
-        } = args;
+        } = (args ?? {}) as TtsArgs;
 
         if (!transport || !chatId) {
             return { success: false, message: 'Transport or chatId missing from context' };
         }
 
-        // Si pas de texte, tenter d'utiliser le message cité
+        let text = rawText;
         if (!text && message?.quotedMsg?.text) {
             text = message.quotedMsg.text;
         }
@@ -125,9 +215,10 @@ export default {
             const voiceProvider = container?.get('voiceProvider');
             if (!voiceProvider) throw new Error('VoiceProvider service not found.');
 
+            const vp = voiceProvider as VoiceProviderLike;
             const result = provider === 'gtts'
-                ? await voiceProvider.textToSpeechGttsOnly(text, { language })
-                : await voiceProvider.textToSpeechGeminiFirst(text, {
+                ? await vp.textToSpeechGttsOnly(text, { language })
+                : await vp.textToSpeechGeminiFirst(text, {
                     model: 'gemini-3.1-flash-tts-preview',
                     voice,
                     style: style_notes,
@@ -147,7 +238,6 @@ export default {
                 };
             }
 
-            // Envoi selon le type demandé
             if (send_as === 'audio') {
                 await transport.sendMedia(chatId, result.filePath || result.audioBuffer, {
                     type: 'audio',
@@ -157,7 +247,6 @@ export default {
                         : 'HIVE-MIND Audio (GTTS fallback)'
                 });
             } else {
-                // Indicateur "enregistrement" pour le voice note (PTT)
                 await transport.setPresence(chatId, 'recording');
 
                 const options = {
@@ -166,7 +255,6 @@ export default {
                 };
                 await transport.sendVoiceNote(chatId, result.filePath || result.audioBuffer, options);
 
-                // Revenir en disponible
                 await transport.setPresence(chatId, 'available');
             }
 
@@ -175,11 +263,11 @@ export default {
                 message: `Audio generated via ${result.provider} (${send_as}).`
             };
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[TTS Plugin] Execution error:', error);
             return {
                 success: false,
-                message: `Failed to generate audio: ${error.message}`
+                message: `Failed to generate audio: ${extractErrorMessage(error)}`
             };
         }
     }

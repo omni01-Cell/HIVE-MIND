@@ -44,8 +44,8 @@ export class EmbeddingsService implements IEmbeddingsService {
             // Fallback
             console.warn('[Embeddings] Gemini failed, attempting OpenAI fallback...');
             return await this._embedWithOpenAI(cleanText);
-        } catch (error: any) {
-            console.error('[Embeddings] Fatal error:', error.message);
+        } catch (error: unknown) {
+            console.error('[Embeddings] Fatal error:', error instanceof Error ? error.message : String(error));
             return null;
         }
     }
@@ -55,7 +55,7 @@ export class EmbeddingsService implements IEmbeddingsService {
         if (!apiKey) throw new Error('Gemini API key missing');
 
         // Safe debug log
-        const keyObfuscated = apiKey.startsWith('AIza')
+        const _keyObfuscated = apiKey.startsWith('AIza')
             ? 'AIza...' + apiKey.slice(-4)
             : apiKey.substring(0, 5) + '...';
 

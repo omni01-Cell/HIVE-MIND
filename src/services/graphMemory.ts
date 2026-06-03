@@ -10,12 +10,54 @@ import { resolveApiKey } from '../config/keyResolver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+interface EntityData {
+    name: string;
+    type?: string;
+    description?: string;
+    metadata?: Record<string, unknown>;
+}
+
+interface UpsertEntityResult {
+    id: string;
+    chat_id: string;
+    name: string;
+    type: string;
+    description: string;
+    metadata: Record<string, unknown>;
+    embedding: number[];
+    updated_at: string;
+}
+
+interface RelationshipResult {
+    id: string;
+    chat_id: string;
+    source_id: string;
+    target_id: string;
+    relation_type: string;
+    strength: number;
+}
+
+interface NeighborResult {
+    relation_type: string;
+    strength: number;
+    target: {
+        id: string;
+        name: string;
+        type: string;
+        description: string;
+    } | null;
+}
+
 // Initialisation embeddings
-let embeddings: any = null;
+let embeddings: EmbeddingsService | null = null;
 try {
     const credentials = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'credentials.json'), 'utf-8'));
 
-    // Résoudre les variables d'environnement
     const geminiKey = resolveApiKey(credentials.familles_ia?.gemini, 'gemini');
     const openaiKey = resolveApiKey(credentials.familles_ia?.openai, 'openai');
 
@@ -23,24 +65,18 @@ try {
         geminiKey: geminiKey || undefined,
         openaiKey: openaiKey || undefined
     });
-} catch (e: any) {
+} catch (error: unknown) {
 
-    console.error('[GraphMemory] Erreur init embeddings:', e.message);
+    console.error('[GraphMemory] Erreur init embeddings:', extractErrorMessage(error));
 }
 
 export const graphMemory = {
-    /**
-     * Enregistre ou met à jour une entité
-     * @param {string} chatId
-     * @param {Object} entity - { name, type, description, metadata }
-     */
-    async upsertEntity(chatId: any, entity: any) {
+    async upsertEntity(chatId: string, entity: EntityData): Promise<UpsertEntityResult | null> {
         if (!supabase || !entity.name) return null;
 
         try {
-            // Générer un embedding pour le nom + description pour la recherche sémantique d'entités
             const textToEmbed = `${entity.name}: ${entity.description || ''}`;
-            const vector = await embeddings.embed(textToEmbed, 'RETRIEVAL_DOCUMENT');
+            const vector = await embeddings?.embed(textToEmbed);
 
             const { data, error } = await supabase
                 .from('entities')
@@ -57,26 +93,23 @@ export const graphMemory = {
                 .single();
 
             if (error) throw error;
-            return data;
-        } catch (error: any) {
-            console.error('[GraphMemory] Erreur upsertEntity:', error.message);
+            return data as UpsertEntityResult;
+        } catch (error: unknown) {
+            console.error('[GraphMemory] Erreur upsertEntity:', extractErrorMessage(error));
             return null;
         }
     },
 
-    /**
-     * Crée une relation entre deux entités
-     * @param {string} chatId
-     * @param {string} sourceName
-     * @param {string} targetName
-     * @param {string} relationType
-     * @param {number} strength
-     */
-    async addRelationship(chatId: any, sourceName: any, targetName: any, relationType: any, strength: any = 1.0) {
+    async addRelationship(
+        chatId: string,
+        sourceName: string,
+        targetName: string,
+        relationType: string,
+        strength: number = 1.0
+    ): Promise<RelationshipResult | null> {
         if (!supabase) return null;
 
         try {
-            // 1. Récupérer les IDs des entités
             const { data: source } = await supabase
                 .from('entities')
                 .select('id')
@@ -96,13 +129,12 @@ export const graphMemory = {
                 return null;
             }
 
-            // 2. Créer la relation
             const { data, error } = await supabase
                 .from('relationships')
                 .upsert({
                     chat_id: chatId,
-                    source_id: source.id,
-                    target_id: target.id,
+                    source_id: (source as { id: string }).id,
+                    target_id: (target as { id: string }).id,
                     relation_type: relationType,
                     strength
                 }, { onConflict: 'source_id,target_id,relation_type' })
@@ -110,24 +142,18 @@ export const graphMemory = {
                 .single();
 
             if (error) throw error;
-            return data;
-        } catch (error: any) {
-            console.error('[GraphMemory] Erreur addRelationship:', error.message);
+            return data as RelationshipResult;
+        } catch (error: unknown) {
+            console.error('[GraphMemory] Erreur addRelationship:', extractErrorMessage(error));
             return null;
         }
     },
 
-    /**
-     * Recherche des entités par similarité sémantique
-     * @param {string} chatId
-     * @param {string} query
-     * @param {number} limit
-     */
-    async searchEntities(chatId: any, query: any, limit: any = 5) {
+    async searchEntities(chatId: string, query: string, limit: number = 5): Promise<UpsertEntityResult[]> {
         if (!supabase) return [];
 
         try {
-            const vector = await embeddings.embed(query, 'RETRIEVAL_QUERY');
+            const vector = await embeddings?.embed(query);
             if (!vector) return [];
 
             const { data, error } = await supabase.rpc('match_entities', {
@@ -138,18 +164,14 @@ export const graphMemory = {
             });
 
             if (error) throw error;
-            return data || [];
-        } catch (error: any) {
-            console.error('[GraphMemory] Erreur searchEntities:', error.message);
+            return (data as UpsertEntityResult[]) || [];
+        } catch (error: unknown) {
+            console.error('[GraphMemory] Erreur searchEntities:', extractErrorMessage(error));
             return [];
         }
     },
 
-    /**
-     * Récupère le voisinage d'une entité (ses relations directes)
-     * @param {string} entityId
-     */
-    async getNeighbors(entityId: any) {
+    async getNeighbors(entityId: string): Promise<NeighborResult[]> {
         if (!supabase) return [];
 
         try {
@@ -163,9 +185,9 @@ export const graphMemory = {
                 .eq('source_id', entityId);
 
             if (error) throw error;
-            return data || [];
-        } catch (error: any) {
-            console.error('[GraphMemory] Erreur getNeighbors:', error.message);
+            return (data as unknown as NeighborResult[]) || [];
+        } catch (error: unknown) {
+            console.error('[GraphMemory] Erreur getNeighbors:', extractErrorMessage(error));
             return [];
         }
     }

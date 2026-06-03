@@ -90,7 +90,7 @@ export interface UnifiedContext {
     authority: Authority;
     userSnapshot: UserSnapshot | null;
     groupBasics: GroupBasics | null;
-    blueprint: any;
+    blueprint: Record<string, unknown>;
     mode: string;
 }
 
@@ -177,7 +177,7 @@ export class TieredContextLoader {
      * @param {Object} message - { sender, text, sourceChannel, ... }
      * @returns {Promise<UnifiedContext>}
      */
-    async load(chatId: string, message: { sender: string; sourceChannel?: string; [key: string]: any }): Promise<UnifiedContext> {
+    async load(chatId: string, message: { sender: string; sourceChannel?: string; [key: string]: unknown }): Promise<UnifiedContext> {
         const startTime = Date.now();
         const isGroup = chatId?.endsWith('@g.us');
 

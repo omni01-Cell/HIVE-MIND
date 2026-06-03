@@ -1,19 +1,126 @@
-// services/monitoring/DatabaseMonitor.js
+// services/monitoring/DatabaseMonitor.ts
 // ============================================================================
 // Service de monitoring de la base de données avec alerting
 // ============================================================================
 
-import { supabase } from '../supabase.js';
+import { supabase as supabaseClient } from '../supabase.js';
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+function getSupabaseClient() {
+    if (!supabaseClient) {
+        throw new Error('[DatabaseMonitor] Supabase client not initialized');
+    }
+    return supabaseClient;
+}
+
+interface MonitoringThresholds {
+    warning: number;
+    critical: number;
+    maxSize: number;
+}
+
+interface TableStats {
+    schemaname: string;
+    tablename: string;
+    size_pretty: string;
+    size_bytes: number;
+}
+
+interface DatabaseStats {
+    tables: TableStats[];
+    totalSize: number;
+    totalSizePretty: string;
+}
+
+interface DetailedTableStats {
+    table_name: string;
+    size: string;
+    size_bytes: number;
+    row_count: number;
+    last_insert: string | null;
+}
+
+interface GrowthDataPoint {
+    day: string;
+    count: number;
+}
+
+interface SlowQuery {
+    query: string;
+    mean_time: number;
+    calls: number;
+}
+
+interface IndexInfo {
+    schemaname: string;
+    tablename: string;
+    indexname: string;
+    indexdef: string;
+}
+
+interface ConstraintInfo {
+    constraint_name: string;
+    constraint_type: string;
+    table_name: string;
+}
+
+interface Alert {
+    type: string;
+    table: string;
+    size?: string;
+    growthRate?: number;
+    message: string;
+    timestamp: string;
+}
+
+interface HealthRecommendation {
+    type: string;
+    priority: string;
+    table?: string;
+    tables?: string[];
+    message: string;
+    action: string;
+}
+
+interface HealthReportSummary {
+    totalTables: number;
+    totalSize: string;
+    largestTable: string;
+    largestSize: string;
+}
+
+interface HealthReport {
+    timestamp: string;
+    summary: HealthReportSummary;
+    tables: Array<{
+        name: string;
+        size: string;
+        rows: number;
+        lastInsert: string | null;
+    }>;
+    recommendations: HealthRecommendation[];
+}
+
+interface MonitorStatus {
+    active: boolean;
+    lastCheck: string;
+    thresholds: MonitoringThresholds;
+    activeAlerts: number;
+}
 
 /**
  * Service de monitoring de la base de données
  * Surveille la taille des tables, les performances et envoie des alertes
  */
 export class DatabaseMonitor {
-    thresholds: any;
-    alertedTables: any;
-    monitoringActive: any;
-    supabase: any;
+    thresholds: MonitoringThresholds;
+    alertedTables: Set<string>;
+    monitoringActive: boolean;
+    supabase: typeof supabaseClient;
 
     constructor() {
         this.thresholds = {
@@ -25,18 +132,18 @@ export class DatabaseMonitor {
 
         this.alertedTables = new Set(); // Tracker les tables déjà alertées
         this.monitoringActive = false;
-        this.supabase = supabase;
+        this.supabase = supabaseClient;
     }
 
     /**
      * Initialise le monitoring
      */
-    async init() {
+    async init(): Promise<void> {
         console.log('[DatabaseMonitor] 🔍 Initialisation du monitoring DB...');
 
         // Vérifier la connectivité
         try {
-            const { error } = await supabase.from('memories').select('id').limit(1);
+            const { error } = await getSupabaseClient().from('memories').select('id').limit(1);
             if (error) throw error;
 
             console.log('[DatabaseMonitor] ✅ Connecté à Supabase');
@@ -45,8 +152,8 @@ export class DatabaseMonitor {
             // Démarrer le monitoring périodique
             this.startPeriodicMonitoring();
 
-        } catch (error: any) {
-            console.error('[DatabaseMonitor] ❌ Erreur connexion:', error.message);
+        } catch (error: unknown) {
+            console.error('[DatabaseMonitor] ❌ Erreur connexion:', extractErrorMessage(error));
             this.monitoringActive = false;
         }
     }
@@ -55,15 +162,15 @@ export class DatabaseMonitor {
      * Démarre le monitoring périodique
      * @private
      */
-    startPeriodicMonitoring() {
+    startPeriodicMonitoring(): void {
         // Vérifier toutes les heures
         setInterval(async () => {
             if (!this.monitoringActive) return;
 
             try {
                 await this.checkDatabaseHealth();
-            } catch (error: any) {
-                console.error('[DatabaseMonitor] Erreur monitoring:', error.message);
+            } catch (error: unknown) {
+                console.error('[DatabaseMonitor] Erreur monitoring:', extractErrorMessage(error));
             }
         }, 60 * 60 * 1000); // Toutes les heures
 
@@ -74,8 +181,8 @@ export class DatabaseMonitor {
             try {
                 console.log('[DatabaseMonitor] 📊 Vérification complète quotidienne...');
                 await this.performFullCheck();
-            } catch (error: any) {
-                console.error('[DatabaseMonitor] Erreur vérification complète:', error.message);
+            } catch (error: unknown) {
+                console.error('[DatabaseMonitor] Erreur vérification complète:', extractErrorMessage(error));
             }
         }, this.getNextDailyCheck());
 
@@ -85,7 +192,7 @@ export class DatabaseMonitor {
     /**
      * Vérifie la santé générale de la base de données
      */
-    async checkDatabaseHealth() {
+    async checkDatabaseHealth(): Promise<void> {
         const stats = await this.getDatabaseStats();
 
         // Vérifier chaque table
@@ -102,30 +209,30 @@ export class DatabaseMonitor {
 
     /**
      * Vérifie la santé d'une table spécifique
-     * @param {Object} table - Info table {name, size}
+     * @param table - Info table {name, size}
      */
-    async checkTableHealth(table: any) {
-        const { name, size } = table;
+    async checkTableHealth(table: TableStats): Promise<void> {
+        const { tablename, size_bytes } = table;
 
         // Vérifier seuils
-        if (size > this.thresholds.critical) {
-            await this.sendCriticalAlert(name, size);
-        } else if (size > this.thresholds.warning) {
-            await this.sendWarningAlert(name, size);
+        if (size_bytes > this.thresholds.critical) {
+            await this.sendCriticalAlert(tablename, size_bytes);
+        } else if (size_bytes > this.thresholds.warning) {
+            await this.sendWarningAlert(tablename, size_bytes);
         }
 
         // Vérifier croissance anormale
-        await this.checkGrowthRate(name);
+        await this.checkGrowthRate(tablename);
     }
 
     /**
      * Obtient les statistiques de la base de données
-     * @returns {Promise<Object>} - Stats DB
+     * @returns Stats DB
      */
-    async getDatabaseStats() {
+    async getDatabaseStats(): Promise<DatabaseStats> {
         try {
             // Obtenir la taille des tables principales
-            const { data, error } = await supabase.rpc('exec_sql', {
+            const { data, error } = await getSupabaseClient().rpc('exec_sql', {
                 sql: `
                     SELECT 
                         schemaname,
@@ -140,28 +247,29 @@ export class DatabaseMonitor {
 
             if (error) throw error;
 
-            const totalSize = data.reduce((sum: any, table: any) => sum + table.size_bytes, 0);
+            const tables = (data ?? []) as TableStats[];
+            const totalSize = tables.reduce((sum: number, tbl: TableStats) => sum + tbl.size_bytes, 0);
 
             return {
-                tables: data,
+                tables,
                 totalSize,
                 totalSizePretty: this.formatBytes(totalSize)
             };
 
-        } catch (error: any) {
-            console.error('[DatabaseMonitor] Erreur stats:', error.message);
+        } catch (error: unknown) {
+            console.error('[DatabaseMonitor] Erreur stats:', extractErrorMessage(error));
             return { tables: [], totalSize: 0, totalSizePretty: '0 B' };
         }
     }
 
     /**
      * Vérifie le taux de croissance d'une table
-     * @param {string} tableName
+     * @param tableName
      */
-    async checkGrowthRate(tableName: any) {
+    async checkGrowthRate(tableName: string): Promise<void> {
         try {
             // Obtenir la croissance sur 7 jours
-            const { data, error } = await supabase.rpc('exec_sql', {
+            const { data, error } = await getSupabaseClient().rpc('exec_sql', {
                 sql: `
                     SELECT 
                         date_trunc('day', created_at) as day,
@@ -175,31 +283,35 @@ export class DatabaseMonitor {
 
             if (error) throw error;
 
+            const growthData = (data ?? []) as GrowthDataPoint[];
+
             // Analyser la tendance
-            if (data.length >= 3) {
-                const recent = data.slice(0, 3).reduce((sum: any, d: any) => sum + d.count, 0) / 3;
-                const older = data.slice(-3).reduce((sum: any, d: any) => sum + d.count, 3) / 3;
+            if (growthData.length >= 3) {
+                const recent = growthData.slice(0, 3).reduce((sum: number, d: GrowthDataPoint) => sum + d.count, 0) / 3;
+                const older = growthData.slice(-3).reduce((sum: number, d: GrowthDataPoint) => sum + d.count, 0) / 3;
+
+                if (older === 0) return;
 
                 const growthRate = (recent - older) / older;
 
                 if (growthRate > 2) { // +200% = alerte
-                    console.warn(`[DatabaseMonitor] 🚨 Croissance explosive détectée sur ${tableName}: +${Math.round(growthRate*100)}%`);
+                    console.warn(`[DatabaseMonitor] 🚨 Croissance explosive détectée sur ${tableName}: +${Math.round(growthRate * 100)}%`);
                     await this.sendGrowthAlert(tableName, growthRate);
                 }
             }
 
-        } catch (error: any) {
-            console.warn(`[DatabaseMonitor] Erreur croissance ${tableName}:`, error.message);
+        } catch (error: unknown) {
+            console.warn(`[DatabaseMonitor] Erreur croissance ${tableName}:`, extractErrorMessage(error));
         }
     }
 
     /**
      * Vérifie les métriques de performance
      */
-    async checkPerformanceMetrics() {
+    async checkPerformanceMetrics(): Promise<void> {
         try {
             // Vérifier les temps de réponse des requêtes lentes
-            const { data, error } = await supabase.rpc('exec_sql', {
+            const { data, error } = await getSupabaseClient().rpc('exec_sql', {
                 sql: `
                     SELECT query, mean_time, calls
                     FROM pg_stat_statements 
@@ -215,22 +327,23 @@ export class DatabaseMonitor {
                 return;
             }
 
-            if (data && data.length > 0) {
-                console.warn(`[DatabaseMonitor] ⚠️ ${data.length} requêtes lentes détectées`);
-                data.forEach((query: any) => {
+            const queries = (data ?? []) as SlowQuery[];
+            if (queries.length > 0) {
+                console.warn(`[DatabaseMonitor] ⚠️ ${queries.length} requêtes lentes détectées`);
+                queries.forEach((query: SlowQuery) => {
                     console.warn(`[DatabaseMonitor] Lente: ${query.mean_time}ms - ${query.query.substring(0, 100)}...`);
                 });
             }
 
-        } catch (error: any) {
-            console.warn('[DatabaseMonitor] Erreur perf metrics:', error.message);
+        } catch (error: unknown) {
+            console.warn('[DatabaseMonitor] Erreur perf metrics:', extractErrorMessage(error));
         }
     }
 
     /**
      * Effectue une vérification complète
      */
-    async performFullCheck() {
+    async performFullCheck(): Promise<HealthReport> {
         console.log('[DatabaseMonitor] 🔍 Vérification complète...');
 
         // Stats détaillées
@@ -250,9 +363,9 @@ export class DatabaseMonitor {
     /**
      * Obtient des statistiques détaillées
      */
-    async getDetailedStats() {
+    async getDetailedStats(): Promise<DetailedTableStats[]> {
         try {
-            const { data, error } = await supabase.rpc('exec_sql', {
+            const { data, error } = await getSupabaseClient().rpc('exec_sql', {
                 sql: `
                     SELECT 
                         table_name,
@@ -266,10 +379,12 @@ export class DatabaseMonitor {
                 `
             });
 
-            return data || [];
+            if (error) throw error;
 
-        } catch (error: any) {
-            console.error('[DatabaseMonitor] Erreur stats détaillées:', error.message);
+            return (data ?? []) as DetailedTableStats[];
+
+        } catch (error: unknown) {
+            console.error('[DatabaseMonitor] Erreur stats détaillées:', extractErrorMessage(error));
             return [];
         }
     }
@@ -277,9 +392,9 @@ export class DatabaseMonitor {
     /**
      * Vérifie la santé des indexes
      */
-    async checkIndexesHealth() {
+    async checkIndexesHealth(): Promise<void> {
         try {
-            const { data, error } = await supabase.rpc('exec_sql', {
+            const { data, error } = await getSupabaseClient().rpc('exec_sql', {
                 sql: `
                     SELECT 
                         schemaname,
@@ -294,21 +409,22 @@ export class DatabaseMonitor {
 
             if (error) throw error;
 
-            console.log(`[DatabaseMonitor] 📊 Indexes: ${data.length} trouvés`);
+            const indexes = (data ?? []) as IndexInfo[];
+            console.log(`[DatabaseMonitor] 📊 Indexes: ${indexes.length} trouvés`);
 
             // Vérifier les indexes manquants sur les colonnes fréquemment utilisées
             const criticalColumns = ['chat_id', 'created_at', 'status'];
-            const tablesNeedingIndexes = [];
+            const tablesNeedingIndexes: string[] = [];
 
             // Logique simplifiée - en production, utiliser pg_stat_user_tables
-            for (const table of ['memories', 'agent_actions', 'facts']) {
+            for (const tableName of ['memories', 'agent_actions', 'facts']) {
                 for (const column of criticalColumns) {
-                    const hasIndex = data.some((idx: any) =>
-                        idx.tablename === table && idx.indexdef.includes(column)
+                    const hasIndex = indexes.some((idx: IndexInfo) =>
+                        idx.tablename === tableName && idx.indexdef.includes(column)
                     );
 
                     if (!hasIndex) {
-                        tablesNeedingIndexes.push(`${table}.${column}`);
+                        tablesNeedingIndexes.push(`${tableName}.${column}`);
                     }
                 }
             }
@@ -317,17 +433,17 @@ export class DatabaseMonitor {
                 console.warn('[DatabaseMonitor] ⚠️ Indexes manquants suggérés:', tablesNeedingIndexes);
             }
 
-        } catch (error: any) {
-            console.error('[DatabaseMonitor] Erreur indexes:', error.message);
+        } catch (error: unknown) {
+            console.error('[DatabaseMonitor] Erreur indexes:', extractErrorMessage(error));
         }
     }
 
     /**
      * Vérifie la santé des contraintes
      */
-    async checkConstraintsHealth() {
+    async checkConstraintsHealth(): Promise<void> {
         try {
-            const { data, error } = await supabase.rpc('exec_sql', {
+            const { data, error } = await getSupabaseClient().rpc('exec_sql', {
                 sql: `
                     SELECT 
                         conname as constraint_name,
@@ -341,7 +457,8 @@ export class DatabaseMonitor {
 
             if (error) throw error;
 
-            console.log(`[DatabaseMonitor] 🔒 Contraintes: ${data.length} trouvées`);
+            const constraints = (data ?? []) as ConstraintInfo[];
+            console.log(`[DatabaseMonitor] 🔒 Contraintes: ${constraints.length} trouvées`);
 
             // Vérifier les contraintes manquantes
             const expectedConstraints = [
@@ -349,7 +466,7 @@ export class DatabaseMonitor {
             ];
 
             for (const expected of expectedConstraints) {
-                const hasConstraint = data.some((c: any) =>
+                const hasConstraint = constraints.some((c: ConstraintInfo) =>
                     c.table_name === expected.table && c.constraint_name === expected.constraint
                 );
 
@@ -358,27 +475,27 @@ export class DatabaseMonitor {
                 }
             }
 
-        } catch (error: any) {
-            console.error('[DatabaseMonitor] Erreur contraintes:', error.message);
+        } catch (error: unknown) {
+            console.error('[DatabaseMonitor] Erreur contraintes:', extractErrorMessage(error));
         }
     }
 
     /**
      * Génère un rapport de santé
      */
-    async generateHealthReport() {
+    async generateHealthReport(): Promise<HealthReport> {
         const stats = await this.getDatabaseStats();
         const detailedStats = await this.getDetailedStats();
 
-        const report = {
+        const report: HealthReport = {
             timestamp: new Date().toISOString(),
             summary: {
                 totalTables: stats.tables.length,
                 totalSize: stats.totalSizePretty,
-                largestTable: stats.tables[0]?.name || 'N/A',
-                largestSize: stats.tables[0]?.size_pretty || 'N/A'
+                largestTable: stats.tables[0]?.tablename ?? 'N/A',
+                largestSize: stats.tables[0]?.size_pretty ?? 'N/A'
             },
-            tables: detailedStats.map((table: any) => ({
+            tables: detailedStats.map((table: DetailedTableStats) => ({
                 name: table.table_name,
                 size: table.size,
                 rows: table.row_count,
@@ -397,8 +514,8 @@ export class DatabaseMonitor {
     /**
      * Génère des recommandations basées sur l'analyse
      */
-    async generateRecommendations() {
-        const recommendations = [];
+    async generateRecommendations(): Promise<HealthRecommendation[]> {
+        const recommendations: HealthRecommendation[] = [];
 
         try {
             const stats = await this.getDatabaseStats();
@@ -409,15 +526,15 @@ export class DatabaseMonitor {
                     recommendations.push({
                         type: 'size',
                         priority: 'high',
-                        table: table.name,
-                        message: `Table ${table.name} dépasse 500MB (${table.size_pretty}). Consider cleanup.`,
+                        table: table.tablename,
+                        message: `Table ${table.tablename} dépasse 500MB (${table.size_pretty}). Consider cleanup.`,
                         action: 'cleanup'
                     });
                 }
             }
 
             // Recommandation 2: Vérifier les tables sans index
-            const { data: indexes } = await supabase.rpc('exec_sql', {
+            const { data: indexes } = await getSupabaseClient().rpc('exec_sql', {
                 sql: `
                     SELECT table_name 
                     FROM information_schema.tables 
@@ -430,18 +547,19 @@ export class DatabaseMonitor {
                 `
             });
 
-            if (indexes?.length > 0) {
+            const indexlessTables = (indexes ?? []) as Array<{ table_name: string }>;
+            if (indexlessTables.length > 0) {
                 recommendations.push({
                     type: 'performance',
                     priority: 'medium',
-                    tables: indexes.map((i: any) => i.table_name),
+                    tables: indexlessTables.map((i: { table_name: string }) => i.table_name),
                     message: 'Tables sans index détectées',
                     action: 'add_indexes'
                 });
             }
 
-        } catch (error: any) {
-            console.error('[DatabaseMonitor] Erreur recommandations:', error.message);
+        } catch (error: unknown) {
+            console.error('[DatabaseMonitor] Erreur recommandations:', extractErrorMessage(error));
         }
 
         return recommendations;
@@ -450,12 +568,12 @@ export class DatabaseMonitor {
     /**
      * Envoie une alerte critique
      */
-    async sendCriticalAlert(tableName: any, size: any) {
+    async sendCriticalAlert(tableName: string, size: number): Promise<void> {
         const alertKey = `critical_${tableName}`;
 
         if (this.alertedTables.has(alertKey)) return; // Déjà alerté
 
-        const alert = {
+        const alert: Alert = {
             type: 'critical',
             table: tableName,
             size: this.formatBytes(size),
@@ -466,7 +584,7 @@ export class DatabaseMonitor {
         console.error('[DatabaseMonitor] 🚨 ALERTE CRITIQUE:', alert);
 
         // Sauvegarder dans la DB
-        await supabase.from('system_alerts').insert({
+        await getSupabaseClient().from('system_alerts').insert({
             type: 'db_size_critical',
             severity: 'critical',
             message: alert.message,
@@ -482,12 +600,12 @@ export class DatabaseMonitor {
     /**
      * Envoie une alerte warning
      */
-    async sendWarningAlert(tableName: any, size: any) {
+    async sendWarningAlert(tableName: string, size: number): Promise<void> {
         const alertKey = `warning_${tableName}`;
 
         if (this.alertedTables.has(alertKey)) return;
 
-        const alert = {
+        const alert: Alert = {
             type: 'warning',
             table: tableName,
             size: this.formatBytes(size),
@@ -498,7 +616,7 @@ export class DatabaseMonitor {
         console.warn('[DatabaseMonitor] ⚠️ ALERTE WARNING:', alert);
 
         // Sauvegarder dans la DB
-        await supabase.from('system_alerts').insert({
+        await getSupabaseClient().from('system_alerts').insert({
             type: 'db_size_warning',
             severity: 'warning',
             message: alert.message,
@@ -511,18 +629,18 @@ export class DatabaseMonitor {
     /**
      * Envoie une alerte de croissance
      */
-    async sendGrowthAlert(tableName: any, growthRate: any) {
-        const alert = {
+    async sendGrowthAlert(tableName: string, growthRate: number): Promise<void> {
+        const alert: Alert = {
             type: 'growth',
             table: tableName,
             growthRate: Math.round(growthRate * 100),
-            message: `Table ${tableName} a une croissance de +${Math.round(growthRate*100)}% sur 7 jours`,
+            message: `Table ${tableName} a une croissance de +${Math.round(growthRate * 100)}% sur 7 jours`,
             timestamp: new Date().toISOString()
         };
 
         console.warn('[DatabaseMonitor] 📈 ALERTE CROISSANCE:', alert);
 
-        await supabase.from('system_alerts').insert({
+        await getSupabaseClient().from('system_alerts').insert({
             type: 'db_growth_warning',
             severity: 'warning',
             message: alert.message,
@@ -533,7 +651,7 @@ export class DatabaseMonitor {
     /**
      * Envoie une notification (placeholder pour intégration réelle)
      */
-    async sendNotification(alert: any) {
+    async sendNotification(alert: Alert): Promise<void> {
         // Dans une vraie application, envoyer email/Slack/SMS ici
         console.log(`[DatabaseMonitor] 📧 Notification envoyée: ${alert.message}`);
     }
@@ -541,22 +659,22 @@ export class DatabaseMonitor {
     /**
      * Sauvegarde le rapport de santé
      */
-    async saveHealthReport(report: any) {
+    async saveHealthReport(report: HealthReport): Promise<void> {
         try {
-            await supabase.from('db_health_reports').insert({
+            await getSupabaseClient().from('db_health_reports').insert({
                 timestamp: report.timestamp,
                 report_data: report,
                 summary: report.summary
             });
-        } catch (error: any) {
-            console.error('[DatabaseMonitor] Erreur sauvegarde rapport:', error.message);
+        } catch (error: unknown) {
+            console.error('[DatabaseMonitor] Erreur sauvegarde rapport:', extractErrorMessage(error));
         }
     }
 
     /**
      * Obtient la prochaine vérification quotidienne (6h du matin)
      */
-    getNextDailyCheck() {
+    getNextDailyCheck(): number {
         const now = new Date();
         const next = new Date(now);
         next.setHours(6, 0, 0, 0);
@@ -571,7 +689,7 @@ export class DatabaseMonitor {
     /**
      * Formate les bytes en format lisible
      */
-    formatBytes(bytes: any) {
+    formatBytes(bytes: number): string {
         if (bytes === 0) return '0 B';
 
         const k = 1024;
@@ -584,7 +702,7 @@ export class DatabaseMonitor {
     /**
      * Obtient le statut actuel du monitoring
      */
-    getStatus() {
+    getStatus(): MonitorStatus {
         return {
             active: this.monitoringActive,
             lastCheck: new Date().toISOString(),

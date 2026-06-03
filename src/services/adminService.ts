@@ -5,22 +5,49 @@
 
 import { supabase, default as db } from './supabase.js';
 
-// Cache RAM pour vérification instantanée (0ms)
-const adminCache = new Map(); // UUID -> Role ('owner', 'moderator')
-let lastRefresh = 0;
-const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
+type AdminRole = 'owner' | 'moderator';
+
+interface AdminRow {
+    id: string;
+    user_id: string;
+    role: AdminRole;
+    created_at: string;
+    users?: { username?: string };
+}
+
+interface ResolvedContext {
+    context_id: string;
+    type: 'user' | 'group';
+}
+
+interface UserServiceLike {
+    resolveLid: (jid: string) => Promise<string | null>;
+}
+
+interface ContainerLike {
+    get: (name: string) => UserServiceLike | undefined;
+}
+
+const adminCache = new Map<string, AdminRole>();
+const REFRESH_INTERVAL = 10 * 60 * 1000;
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
 
 /**
  * Service d'administration globale
  */
 export const adminService = {
-    container: null as any,
+    container: null as ContainerLike | null,
 
-    setContainer(container: any) {
+    setContainer(container: ContainerLike) {
         this.container = container;
     },
 
-    get userService() {
+    get userService(): UserServiceLike | undefined {
         return this.container?.get('userService');
     },
 
@@ -39,7 +66,7 @@ export const adminService = {
         }, REFRESH_INTERVAL);
     },
 
-    async refresh() {
+    async refresh(): Promise<boolean> {
         if (!supabase) return false;
 
         try {
@@ -53,16 +80,15 @@ export const adminService = {
             }
 
             adminCache.clear();
-            data.forEach((a: any) => adminCache.set(a.user_id, a.role || 'moderator'));
-            lastRefresh = Date.now();
+            data.forEach((a: { user_id: string; role?: string }) => adminCache.set(a.user_id, (a.role as AdminRole) || 'moderator'));
             return true;
-        } catch (error: any) {
-            console.error('[AdminService] Erreur refresh:', error.message);
+        } catch (error: unknown) {
+            console.error('[AdminService] Erreur refresh:', extractErrorMessage(error));
             return false;
         }
     },
 
-    async isGlobalAdmin(jid: any) {
+    async isGlobalAdmin(jid: string): Promise<boolean> {
         if (!jid) return false;
 
         let resolvedJid = jid;
@@ -70,7 +96,7 @@ export const adminService = {
             resolvedJid = await this.userService.resolveLid(jid) || jid;
         }
 
-        const resolved = await db.resolveContextFromLegacyId(resolvedJid);
+        const resolved: ResolvedContext | null = await db.resolveContextFromLegacyId(resolvedJid);
         if (!resolved || resolved.type !== 'user') return false;
 
         const role = adminCache.get(resolved.context_id);
@@ -80,7 +106,7 @@ export const adminService = {
         return !!role;
     },
 
-    async isSuperUser(jid: any) {
+    async isSuperUser(jid: string): Promise<boolean> {
         if (!jid) return false;
 
         let resolvedJid = jid;
@@ -88,7 +114,7 @@ export const adminService = {
             resolvedJid = await this.userService.resolveLid(jid) || jid;
         }
 
-        const resolved = await db.resolveContextFromLegacyId(resolvedJid);
+        const resolved: ResolvedContext | null = await db.resolveContextFromLegacyId(resolvedJid);
         if (!resolved || resolved.type !== 'user') return false;
 
         const role = adminCache.get(resolved.context_id);
@@ -99,14 +125,13 @@ export const adminService = {
         return false;
     },
 
-    async addAdmin(jid: any, name: any = null, role: any = 'moderator') {
+    async addAdmin(jid: string, name: string | null = null, role: AdminRole = 'moderator'): Promise<boolean> {
         if (!supabase) return false;
 
         try {
-            const resolved = await db.resolveContextFromLegacyId(jid);
+            const resolved: ResolvedContext | null = await db.resolveContextFromLegacyId(jid);
             if (!resolved || resolved.type !== 'user') return false;
 
-            // Optional: update user name if provided
             if (name) {
                 await supabase.from('users').update({ username: name }).eq('id', resolved.context_id);
             }
@@ -124,17 +149,17 @@ export const adminService = {
             console.log(`[AdminService] Admin ajouté: ${jid}`);
             return true;
 
-        } catch (error: any) {
-            console.error('[AdminService] Erreur addAdmin:', error.message);
+        } catch (error: unknown) {
+            console.error('[AdminService] Erreur addAdmin:', extractErrorMessage(error));
             return false;
         }
     },
 
-    async removeAdmin(jid: any) {
+    async removeAdmin(jid: string): Promise<boolean> {
         if (!supabase) return false;
 
         try {
-            const resolved = await db.resolveContextFromLegacyId(jid);
+            const resolved: ResolvedContext | null = await db.resolveContextFromLegacyId(jid);
             if (!resolved || resolved.type !== 'user') return false;
 
             const { error } = await supabase
@@ -151,8 +176,8 @@ export const adminService = {
             console.log(`[AdminService] Admin retiré: ${jid}`);
             return true;
 
-        } catch (error: any) {
-            console.error('[AdminService] Erreur removeAdmin:', error.message);
+        } catch (error: unknown) {
+            console.error('[AdminService] Erreur removeAdmin:', extractErrorMessage(error));
             return false;
         }
     },
@@ -161,7 +186,6 @@ export const adminService = {
         if (!supabase) return [];
 
         try {
-            // Join with users to get username
             const { data, error } = await supabase
                 .from('global_admins')
                 .select('*, users(username)')
@@ -172,8 +196,7 @@ export const adminService = {
                 return [];
             }
 
-            // Map to old format for compatibility if needed
-            return (data || []).map((row: any) => ({
+            return (data || []).map((row: AdminRow) => ({
                 id: row.id,
                 user_id: row.user_id,
                 name: row.users?.username || 'Unknown',
@@ -181,13 +204,13 @@ export const adminService = {
                 created_at: row.created_at
             }));
 
-        } catch (error: any) {
-            console.error('[AdminService] Erreur listAdmins:', error.message);
+        } catch (error: unknown) {
+            console.error('[AdminService] Erreur listAdmins:', extractErrorMessage(error));
             return [];
         }
     },
 
-    getCacheSize() {
+    getCacheSize(): number {
         return adminCache.size;
     },
 
@@ -201,7 +224,6 @@ export const adminService = {
     async getOwnerJid(): Promise<string | null> {
         if (!supabase) return null;
 
-        // 1. Find the owner UUID from RAM cache (0ms)
         let ownerUserId: string | null = null;
         for (const [userId, role] of adminCache.entries()) {
             if (role === 'owner') {
@@ -215,7 +237,6 @@ export const adminService = {
             return null;
         }
 
-        // 2. Reverse-resolve UUID → platform JID via user_identities
         try {
             const { data, error } = await supabase
                 .from('user_identities')
@@ -229,9 +250,9 @@ export const adminService = {
                 return null;
             }
 
-            return data.platform_user_id;
-        } catch (e: any) {
-            console.error('[AdminService] ❌ Error resolving owner JID:', e.message);
+            return data.platform_user_id as string;
+        } catch (error: unknown) {
+            console.error('[AdminService] ❌ Error resolving owner JID:', extractErrorMessage(error));
             return null;
         }
     }

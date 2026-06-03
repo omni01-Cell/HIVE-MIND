@@ -16,8 +16,8 @@ class FileStateTracker {
         try {
             const stats = statSync(filePath);
             this.readTimestamps.set(filePath, stats.mtimeMs);
-        } catch (e) {
-            // Si le fichier n'existe pas encore, on ne peut pas enregistrer son mtime
+        } catch {
+            // Fichier non accessible — skipped silently
         }
     }
 
@@ -38,7 +38,7 @@ class FileStateTracker {
                 lastRead,
                 current
             };
-        } catch (e) {
+        } catch {
             return { changed: false };
         }
     }

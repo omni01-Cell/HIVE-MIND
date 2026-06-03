@@ -23,7 +23,7 @@ async function testSendFile() {
         transport: mockTransport,
         chatId: '123@c.us',
         sourceChannel: 'cli'
-    };
+    } as any;
 
     console.log('Testing Markdown file...');
     fs.writeFileSync('test.md', '# Hello');

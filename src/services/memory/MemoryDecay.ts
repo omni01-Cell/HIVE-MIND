@@ -32,36 +32,40 @@ export interface DecayStats {
   retention: string;
 }
 
+interface ScoreComponents {
+  recency: number;
+  frequency: number;
+  importance: number;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+    if (typeof error === 'string') {
+        return error;
+    }
+    return 'Unknown error';
+}
+
 export class MemoryDecaySystem {
-    // Decay parameters
-    private readonly tau = 24; // Time constant (hours) for exponential decay
-    private readonly scoreThreshold = 0.3; // Threshold below which we archive
+    private readonly tau = 24;
+    private readonly scoreThreshold = 0.3;
     private readonly importanceKeywords = [
         'promis', 'engagement', 'rdv', 'rendez-vous', 'deadline',
         'important', 'critique', 'urgent', 'préfère', 'déteste',
         'aime', 'jamais', 'toujours', 'rappelle-moi', 'note'
     ];
 
-    /**
-   * Scores a memory based on recency, frequency, and importance.
-   * @param memory The memory object.
-   */
-    async scoreMemory(memory: MemoryRecord): Promise<{ score: number; components: any; keep: boolean; ageHours: number }> {
+    async scoreMemory(memory: MemoryRecord): Promise<{ score: number; components: ScoreComponents; keep: boolean; ageHours: number }> {
         const now = Date.now();
         const createdAt = new Date(memory.created_at).getTime();
         const ageHours = (now - createdAt) / (1000 * 60 * 60);
 
-        // 1. Recency: Exponential decay
         const recency = Math.exp(-ageHours / this.tau);
-
-        // 2. Frequency: Number of times recalled
         const recallCount = memory.recall_count || 0;
-        const frequency = Math.min(recallCount / 10, 1); // Normalize to [0,1]
-
-        // 3. Importance: Detection of critical keywords
+        const frequency = Math.min(recallCount / 10, 1);
         const importance = await this._detectImportance(memory.content);
-
-        // 4. Composite score
         const score = (recency * 0.4) + (frequency * 0.3) + (importance * 0.3);
 
         return {
@@ -72,9 +76,6 @@ export class MemoryDecaySystem {
         };
     }
 
-    /**
-   * Detects semantic importance based on keywords.
-   */
     private async _detectImportance(content: string): Promise<number> {
         const lowerContent = content.toLowerCase();
         let keywordScore = 0;
@@ -85,31 +86,24 @@ export class MemoryDecaySystem {
             }
         }
 
-        // Cap at 1.0
         return Math.min(keywordScore, 1.0);
     }
 
-    /**
-   * Runs the decay cycle for a specific chat.
-   * @param chatId Unique identifier for the chat.
-   */
     async decay(chatId: string): Promise<DecayResult> {
         console.log(`[MemoryDecay] 🧹 Starting decay cycle for ${chatId}...`);
 
         try {
             if (!supabase) throw new Error('Supabase client not initialized');
 
-            // 0. Resolve Omni-Channel UUID
             const { default: db } = await import('../supabase.js');
             const resolved = await db.resolveContextFromLegacyId(chatId);
-            const contextId = resolved ? resolved.context_id : chatId; // Fallback if already context_id or not found
+            const contextId = resolved ? resolved.context_id : chatId;
 
-            // 1. Get all memories for the chat
             const { data: memories, error } = await supabase
                 .from('memories')
                 .select('*')
                 .eq('context_id', contextId)
-                .eq('role', 'assistant') // Decay bot responses to manage brain weight
+                .eq('role', 'assistant')
                 .is('archived_at', null);
 
             if (error) throw error;
@@ -122,12 +116,10 @@ export class MemoryDecaySystem {
             let keptCount = 0;
             const memoriesToArchive: MemoryRecord[] = [];
 
-            // 2. Score and archive if necessary
             for (const memory of memories as MemoryRecord[]) {
                 const { score, keep, ageHours } = await this.scoreMemory(memory);
 
                 if (!keep) {
-                    // Soft delete: set archived_at
                     await supabase
                         .from('memories')
                         .update({
@@ -140,7 +132,6 @@ export class MemoryDecaySystem {
                     memoriesToArchive.push(memory);
                     console.log(`[MemoryDecay] ⚰️ Archived: ID ${memory.id} (age=${ageHours}h, score=${score.toFixed(2)})`);
                 } else {
-                    // Just update the score
                     await supabase
                         .from('memories')
                         .update({ decay_score: score })
@@ -152,7 +143,6 @@ export class MemoryDecaySystem {
 
             console.log(`[MemoryDecay] ✅ ${chatId}: ${archivedCount} archived, ${keptCount} kept (${memories.length} total)`);
 
-            // [CMA] CONSOLIDATION & DREAMS: If we archived multiple memories, synthesize them into a "Gist"
             if (memoriesToArchive.length >= 5) {
                 setImmediate(() => {
                     this._consolidateMemories(chatId, memoriesToArchive);
@@ -165,15 +155,13 @@ export class MemoryDecaySystem {
                 kept: keptCount
             };
 
-        } catch (error: any) {
-            console.error('[MemoryDecay] Error:', error.message);
-            return { processed: 0, archived: 0, kept: 0, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
+            console.error('[MemoryDecay] Error:', errorMessage);
+            return { processed: 0, archived: 0, kept: 0, error: errorMessage };
         }
     }
 
-    /**
-   * Consolidates archived memories into a high-level dense Gist.
-   */
     private async _consolidateMemories(chatId: string, oldMemories: MemoryRecord[]): Promise<void> {
         console.log(`[CMA] 💤 Consolidation de ${oldMemories.length} souvenirs archivés pour ${chatId}...`);
         const transcript = oldMemories.map(m => m.content).join('\n---\n');
@@ -203,24 +191,21 @@ Few-shot examples:
                 const { default: memoryService } = await import('../memory.js');
                 const semanticMemory = memoryService.semanticMemory;
 
-                await semanticMemory.store(chatId, `[CONSOLIDATED GIST] ${response.content}`, 'system');
+                await semanticMemory.store(chatId, `[CONSOLIDATED GIST] ${response.content}`, 'assistant');
                 console.log(`[CMA] 🌠 Gist créé et stocké : ${response.content.substring(0, 80)}...`);
             }
-        } catch (e: any) {
-            console.error('[CMA] Erreur lors de la consolidation des souvenirs :', e.message);
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
+            console.error('[CMA] Erreur lors de la consolidation des souvenirs :', errorMessage);
         }
     }
 
-    /**
-   * Runs the global decay cycle for all active chats.
-   */
     async decayAll(): Promise<{ chats: number; archived: number; kept: number; error?: string }> {
         console.log('[MemoryDecay] 🌍 Starting global decay cycle...');
 
         try {
             if (!supabase) throw new Error('Supabase client not initialized');
 
-            // Get chats with recent activity (< 7 days)
             const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
             const { data: activeChats, error } = await supabase
@@ -231,8 +216,7 @@ Few-shot examples:
 
             if (error) throw error;
 
-            // Deduplicate context IDs
-            const uniqueContexts: string[] = [...new Set((activeChats || []).map((m: any) => m.context_id as string).filter((id: any) => id !== null && id !== undefined))] as string[];
+            const uniqueContexts: string[] = [...new Set((activeChats || []).map((m: { context_id: string | null }) => m.context_id).filter((id): id is string => id !== null && id !== undefined))];
 
             console.log(`[MemoryDecay] ${uniqueContexts.length} active contexts detected`);
 
@@ -253,16 +237,13 @@ Few-shot examples:
                 kept: totalKept
             };
 
-        } catch (error: any) {
-            console.error('[MemoryDecay] Global cycle error:', error.message);
-            return { chats: 0, archived: 0, kept: 0, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
+            console.error('[MemoryDecay] Global cycle error:', errorMessage);
+            return { chats: 0, archived: 0, kept: 0, error: errorMessage };
         }
     }
 
-    /**
-   * Retrieves decay statistics.
-   * @param chatId Optional chat filter.
-   */
     async getStats(chatId: string | null = null): Promise<DecayStats | null> {
         try {
             if (!supabase) return null;
@@ -282,23 +263,24 @@ Few-shot examples:
 
             if (!memories) return null;
 
-            const active = (memories as any[]).filter((m: any) => !m.archived_at);
-            const archived = (memories as any[]).filter((m: any) => m.archived_at);
+            const active = memories.filter((m) => !m.archived_at);
+            const archivedMemories = memories.filter((m) => m.archived_at);
 
             const avgScoreActive = active.length > 0
-                ? active.reduce((sum: any, m: any) => sum + (m.decay_score || 0), 0) / active.length
+                ? active.reduce((sum, m) => sum + (m.decay_score || 0), 0) / active.length
                 : 0;
 
             return {
                 total: memories.length,
                 active: active.length,
-                archived: archived.length,
+                archived: archivedMemories.length,
                 avgScore: avgScoreActive.toFixed(3),
                 retention: (active.length / memories.length * 100).toFixed(1) + '%'
             };
 
-        } catch (error: any) {
-            console.error('[MemoryDecay] Stats error:', error.message);
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
+            console.error('[MemoryDecay] Stats error:', errorMessage);
             return null;
         }
     }

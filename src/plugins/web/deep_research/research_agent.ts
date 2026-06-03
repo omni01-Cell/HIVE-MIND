@@ -6,11 +6,11 @@ import { SubAgentEngine } from '../../../services/agentic/SubAgentEngine.js';
  * Configuré via le moteur universel SubAgentEngine.
  */
 export class DeepResearchAgent {
-    userId: any;
-    chatId: any;
+    userId: string;
+    chatId: string;
     engine: SubAgentEngine;
 
-    constructor(userId: any, chatId: any) {
+    constructor(userId: string, chatId: string) {
         this.userId = userId;
         this.chatId = chatId;
 
@@ -49,7 +49,7 @@ Users expect comprehensive, multi-sourced, factual reports with proper citations
      * Lance une session de recherche approfondie
      * @param {string} query - La requête de recherche de l'utilisateur
      */
-    async start(query: any) {
+    async start(query: string) {
         const context = { chatId: this.chatId };
         const result = await this.engine.run(`Sujet de recherche: "${query}". Commence l'investigation approfondie.`, context);
         return result.message;

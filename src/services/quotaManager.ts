@@ -12,13 +12,78 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // while the 20% RPM safety margin absorbs any staleness.
 const L0_CACHE_TTL_MS = 2000;
 
+interface ModelConfigItem {
+    id?: string;
+    quota?: QuotaLimits;
+    types?: string[];
+}
+
+interface ProviderConfig {
+    modeles?: ModelConfigItem[];
+    models?: ModelConfigItem[];
+}
+
+interface ModelsConfig {
+    familles?: Record<string, ProviderConfig>;
+}
+
+interface QuotaLimits {
+    rpm?: number;
+    tpm?: number;
+    rpd?: number;
+}
+
+interface MarginConfig {
+    rpm: number;
+    tpm: number;
+    rpd: number;
+}
+
+interface HealthResult {
+    healthy: boolean;
+    blocked: boolean;
+    rpmUsed: number;
+    rpmLimit: number;
+    tpmUsed: number;
+    tpmLimit: number;
+    rpdUsed: number;
+    rpdLimit: number;
+    reason: string | null;
+}
+
+interface StatsResult {
+    rpm: number;
+    tpm: number;
+    rpd: number;
+}
+
+interface ModelWithId {
+    id?: string;
+}
+
+interface FamilyHealthResult {
+    familyName: string;
+    healthy: boolean;
+}
+
+interface ModelHealthEntry {
+    modelId: string;
+    healthy: boolean;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 class QuotaManager {
-    client: any;
-    quotas: any;
-    localRateLimit: any;
-    redisDownSince: any;
+    private client: typeof redisClient;
+    private quotas: Record<string, QuotaLimits>;
+    private localRateLimit: Map<string, number>;
+    private redisDownSince: number | null;
     /** Reverse map: modelId → providerName (populated from models_config.json) */
-    modelToProvider: Map<string, string>;
+    private modelToProvider: Map<string, string>;
     /** L0 in-memory cache: redisKey → { value, expiresAt } */
     private _l0Cache: Map<string, { value: string | null, expiresAt: number }>;
 
@@ -34,42 +99,40 @@ class QuotaManager {
         this.redisDownSince = null; // Timestamp de la panne Redis
     }
 
-    _loadConfig() {
+    private _loadConfig(): void {
         try {
             const configPath = join(__dirname, '..', 'config', 'models_config.json');
-            const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+            const config: ModelsConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
 
             // Flatten quotas: modelId -> quota + build reverse map modelId -> providerName
             this.quotas = {};
             this.modelToProvider = new Map();
 
             if (config.familles) {
-                for (const [providerName, providerConfigRaw] of Object.entries(config.familles)) {
-                    const providerConfig = providerConfigRaw as any;
-                    const allModels = [
+                for (const [providerName, providerConfig] of Object.entries(config.familles)) {
+                    const allModels: ModelConfigItem[] = [
                         ...(providerConfig.modeles || []),
                         ...(providerConfig.models || [])  // HuggingFace structure variant
                     ];
                     for (const model of allModels) {
-                        if (model.id) {
-                            this.modelToProvider.set(model.id, providerName);
-                            if (model.quota) {
-                                this.quotas[model.id] = model.quota;
-                            }
+                        if (!model.id) continue;
+                        this.modelToProvider.set(model.id, providerName);
+                        if (model.quota) {
+                            this.quotas[model.id] = model.quota;
                         }
                     }
                 }
             }
             // Chargement silencieux
-        } catch (e: any) {
-            console.warn('[QuotaManager] Impossible de charger les quotas:', e.message);
+        } catch (error: unknown) {
+            console.warn('[QuotaManager] Impossible de charger les quotas:', extractErrorMessage(error));
         }
     }
 
     /**
      * Initialse le manager (compatibilité interface service)
      */
-    async init() {
+    async init(): Promise<void> {
         // Initialisé (silencieux)
     }
 
@@ -112,12 +175,12 @@ class QuotaManager {
     /**
      * Enregistre l'utilisation d'un modèle après un appel réussi.
      * WHY: Keys include keyIndex so getModelHealth() reads the same keys we write.
-     * @param {string} provider - Nom du provider (pour compatibilité/logging)
+     * @param {string} _provider - Nom du provider (pour compatibilité/logging, non utilisé)
      * @param {string} modelId - ID du modèle utilisé
      * @param {number} estimatedTokens - Estimation des tokens
      * @param {number} keyIndex - Index de la clé API utilisée (défaut: 1)
      */
-    async recordUsage(provider: any, modelId: any, estimatedTokens: any = 0, keyIndex: any = 1) {
+    async recordUsage(_provider: string, modelId: string, estimatedTokens = 0, keyIndex = 1): Promise<void> {
         if (!this.client.isReady) return;
         if (!modelId) return;
 
@@ -155,7 +218,7 @@ class QuotaManager {
             if (estimatedTokens > 0) {
                 this._l0Set(quotaKeyTPM, String(parseInt(this._l0Get(quotaKeyTPM) || '0') + estimatedTokens));
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[QuotaManager] Erreur Redis:', error);
         }
     }
@@ -163,10 +226,10 @@ class QuotaManager {
     /**
      * Vérifie si un modèle spécifique est disponible
      * @param {string} modelId - ID du modèle
-     * @param {number} estimatedCost - Coût estimé en tokens pour cette requête (optionnel)
+     * @param {number} _estimatedCost - Coût estimé en tokens pour cette requête (non utilisé)
      * @returns {Promise<boolean>} - true si disponible, false sinon
      */
-    async isModelAvailable(modelId: any, estimatedCost: any = 0) {
+    async isModelAvailable(modelId: string, _estimatedCost = 0): Promise<boolean> {
         // ⚠️ FAIL CLOSED avec mode dégradé si Redis down
         if (!this.client.isReady) {
             console.warn('[QuotaManager] ⚠️ Redis indisponible - Mode dégradé actif (1 req/min max)');
@@ -216,10 +279,10 @@ class QuotaManager {
      * Recherche la première clé saine (avec marges) pour un modèle donné.
      * @param {string} modelId - ID du modèle
      * @param {string} providerName - Nom du fournisseur (pour résoudre les clés existantes)
-     * @param {Object} margins - Marges de sécurité { rpm: 0.2, tpm: 0.1, rpd: 0.05 }
+     * @param {MarginConfig} margins - Marges de sécurité { rpm: 0.2, tpm: 0.1, rpd: 0.05 }
      * @returns {Promise<number|null>} - Index de la clé saine, ou null si aucune clé n'est dispo
      */
-    async getAvailableKeyForModel(modelId: any, providerName: any, margins = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }) {
+    async getAvailableKeyForModel(modelId: string, providerName: string, margins: MarginConfig = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }): Promise<number | null> {
         if (!this.client.isReady) return 1; // Fail open en dégradé, on prend la clé 1 par défaut
 
         const availableIndices = envResolver.getAvailableKeysForProvider(providerName);
@@ -248,7 +311,7 @@ class QuotaManager {
      * @param {number} timeoutSeconds - Durée du blocage en secondes
      * @param {number} keyIndex - Index de la clé utilisée (défaut: 1)
      */
-    async recordQuotaExceeded(modelId: any, timeoutSeconds: any = 60, keyIndex: any = 1) {
+    async recordQuotaExceeded(modelId: string, timeoutSeconds = 60, keyIndex = 1): Promise<void> {
         if (!modelId) return;
 
         const blockKey = `quota:${modelId}:k${keyIndex}:blocked`;
@@ -263,21 +326,21 @@ class QuotaManager {
         try {
             await this.client.setEx(blockKey, timeoutSeconds, '1');
             console.log(`[QuotaManager] 🥶 Modèle ${modelId} (Clé ${keyIndex}) mis au frigo pour ${timeoutSeconds}s (Quota Exceeded)`);
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[QuotaManager] Erreur recordQuotaExceeded:', error);
         }
     }
 
     /**
      * Filtre une liste de modèles pour ne garder que ceux disponibles
-     * @param {Array} models - Liste d'objets modèles ou IDs
-     * @returns {Promise<Array>} - Liste filtrée
+     * @param {Array<ModelWithId | string>} models - Liste d'objets modèles ou IDs
+     * @returns {Promise<Array<ModelWithId | string>>} - Liste filtrée
      */
-    async filterAvailableModels(models: any) {
-        const available = [];
+    async filterAvailableModels(models: Array<ModelWithId | string>): Promise<Array<ModelWithId | string>> {
+        const available: Array<ModelWithId | string> = [];
         for (const model of models) {
             const id = typeof model === 'string' ? model : model.id;
-            if (await this.isModelAvailable(id)) {
+            if (id && await this.isModelAvailable(id)) {
                 available.push(model);
             }
         }
@@ -289,7 +352,7 @@ class QuotaManager {
     /**
      * Récupère l'état actuel des quotas pour un provider (Debug)
      */
-    async getStats(provider: any) {
+    async getStats(provider: string): Promise<StatsResult | null> {
         if (!this.client.isReady) return null;
         const date = new Date().toISOString().split('T')[0];
 
@@ -313,23 +376,11 @@ class QuotaManager {
     /**
      * Récupère l'état de santé détaillé d'un modèle avec marges de sécurité
      * @param {string} modelId - ID du modèle
-     * @param {Object} margins - Marges de sécurité { rpm: 0.2, tpm: 0.1, rpd: 0.05 }
+     * @param {MarginConfig} margins - Marges de sécurité { rpm: 0.2, tpm: 0.1, rpd: 0.05 }
      * @param {number} keyIndex - Index de la clé utilisée (défaut: 1)
-     * @returns {Promise<{healthy: boolean, blocked: boolean, rpmUsed: number, rpmLimit: number, tpmUsed: number, tpmLimit: number, rpdUsed: number, rpdLimit: number, reason?: string}>}
+     * @returns {Promise<HealthResult>}
      */
-    async getModelHealth(modelId: any, margins = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }, keyIndex: any = 1) {
-        interface HealthResult {
-            healthy: boolean;
-            blocked: boolean;
-            rpmUsed: number;
-            rpmLimit: number;
-            tpmUsed: number;
-            tpmLimit: number;
-            rpdUsed: number;
-            rpdLimit: number;
-            reason: string | null;
-        }
-
+    async getModelHealth(modelId: string, margins: MarginConfig = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }, keyIndex = 1): Promise<HealthResult> {
         const result: HealthResult = {
             healthy: true,
             blocked: false,
@@ -410,7 +461,7 @@ class QuotaManager {
 
             return result;
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(`[QuotaManager] Erreur getModelHealth ${modelId}:`, error);
             return result; // Fail open
         }
@@ -419,13 +470,13 @@ class QuotaManager {
     /**
      * Filtre une liste de modèles pour ne garder que ceux "sains" (avec marge de sécurité)
      * @param {Array<string>} modelIds - Liste des IDs de modèles
-     * @param {Object} margins - Marges de sécurité { rpm: 0.2, tpm: 0.1, rpd: 0.05 }
+     * @param {MarginConfig} margins - Marges de sécurité { rpm: 0.2, tpm: 0.1, rpd: 0.05 }
      * @returns {Promise<Array<string>>} - Liste filtrée des IDs sains
      */
-    async filterHealthyModels(modelIds: any,  margins = { rpm: 0.20,  tpm: 0.10,  rpd: 0.05 }) {
+    async filterHealthyModels(modelIds: Array<string>, margins: MarginConfig = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }): Promise<Array<string>> {
         if (!this.client.isReady) return modelIds; // Fail open
 
-        const results = await Promise.all(modelIds.map(async (modelId: any) => {
+        const results = await Promise.all(modelIds.map(async (modelId: string) => {
             // WHY: Check ALL keys for this model's provider, not just k1.
             // A model is healthy if at least one key passes the health check.
             const providerName = this.modelToProvider.get(modelId);
@@ -441,22 +492,23 @@ class QuotaManager {
             return { modelId, healthy: false };
         }));
 
-        return results.filter((r: any) => r.healthy).map((r: any) => r.modelId);
+        return results.filter((r: ModelHealthEntry) => r.healthy).map((r: ModelHealthEntry) => r.modelId);
     }
 
     /**
      * Récupère les familles qui ont au moins un modèle sain
-     * @param {Object} familiesConfig - Configuration des familles { gemini: { modeles: [...] }, ... }
-     * @param {Object} margins - Marges de sécurité
+     * @param {Record<string, ProviderConfig>} familiesConfig - Configuration des familles
+     * @param {MarginConfig} margins - Marges de sécurité
      * @returns {Promise<Array<string>>} - Liste des noms de familles saines
      */
-    async getHealthyFamilies(familiesConfig: any,  margins = { rpm: 0.20,  tpm: 0.10,  rpd: 0.05 }) {
-        const familyResults = await Promise.all(Object.entries(familiesConfig).map(async ([familyName, familyConfig]: any) => {
-            const models = familyConfig.modeles || familyConfig.models || [];
+    async getHealthyFamilies(familiesConfig: Record<string, ProviderConfig>, margins: MarginConfig = { rpm: 0.20, tpm: 0.10, rpd: 0.05 }): Promise<Array<string>> {
+        const familyResults = await Promise.all(Object.entries(familiesConfig).map(async ([familyName, familyConfig]: [string, ProviderConfig]) => {
+            const models: ModelConfigItem[] = familyConfig.modeles || familyConfig.models || [];
             // Exclure les modèles d'embedding du check chat
             const chatModels = models
-                .filter((m: any) => !m.id?.includes('embedding') && !m.types?.includes('embedding'))
-                .map((m: any) => m.id);
+                .filter((m: ModelConfigItem) => !m.id?.includes('embedding') && !m.types?.includes('embedding'))
+                .map((m: ModelConfigItem) => m.id)
+                .filter((id): id is string => id !== undefined);
 
             if (chatModels.length === 0) return { familyName, healthy: false };
 
@@ -464,7 +516,7 @@ class QuotaManager {
             return { familyName, healthy: healthyModels.length > 0 };
         }));
 
-        return familyResults.filter((r: any) => r.healthy).map((r: any) => r.familyName);
+        return familyResults.filter((r: FamilyHealthResult) => r.healthy).map((r: FamilyHealthResult) => r.familyName);
     }
 
     /**
@@ -472,9 +524,8 @@ class QuotaManager {
      * Limite stricte : 1 requête par minute par modèle
      * @param {string} modelId - ID du modèle
      * @returns {boolean} - true si autorisé
-     * @private
      */
-    _allowWithLocalRateLimit(modelId: any) {
+    private _allowWithLocalRateLimit(modelId: string): boolean {
         const key = `local:${modelId}`;
         const lastSeen = this.localRateLimit.get(key);
         const now = Date.now();

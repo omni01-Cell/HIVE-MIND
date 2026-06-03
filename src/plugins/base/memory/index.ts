@@ -2,6 +2,11 @@
 // Persistent fact memorization plugin (Option C)
 // Allows the AI to memorize, recall, and list information about users
 
+const extractErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    return String(error);
+};
+
 // Helper de services chargés dynamiquement
 const getServices = async () => {
     const [{ factsMemory, workspaceMemory, semanticMemory }, { workingMemory }] = await Promise.all([
@@ -14,7 +19,7 @@ const getServices = async () => {
 interface MemoryContext {
     chatId?: string;
     sender?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 interface RememberFactArgs { key: string; value: string; }
@@ -26,6 +31,16 @@ interface WorkspaceSearchArgs { query: string; tags?: string[]; }
 interface WorkspaceDeleteArgs { key: string; }
 interface UpdateScratchpadArgs { text: string; }
 interface SearchLongTermMemoryArgs { query: string; }
+interface WorkspaceSearchResult {
+    key: string;
+    similarity: number;
+    content: string;
+}
+interface SemanticMemoryResult {
+    formattedContent?: string;
+    content: string;
+    role?: string;
+}
 
 export default {
     name: 'memory',
@@ -210,44 +225,44 @@ export default {
         const factsChatId = sender || chatId;
 
         switch (toolName) {
-            case 'remember_fact':
+            case 'remember_fact': {
                 const rememberArgs = args as RememberFactArgs;
                 return await this._rememberFact(factsChatId as string, rememberArgs.key, rememberArgs.value);
-
-            case 'recall_fact':
+            }
+            case 'recall_fact': {
                 const recallArgs = args as RecallFactArgs;
                 return await this._recallFact(factsChatId as string, recallArgs.key);
-
+            }
             case 'list_facts':
                 return await this._listFacts(factsChatId as string);
-
-            case 'forget_fact':
+            case 'forget_fact': {
                 const forgetArgs = args as ForgetFactArgs;
                 return await this._forgetFact(factsChatId as string, forgetArgs.key);
-
-            case 'db_document_save':
+            }
+            case 'db_document_save': {
                 const writeArgs = args as WorkspaceWriteArgs;
                 return await this._workspaceWrite(factsChatId as string, writeArgs.key, writeArgs.content, writeArgs.tags);
-
-            case 'db_document_read':
+            }
+            case 'db_document_read': {
                 const readArgs = args as WorkspaceReadArgs;
                 return await this._workspaceRead(factsChatId as string, readArgs.key);
-
-            case 'db_document_search':
+            }
+            case 'db_document_search': {
                 const searchArgs = args as WorkspaceSearchArgs;
                 return await this._workspaceSearch(factsChatId as string, searchArgs.query, searchArgs.tags);
-
-            case 'db_document_delete':
+            }
+            case 'db_document_delete': {
                 const deleteArgs = args as WorkspaceDeleteArgs;
                 return await this._workspaceDelete(factsChatId as string, deleteArgs.key);
-
-            case 'update_scratchpad':
+            }
+            case 'update_scratchpad': {
                 const updateArgs = args as UpdateScratchpadArgs;
                 return await this._updateScratchpad(chatId as string, updateArgs.text);
-
-            case 'search_long_term_memory':
+            }
+            case 'search_long_term_memory': {
                 const ltmArgs = args as SearchLongTermMemoryArgs;
                 return await this._searchLongTermMemory(chatId as string, ltmArgs.query);
+            }
 
             default:
                 return { success: false, message: `Unknown tool: ${toolName}` };
@@ -269,11 +284,11 @@ export default {
                 success: true,
                 message: `FACT_MEMORIZED: I've noted "${normalizedKey}" = "${value}". I will remember it! 📝`
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Memory Plugin] Error remember:', error);
             return {
                 success: false,
-                message: `Memorization error: ${error.message}`
+                message: `Memorization error: ${extractErrorMessage(error)}`
             };
         }
     },
@@ -298,11 +313,11 @@ export default {
                     message: `FACT_UNKNOWN: I have no information on "${key}" for this user.`
                 };
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Memory Plugin] Error recall:', error);
             return {
                 success: false,
-                message: `Recall error: ${error.message}`
+                message: `Recall error: ${extractErrorMessage(error)}`
             };
         }
     },
@@ -331,11 +346,11 @@ export default {
                 success: true,
                 message: `KNOWN_FACTS (${entries.length}):\n${formatted}`
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Memory Plugin] Error list:', error);
             return {
                 success: false,
-                message: `Listing error: ${error.message}`
+                message: `Listing error: ${extractErrorMessage(error)}`
             };
         }
     },
@@ -363,11 +378,11 @@ export default {
                 success: true,
                 message: `FACT_FORGOTTEN: I've forgotten "${normalizedKey}". This information has been removed. 🗑️`
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Memory Plugin] Error forget:', error);
             return {
                 success: false,
-                message: `Forget error: ${error.message}`
+                message: `Forget error: ${extractErrorMessage(error)}`
             };
         }
     },
@@ -389,8 +404,8 @@ export default {
                 return { success: true, message: `WORKSPACE_WRITTEN: Document "${key}" saved successfully.` };
             }
             return { success: false, message: `Error saving document "${key}".` };
-        } catch (error: any) {
-            return { success: false, message: `Internal error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Internal error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -405,8 +420,8 @@ export default {
                 return { success: true, message: `WORKSPACE_DOC [${key}]:\n${doc.content}\n\nTags: ${(doc.tags || []).join(', ')}` };
             }
             return { success: false, message: `WORKSPACE_NOT_FOUND: Document "${key}" does not exist.` };
-        } catch (error: any) {
-            return { success: false, message: `Internal error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Internal error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -418,12 +433,12 @@ export default {
             const { workspaceMemory } = await getServices();
             const results = await workspaceMemory.search(chatId, query, tags || []);
             if (results && results.length > 0) {
-                const formatted = results.map((r: any) => `- [${r.key}] (Score: ${Math.round(r.similarity*100)}%): ${r.content.substring(0, 200)}...`).join('\n');
+                const formatted = results.map((r) => `- [${r.key}] (Score: ${Math.round((r as unknown as WorkspaceSearchResult).similarity*100)}%): ${r.content.substring(0, 200)}...`).join('\n');
                 return { success: true, message: `WORKSPACE_SEARCH_RESULTS:\n${formatted}` };
             }
             return { success: true, message: `WORKSPACE_NO_MATCH: No documents found for "${query}".` };
-        } catch (error: any) {
-            return { success: false, message: `Internal error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Internal error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -438,8 +453,8 @@ export default {
                 return { success: true, message: `WORKSPACE_DELETED: Document "${key}" deleted.` };
             }
             return { success: false, message: `Error deleting "${key}".` };
-        } catch (error: any) {
-            return { success: false, message: `Internal error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Internal error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -462,8 +477,8 @@ export default {
                 success: true,
                 message: `SCRATCHPAD_UPDATED: Your working memory has been updated (${Math.min(text.length, 500)} chars). It will be visible in your <scratchpad> at the next turn.`
             };
-        } catch (error: any) {
-            return { success: false, message: `SCRATCHPAD_ERROR: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `SCRATCHPAD_ERROR: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -487,7 +502,7 @@ export default {
                 };
             }
 
-            const formatted = results.map((r: any, i: number) => {
+            const formatted = results.map((r: SemanticMemoryResult, i: number) => {
                 const content = r.formattedContent || r.content;
                 return `${i + 1}. [${r.role || 'unknown'}] ${content.substring(0, 300)}`;
             }).join('\n');
@@ -496,8 +511,8 @@ export default {
                 success: true,
                 message: `LTM_RESULTS (${results.length} memories):\n${formatted}`
             };
-        } catch (error: any) {
-            return { success: false, message: `LTM_ERROR: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `LTM_ERROR: ${extractErrorMessage(error)}` };
         }
     }
 };

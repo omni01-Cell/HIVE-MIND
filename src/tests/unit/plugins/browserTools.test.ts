@@ -42,8 +42,9 @@ describe('BrowserTools', () => {
 
             // Assert
             expect(result.success).toBe(true);
-            expect(result.llmOutput.snapshot).toContain('[TRUNCATED]');
-            expect(result.llmOutput.snapshot.length).toBeLessThanOrEqual(12_200);
+            const snapResult = result.llmOutput as { snapshot: string };
+            expect(snapResult.snapshot).toContain('[TRUNCATED]');
+            expect(snapResult.snapshot.length).toBeLessThanOrEqual(12_200);
         });
     });
 });

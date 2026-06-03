@@ -20,8 +20,8 @@ describe('LLM Harness Integration', () => {
             }];
         });
 
-        jest.spyOn(pluginLoader, 'execute').mockImplementation(async (name: string, args: any) => {
-            return { success: true, content: 'mocked content' };
+        jest.spyOn(pluginLoader, 'execute').mockImplementation(async (name: string, args: any, _context: any) => {
+            return { success: true, content: 'mocked content' } as any;
         });
     });
 

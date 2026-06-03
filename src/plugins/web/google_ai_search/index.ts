@@ -23,12 +23,41 @@ interface SearchResult {
 }
 
 interface GoogleAiSearchContext {
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 interface GoogleAiSearchArgs {
     query: string;
     mode?: 'standard' | 'chat' | 'new';
+}
+
+interface SerpApiTextBlock {
+    title?: string;
+    snippet?: string;
+    text?: string;
+}
+
+interface SerpApiReference {
+    title?: string;
+    link?: string;
+    url?: string;
+}
+
+interface SerpApiResponse {
+    error?: string;
+    search_metadata?: {
+        status?: string;
+        subsequent_request_token?: string;
+    };
+    subsequent_request_token?: string;
+    text_blocks?: SerpApiTextBlock[];
+    references?: SerpApiReference[];
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return 'Unknown error';
 }
 
 /**
@@ -37,7 +66,7 @@ interface GoogleAiSearchArgs {
 function loadConversationToken(): string | null {
     if (!existsSync(CONTEXT_FILE)) return null;
     try {
-        const data = JSON.parse(readFileSync(CONTEXT_FILE, 'utf-8'));
+        const data = JSON.parse(readFileSync(CONTEXT_FILE, 'utf-8')) as { subsequent_request_token?: string };
         return data.subsequent_request_token || null;
     } catch {
         return null;
@@ -50,8 +79,8 @@ function loadConversationToken(): string | null {
 function saveConversationToken(token: string): void {
     try {
         writeFileSync(CONTEXT_FILE, JSON.stringify({ subsequent_request_token: token }));
-    } catch (err: any) {
-        console.warn(`[GoogleAI] ⚠️ Erreur sauvegarde contexte: ${err.message}`);
+    } catch (error: unknown) {
+        console.warn(`[GoogleAI] ⚠️ Erreur sauvegarde contexte: ${extractErrorMessage(error)}`);
     }
 }
 
@@ -84,10 +113,9 @@ export default {
         }
     },
 
-    async execute(args: unknown, _context: GoogleAiSearchContext, toolName?: string): Promise<SearchResult> {
+    async execute(args: unknown, _context: GoogleAiSearchContext, _toolName?: string): Promise<SearchResult> {
         const searchArgs = args as GoogleAiSearchArgs;
         const { query, mode = 'standard' } = searchArgs;
-        const context = _context || {};
 
         console.log(`[GoogleAI] 🔍 Recherche Google AI Mode: "${query}" (mode: ${mode})`);
 
@@ -139,7 +167,7 @@ export default {
                 throw new Error(`SerpApi ${response.status}: ${errorText.substring(0, 200)}`);
             }
 
-            const data = await response.json();
+            const data = await response.json() as SerpApiResponse;
 
             // Vérifier erreurs API
             if (data.error) {
@@ -163,7 +191,7 @@ export default {
             }
 
             // Extraire les blocs de texte
-            const textBlocks: any[] = data.text_blocks || [];
+            const textBlocks: SerpApiTextBlock[] = data.text_blocks || [];
 
             if (textBlocks.length === 0) {
                 return {
@@ -181,15 +209,15 @@ export default {
             }
 
             // Extraire les sources
-            const references: any[] = data.references || [];
-            const sources = references.slice(0, 5).map((r: any) => ({
+            const references: SerpApiReference[] = data.references || [];
+            const sources = references.slice(0, 5).map((r) => ({
                 title: r.title || 'Source',
                 url: r.link || r.url || ''
             }));
 
             if (sources.length > 0) {
                 answer += '\n**Sources:**\n' + sources
-                    .map((s: { title: string; url: string }) => `- [${s.title}](${s.url})`)
+                    .map((s) => `- [${s.title}](${s.url})`)
                     .join('\n');
             }
 
@@ -199,10 +227,10 @@ export default {
                 sources
             };
 
-        } catch (err: any) {
+        } catch (error: unknown) {
             clearTimeout(timeoutId);
 
-            if (err.name === 'AbortError') {
+            if (error instanceof Error && error.name === 'AbortError') {
                 return {
                     success: false,
                     message: `Google AI search timeout (${REQUEST_TIMEOUT_MS / 1000}s exceeded). Try with a shorter question.`,
@@ -210,10 +238,11 @@ export default {
                 };
             }
 
-            console.error('[GoogleAI] ❌ Error:', err.message);
+            const errorMessage = extractErrorMessage(error);
+            console.error('[GoogleAI] ❌ Error:', errorMessage);
             return {
                 success: false,
-                message: `Google AI search error: ${err.message}. Try to rephrase or use DuckDuckGo.`,
+                message: `Google AI search error: ${errorMessage}. Try to rephrase or use DuckDuckGo.`,
                 gracefulDegradation: true
             };
         }

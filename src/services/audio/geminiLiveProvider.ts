@@ -9,42 +9,181 @@ import { join } from 'path';
 import { convertOggToPcm } from './audioConverter.js';
 import { envResolver } from '../envResolver.js';
 
-/**
- * GeminiLiveProvider
- * Gère les conversations audio en temps réel avec Gemini 2.5 Flash
- *
- * Flux: OGG/Opus (WhatsApp) → PCM 16kHz (Gemini) → PCM 24kHz (réponse) → OGG (WhatsApp)
- */
-export class GeminiLiveProvider {
-    apiKey: any;
-    model: any;
-    ws: any;
-    isConnected: any;
-    pendingTools: any;
-    audioQueue: any;
-    toolExecutor: any;
-    responseResolver: any;
-    responseRejector: any;
-    transcribedText: any;
+/* ------------------------------------------------------------------ */
+/*  Interfaces — Gemini Live API data structures                       */
+/* ------------------------------------------------------------------ */
 
-    constructor(config: any = {}) {
-        this.apiKey = config.apiKey || envResolver.resolveProviderKey('gemini') || process.env.GEMINI_API_KEY;
+/** JSON Schema (subset used by Gemini tool parameters) */
+interface JsonSchemaProperties {
+    [key: string]: JsonSchemaNode;
+}
+
+interface JsonSchemaNode {
+    type?: string;
+    description?: string;
+    properties?: JsonSchemaProperties;
+    items?: JsonSchemaNode;
+    required?: string[];
+    enum?: string[];
+    [key: string]: unknown;
+}
+
+/** Tool function as declared in OpenAI-compatible format */
+interface ToolFunction {
+    name: string;
+    description: string;
+    parameters?: JsonSchemaNode;
+}
+
+/** Tool wrapper sent during setup */
+interface ToolDeclaration {
+    name: string;
+    description: string;
+    parameters?: JsonSchemaNode;
+}
+
+/** Tool definition from the caller (OpenAI-compatible) */
+interface ToolDefinition {
+    function: ToolFunction;
+}
+
+/** Session config passed to connect() */
+interface SessionConfig {
+    voice?: string;
+    systemPrompt?: string;
+    tools?: ToolDefinition[];
+}
+
+/** Constructor config */
+interface GeminiLiveConfig {
+    apiKey?: string;
+    model?: string;
+    toolExecutor?: ToolExecutorFn | null;
+}
+
+type ToolExecutorFn = (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+
+/** Setup message sent to Gemini */
+interface SetupMessage {
+    setup: {
+        model: string;
+        generationConfig: {
+            responseModalities: string[];
+            speechConfig: {
+                voiceConfig: {
+                    prebuiltVoiceConfig: {
+                        voiceName: string;
+                    };
+                };
+            };
+        };
+        systemInstruction?: {
+            parts: Array<{ text: string }>;
+        };
+        tools?: Array<{
+            functionDeclarations: ToolDeclaration[];
+        }>;
+    };
+}
+
+/** Incoming server message (top-level) */
+interface GeminiServerMessage {
+    setupComplete?: Record<string, unknown>;
+    serverContent?: ServerContent;
+    toolCall?: ToolCall;
+    toolCallCancellation?: Record<string, unknown>;
+}
+
+/** serverContent payload */
+interface ServerContent {
+    modelTurn?: {
+        parts: ServerPart[];
+    };
+    turnComplete?: boolean;
+    inputTranscription?: { text?: string };
+    outputTranscription?: { text?: string };
+}
+
+/** Individual part inside modelTurn */
+interface ServerPart {
+    inlineData?: { mimeType?: string; data?: string };
+    text?: string;
+    functionCall?: FunctionCall;
+}
+
+/** Function call received from the model */
+interface FunctionCall {
+    id?: string;
+    name: string;
+    args?: Record<string, unknown>;
+}
+
+/** Tool call (batch format) */
+interface ToolCall {
+    functionCalls?: FunctionCall[];
+}
+
+/** Final response resolved by waitForResponse() */
+interface GeminiLiveResponse {
+    audioFile: string | null;
+    transcribedText: string | null;
+    toolCalls: FunctionCall[];
+}
+
+/** Options for processAudioWithTools() */
+interface ProcessAudioOptions {
+    audioBuffer: Buffer;
+    systemPrompt?: string;
+    tools?: ToolDefinition[];
+    voice?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helper — extract a safe error message from unknown                  */
+/* ------------------------------------------------------------------ */
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return 'Unknown error';
+}
+
+/* ------------------------------------------------------------------ */
+/*  GeminiLiveProvider                                                  */
+/* ------------------------------------------------------------------ */
+
+export class GeminiLiveProvider {
+    apiKey: string | null;
+    model: string;
+    ws: WebSocket | null;
+    isConnected: boolean;
+    pendingTools: Map<string, FunctionCall>;
+    audioQueue: Buffer[];
+    toolExecutor: ToolExecutorFn | null;
+    responseResolver: ((response: GeminiLiveResponse) => void) | null;
+    responseRejector: ((error: Error) => void) | null;
+    transcribedText: string | null;
+    private _resetActivityTimeout: (() => void) | null;
+
+    constructor(config: GeminiLiveConfig = {}) {
+        this.apiKey = config.apiKey || envResolver.resolveProviderKey('gemini') || process.env.GEMINI_API_KEY || null;
         this.model = config.model || 'gemini-3.1-flash-live-preview';
         this.ws = null;
         this.isConnected = false;
         this.pendingTools = new Map();
         this.audioQueue = [];
-        this.toolExecutor = config.toolExecutor;
+        this.toolExecutor = config.toolExecutor || null;
         this.responseResolver = null;
         this.responseRejector = null;
         this.transcribedText = null;
+        this._resetActivityTimeout = null;
     }
 
     /**
      * Connexion au Live API
      * Attend la confirmation setupComplete avant de résoudre la promesse
      */
-    async connect(sessionConfig: any = {}): Promise<void> {
+    async connect(sessionConfig: SessionConfig = {}): Promise<void> {
         return new Promise((resolve, reject) => {
             if (!this.apiKey) {
                 reject(new Error('Gemini Live API key missing: expected GEMINI_KEY or GEMINI_KEY_N'));
@@ -67,13 +206,12 @@ export class GeminiLiveProvider {
                 console.log('[GeminiLive] ✅ WebSocket connecté');
                 this.isConnected = true;
                 this._sendSetup(sessionConfig);
-                // Ne PAS resolve ici — on attend setupComplete
             });
 
-            this.ws.on('message', (data: any) => {
+            this.ws.on('message', (data: Buffer) => {
                 try {
                     const raw = data.toString();
-                    const message = JSON.parse(raw);
+                    const message: GeminiServerMessage = JSON.parse(raw) as GeminiServerMessage;
 
                     // Debug: log every server message key for diagnostics
                     const keys = Object.keys(message);
@@ -90,12 +228,12 @@ export class GeminiLiveProvider {
                     // All other messages go through the normal handler
                     this._handleMessage(message);
 
-                } catch (error: any) {
-                    console.error('[GeminiLive] Erreur parsing message:', error.message);
+                } catch (error: unknown) {
+                    console.error('[GeminiLive] Erreur parsing message:', extractErrorMessage(error));
                 }
             });
 
-            this.ws.on('error', (error: any) => {
+            this.ws.on('error', (error: Error) => {
                 console.error('[GeminiLive] ❌ WebSocket error:', error.message);
                 this.isConnected = false;
                 reject(error);
@@ -123,7 +261,7 @@ export class GeminiLiveProvider {
             setTimeout(() => {
                 if (!setupReceived) {
                     reject(new Error('Setup timeout (15s)'));
-                    this.disconnect().catch(() => {});
+                    this.disconnect().catch(() => { /* intentionally empty — best-effort cleanup */ });
                 }
             }, 15000);
         });
@@ -133,20 +271,20 @@ export class GeminiLiveProvider {
      * Sanitise un schéma de paramètres pour l'API Gemini Live.
      * Gemini ne supporte pas `additionalProperties` — le serveur crash (1011) si présent.
      */
-    _sanitizeParameters(params: any): any {
+    _sanitizeParameters(params: JsonSchemaNode | undefined): JsonSchemaNode | undefined {
         if (!params || typeof params !== 'object') return params;
 
-        const cleaned: any = {};
+        const cleaned: JsonSchemaNode = {};
         for (const [key, value] of Object.entries(params)) {
             if (key === 'additionalProperties') continue;
             if (key === 'properties' && typeof value === 'object' && value !== null) {
-                const cleanedProps: any = {};
-                for (const [propName, propVal] of Object.entries(value as Record<string, any>)) {
-                    cleanedProps[propName] = this._sanitizeParameters(propVal);
+                const cleanedProps: JsonSchemaProperties = {};
+                for (const [propName, propVal] of Object.entries(value as JsonSchemaProperties)) {
+                    cleanedProps[propName] = this._sanitizeParameters(propVal) as JsonSchemaNode;
                 }
                 cleaned[key] = cleanedProps;
             } else if (key === 'items' && typeof value === 'object') {
-                cleaned[key] = this._sanitizeParameters(value);
+                cleaned[key] = this._sanitizeParameters(value as JsonSchemaNode);
             } else {
                 cleaned[key] = value;
             }
@@ -157,13 +295,13 @@ export class GeminiLiveProvider {
     /**
      * Envoyer la configuration de session (camelCase requis par l'API Gemini)
      */
-    _sendSetup(config: any) {
+    _sendSetup(config: SessionConfig): void {
         // Gemini Live API crashes (1011) when setup payload exceeds ~10KB.
         const MAX_SETUP_PAYLOAD_BYTES = 8000;
         const MAX_DESC_LENGTH = 300;
 
         // Official API format: wrapper key is 'setup'
-        const configMessage: any = {
+        const configMessage: SetupMessage = {
             setup: {
                 model: `models/${this.model}`,
                 generationConfig: {
@@ -193,9 +331,9 @@ export class GeminiLiveProvider {
         }
 
         // Tools (function declarations) — sanitised for Live API compatibility
-        let sanitisedDeclarations: any[] = [];
+        let sanitisedDeclarations: ToolDeclaration[] = [];
         if (config.tools && config.tools.length > 0) {
-            sanitisedDeclarations = config.tools.map((tool: any) => {
+            sanitisedDeclarations = config.tools.map((tool: ToolDefinition) => {
                 const desc = tool.function.description || '';
                 return {
                     name: tool.function.name,
@@ -234,7 +372,7 @@ export class GeminiLiveProvider {
      * Utilise `realtimeInput.mediaChunks` (format requis par le Live API).
      * Puis signale `turnComplete` via `clientContent`.
      */
-    async sendAudio(audioBuffer: any) {
+    async sendAudio(audioBuffer: Buffer): Promise<void> {
         if (!this.isConnected) {
             throw new Error('WebSocket not connected');
         }
@@ -258,7 +396,7 @@ export class GeminiLiveProvider {
             try {
                 pcmBuffer = await convertOggToPcm(tempOgg) as Buffer;
             } finally {
-                import('fs/promises').then(fsp => fsp.unlink(tempOgg).catch(() => {}));
+                import('fs/promises').then(fsp => fsp.unlink(tempOgg).catch(() => { /* best-effort temp cleanup */ }));
             }
         } else {
             pcmBuffer = audioBuffer;
@@ -281,7 +419,7 @@ export class GeminiLiveProvider {
                 }
             });
             // Petit délai artificiel
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise<void>(resolve => setTimeout(resolve, 10));
         }
 
         console.log(`[GeminiLive] 🎤 Audio envoyé en chunks avec silence VAD (${pcmBuffer.length} bytes PCM)`);
@@ -290,36 +428,36 @@ export class GeminiLiveProvider {
     /**
      * Attendre la réponse du modèle
      */
-    async waitForResponse(timeoutMs: any = 120000): Promise<any> {
+    async waitForResponse(timeoutMs = 120000): Promise<GeminiLiveResponse> {
         return new Promise((resolve, reject) => {
             let timeout: NodeJS.Timeout;
 
-            const resetTimeout = () => {
+            const resetTimeout = (): void => {
                 if (timeout) clearTimeout(timeout);
                 timeout = setTimeout(() => {
                     this.responseResolver = null;
                     this.responseRejector = null;
-                    (this as any)._resetActivityTimeout = null;
+                    this._resetActivityTimeout = null;
                     reject(new Error(`Response timeout (${timeoutMs}ms without activity)`));
                 }, timeoutMs);
             };
 
-            (this as any)._resetActivityTimeout = resetTimeout;
+            this._resetActivityTimeout = resetTimeout;
             resetTimeout();
 
-            this.responseResolver = (response: any) => {
+            this.responseResolver = (response: GeminiLiveResponse): void => {
                 clearTimeout(timeout);
                 this.responseResolver = null;
                 this.responseRejector = null;
-                (this as any)._resetActivityTimeout = null;
+                this._resetActivityTimeout = null;
                 resolve(response);
             };
 
-            this.responseRejector = (error: any) => {
+            this.responseRejector = (error: Error): void => {
                 clearTimeout(timeout);
                 this.responseResolver = null;
                 this.responseRejector = null;
-                (this as any)._resetActivityTimeout = null;
+                this._resetActivityTimeout = null;
                 reject(error);
             };
         });
@@ -328,9 +466,9 @@ export class GeminiLiveProvider {
     /**
      * Gérer les messages du serveur (après setup)
      */
-    _handleMessage(message: any) {
-        if ((this as any)._resetActivityTimeout) {
-            (this as any)._resetActivityTimeout();
+    _handleMessage(message: GeminiServerMessage): void {
+        if (this._resetActivityTimeout) {
+            this._resetActivityTimeout();
         }
 
         // Server content (réponse du modèle)
@@ -353,14 +491,14 @@ export class GeminiLiveProvider {
     /**
      * Gérer le contenu serveur (audio + text)
      */
-    async _handleServerContent(content: any) {
+    async _handleServerContent(content: ServerContent): Promise<void> {
         console.log('[GeminiLive] 🔍 Raw serverContent:', JSON.stringify(content, null, 2));
         const parts = content.modelTurn?.parts || [];
 
         for (const part of parts) {
             // Audio reçu (PCM 24kHz du serveur)
             if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/')) {
-                this.audioQueue.push(Buffer.from(part.inlineData.data, 'base64'));
+                this.audioQueue.push(Buffer.from(part.inlineData.data || '', 'base64'));
             }
 
             // Texte (transcription de la réponse audio - fallback)
@@ -381,7 +519,7 @@ export class GeminiLiveProvider {
         }
         if (content.outputTranscription) {
             console.log('[GeminiLive] 🤖 Gemini Transcription:', content.outputTranscription.text);
-            this.transcribedText = (this.transcribedText || '') + content.outputTranscription.text;
+            this.transcribedText = (this.transcribedText || '') + (content.outputTranscription.text || '');
         }
 
         // Si turn complete, résoudre la promesse
@@ -403,7 +541,7 @@ export class GeminiLiveProvider {
     /**
      * Gérer un function call
      */
-    async _handleFunctionCall(functionCall: any) {
+    async _handleFunctionCall(functionCall: FunctionCall): Promise<void> {
         console.log('[GeminiLive] 🛠️ Function call:', functionCall.name);
 
         if (!this.toolExecutor) {
@@ -412,7 +550,7 @@ export class GeminiLiveProvider {
         }
 
         try {
-            const result = await this.toolExecutor(functionCall.name, functionCall.args);
+            const result = await this.toolExecutor(functionCall.name, functionCall.args || {});
 
             const response = {
                 toolResponse: {
@@ -427,8 +565,9 @@ export class GeminiLiveProvider {
             this._send(response);
             console.log('[GeminiLive] ✓ Tool result sent');
 
-        } catch (error: any) {
-            console.error('[GeminiLive] ❌ Tool execution error:', error.message);
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
+            console.error('[GeminiLive] ❌ Tool execution error:', errorMessage);
 
             // Envoyer une réponse d'erreur pour débloquer le modèle
             const errorResponse = {
@@ -436,7 +575,7 @@ export class GeminiLiveProvider {
                     functionResponses: [{
                         id: functionCall.id || `tool_${Date.now()}`,
                         name: functionCall.name,
-                        response: { error: error.message }
+                        response: { error: errorMessage }
                     }]
                 }
             };
@@ -447,7 +586,7 @@ export class GeminiLiveProvider {
     /**
      * Gérer un toolCall (format alternatif du serveur)
      */
-    async _handleToolCall(toolCall: any) {
+    async _handleToolCall(toolCall: ToolCall): Promise<void> {
         const calls = toolCall.functionCalls || [];
         for (const fc of calls) {
             await this._handleFunctionCall(fc);
@@ -478,7 +617,7 @@ export class GeminiLiveProvider {
     /**
      * Envoyer un message JSON au serveur
      */
-    _send(message: any) {
+    _send(message: Record<string, unknown> | SetupMessage): void {
         if (this.ws && this.isConnected) {
             this.ws.send(JSON.stringify(message));
         }
@@ -499,8 +638,8 @@ export class GeminiLiveProvider {
     /**
      * Process audio avec tools (méthode principale — point d'entrée depuis le Core)
      */
-    async processAudioWithTools(options: any): Promise<any> {
-        const { audioBuffer, systemPrompt, tools, conversationHistory, voice } = options;
+    async processAudioWithTools(options: ProcessAudioOptions): Promise<GeminiLiveResponse> {
+        const { audioBuffer, systemPrompt, tools, voice } = options;
 
         try {
             // 1. Connexion + setup (attend setupComplete)
@@ -517,8 +656,8 @@ export class GeminiLiveProvider {
 
             return response;
 
-        } catch (error: any) {
-            console.error('[GeminiLive] ❌ Process error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GeminiLive] ❌ Process error:', extractErrorMessage(error));
             await this.disconnect();
             throw error;
         }

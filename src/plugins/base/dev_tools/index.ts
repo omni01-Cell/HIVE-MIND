@@ -15,9 +15,9 @@ import BrowserTools from './BrowserTools.js';
 import LSPTool from './LSPTool.js';
 
 interface DevToolsContext {
-    transport?: any;
+    transport?: { sendText: (chatId: string | undefined, text: string) => Promise<void>; setPresence: (chatId: string | undefined, presence: string) => Promise<void>; sendContact: (chatId: string | undefined, name: string, phone: string) => Promise<void> };
     chatId?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -56,7 +56,8 @@ const AGGREGATED_TOOL_DEFINITIONS = [
 // ──────────────────────────────────────────────────────────────────────────────
 // MAP outil → sous-module (routing O(1))
 // ──────────────────────────────────────────────────────────────────────────────
-const TOOL_ROUTER: Record<string, any> = {};
+// Tool modules have heterogeneous shapes; we store them as-is and call execute() at runtime.
+const TOOL_ROUTER: Record<string, Record<string, unknown>> = {};
 
 const tools = [
     BashTool,
@@ -130,6 +131,6 @@ export default {
             };
         }
 
-        return subModule.execute(args, context, toolName);
+        return (subModule as { execute: (args: unknown, context: DevToolsContext, toolName: string) => Promise<unknown> }).execute(args, context, toolName);
     }
 };

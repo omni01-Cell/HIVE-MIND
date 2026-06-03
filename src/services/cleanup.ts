@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export class CleanupService {
-    tempDir: any;
-    thresholdMs: any;
+    tempDir: string;
+    thresholdMs: number;
 
     constructor() {
         // Paths relative to services/
@@ -22,12 +22,13 @@ export class CleanupService {
         try {
             const now = Date.now();
             this._cleanRecursive(this.tempDir, now);
-        } catch (error: any) {
-            console.error('[Cleanup] Erreur:', error.message);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('[Cleanup] Erreur:', errorMessage);
         }
     }
 
-    _cleanRecursive(directory: any, now: any) {
+    _cleanRecursive(directory: string, now: number) {
         try {
             const files = fs.readdirSync(directory);
 
@@ -44,14 +45,16 @@ export class CleanupService {
                         try {
                             fs.unlinkSync(filePath);
                             // console.log(`[Cleanup] Supprimé: ${file}`);
-                        } catch (e: any) {
-                            console.warn(`[Cleanup] Echec suppression ${file}: ${e.message}`);
+                        } catch (e: unknown) {
+                            const eMessage = e instanceof Error ? e.message : String(e);
+                            console.warn(`[Cleanup] Echec suppression ${file}: ${eMessage}`);
                         }
                     }
                 }
             }
-        } catch (e: any) {
-            console.warn(`[Cleanup] Erreur lecture dossier ${directory}: ${e.message}`);
+        } catch (e: unknown) {
+            const eMessage = e instanceof Error ? e.message : String(e);
+            console.warn(`[Cleanup] Erreur lecture dossier ${directory}: ${eMessage}`);
         }
     }
 }

@@ -9,6 +9,11 @@ import { providerRouter } from '../providers/index.js';
 import { supabase } from './supabase.js';
 import { container } from '../core/ServiceContainer.js';
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LESSONS_PATH = join(__dirname, '..', 'persona', 'lessons_learned.md');
 
@@ -28,7 +33,7 @@ Your purpose: analyze recent failures and extract lessons to prevent repetition.
 </role>
 
 <recent_errors>
-${recentErrors.map((err: any) => `- ${err}`).join('\n')}
+${recentErrors.map((err: string) => `- ${err}`).join('\n')}
 </recent_errors>
 
 <current_lessons>
@@ -80,15 +85,16 @@ ${response.content}`;
                     return; // Succès, on sort
                 }
 
-            } catch (error: any) {
+            } catch (error: unknown) {
                 retries++;
+                const errorMessage = extractErrorMessage(error);
 
                 if (retries < maxRetries) {
                     const delay = 5000 * Math.pow(2, retries); // Backoff: 5s, 10s, 20s
                     console.warn(`[DreamService] ⚠️ Tentative ${retries}/${maxRetries} échouée, retry dans ${delay/1000}s...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                 } else {
-                    console.error(`[DreamService] ❌ Échec après ${maxRetries} tentatives:`, error.message);
+                    console.error(`[DreamService] ❌ Échec après ${maxRetries} tentatives:`, errorMessage);
                 }
             }
         }
@@ -124,8 +130,8 @@ ${response.content}`;
                     }
                 }
             }
-        } catch (e: any) {
-            console.error('[DreamService] Erreur sync tool embeddings:', e.message);
+        } catch (e: unknown) {
+            console.error('[DreamService] Erreur sync tool embeddings:', extractErrorMessage(e));
         }
     },
 
@@ -146,8 +152,8 @@ ${response.content}`;
     async getRecentErrors() {
         try {
             const lessons = await agentMemory.getGlobalLessonsLearned(10);
-            return lessons.map((l: any) => `[${l.tool}] ${l.error}`);
-        } catch (e) {
+            return lessons.map((l: { tool: string; error: string | null }) => `[${l.tool}] ${l.error}`);
+        } catch {
             return [];
         }
     }

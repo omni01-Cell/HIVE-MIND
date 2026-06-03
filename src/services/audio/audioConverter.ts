@@ -1,20 +1,22 @@
-// services/audio/audioConverter.js
+// services/audio/audioConverter.ts
 // Convertit les formats audio entre WhatsApp (OGG Opus) et Gemini (PCM 16kHz mono)
 
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
-import { promisify } from 'util';
 import { unlink } from 'fs/promises';
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
+type ResolveFn<T> = (value: T | PromiseLike<T>) => void;
+type RejectFn = (reason?: unknown) => void;
+
 /**
  * Convertir OGG Opus vers PCM 16kHz mono (format Gemini)
- * @param {string} inputPath - Chemin du fichier OGG
- * @returns {Promise<Buffer>} Buffer PCM
+ * @param inputPath - Chemin du fichier OGG
+ * @returns Buffer PCM
  */
 export async function convertOggToPcm(inputPath: string): Promise<Buffer> {
-    return new Promise((resolve: any, reject: any) => {
+    return new Promise<Buffer>((resolve: ResolveFn<Buffer>, reject: RejectFn) => {
         const chunks: Buffer[] = [];
 
         ffmpeg(inputPath)
@@ -22,7 +24,7 @@ export async function convertOggToPcm(inputPath: string): Promise<Buffer> {
             .audioFrequency(16000)    // 16kHz
             .audioChannels(1)         // Mono
             .format('s16le')          // Raw PCM
-            .on('error', (err: any) => {
+            .on('error', (err: Error) => {
                 console.error('[AudioConverter] ❌ OGG→PCM error:', err.message);
                 reject(err);
             })
@@ -32,18 +34,19 @@ export async function convertOggToPcm(inputPath: string): Promise<Buffer> {
                 resolve(buffer);
             })
             .pipe()
-            .on('data', (chunk: any) => chunks.push(chunk));
+            .on('data', (chunk: Buffer) => chunks.push(chunk));
     });
 }
 
 /**
  * Convertir PCM vers OGG Opus (format WhatsApp)
- * @param {string} inputPath - Chemin du fichier PCM
- * @param {string} outputPath - Chemin de sortie OGG
- * @returns {Promise<string>} Chemin du fichier OGG
+ * @param inputPath - Chemin du fichier PCM
+ * @param outputPath - Chemin de sortie OGG
+ * @param sampleRate - Fréquence d'échantillonnage en Hz
+ * @returns Chemin du fichier OGG
  */
 export async function convertPcmToOgg(inputPath: string, outputPath: string, sampleRate = 24000): Promise<string> {
-    return new Promise((resolve: any, reject: any) => {
+    return new Promise<string>((resolve: ResolveFn<string>, reject: RejectFn) => {
         ffmpeg(inputPath)
             .inputOptions([
                 '-f s16le',
@@ -54,7 +57,7 @@ export async function convertPcmToOgg(inputPath: string, outputPath: string, sam
             .audioBitrate('64k')
             .audioFrequency(48000)
             .format('ogg')
-            .on('error', (err: any, stdout: any, stderr: any) => {
+            .on('error', (err: Error, _stdout: string | null, stderr: string | null) => {
                 if (stderr) console.error('[AudioConverter] FFmpeg stderr:', stderr);
                 console.error('[AudioConverter] ❌ PCM→OGG error:', err.message);
                 reject(err);
@@ -69,17 +72,17 @@ export async function convertPcmToOgg(inputPath: string, outputPath: string, sam
 
 /**
  * Convertir et nettoyer (tout-en-un)
- * @param {string} inputOgg - Fichier OGG WhatsApp
- * @param {string} outputOgg - Fichier OGG de sortie
- * @param {Function} processCallback - Fonction de traitement (reçoit PCM buffer)
+ * @param inputOgg - Fichier OGG WhatsApp
+ * @param outputOgg - Fichier OGG de sortie
+ * @param processCallback - Fonction de traitement (reçoit PCM buffer)
  */
 export async function processAudioPipeline(
     inputOgg: string,
     outputOgg: string,
     processCallback: (buffer: Buffer) => Promise<string>
 ): Promise<string> {
-    let pcmBuffer: any = null;
-    let tempPcmPath: any = null;
+    let pcmBuffer: Buffer | null = null;
+    let tempPcmPath: string | null = null;
 
     try {
         // 1. OGG → PCM

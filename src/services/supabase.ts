@@ -1,7 +1,7 @@
 // services/supabase.ts
 // Client Supabase pour la persistance cloud - Omni-Channel Ready
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -10,18 +10,47 @@ import ws from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+interface SupabaseCredentials {
+    project_url?: string;
+    url?: string;
+    service_role_key?: string;
+    key?: string;
+}
+
+interface Credentials {
+    supabase?: SupabaseCredentials;
+}
+
+interface ResolvedContext {
+    context_id: string;
+    type: 'user' | 'group';
+}
+
+interface HealthCheckResult {
+    status: 'connected' | 'disconnected' | 'error';
+    error?: string;
+    latency?: string;
+    userCount?: number | null;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 // Charger les credentials
-let credentials: any;
+let credentials: Credentials | null = null;
 try {
     const credentialsPath = join(__dirname, '..', 'config', 'credentials.json');
-    credentials = JSON.parse(readFileSync(credentialsPath, 'utf-8'));
-} catch (error: any) {
-    console.warn(`⚠️ Erreur lecture credentials: ${error.message}`);
+    credentials = JSON.parse(readFileSync(credentialsPath, 'utf-8')) as Credentials;
+} catch (error: unknown) {
+    console.warn(`⚠️ Erreur lecture credentials: ${extractErrorMessage(error)}`);
     credentials = null;
 }
 
 // Créer le client Supabase
-let supabase: any = null;
+let supabase: SupabaseClient | null = null;
 
 let projUrl = credentials?.supabase?.project_url || credentials?.supabase?.url;
 let projKey = credentials?.supabase?.service_role_key || credentials?.supabase?.key;
@@ -36,7 +65,7 @@ if (!projKey) projKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUP
 
 if (projUrl && projUrl.startsWith('http') && projUrl !== 'https://VOTRE_PROJET.supabase.co') {
     // IMPORTANT : Utiliser service_role_key pour contourner Row Level Security
-    supabase = createClient(projUrl, projKey, {
+    supabase = createClient(projUrl, projKey ?? '', {
         auth: {
             persistSession: false
         },
@@ -54,11 +83,11 @@ export const db = {
         return supabase;
     },
 
-    from(table: any) {
+    from(table: string) {
         return supabase?.from(table);
     },
 
-    rpc(fn: any, args: any) {
+    rpc(fn: string, args: Record<string, unknown>) {
         return supabase?.rpc(fn, args);
     },
 
@@ -167,7 +196,7 @@ export const db = {
      * Legacy JID resolver for backward compatibility
      * Déduit automatiquement la plateforme depuis le format du JID WhatsApp/Telegram/Discord
      */
-    async resolveContextFromLegacyId(legacyId: string): Promise<{ context_id: string, type: 'user' | 'group' } | null> {
+    async resolveContextFromLegacyId(legacyId: string): Promise<ResolvedContext | null> {
         if (!legacyId) return null;
 
         // Heuristiques de détection
@@ -198,7 +227,7 @@ export const db = {
     /**
      * [EPISODIC MEMORY] Enregistre une action de l'agent
      */
-    async logAction(chatId: any, toolName: any, params: any, result: any, isSuccess: any = true, errorMessage: any = null) {
+    async logAction(chatId: string, toolName: string, params: Record<string, unknown>, result: Record<string, unknown>, isSuccess = true, errorMessage: string | null = null) {
         if (!supabase) return;
         const resolved = await this.resolveContextFromLegacyId(chatId);
         if (!resolved) return;
@@ -212,7 +241,7 @@ export const db = {
                 status: isSuccess ? 'success' : 'error',
                 error_message: errorMessage
             });
-        } catch (e: any) {
+        } catch {
             // Silencieux si la table n'existe pas encore
         }
     },
@@ -220,7 +249,7 @@ export const db = {
     /**
      * Récupère la config avancée d'un groupe
      */
-    async getGroupConfig(jid: any) {
+    async getGroupConfig(jid: string) {
         if (!supabase) return null;
         const resolved = await this.resolveContextFromLegacyId(jid);
         if (!resolved || resolved.type !== 'group') return null;
@@ -240,7 +269,7 @@ export const db = {
     /**
      * Met à jour la config d'un groupe
      */
-    async upsertGroupConfig(jid: any, config: any) {
+    async upsertGroupConfig(jid: string, config: Record<string, unknown>) {
         if (!supabase) return null;
         const resolved = await this.resolveContextFromLegacyId(jid);
         if (!resolved || resolved.type !== 'group') return null;
@@ -261,7 +290,7 @@ export const db = {
     /**
      * Crée un nouveau rappel
      */
-    async createReminder(chatId: any, message: any, remindAt: any) {
+    async createReminder(chatId: string, message: string, remindAt: Date) {
         if (!supabase) return null;
         const resolved = await this.resolveContextFromLegacyId(chatId);
         if (!resolved) return null;
@@ -303,7 +332,7 @@ export const db = {
     /**
      * Marque un rappel comme envoyé
      */
-    async markReminderSent(reminderId: any) {
+    async markReminderSent(reminderId: string) {
         if (!supabase) return;
 
         await supabase
@@ -315,7 +344,7 @@ export const db = {
     /**
      * Reprogramme un rappel récurrent
      */
-    async rescheduleReminder(reminderId: any, nextDate: any) {
+    async rescheduleReminder(reminderId: string, nextDate: Date) {
         if (!supabase) return;
 
         await supabase
@@ -324,7 +353,7 @@ export const db = {
             .eq('id', reminderId);
     },
 
-    async getGroupFounder(groupJid: any) {
+    async getGroupFounder(groupJid: string) {
         if (!supabase) return null;
         const resolved = await this.resolveContextFromLegacyId(groupJid);
         if (!resolved || resolved.type !== 'group') return null;
@@ -354,7 +383,7 @@ export const db = {
     /**
      * Définit le fondateur d'un groupe
      */
-    async setGroupFounder(groupJid: any, founderJid: any) {
+    async setGroupFounder(groupJid: string, founderJid: string) {
         if (!supabase) return null;
         const groupRes = await this.resolveContextFromLegacyId(groupJid);
         const founderRes = await this.resolveContextFromLegacyId(founderJid);
@@ -375,7 +404,7 @@ export const db = {
     /**
      * Récupère l'historique d'un membre dans un groupe
      */
-    async getMemberHistory(groupJid: any, userJid: any) {
+    async getMemberHistory(groupJid: string, userJid: string) {
         if (!supabase) return [];
         const groupRes = await this.resolveContextFromLegacyId(groupJid);
         const userRes = await this.resolveContextFromLegacyId(userJid);
@@ -396,7 +425,7 @@ export const db = {
     /**
      * Enregistre un événement de membre de groupe (join, leave, etc.)
      */
-    async recordMemberEvent(groupJid: any, userJid: any, action: any) {
+    async recordMemberEvent(groupJid: string, userJid: string, action: string) {
         if (!supabase) return null;
         const groupRes = await this.resolveContextFromLegacyId(groupJid);
         const userRes = await this.resolveContextFromLegacyId(userJid);
@@ -420,15 +449,15 @@ export const db = {
     /**
      * Vérifie si un utilisateur a déjà quitté le groupe
      */
-    async hasLeftBefore(groupJid: any, userJid: any) {
+    async hasLeftBefore(groupJid: string, userJid: string) {
         const history = await this.getMemberHistory(groupJid, userJid);
-        return history.some((event: any) => event.action === 'remove');
+        return history.some((event) => event.action === 'remove');
     },
 
     /**
      * Vérifie l'état de santé de Supabase
      */
-    async checkHealth() {
+    async checkHealth(): Promise<HealthCheckResult> {
         if (!supabase) {
             return { status: 'disconnected', error: 'Supabase client not initialized' };
         }
@@ -441,8 +470,8 @@ export const db = {
 
             if (error) throw error;
             return { status: 'connected', latency: `${Date.now() - start}ms`, userCount: count };
-        } catch (e: any) {
-            return { status: 'error', error: e.message };
+        } catch (error: unknown) {
+            return { status: 'error', error: extractErrorMessage(error) };
         }
     }
 };

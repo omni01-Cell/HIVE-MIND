@@ -167,8 +167,8 @@ export class HiveWakeSystem extends EventEmitter {
                     missed.push(event);
                     await redis.hDel('hive:wake_events', id);
                 }
-            } catch (e: any) {
-                console.error('[WakeSystem] Error parsing wake event:', e.message);
+            } catch (e: unknown) {
+                console.error('[WakeSystem] Error parsing wake event:', e instanceof Error ? e.message : String(e));
                 await redis.hDel('hive:wake_events', id); // Clean invalid data
             }
         }
@@ -188,10 +188,8 @@ export class HiveWakeSystem extends EventEmitter {
      * @param chatId — Conversation courante, pour associer le wake event au bon canal
      */
     buildHiveBridge(chatId: string): HiveWakeBridge {
-        const self = this;
-
         return {
-            async sleepAndWake(delayMs: number, wakePrompt: string): Promise<SleepResult> {
+            sleepAndWake: async (delayMs: number, wakePrompt: string): Promise<SleepResult> => {
                 if (!Number.isFinite(delayMs) || delayMs < 0) {
                     return {
                         type: 'SLEEP_ERROR',
@@ -210,14 +208,14 @@ export class HiveWakeSystem extends EventEmitter {
                 }
                 // Plafonner à 24h pour éviter les oublis
                 const clampedDelay = Math.min(delayMs, 24 * 60 * 60 * 1000);
-                return await self.scheduleWake(chatId, clampedDelay, wakePrompt);
+                return await this.scheduleWake(chatId, clampedDelay, wakePrompt);
             },
 
-            async waitForBackground(commandId: string, checkEveryMs: number = 10_000, wakePrompt: string): Promise<SleepResult> {
+            waitForBackground: async (commandId: string, checkEveryMs: number = 10_000, wakePrompt: string): Promise<SleepResult> => {
                 // Programme un premier check après checkEveryMs.
                 // Le tick() vérifiera le commandId et re-planifiera si toujours en cours.
                 const clampedInterval = Math.max(checkEveryMs, 3_000); // Min 3s
-                return await self.scheduleWake(chatId, clampedInterval, wakePrompt, commandId, clampedInterval);
+                return await this.scheduleWake(chatId, clampedInterval, wakePrompt, commandId, clampedInterval);
             }
         };
     }

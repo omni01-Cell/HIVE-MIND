@@ -1,75 +1,109 @@
-// services/memory.js
+// services/memory.ts
 // Service de mémoire sémantique (RAG) avec pgvector
 
 import { supabase, db } from './supabase.js';
 
-// Initialisation embeddings via container singleton
-let embeddings: any = null;
-let container: any = null;
+interface EmbeddingsService {
+    embed(text: string, taskType: string): Promise<number[] | null>;
+}
 
-// Fonction pour obtenir l'instance singleton
-async function getEmbeddingsService() {
-    if (embeddings) return embeddings;
+interface ContainerService {
+    has(name: string): boolean;
+    get(name: string): EmbeddingsService;
+}
+
+interface MemoryRow {
+    id?: string;
+    content: string;
+    role: string;
+    created_at?: string;
+    chat_id?: string;
+    context_id?: string;
+    embedding?: number[];
+    metadata?: Record<string, unknown>;
+}
+
+interface FactRow {
+    key: string;
+    value: string;
+}
+
+interface WorkspaceRow {
+    id?: string;
+    content: string;
+    tags?: string[];
+    access_count?: number;
+    variance?: number;
+    key?: string;
+    updated_at?: string;
+    context_id?: string;
+}
+
+interface FormattedMemory extends MemoryRow {
+    formattedContent: string;
+}
+
+interface SummarizeResult {
+    success: boolean;
+    reason?: string;
+    summarized?: number;
+    summary?: string;
+}
+
+let embeddingsInstance: EmbeddingsService | null = null;
+let containerInstance: ContainerService | null = null;
+
+async function getEmbeddingsService(): Promise<EmbeddingsService | null> {
+    if (embeddingsInstance) return embeddingsInstance;
 
     try {
-        if (!container) {
+        if (!containerInstance) {
             const { container: serviceContainer } = await import('../core/ServiceContainer.js');
-            container = serviceContainer;
+            containerInstance = serviceContainer as unknown as ContainerService;
         }
 
-        if (container.has('embeddings')) {
-            embeddings = container.get('embeddings');
+        if (containerInstance.has('embeddings')) {
+            embeddingsInstance = containerInstance.get('embeddings');
             console.log('[Memory] ✅ EmbeddingsService chargé depuis container (singleton)');
         } else {
             console.warn('[Memory] EmbeddingsService non disponible dans container');
         }
-    } catch (e: any) {
-        console.error('[Memory] Erreur chargement EmbeddingsService depuis container:', e.message);
+    } catch (e: unknown) {
+        console.error('[Memory] Erreur chargement EmbeddingsService depuis container:', e instanceof Error ? e.message : String(e));
     }
 
-    return embeddings;
+    return embeddingsInstance;
 }
 
-/**
- * Service de mémoire sémantique
- * Utilise les embeddings pour une recherche par similarité
- */
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
 export const semanticMemory = {
-    /**
-     * Stocke un message avec son embedding et auto-tagging
-     * @param {string} chatId
-     * @param {string} content
-     * @param {'user'|'assistant'} role
-     * @param {Object} options - { msgId }
-     */
-    async store(chatId: any, content: any, role: any, options: any = {}) {
+    async store(chatId: string, content: string, role: 'user' | 'assistant', options: { msgId?: string } = {}): Promise<void> {
         if (!supabase || !content?.trim()) return;
 
-        // Obtenir l'instance singleton depuis le container
-        const embeddings = await getEmbeddingsService();
-        if (!embeddings) {
+        const emb = await getEmbeddingsService();
+        if (!emb) {
             console.warn('[Memory] EmbeddingsService non disponible, message non vectorisé');
             return;
         }
 
-        // 1. Génération de l'embedding
-        const vector = await embeddings.embed(content, 'RETRIEVAL_DOCUMENT');
-
+        const vector = await emb.embed(content, 'RETRIEVAL_DOCUMENT');
         if (!vector) {
             console.warn('[Memory] Échec génération embedding, message non vectorisé.');
             return;
         }
 
-        // 2. [LEVEL 5] Auto-Tagging
         let tags: string[] = [];
         try {
             const { tagService } = await import('./tagService.js');
             tags = await tagService.generateTags(content);
-        } catch (e: any) {
-            console.warn('[Memory] Erreur tagging:', e.message);
+        } catch (e: unknown) {
+            console.warn('[Memory] Erreur tagging:', extractErrorMessage(e));
         }
 
-        // 3. Préparer les metadata pour le feedback loop
         const metadata = {
             msgId: options.msgId,
             tags,
@@ -78,13 +112,13 @@ export const semanticMemory = {
 
         let contextId = chatId;
         try {
-            const { db } = await import('./supabase.js');
-            const resolved = await db.resolveContextFromLegacyId(chatId);
+            const { db: dbMod } = await import('./supabase.js');
+            const resolved = await dbMod.resolveContextFromLegacyId(chatId);
             if (resolved) {
                 contextId = resolved.context_id;
             }
-        } catch (e: any) {
-            console.warn('[Memory] Résolution context_id échouée:', e.message);
+        } catch (e: unknown) {
+            console.warn('[Memory] Résolution context_id échouée:', extractErrorMessage(e));
         }
 
         const { error } = await supabase
@@ -100,22 +134,12 @@ export const semanticMemory = {
         if (error) console.error('[Memory] Erreur store:', error);
     },
 
-    /**
-     * Recherche les souvenirs similaires (RAG) avec contexte temporel
-     * Utilise la recherche vectorielle pour trouver des messages pertinents
-     * @param {string} chatId
-     * @param {string} query
-     * @param {number} limit
-     * @returns {Promise<Array>}
-     */
-    async recall(chatId: any, query: any, limit: any = 5) {
+    async recall(chatId: string, query: string, limit = 5): Promise<FormattedMemory[]> {
         if (!supabase) return [];
 
-        // Obtenir l'instance singleton depuis le container
-        const embeddings = await getEmbeddingsService();
-        if (!embeddings) {
+        const emb = await getEmbeddingsService();
+        if (!emb) {
             console.warn('[Memory] EmbeddingsService non disponible, fallback temporel');
-            // Fallback: recherche simple par date
             const { data } = await supabase
                 .from('memories')
                 .select('content, role, created_at')
@@ -123,14 +147,11 @@ export const semanticMemory = {
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
-            return this._formatWithAge(data || []);
+            return this._formatWithAge((data || []) as MemoryRow[]);
         }
 
-        // Utilise taskType 'RETRIEVAL_QUERY' pour optimiser la recherche
-        const vector = await embeddings.embed(query, 'RETRIEVAL_QUERY');
-
+        const vector = await emb.embed(query, 'RETRIEVAL_QUERY');
         if (!vector) {
-            // Fallback: recherche simple par date
             console.warn('[Memory] Échec embedding requête, fallback temporel');
             const { data } = await supabase
                 .from('memories')
@@ -139,22 +160,20 @@ export const semanticMemory = {
                 .order('created_at', { ascending: false })
                 .limit(limit);
 
-            return this._formatWithAge(data || []);
+            return this._formatWithAge((data || []) as MemoryRow[]);
         }
 
-        // [OMNI-CHANNEL] Résoudre le chatId (JID legacy) en UUID context_id
         let contextId = chatId;
         try {
             const resolved = await db.resolveContextFromLegacyId(chatId);
             if (resolved) {
                 contextId = resolved.context_id;
             }
-        } catch (e: any) {
-            console.warn('[Memory] Résolution context_id échouée, skip recall:', e.message);
+        } catch (e: unknown) {
+            console.warn('[Memory] Résolution context_id échouée, skip recall:', extractErrorMessage(e));
             return [];
         }
 
-        // Recherche par similarité vectorielle
         const { data, error } = await supabase
             .rpc('match_memories', {
                 query_embedding: vector,
@@ -168,43 +187,31 @@ export const semanticMemory = {
             return [];
         }
 
-        // --- GLOBAL KNOWLEDGE RECALL (RAG Documentaire) ---
-        // Recherche aussi dans la base de connaissances globale
-        let globalData = [];
+        let globalData: MemoryRow[] = [];
         try {
             const { data: gData, error: gError } = await supabase
                 .rpc('match_memories', {
                     query_embedding: vector,
-                    match_context_id: 'global', // ID Spécial
-                    match_threshold: 0.65,   // Seuil légèrement plus bas/haut selon besoin
+                    match_context_id: 'global',
+                    match_threshold: 0.65,
                     match_count: limit
                 });
 
             if (!gError && gData) {
                 globalData = gData;
             }
-        } catch (e: any) {
-            console.warn('[Memory] Erreur global recall:', e.message);
+        } catch (e: unknown) {
+            console.warn('[Memory] Erreur global recall:', extractErrorMessage(e));
         }
 
-        // Fusionner et trier par similarité (si score dispo) ou entrelacer
-        // Ici on concatène simplement, l'IA fera le tri contextuel
-        const combined = [...(data || []), ...globalData];
+        const combined = [...((data || []) as MemoryRow[]), ...globalData];
+        const unique = Array.from(new Map(combined.map((item) => [item.id, item])).values());
 
-        // Déduplication basique par ID
-        const unique = Array.from(new Map(combined.map((item: any) => [item.id, item])).values());
-
-        // [RAG TEMPOREL] Ajouter le contexte temporel aux souvenirs
         return this._formatWithAge(unique.slice(0, limit + 2));
     },
 
-    /**
-     * Formate les souvenirs avec leur âge relatif
-     * @param {Array} memories - Tableau de souvenirs avec created_at
-     * @returns {Array} - Souvenirs formatés avec [date relative]
-     */
-    _formatWithAge(memories: any) {
-        return memories.map((m: any) => {
+    _formatWithAge(memories: MemoryRow[]): FormattedMemory[] {
+        return memories.map((m) => {
             const age = this._formatAge(m.created_at);
             return {
                 ...m,
@@ -213,12 +220,7 @@ export const semanticMemory = {
         });
     },
 
-    /**
-     * Calcule l'âge relatif d'un souvenir
-     * @param {string} createdAt - Date ISO
-     * @returns {string} - Ex: "Aujourd'hui", "Hier", "Il y a 3 jours"
-     */
-    _formatAge(createdAt: any) {
+    _formatAge(createdAt: string | undefined): string {
         if (!createdAt) return 'Date inconnue';
 
         const now = Date.now();
@@ -234,13 +236,7 @@ export const semanticMemory = {
         return `Il y a ${Math.floor(diffDays / 365)} ans`;
     },
 
-    /**
-     * Récupère le contexte récent d'une conversation (Supabase)
-     * FALLBACK: Utilisé si Redis (workingMemory) n'est pas disponible
-     * @param {string} chatId
-     * @param {number} limit
-     */
-    async getRecentContext(chatId: any, limit: any = 10) {
+    async getRecentContext(chatId: string, limit = 10): Promise<string> {
         if (!supabase) return '';
 
         const { data } = await supabase
@@ -254,21 +250,14 @@ export const semanticMemory = {
 
         return data
             .reverse()
-            .map((m: any) => `[${m.role}]: ${m.content}`)
+            .map((m: { role: string; content: string }) => `[${m.role}]: ${m.content}`)
             .join('\n');
     },
 
-    /**
-     * Résume les anciennes conversations via IA
-     * Compresse les vieux messages en faits pour économiser l'espace
-     * @param {string} chatId
-     * @param {number} keepLast - Nombre de messages récents à garder intacts
-     */
-    async summarize(chatId: any, keepLast: any = 50) {
+    async summarize(chatId: string, keepLast = 50): Promise<SummarizeResult> {
         if (!supabase) return { success: false, reason: 'Supabase non disponible' };
 
         try {
-            // 1. Compter le nombre total de souvenirs pour ce chat
             const { count } = await supabase
                 .from('memories')
                 .select('*', { count: 'exact', head: true })
@@ -278,28 +267,24 @@ export const semanticMemory = {
                 return { success: true, reason: 'Pas assez de messages à résumer' };
             }
 
-            // 2. Récupérer les vieux messages (les plus anciens)
             const toSkip = count - keepLast;
             const { data: oldMessages } = await supabase
                 .from('memories')
                 .select('id, content, role, created_at')
                 .eq('chat_id', chatId)
                 .order('created_at', { ascending: true })
-                .limit(Math.min(toSkip, 100)); // Max 100 pour éviter surcharge
+                .limit(Math.min(toSkip, 100));
 
             if (!oldMessages || oldMessages.length < 10) {
                 return { success: true, reason: 'Pas assez de messages pour un résumé significatif' };
             }
 
-            // 3. Préparer le texte à résumer
             const conversationText = oldMessages
-                .map((m: any) => `[${m.role}]: ${m.content}`)
+                .map((m: { role: string; content: string }) => `[${m.role}]: ${m.content}`)
                 .join('\n');
 
-            // 4. Import dynamique pour éviter la dépendance circulaire
             const { providerRouter } = await import('../providers/index.js');
 
-            // 5. Appeler l'IA pour résumer (utiliser Gemini car rapide et économique)
             console.log(`[Memory] Résumé de ${oldMessages.length} messages pour ${chatId}...`);
 
             const response = await providerRouter.chat([
@@ -328,13 +313,11 @@ Few-shot examples:
                 return { success: false, reason: 'Échec génération résumé IA' };
             }
 
-            // 6. Stocker le résumé comme "fait" persistant
             const { factsMemory } = await import('./memory.js');
             const timestamp = new Date().toISOString().split('T')[0];
             await factsMemory.remember(chatId, `résumé_${timestamp}`, response.content);
 
-            // 7. Supprimer les vieux messages traités
-            const idsToDelete = oldMessages.map((m: any) => m.id);
+            const idsToDelete = oldMessages.map((m: { id: string }) => m.id);
             await supabase
                 .from('memories')
                 .delete()
@@ -348,22 +331,15 @@ Few-shot examples:
                 summary: response.content.substring(0, 200) + '...'
             };
 
-        } catch (error: any) {
-            console.error('[Memory] Erreur summarize:', error.message);
-            return { success: false, reason: error.message };
+        } catch (error: unknown) {
+            console.error('[Memory] Erreur summarize:', extractErrorMessage(error));
+            return { success: false, reason: extractErrorMessage(error) };
         }
     },
 
-    /**
-     * Nettoie les vieux souvenirs (garbage collection)
-     * Appelé via le job scheduler quotidien 'memoryCleanup'
-     * @param {string} chatId
-     * @param {number} keepLast
-     */
-    async cleanup(chatId: any, keepLast: any = 50) {
+    async cleanup(chatId: string, keepLast = 50): Promise<void> {
         if (!supabase) return;
 
-        // Récupère les IDs à garder
         const { data: toKeep } = await supabase
             .from('memories')
             .select('id')
@@ -373,9 +349,8 @@ Few-shot examples:
 
         if (!toKeep?.length) return;
 
-        const keepIds = toKeep.map((m: any) => m.id);
+        const keepIds = toKeep.map((m: { id: string }) => m.id);
 
-        // Supprime les autres
         await supabase
             .from('memories')
             .delete()
@@ -384,14 +359,8 @@ Few-shot examples:
     }
 };
 
-/**
- * Service de faits mémorisés (informations persistantes)
- */
 export const factsMemory = {
-    /**
-     * Mémorise un fait sur l'utilisateur
-     */
-    async remember(chatId: any, key: any, value: any) {
+    async remember(chatId: string, key: string, value: string): Promise<void> {
         if (!supabase) return;
 
         const { error } = await supabase
@@ -405,10 +374,7 @@ export const factsMemory = {
         if (error) console.error('[Facts] Erreur remember:', error);
     },
 
-    /**
-     * Récupère tous les faits connus sur un utilisateur
-     */
-    async getAll(chatId: any) {
+    async getAll(chatId: string): Promise<Record<string, string>> {
         if (!supabase) return {};
 
         const { data } = await supabase
@@ -418,16 +384,13 @@ export const factsMemory = {
 
         if (!data) return {};
 
-        return data.reduce((acc: any, fact: any) => {
+        return data.reduce((acc: Record<string, string>, fact: FactRow) => {
             acc[fact.key] = fact.value;
             return acc;
         }, {});
     },
 
-    /**
-     * Récupère un fait spécifique
-     */
-    async get(chatId: any, key: any) {
+    async get(chatId: string, key: string): Promise<string | null> {
         if (!supabase) return null;
 
         const { data } = await supabase
@@ -440,10 +403,7 @@ export const factsMemory = {
         return data?.value || null;
     },
 
-    /**
-     * Supprime un fait
-     */
-    async forget(chatId: any, key: any) {
+    async forget(chatId: string, key: string): Promise<void> {
         if (!supabase) return;
 
         await supabase
@@ -453,10 +413,7 @@ export const factsMemory = {
             .eq('key', key);
     },
 
-    /**
-     * Formate les faits pour inclusion dans le prompt
-     */
-    async format(chatId: any) {
+    async format(chatId: string): Promise<string> {
         const facts = await this.getAll(chatId);
         if (Object.keys(facts).length === 0) return '';
 
@@ -466,11 +423,8 @@ export const factsMemory = {
     }
 };
 
-/**
- * Service de Workspace Agentique (Epistemic Memory)
- */
 export const workspaceMemory = {
-    async write(chatId: any, key: any, content: any, tags: any[] = []) {
+    async write(chatId: string, key: string, content: string, tags: string[] = []): Promise<boolean> {
         if (!supabase) return false;
         if (!key) {
             console.error('[Workspace] Erreur write: key est vide ou non défini');
@@ -479,17 +433,17 @@ export const workspaceMemory = {
 
         let contextId = chatId;
         try {
-            const { db } = await import('./supabase.js');
-            const resolved = await db.resolveContextFromLegacyId(chatId);
+            const { db: dbMod } = await import('./supabase.js');
+            const resolved = await dbMod.resolveContextFromLegacyId(chatId);
             if (resolved) contextId = resolved.context_id;
-        } catch (e: any) {
-            console.warn('[Workspace] Résolution context_id échouée:', e.message);
+        } catch (e: unknown) {
+            console.warn('[Workspace] Résolution context_id échouée:', extractErrorMessage(e));
         }
 
-        const embeddings = await getEmbeddingsService();
-        let vector = null;
-        if (embeddings) {
-            vector = await embeddings.embed(content, 'RETRIEVAL_DOCUMENT');
+        const emb = await getEmbeddingsService();
+        let vector: number[] | null = null;
+        if (emb) {
+            vector = await emb.embed(content, 'RETRIEVAL_DOCUMENT');
         }
 
         const { error } = await supabase
@@ -510,15 +464,15 @@ export const workspaceMemory = {
         return true;
     },
 
-    async read(chatId: any, key: any) {
+    async read(chatId: string, key: string): Promise<WorkspaceRow | null> {
         if (!supabase) return null;
 
         let contextId = chatId;
         try {
-            const { db } = await import('./supabase.js');
-            const resolved = await db.resolveContextFromLegacyId(chatId);
+            const { db: dbMod } = await import('./supabase.js');
+            const resolved = await dbMod.resolveContextFromLegacyId(chatId);
             if (resolved) contextId = resolved.context_id;
-        } catch (e: any) { }
+        } catch { /* fallback to raw chatId */ }
 
         const { data, error } = await supabase
             .from('agent_workspace')
@@ -528,36 +482,34 @@ export const workspaceMemory = {
             .single();
 
         if (error || !data) return null;
-        // Incrémente access_count (dynamiques de Langevin)
         try {
             await supabase.rpc('increment_workspace_access', { match_id: data.id });
-        } catch (e) {
-            // Fallback manuel si la RPC n'existe pas
+        } catch {
             await supabase.from('agent_workspace')
-                .update({ access_count: data.access_count + 1, last_accessed: new Date().toISOString() })
+                .update({ access_count: (data.access_count || 0) + 1, last_accessed: new Date().toISOString() })
                 .eq('context_id', contextId).eq('key', key);
         }
 
-        return data;
+        return data as WorkspaceRow;
     },
 
-    async search(chatId: any, query: any, tags: any[] = []) {
+    async search(chatId: string, query: string, tags: string[] = []): Promise<WorkspaceRow[]> {
         if (!supabase) return [];
 
         let contextId = chatId;
         try {
-            const { db } = await import('./supabase.js');
-            const resolved = await db.resolveContextFromLegacyId(chatId);
+            const { db: dbMod } = await import('./supabase.js');
+            const resolved = await dbMod.resolveContextFromLegacyId(chatId);
             if (resolved) contextId = resolved.context_id;
-        } catch (e: any) { }
+        } catch { /* fallback to raw chatId */ }
 
-        const embeddings = await getEmbeddingsService();
-        if (!embeddings) return [];
+        const emb = await getEmbeddingsService();
+        if (!emb) return [];
 
-        const vector = await embeddings.embed(query, 'RETRIEVAL_QUERY');
+        const vector = await emb.embed(query, 'RETRIEVAL_QUERY');
         if (!vector) return [];
 
-        let { data, error } = await supabase.rpc('match_workspace', {
+        const { data: rpcData, error } = await supabase.rpc('match_workspace', {
             query_embedding: vector,
             match_threshold: 0.6,
             match_count: 5,
@@ -569,23 +521,23 @@ export const workspaceMemory = {
             return [];
         }
 
-        // Filtrage optionnel par tag
-        if (tags && tags.length > 0 && data) {
-            data = data.filter((item: any) => tags.some(tag => item.tags?.includes(tag)));
+        let result = rpcData as WorkspaceRow[] | null;
+        if (tags && tags.length > 0 && result) {
+            result = result.filter((item: WorkspaceRow) => tags.some(tag => item.tags?.includes(tag)));
         }
 
-        return data || [];
+        return result || [];
     },
 
-    async delete(chatId: any, key: any) {
+    async delete(chatId: string, key: string): Promise<boolean> {
         if (!supabase) return false;
 
         let contextId = chatId;
         try {
-            const { db } = await import('./supabase.js');
-            const resolved = await db.resolveContextFromLegacyId(chatId);
+            const { db: dbMod } = await import('./supabase.js');
+            const resolved = await dbMod.resolveContextFromLegacyId(chatId);
             if (resolved) contextId = resolved.context_id;
-        } catch (e: any) { }
+        } catch { /* fallback to raw chatId */ }
 
         const { error } = await supabase
             .from('agent_workspace')
@@ -598,7 +550,6 @@ export const workspaceMemory = {
             return false;
         }
 
-        // Cleanup associated reminders to prevent orphaned triggers
         await supabase
             .from('reminders')
             .delete()
@@ -609,15 +560,15 @@ export const workspaceMemory = {
         return true;
     },
 
-    async getKeys(chatId: any) {
+    async getKeys(chatId: string): Promise<WorkspaceRow[]> {
         if (!supabase) return [];
 
         let contextId = chatId;
         try {
-            const { db } = await import('./supabase.js');
-            const resolved = await db.resolveContextFromLegacyId(chatId);
+            const { db: dbMod } = await import('./supabase.js');
+            const resolved = await dbMod.resolveContextFromLegacyId(chatId);
             if (resolved) contextId = resolved.context_id;
-        } catch (e: any) { }
+        } catch { /* fallback to raw chatId */ }
 
         const { data, error } = await supabase
             .from('agent_workspace')
@@ -626,7 +577,7 @@ export const workspaceMemory = {
             .order('updated_at', { ascending: false });
 
         if (error) return [];
-        return data || [];
+        return (data || []) as WorkspaceRow[];
     }
 };
 

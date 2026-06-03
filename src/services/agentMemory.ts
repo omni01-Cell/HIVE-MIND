@@ -1,4 +1,4 @@
-// services/agentMemory.js
+// services/agentMemory.ts
 // Mémoire épisodique des actions de l'agent
 // Utilise la table Supabase agent_actions pour tracer et apprendre de chaque action
 
@@ -11,22 +11,63 @@ import db, { supabase } from './supabase.js';
  * - Apprentissage des erreurs (éviter répétition)
  * - Statistiques d'utilisation
  */
+
+interface AgentActionParams {
+    [key: string]: unknown;
+}
+
+interface AgentActionResult {
+    [key: string]: unknown;
+}
+
+interface AgentActionRow {
+    tool_name: string;
+    status: string;
+    error_message: string | null;
+    created_at: string;
+}
+
+interface ToolStats {
+    success: number;
+    error: number;
+}
+
+interface LessonLearned {
+    tool: string;
+    error: string | null;
+    when: string;
+}
+
+interface HasFailureResult {
+    hasFailure: boolean;
+    errorMessage: string | null;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
+function requireSupabase(): NonNullable<typeof supabase> {
+    if (!supabase) throw new Error('[AgentMemory] Supabase client not initialized');
+    return supabase;
+}
+
 export const agentMemory = {
-    /**
-     * Log une action effectuée par l'agent
-     * @param {string} chatId - ID du chat (groupe ou privé)
-     * @param {string} toolName - Nom de l'outil appelé
-     * @param {Object} params - Paramètres passés à l'outil
-     * @param {Object} result - Résultat retourné
-     * @param {'success'|'error'} status - Statut de l'exécution
-     * @param {string|null} errorMessage - Message d'erreur si applicable
-     */
-    async logAction(chatId: any, toolName: any, params: any, result: any, status: any, errorMessage: any = null) {
+    async logAction(
+        chatId: string,
+        toolName: string,
+        params: AgentActionParams,
+        result: AgentActionResult,
+        status: 'success' | 'error',
+        errorMessage: string | null = null
+    ): Promise<void> {
         try {
             const resolved = await db.resolveContextFromLegacyId(chatId);
             if (!resolved) return;
 
-            const { error } = await supabase
+            const { error } = await requireSupabase()
                 .from('agent_actions')
                 .insert({
                     context_id: resolved.context_id,
@@ -40,24 +81,17 @@ export const agentMemory = {
             if (error) {
                 console.warn('[AgentMemory] Erreur log action:', error.message);
             }
-        } catch (e: any) {
-            // Silently fail - logging should never break the main flow
-            console.warn('[AgentMemory] Exception log:', e.message);
+        } catch (error: unknown) {
+            console.warn('[AgentMemory] Exception log:', extractErrorMessage(error));
         }
     },
 
-    /**
-     * Récupère les dernières actions pour un chat (contexte)
-     * @param {string} chatId
-     * @param {number} limit
-     * @returns {Promise<Array>}
-     */
-    async getRecentActions(chatId: any, limit: any = 5) {
+    async getRecentActions(chatId: string, limit: number = 5): Promise<AgentActionRow[]> {
         try {
             const resolved = await db.resolveContextFromLegacyId(chatId);
             if (!resolved) return [];
 
-            const { data, error } = await supabase
+            const { data, error } = await requireSupabase()
                 .from('agent_actions')
                 .select('tool_name, status, error_message, created_at')
                 .eq('context_id', resolved.context_id)
@@ -65,28 +99,21 @@ export const agentMemory = {
                 .limit(limit);
 
             if (error) throw error;
-            return data || [];
-        } catch (e: any) {
-            console.warn('[AgentMemory] Erreur getRecentActions:', e.message);
+            return (data ?? []) as AgentActionRow[];
+        } catch (error: unknown) {
+            console.warn('[AgentMemory] Erreur getRecentActions:', extractErrorMessage(error));
             return [];
         }
     },
 
-    /**
-     * Vérifie si un outil a récemment échoué (évite répétition d'erreurs)
-     * @param {string} chatId
-     * @param {string} toolName
-     * @param {number} withinMinutes - Fenêtre de temps en minutes
-     * @returns {Promise<{hasFailure: boolean, errorMessage: string|null}>}
-     */
-    async hasRecentFailure(chatId: any, toolName: any, withinMinutes: any = 30) {
+    async hasRecentFailure(chatId: string, toolName: string, withinMinutes: number = 30): Promise<HasFailureResult> {
         try {
             const cutoff = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString();
 
             const resolved = await db.resolveContextFromLegacyId(chatId);
             if (!resolved) return { hasFailure: false, errorMessage: null };
 
-            const { data, error } = await supabase
+            const { data, error } = await requireSupabase()
                 .from('agent_actions')
                 .select('error_message')
                 .eq('context_id', resolved.context_id)
@@ -106,57 +133,48 @@ export const agentMemory = {
             }
 
             return { hasFailure: false, errorMessage: null };
-        } catch (e: any) {
-            console.warn('[AgentMemory] Erreur hasRecentFailure:', e.message);
+        } catch (error: unknown) {
+            console.warn('[AgentMemory] Erreur hasRecentFailure:', extractErrorMessage(error));
             return { hasFailure: false, errorMessage: null };
         }
     },
 
-    /**
-     * Statistiques d'utilisation des outils pour un chat
-     * @param {string} chatId
-     * @returns {Promise<Object>} - { toolName: { success: n, error: n } }
-     */
-    async getToolStats(chatId: any) {
+    async getToolStats(chatId: string): Promise<Record<string, ToolStats>> {
         try {
             const resolved = await db.resolveContextFromLegacyId(chatId);
             if (!resolved) return {};
 
-            const { data, error } = await supabase
+            const { data, error } = await requireSupabase()
                 .from('agent_actions')
                 .select('tool_name, status')
                 .eq('context_id', resolved.context_id);
 
             if (error) throw error;
 
-            const stats: Record<string, any> = {};
-            for (const row of (data || [])) {
+            const stats: Record<string, ToolStats> = {};
+            for (const row of (data ?? []) as AgentActionRow[]) {
                 if (!stats[row.tool_name]) {
                     stats[row.tool_name] = { success: 0, error: 0 };
                 }
-                stats[row.tool_name][row.status]++;
+                const key = row.status as keyof ToolStats;
+                if (key === 'success' || key === 'error') {
+                    stats[row.tool_name][key]++;
+                }
             }
 
             return stats;
-        } catch (e: any) {
-            console.warn('[AgentMemory] Erreur getToolStats:', e.message);
+        } catch (error: unknown) {
+            console.warn('[AgentMemory] Erreur getToolStats:', extractErrorMessage(error));
             return {};
         }
     },
 
-    /**
-     * Récupère les "leçons apprises" - les erreurs les plus fréquentes
-     * Utile pour éviter de répéter les mêmes erreurs
-     * @param {string} chatId
-     * @param {number} limit
-     * @returns {Promise<Array>}
-     */
-    async getLessonsLearned(chatId: any, limit: any = 3) {
+    async getLessonsLearned(chatId: string, limit: number = 3): Promise<LessonLearned[]> {
         try {
             const resolved = await db.resolveContextFromLegacyId(chatId);
             if (!resolved) return [];
 
-            const { data, error } = await supabase
+            const { data, error } = await requireSupabase()
                 .from('agent_actions')
                 .select('tool_name, error_message, created_at')
                 .eq('context_id', resolved.context_id)
@@ -167,25 +185,20 @@ export const agentMemory = {
 
             if (error) throw error;
 
-            return (data || []).map((d: any) => ({
+            return ((data ?? []) as AgentActionRow[]).map((d) => ({
                 tool: d.tool_name,
                 error: d.error_message,
                 when: d.created_at
             }));
-        } catch (e: any) {
-            console.warn('[AgentMemory] Erreur getLessonsLearned:', e.message);
+        } catch (error: unknown) {
+            console.warn('[AgentMemory] Erreur getLessonsLearned:', extractErrorMessage(error));
             return [];
         }
     },
 
-    /**
-     * Récupère les leçons apprises globales (tous les chats)
-     * @param {number} limit
-     * @returns {Promise<Array>}
-     */
-    async getGlobalLessonsLearned(limit: any = 10) {
+    async getGlobalLessonsLearned(limit: number = 10): Promise<LessonLearned[]> {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await requireSupabase()
                 .from('agent_actions')
                 .select('tool_name, error_message, created_at')
                 .eq('status', 'error')
@@ -195,13 +208,13 @@ export const agentMemory = {
 
             if (error) throw error;
 
-            return (data || []).map((d: any) => ({
+            return ((data ?? []) as AgentActionRow[]).map((d) => ({
                 tool: d.tool_name,
                 error: d.error_message,
                 when: d.created_at
             }));
-        } catch (e: any) {
-            console.warn('[AgentMemory] Erreur getGlobalLessonsLearned:', e.message);
+        } catch (error: unknown) {
+            console.warn('[AgentMemory] Erreur getGlobalLessonsLearned:', extractErrorMessage(error));
             return [];
         }
     }

@@ -4,12 +4,17 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 interface SystemContext {
-    transport?: any;
-    message?: any;
+    transport?: unknown;
     sender?: string;
     chatId?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 interface OsShutdownArgs {
@@ -17,8 +22,12 @@ interface OsShutdownArgs {
     restart?: boolean;
 }
 
-interface OsUpdatePullArgs {}
-interface OsSystemInfoArgs {}
+interface TextMatcherMatch {
+    pattern: RegExp;
+    handler: string;
+    description: string;
+    extractArgs: (match: RegExpMatchArray, message: unknown, text: string) => Record<string, unknown>;
+}
 
 export default {
     name: 'system',
@@ -61,22 +70,21 @@ export default {
         }
     ],
 
-    // Text matchers for quick commands (.shutdown)
     textMatchers: [
         {
             pattern: /^\.(shutdown|stop)\b/i,
             handler: 'os_shutdown',
             description: 'Stop the bot',
-            extractArgs: (match: any, message: any, text: string) => {
+            extractArgs: (_match: RegExpMatchArray, _message: unknown, text: string) => {
                 const reason = text.replace(/^\.(shutdown|stop)\s*/i, '').trim();
                 return { reason: reason || 'Manual command', restart: false };
             }
         },
         {
             pattern: /^\.(restart|reboot)\b/i,
-            handler: 'os_shutdown', // Use shutdown with restart=true
+            handler: 'os_shutdown',
             description: 'Restart the bot',
-            extractArgs: (match: any, message: any, text: string) => {
+            extractArgs: () => {
                 return { reason: 'Manual restart', restart: true };
             }
         },
@@ -86,38 +94,32 @@ export default {
             description: 'System status',
             extractArgs: () => ({})
         }
-    ],
+    ] satisfies TextMatcherMatch[],
 
     /**
      * Exécution des outils
      */
     async execute(args: unknown, context: SystemContext, toolName?: string) {
-        const { transport, message, sender, chatId } = context || {};
+        const { transport, sender, chatId } = context || {};
 
         if (!transport) {
             return { success: false, message: 'Transport not available' };
         }
         const { adminService } = await import('../../../services/adminService.js');
-        const isSuperUser = await adminService.isSuperUser(sender);
-        const isGlobalAdmin = await adminService.isGlobalAdmin(sender);
+        const isSuperUser = await adminService.isSuperUser(sender!);
 
-        // System info accessible to global admins, but shutdown = SuperUser only
-        if (toolName === 'os_system_info') {
-            /* Open to admins */
-        } else {
-            // Critical actions (Shutdown, Update) -> SuperUser Only
-            if (!isSuperUser) {
-                return { success: false, message: '⛔ DENIED: Only the Creator (SuperUser) can touch the system.' };
-            }
+        if (toolName !== 'os_system_info' && !isSuperUser) {
+            return { success: false, message: '⛔ DENIED: Only the Creator (SuperUser) can touch the system.' };
         }
 
         switch (toolName) {
             case 'os_system_info':
                 return this._getSystemInfo();
 
-            case 'os_shutdown':
+            case 'os_shutdown': {
                 const shutdownArgs = args as OsShutdownArgs;
-                return this._shutdown(shutdownArgs, transport, chatId as string);
+                return this._shutdown(shutdownArgs, chatId as string);
+            }
 
             case 'os_update_pull':
                 return await this._gitPull();
@@ -137,7 +139,7 @@ export default {
         const freeMem = os.freemem();
         const loadAvg = os.loadavg();
 
-        const formatBytes = (bytes: any) => (bytes / 1024 / 1024).toFixed(2) + ' MB';
+        const formatBytes = (bytes: number) => (bytes / 1024 / 1024).toFixed(2) + ' MB';
 
         return {
             success: true,
@@ -154,7 +156,7 @@ export default {
     /**
      * Shutdown / Restart
      */
-    async _shutdown(args: OsShutdownArgs, transport: any, chatId: string) {
+    async _shutdown(args: OsShutdownArgs, _chatId: string) {
         // Need chatId passed correctly.
         // Note: The execute method didn't extract chatId. Fixing logic here assuming context availability issues.
 
@@ -183,8 +185,8 @@ export default {
                 success: true,
                 message: `📦 **GIT PULL**\n\`\`\`\n${stdout || stderr}\n\`\`\``
             };
-        } catch (error: any) {
-            return { success: false, message: `Git Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Git Error: ${extractErrorMessage(error)}` };
         }
     }
 };

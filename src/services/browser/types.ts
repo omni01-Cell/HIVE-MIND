@@ -1,6 +1,6 @@
 export interface BrowserResult {
     success: boolean;
-    data?: any;
+    data?: unknown;
     error?: string;
     warning?: string;  // Dialog alerts, etc.
 }

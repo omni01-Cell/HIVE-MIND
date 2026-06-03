@@ -7,6 +7,11 @@
 import { redis } from '../redisClient.js';
 import db, { supabase } from '../supabase.js';
 
+const extractErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    return String(error);
+};
+
 export interface ActionStep {
   step: string;
   timestamp: number;
@@ -17,13 +22,26 @@ export interface OngoingAction {
   chatId: string;
   type: string;
   goal: string;
-  context: any;
+  context: Record<string, unknown>;
   priority: number;
   status: 'active' | 'completed' | 'interrupted';
   steps: ActionStep[];
   startedAt: number;
   updatedAt?: number;
   expiresAt?: number;
+}
+
+interface ActionData {
+  [key: string]: string;
+}
+
+interface ResumableAction {
+  id: string;
+  chatId: string;
+  type: string;
+  params: Record<string, unknown>;
+  steps: ActionStep[];
+  createdAt: number;
 }
 
 export class ActionMemory {
@@ -50,11 +68,11 @@ export class ActionMemory {
    */
     async startAction(chatId: string, { type, goal, context = {}, priority = 5 }: Partial<OngoingAction>): Promise<string | null> {
         const actionId = `${chatId}:${Date.now()}`;
-        const actionData: any = {
+        const actionData: ActionData = {
             id: actionId,
             chatId,
-            type,
-            goal,
+            type: type || '',
+            goal: goal || '',
             context: JSON.stringify(context),
             priority: priority.toString(),
             status: 'active',
@@ -84,8 +102,8 @@ export class ActionMemory {
 
             console.log(`[ActionMemory] 🎬 Action started: ${type} (${goal})`);
             return actionId;
-        } catch (error: any) {
-            console.error('[ActionMemory] Error startAction:', error.message);
+        } catch (error: unknown) {
+            console.error('[ActionMemory] Error startAction:', extractErrorMessage(error));
             return null;
         }
     }
@@ -111,14 +129,14 @@ export class ActionMemory {
                 type: data.type,
                 goal: data.goal,
                 steps: JSON.parse(data.steps || '[]'),
-                status: data.status as any,
+                status: (data.status as 'active' | 'completed' | 'interrupted') || 'active',
                 startedAt: parseInt(data.startedAt),
                 updatedAt: data.updatedAt ? parseInt(data.updatedAt) : undefined,
                 context: JSON.parse(data.context || '{}'),
                 priority: parseInt(data.priority)
             };
-        } catch (error: any) {
-            console.error(`[ActionMemory] Error getActiveAction ${chatId}:`, error.message);
+        } catch (error: unknown) {
+            console.error(`[ActionMemory] Error getActiveAction ${chatId}:`, extractErrorMessage(error));
             return null;
         }
     }
@@ -135,8 +153,8 @@ export class ActionMemory {
                 await this._cleanupRedisOrphans();
                 await this._cleanupSupabaseOrphans();
                 console.log('[ActionMemory] ✅ Cleanup completed');
-            } catch (error: any) {
-                console.error('[ActionMemory] ❌ Cleanup error:', error.message);
+            } catch (error: unknown) {
+                console.error('[ActionMemory] ❌ Cleanup error:', extractErrorMessage(error));
             }
         }, 60 * 60 * 1000);
     }
@@ -163,8 +181,8 @@ export class ActionMemory {
             if (cleaned > 0) {
                 console.log(`[ActionMemory] Cleaned ${cleaned} orphan Redis actions`);
             }
-        } catch (error: any) {
-            console.error('[ActionMemory] Redis cleanup error:', error.message);
+        } catch (error: unknown) {
+            console.error('[ActionMemory] Redis cleanup error:', extractErrorMessage(error));
         }
     }
 
@@ -193,8 +211,8 @@ export class ActionMemory {
                     console.log(`[ActionMemory] ✅ ${count} orphan Supabase actions removed`);
                 }
             }
-        } catch (error: any) {
-            console.error('[ActionMemory] Supabase cleanup error:', error.message);
+        } catch (error: unknown) {
+            console.error('[ActionMemory] Supabase cleanup error:', extractErrorMessage(error));
         }
     }
 
@@ -228,8 +246,8 @@ export class ActionMemory {
             }
 
             return true;
-        } catch (error: any) {
-            console.error('[ActionMemory] updateStep error:', error.message);
+        } catch (error: unknown) {
+            console.error('[ActionMemory] updateStep error:', extractErrorMessage(error));
             return false;
         }
     }
@@ -239,7 +257,7 @@ export class ActionMemory {
    * @param chatId Chat ID.
    * @param result Action result.
    */
-    async completeAction(chatId: string, result: any): Promise<boolean> {
+    async completeAction(chatId: string, result: unknown): Promise<boolean> {
         try {
             const action = await this.getActiveAction(chatId);
             if (!action) return false;
@@ -270,8 +288,8 @@ export class ActionMemory {
 
             console.log(`[ActionMemory] ✅ Action completed: ${action.type}`);
             return true;
-        } catch (error: any) {
-            console.error('[ActionMemory] completeAction error:', error.message);
+        } catch (error: unknown) {
+            console.error('[ActionMemory] completeAction error:', extractErrorMessage(error));
             return false;
         }
     }
@@ -295,8 +313,8 @@ export class ActionMemory {
             await redis.expire(key, 300); // 5 minutes
 
             return true;
-        } catch (error: any) {
-            console.error('[ActionMemory] interruptAction error:', error.message);
+        } catch (error: unknown) {
+            console.error('[ActionMemory] interruptAction error:', extractErrorMessage(error));
             return false;
         }
     }
@@ -327,8 +345,8 @@ export class ActionMemory {
                     }
                 }
             }
-        } catch (error: any) {
-            console.error(`[ActionMemory] cleanupChatActions error for ${chatId}:`, error.message);
+        } catch (error: unknown) {
+            console.error(`[ActionMemory] cleanupChatActions error for ${chatId}:`, extractErrorMessage(error));
         }
     }
 
@@ -338,7 +356,7 @@ export class ActionMemory {
 
         const elapsed = Math.floor((Date.now() - action.startedAt) / 1000);
         const stepsText = action.steps.length > 0
-            ? action.steps.map((s: any) => `  - ${s.step}`).join('\n')
+            ? action.steps.map((s: ActionStep) => `  - ${s.step}`).join('\n')
             : '  (No steps completed)';
 
         return `
@@ -356,7 +374,7 @@ ${stepsText}
 `;
     }
 
-    async getResumableActions(limit: number = 10): Promise<any[]> {
+    async getResumableActions(limit: number = 10): Promise<ResumableAction[]> {
         if (!supabase) return [];
         try {
             const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -370,26 +388,26 @@ ${stepsText}
 
             if (error) throw error;
 
-            const actions = [];
-            for (const row of (data as any[])) {
-                const legacyId = await db.resolveLegacyIdFromContext(row.context_id);
+            const actions: ResumableAction[] = [];
+            for (const row of (data as Record<string, unknown>[])) {
+                const legacyId = await db.resolveLegacyIdFromContext(row.context_id as string);
                 actions.push({
-                    id: row.id,
-                    chatId: legacyId || row.context_id,
-                    type: row.tool_name,
-                    params: typeof row.params === 'string' ? JSON.parse(row.params) : row.params,
-                    steps: typeof row.steps === 'string' ? JSON.parse(row.steps) : (row.steps || []),
-                    createdAt: new Date(row.created_at).getTime()
+                    id: row.id as string,
+                    chatId: legacyId || (row.context_id as string),
+                    type: row.tool_name as string,
+                    params: typeof row.params === 'string' ? JSON.parse(row.params as string) : (row.params as Record<string, unknown> || {}),
+                    steps: typeof row.steps === 'string' ? JSON.parse(row.steps as string) : ((row.steps as ActionStep[]) || []),
+                    createdAt: new Date(row.created_at as string).getTime()
                 });
             }
             return actions;
-        } catch (error: any) {
-            console.error('[ActionMemory] getResumableActions error:', error.message);
+        } catch (error: unknown) {
+            console.error('[ActionMemory] getResumableActions error:', extractErrorMessage(error));
             return [];
         }
     }
 
-    async rehydrateAction(chatId: string, actionId: string): Promise<boolean> {
+    async rehydrateAction(_chatId: string, actionId: string): Promise<boolean> {
         if (!supabase) return false;
         try {
             const { data, error } = await supabase
@@ -403,12 +421,13 @@ ${stepsText}
             const legacyId = await db.resolveLegacyIdFromContext(data.context_id);
             const resolvedChatId = legacyId || data.context_id;
 
-            const actionData: any = {
+            const params = typeof data.params === 'string' ? JSON.parse(data.params) : data.params;
+            const actionData: ActionData = {
                 id: data.id.toString(),
                 chatId: resolvedChatId,
                 type: data.tool_name,
-                goal: typeof data.params === 'string' ? JSON.parse(data.params).goal : data.params.goal,
-                context: typeof data.params === 'string' ? JSON.parse(data.params).context : JSON.stringify(data.params.context || {}),
+                goal: params.goal || '',
+                context: typeof data.params === 'string' ? JSON.parse(data.params).context : JSON.stringify(params.context || {}),
                 priority: '5',
                 status: 'active',
                 steps: typeof data.steps === 'string' ? data.steps : JSON.stringify(data.steps || []),
@@ -422,8 +441,8 @@ ${stepsText}
 
             console.log(`[ActionMemory] 💧 Action rehydrated in Redis: ${data.tool_name}`);
             return true;
-        } catch (error: any) {
-            console.error('[ActionMemory] rehydrateAction error:', error.message);
+        } catch (error: unknown) {
+            console.error('[ActionMemory] rehydrateAction error:', extractErrorMessage(error));
             return false;
         }
     }

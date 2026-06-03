@@ -6,14 +6,24 @@ import { semanticMemory } from './memory.js';
 import { knowledgeWeaver } from './knowledgeWeaver.js';
 import { providerRouter } from '../providers/index.js';
 
-const consolidationLocks = new Set();
+interface ConsolidationMessage {
+    role: string;
+    content: string;
+}
+
+const consolidationLocks = new Set<string>();
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
 
 export const consolidationService = {
     /**
      * Consolide la mémoire à court terme d'un chat précis
      * @param {string} chatId
      */
-    async consolidate(chatId: any) {
+    async consolidate(chatId: string) {
         if (consolidationLocks.has(chatId)) {
             console.log(`[Consolidation] ⏳ Consolidation déjà en cours pour ${chatId}, sautée.`);
             return;
@@ -26,7 +36,6 @@ export const consolidationService = {
 
             // On ne consolide que s'il y a plus de 5 messages (seuil de consolidation)
             if (!context || context.length < 5) {
-                // console.log(`[Consolidation] ${chatId} : Pas assez de messages (${context?.length || 0})`);
                 return;
             }
 
@@ -34,7 +43,7 @@ export const consolidationService = {
 
             // 2. Formater le texte pour l'IA
             const conversationText = context
-                .map((m: any) => `[${m.role === 'user' ? 'Utilisateur' : 'Bot'}]: ${m.content}`)
+                .map((m: ConsolidationMessage) => `[${m.role === 'user' ? 'Utilisateur' : 'Bot'}]: ${m.content}`)
                 .join('\n');
 
             // 3. Appel IA pour une synthèse de haute qualité
@@ -70,8 +79,8 @@ Format : Un paragraphe court et percutant.`;
                 console.log(`[Consolidation] ✅ Succès pour ${chatId}`);
             }
 
-        } catch (error: any) {
-            console.error('[Consolidation] Erreur :', error.message);
+        } catch (error: unknown) {
+            console.error('[Consolidation] Erreur :', extractErrorMessage(error));
         } finally {
             consolidationLocks.delete(chatId);
         }
@@ -88,8 +97,8 @@ Format : Un paragraphe court et percutant.`;
             // Ici, on va supposer que l'orchestrateur ou le scheduler connaît les cibles.
             console.log('[Consolidation] 🌍 Début de la consolidation globale...');
             // ... Logique de boucle sur les chats ...
-        } catch (error: any) {
-            console.error('[Consolidation Global] Erreur :', error.message);
+        } catch (error: unknown) {
+            console.error('[Consolidation Global] Erreur :', extractErrorMessage(error));
         }
     }
 };

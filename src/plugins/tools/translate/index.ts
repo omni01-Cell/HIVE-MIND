@@ -6,14 +6,24 @@ interface TranslateArgs {
     target_lang: string;
 }
 
-interface TranslateContext {
-    message?: {
-        quotedMsg?: {
-            text?: string;
-        };
-        [key: string]: any;
+interface TranslateMessageContent {
+    quotedMsg?: {
+        text?: string;
     };
-    [key: string]: any;
+}
+
+interface TranslateContext {
+    message?: TranslateMessageContent;
+    [key: string]: unknown;
+}
+
+interface TranslateResult {
+    from?: {
+        language?: {
+            iso?: string;
+        };
+    };
+    text: string;
 }
 
 export default {
@@ -48,7 +58,7 @@ export default {
         }
     },
 
-    async execute(args: unknown, context: TranslateContext, toolName?: string) {
+    async execute(args: unknown, context: TranslateContext, _toolName?: string) {
         const { text, source_lang = 'auto', target_lang } = args as TranslateArgs;
         const { message } = context || {};
 
@@ -92,9 +102,9 @@ export default {
                 'ru': '🇷🇺 Russian'
             };
 
-            const resAny = result as any;
-            const sourceName = langNames[resAny.from?.language?.iso] || resAny.from?.language?.iso || 'Auto';
-            const targetName = langNames[target_lang as string] || target_lang;
+            const translateResult = result as TranslateResult;
+            const sourceName = langNames[translateResult.from?.language?.iso ?? ''] || translateResult.from?.language?.iso || 'Auto';
+            const targetName = langNames[target_lang] || target_lang;
 
             return {
                 success: true,
@@ -102,17 +112,17 @@ export default {
                 data: {
                     original: textToTranslate,
                     translated: result.text,
-                    from: resAny.from?.language?.iso,
+                    from: translateResult.from?.language?.iso,
                     to: target_lang
                 }
             };
 
         } catch (error: unknown) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            console.error('[Translate Plugin] Error:', err);
+            const errMsg = error instanceof Error ? error.message : String(error);
+            console.error('[Translate Plugin] Error:', errMsg);
             return {
                 success: false,
-                message: `Translation error: ${err.message}`
+                message: `Translation error: ${errMsg}`
             };
         }
     }

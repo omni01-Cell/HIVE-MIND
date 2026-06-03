@@ -1,7 +1,10 @@
 interface CrawlfireContext {
-    transport?: any;
+    transport?: TransportLike;
     chatId?: string;
-    [key: string]: any;
+}
+
+interface TransportLike {
+    sendText: (chatId: string | undefined, text: string) => Promise<void>;
 }
 
 interface FirecrawlScrapeArgs { url: string; }
@@ -9,6 +12,37 @@ interface FirecrawlCrawlArgs { url: string; limit?: number; }
 interface FirecrawlMapArgs { url: string; }
 interface FirecrawlSearchArgs { query: string; limit?: number; }
 interface FirecrawlExtractArgs { urls: string[]; prompt: string; }
+
+type FirecrawlHeaders = Record<string, string>;
+
+interface FirecrawlSuccessResponse {
+    success: true;
+    data?: unknown;
+    markdown?: string;
+    links?: Array<{ url: string; title?: string }>;
+    error?: string;
+    id?: string;
+    status?: string;
+}
+
+interface FirecrawlErrorResponse {
+    success: false;
+    error?: string;
+}
+
+type FirecrawlApiResponse = FirecrawlSuccessResponse | FirecrawlErrorResponse;
+
+interface CrawlPageData {
+    metadata?: { title?: string; sourceURL?: string };
+    markdown?: string;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 export default {
     name: 'crawlfire_web',
     description: 'Advanced crawling and scraping plugin via Firecrawl (v2). Transforms websites into clean Markdown for LLMs.',
@@ -98,15 +132,14 @@ export default {
             return { success: false, message: 'Transport or chatId missing from context' };
         }
 
-        // Import dynamique pour éviter les instanciations prématurées
         const { container } = await import('../../../core/ServiceContainer.js');
 
         let apiKey = process.env.FIRECRAWL_API_KEY;
         try {
             if (container.has('config')) {
-                const configService = container.get('config');
+                const configService = container.get('config') as { get?: (key: string) => Record<string, unknown> | undefined; plugins?: Record<string, Record<string, string>> };
                 const pluginConfig = typeof configService.get === 'function'
-                    ? configService.get('plugins')?.crawlfire_web
+                    ? (configService.get('plugins') as Record<string, Record<string, string>> | undefined)?.crawlfire_web
                     : configService.plugins?.crawlfire_web;
                 if (pluginConfig?.apiKey) apiKey = pluginConfig.apiKey;
             }
@@ -119,7 +152,7 @@ export default {
         }
 
         const baseUrl = 'https://api.firecrawl.dev/v2';
-        const headers = {
+        const headers: FirecrawlHeaders = {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
         };
@@ -159,22 +192,22 @@ export default {
                 default:
                     return { success: false, message: `Unknown Firecrawl tool: ${toolName}` };
             }
-        } catch (error: any) {
-            console.error(`[CrawlFire] Error in ${toolName}:`, error.message);
-            return { success: false, message: `❌ Firecrawl error: ${error.message}` };
+        } catch (error: unknown) {
+            console.error(`[CrawlFire] Error in ${toolName}:`, extractErrorMessage(error));
+            return { success: false, message: `❌ Firecrawl error: ${extractErrorMessage(error)}` };
         }
     },
 
-    async apiFetch(url: string, options: any) {
+    async apiFetch(url: string, options: RequestInit): Promise<FirecrawlApiResponse> {
         const res = await fetch(url, options);
         const contentType = res.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
             throw new Error(`API error: non-JSON response (Status ${res.status}). Service potentially unavailable.`);
         }
-        return await res.json();
+        return await res.json() as FirecrawlApiResponse;
     },
 
-    async handleScrape(url: string, headers: any, baseUrl: string) {
+    async handleScrape(url: string, headers: FirecrawlHeaders, baseUrl: string) {
         console.log(`[CrawlFire] 📄 Scraping: ${url}`);
         const json = await this.apiFetch(`${baseUrl}/scrape`, {
             method: 'POST',
@@ -183,7 +216,7 @@ export default {
         });
         if (!json.success) throw new Error(json.error || 'Scraping failed');
 
-        const markdown = json.data.markdown || '';
+        const markdown = json.markdown || '';
         const truncated = markdown.length > 25000 ? markdown.substring(0, 25000) + '\n\n[...Content truncated due to length...]' : markdown;
 
         return {
@@ -193,7 +226,7 @@ export default {
         };
     },
 
-    async handleCrawl(url: string, limit: number, headers: any, baseUrl: string, transport: any, chatId?: string) {
+    async handleCrawl(url: string, limit: number, headers: FirecrawlHeaders, baseUrl: string, transport: TransportLike, chatId?: string) {
         console.log(`[CrawlFire] 🕸️ Crawling: ${url} (limit: ${limit})`);
         if (transport) await transport.sendText(chatId, `🕸️ Starting crawl on ${url}...`);
 
@@ -208,7 +241,7 @@ export default {
         return await this.pollJob(jobId, 'crawl', headers, baseUrl, transport, chatId);
     },
 
-    async handleMap(url: string, headers: any, baseUrl: string) {
+    async handleMap(url: string, headers: FirecrawlHeaders, baseUrl: string) {
         console.log(`[CrawlFire] 🗺️ Mapping: ${url}`);
         const json = await this.apiFetch(`${baseUrl}/map`, {
             method: 'POST',
@@ -219,12 +252,9 @@ export default {
 
         const maxLinks = 100;
         const total = json.links?.length || 0;
-        let linksDisp = json.links || [];
-        if (linksDisp.length > maxLinks) {
-            linksDisp = linksDisp.slice(0, maxLinks);
-        }
+        const linksDisp = total > maxLinks ? (json.links || []).slice(0, maxLinks) : (json.links || []);
 
-        const linksTxt = linksDisp.map((l: any) => `- ${l.url} (${l.title || 'untitled'})`).join('\n');
+        const linksTxt = linksDisp.map((l) => `- ${l.url} (${l.title || 'untitled'})`).join('\n');
         let msg = `🗺️ Sitemap for ${url} (${total} links found):\n\n${linksTxt}`;
         if (total > maxLinks) {
             msg += `\n\n[... ${total - maxLinks} more links not shown due to length ...]`;
@@ -232,7 +262,7 @@ export default {
         return { success: true, message: msg };
     },
 
-    async handleSearch(query: string, limit: number, headers: any, baseUrl: string) {
+    async handleSearch(query: string, limit: number, headers: FirecrawlHeaders, baseUrl: string) {
         console.log(`[CrawlFire] 🔍 Searching: ${query}`);
         const json = await this.apiFetch(`${baseUrl}/search`, {
             method: 'POST',
@@ -245,15 +275,15 @@ export default {
             return { success: true, message: `🔍 Search result for "${query}": No results found or invalid response format.` };
         }
 
-        const results = json.data.map((d: any) => {
-            let md = d.markdown || 'No markdown content';
+        const results = json.data.map((d: Record<string, unknown>) => {
+            let md = (d.markdown as string) || 'No markdown content';
             if (md.length > 5000) md = md.substring(0, 5000) + '...';
             return `### ${d.title}\nURL: ${d.url}\n\n${md}\n---`;
         }).join('\n\n');
         return { success: true, message: `🔍 Firecrawl results for "${query}":\n\n${results}` };
     },
 
-    async handleExtract(urls: string[], prompt: string, headers: any, baseUrl: string, transport: any, chatId?: string) {
+    async handleExtract(urls: string[], prompt: string, headers: FirecrawlHeaders, baseUrl: string, transport: TransportLike, chatId?: string) {
         console.log(`[CrawlFire] 🧪 Extracting from ${urls?.length} URLs`);
         if (transport) await transport.sendText(chatId, '🧪 Extracting structured data...');
 
@@ -271,9 +301,9 @@ export default {
         return await this.pollJob(json.id, 'extract', headers, baseUrl, transport, chatId);
     },
 
-    async pollJob(jobId: string, type: string, headers: any, baseUrl: string, transport: any, chatId?: string) {
+    async pollJob(jobId: string | undefined, type: string, headers: FirecrawlHeaders, baseUrl: string, transport: TransportLike, chatId?: string) {
         let attempts = 0;
-        const maxAttempts = 30; // 5 mins max
+        const maxAttempts = 30;
 
         while (attempts < maxAttempts) {
             attempts++;
@@ -282,14 +312,20 @@ export default {
             console.log(`[CrawlFire] ⏳ Polling ${type} job ${jobId} (attempt ${attempts})`);
             const json = await this.apiFetch(`${baseUrl}/${type}/${jobId}`, { headers });
 
+            if (!json.success) {
+                throw new Error(`${type} job failed: ${json.error || 'Unknown error'}`);
+            }
+
             if (json.status === 'completed') {
                 if (type === 'crawl') {
-                    const count = json.data?.length || 0;
-                    let combinedMarkdown = json.data?.map((d: any) => `#### ${d.metadata?.title || d.metadata?.sourceURL}\n${d.markdown || ''}`).join('\n\n---\n\n') || '';
-                    if (combinedMarkdown.length > 30000) {
-                        combinedMarkdown = combinedMarkdown.substring(0, 30000) + '\n\n[...Content truncated due to length...]';
-                    }
-                    return { success: true, message: `✅ Crawl finished (${count} pages found).\n\n${combinedMarkdown}\n\n[Job ID: ${jobId}]` };
+                    const count = (json.data as CrawlPageData[] | undefined)?.length || 0;
+                    const combinedMarkdown = (json.data as CrawlPageData[] | undefined)
+                        ?.map((d: CrawlPageData) => `#### ${d.metadata?.title || d.metadata?.sourceURL}\n${d.markdown || ''}`)
+                        .join('\n\n---\n\n') || '';
+                    const finalMarkdown = combinedMarkdown.length > 30000
+                        ? combinedMarkdown.substring(0, 30000) + '\n\n[...Content truncated due to length...]'
+                        : combinedMarkdown;
+                    return { success: true, message: `✅ Crawl finished (${count} pages found).\n\n${finalMarkdown}\n\n[Job ID: ${jobId}]` };
                 } else {
                     return { success: true, message: `✅ Extraction finished:\n\n\`\`\`json\n${JSON.stringify(json.data, null, 2)}\n\`\`\`` };
                 }

@@ -2,13 +2,35 @@ import { providerRouter } from '../providers/index.js';
 import { graphMemory } from './graphMemory.js';
 import { tryParseJson } from '../utils/ResponseFormatEnforcer.js';
 
+interface KnowledgeEntity {
+    name: string;
+    type?: string;
+    description?: string;
+}
+
+interface KnowledgeRelationship {
+    source: string;
+    target: string;
+    type: string;
+}
+
+interface KnowledgeGraphData {
+    entities?: KnowledgeEntity[];
+    relationships?: KnowledgeRelationship[];
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
 export const knowledgeWeaver = {
     /**
      * Analyse un message ou une conversation pour extraire du savoir structuré
      * @param {string} chatId
      * @param {string} text
      */
-    async weave(chatId: any, text: any) {
+    async weave(chatId: string, text: string) {
         if (!text || text.length < 10) return;
 
         try {
@@ -60,10 +82,10 @@ Few-shot example:
 
             if (!response?.content) return;
 
-            const data = tryParseJson<any>(response.content);
+            const data = tryParseJson<KnowledgeGraphData>(response.content);
 
             // 1. Enregistrer les entités
-            const entityMap = new Map();
+            const entityMap = new Map<string, string>();
             for (const ent of data.entities || []) {
                 const stored = await graphMemory.upsertEntity(chatId, ent);
                 if (stored) entityMap.set(ent.name, stored.id);
@@ -76,8 +98,8 @@ Few-shot example:
 
             console.log(`[KnowledgeWeaver] ✅ Tissage terminé : ${data.entities?.length || 0} entités, ${data.relationships?.length || 0} relations.`);
 
-        } catch (error: any) {
-            console.error('[KnowledgeWeaver] Erreur lors du tissage:', error.message);
+        } catch (error: unknown) {
+            console.error('[KnowledgeWeaver] Erreur lors du tissage:', extractErrorMessage(error));
         }
     }
 };

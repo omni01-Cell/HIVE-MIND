@@ -259,10 +259,10 @@ export class SchedulerHandler {
             const { data: heavyChats } = supabase ? await supabase
                 .from('semantic_memory')
                 .select('chat_id')
-                .limit(100) : { data: [] };
+                .limit(100) : { data: [] as { chat_id: string }[] };
 
-            if (heavyChats?.length > 0) {
-                const uniqueChatIds = [...new Set(heavyChats.map((m: any) => m.chat_id))];
+            if (heavyChats && heavyChats.length > 0) {
+                const uniqueChatIds = [...new Set(heavyChats.map((m: { chat_id: string }) => m.chat_id))];
                 console.log(`[Scheduler] ${uniqueChatIds.length} chat(s) à nettoyer`);
 
                 for (const chatId of uniqueChatIds) {
@@ -281,6 +281,11 @@ export class SchedulerHandler {
         try {
             const { supabase } = await import('../../services/supabase.js');
             const { providerRouter } = await import('../../providers/index.js');
+
+            if (!supabase) {
+                console.warn('[Scheduler] ⚠️ Supabase not available for epistemic scan');
+                return;
+            }
 
             // Scanner les documents modifiés dans les dernières 24 heures
             const targetTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

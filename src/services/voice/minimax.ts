@@ -6,48 +6,64 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 
-// Configurer ffmpeg avec le binaire installé
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+interface MinimaxConfig {
+    voice_id?: string;
+    model?: string;
+    speed?: number;
+    vol?: number;
+    pitch?: number;
+}
+
+interface MinimaxBaseResp {
+    status_code: number;
+    status_msg: string;
+}
+
+interface MinimaxData {
+    audio: string;
+}
+
+interface MinimaxResponse {
+    base_resp?: MinimaxBaseResp;
+    data?: MinimaxData;
+}
 
 export class MinimaxVoiceService {
-    apiKey: any;
-    baseUrl: any;
-    config: any;
-    cacheDir: any;
+    apiKey: string;
+    baseUrl: string;
+    config: MinimaxConfig;
+    cacheDir: string;
 
-    constructor(apiKey: any, config: any = {}) {
+    constructor(apiKey: string, config: MinimaxConfig = {}) {
         this.apiKey = apiKey;
         this.baseUrl = 'https://api.minimax.io/v1/t2a_v2';
-        this.config = config; // { voice_id, model, speed, ... }
+        this.config = config;
 
-        // Cache directory
         this.cacheDir = path.join(__dirname, '..', '..', 'temp', 'voice_cache');
         if (!fs.existsSync(this.cacheDir)) {
             fs.mkdirSync(this.cacheDir, { recursive: true });
         }
     }
 
-    /**
-     * Génère un fichier audio (MP3 -> OGG Opus)
-     * @param {string} text Le texte à vocaliser
-     * @param {string} [voiceId] ID de voix spécifique (optionnel)
-     * @returns {Promise<string>} Chemin du fichier OGG généré
-     */
-    async generateAudio(text: any, voiceId: any = null) {
+    async generateAudio(text: string, voiceId: string | null = null): Promise<string> {
         if (typeof this.apiKey !== 'string' || this.apiKey.trim().length === 0 || this.apiKey.trim().toLowerCase() === 'no_key') {
             throw new Error('Clé API Minimax manquante ou invalide');
         }
 
         const model = this.config.model || 'speech-02-hd';
-        const selectedVoiceId = voiceId || this.config.voice_id || 'female-01'; // Fallback
-
-        // TODO: Implémenter le cache ici (MD5 du texte + voiceId)
+        const selectedVoiceId = voiceId || this.config.voice_id || 'female-01';
 
         const payload = {
             model,
@@ -62,7 +78,7 @@ export class MinimaxVoiceService {
             audio_setting: {
                 sample_rate: 32000,
                 bitrate: 128000,
-                format: 'mp3', // Minimax output format
+                format: 'mp3',
                 channel: 1
             }
         };
@@ -82,13 +98,12 @@ export class MinimaxVoiceService {
                 throw new Error(`Minimax API Error (${response.status}): ${errorText}`);
             }
 
-            const data = await response.json();
+            const data: MinimaxResponse = await response.json() as MinimaxResponse;
 
             if (data.base_resp && data.base_resp.status_code !== 0) {
                 throw new Error(`Minimax Error: ${data.base_resp.status_msg}`);
             }
 
-            // Minimax retourne de l'audio en Hex string
             if (!data.data || !data.data.audio) {
                 throw new Error('Réponse invalide: pas de données audio');
             }
@@ -96,37 +111,30 @@ export class MinimaxVoiceService {
             const audioHex = data.data.audio;
             const audioBuffer = Buffer.from(audioHex, 'hex');
 
-            // Sauvegarder MP3 temporaire
             const tempMp3Path = path.join(this.cacheDir, `temp_${Date.now()}.mp3`);
             fs.writeFileSync(tempMp3Path, audioBuffer);
 
-            // Convertir en OGG Opus pour WhatsApp
             const outputOggPath = tempMp3Path.replace('.mp3', '.ogg');
-
             await this.convertToOgg(tempMp3Path, outputOggPath);
 
-            // Cleanup MP3
-            try { fs.unlinkSync(tempMp3Path); } catch (e: any) { }
+            try { fs.unlinkSync(tempMp3Path); } catch { /* Cleanup best-effort */ }
 
             return outputOggPath;
 
-        } catch (error: any) {
-            console.error('❌ Erreur génération vocale Minimax:', error);
+        } catch (error: unknown) {
+            console.error('❌ Erreur génération vocale Minimax:', extractErrorMessage(error));
             throw error;
         }
     }
 
-    /**
-     * Convertit MP3 vers OGG Opus via FFmpeg
-     */
-    convertToOgg(inputPath: any, outputPath: any) {
-        return new Promise((resolve: any, reject: any) => {
+    convertToOgg(inputPath: string, outputPath: string): Promise<string> {
+        return new Promise((resolve, reject) => {
             ffmpeg(inputPath)
                 .audioCodec('libopus')
-                .audioBitrate('32k') // Suffisant pour la voix
+                .audioBitrate('32k')
                 .format('ogg')
                 .on('end', () => resolve(outputPath))
-                .on('error', (err: any) => reject(new Error(`FFmpeg error: ${err.message}`)))
+                .on('error', (err: Error) => reject(new Error(`FFmpeg error: ${extractErrorMessage(err)}`)))
                 .save(outputPath);
         });
     }

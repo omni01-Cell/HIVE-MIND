@@ -5,6 +5,11 @@ interface DuckDuckSearchArgs {
     num_results?: number;
 }
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
 export default {
     name: 'duckduck_search',
     description: 'Performs web searches via DuckDuckGo (scraping) to obtain up-to-date information.',
@@ -33,7 +38,7 @@ export default {
         }
     },
 
-    async execute(args: unknown, context: any, toolName?: string) {
+    async execute(args: unknown, _context: unknown, _toolName?: string) {
         const searchArgs = args as DuckDuckSearchArgs;
         const { query, num_results = 3 } = searchArgs;
 
@@ -74,7 +79,7 @@ export default {
             const results = [];
             const resultRegex = /<div class="result__body".*?<a class="result__a" href="([^"]+)".*?>(.*?)<\/a>.*?<a class="result__snippet".*?>(.*?)<\/a>/gs;
 
-            let match: any;
+            let match: RegExpExecArray | null;
             let count = 0;
             while ((match = resultRegex.exec(html)) !== null && count < num_results) {
                 const link = match[1];
@@ -95,11 +100,12 @@ export default {
                 message: `🦆 DuckDuckGo Results for "${query}":\n\n${results.join('\n')}`
             };
 
-        } catch (e: any) {
-            console.error('[DuckDuckSearch] ❌ DuckDuckGo Error:', e.message);
+        } catch (e: unknown) {
+            const errorMessage = extractErrorMessage(e);
+            console.error('[DuckDuckSearch] ❌ DuckDuckGo Error:', errorMessage);
             return {
                 success: false,
-                message: `Technical error during web search (${e.message}). Try to rephrase or ask me something else.`,
+                message: `Technical error during web search (${errorMessage}). Try to rephrase or ask me something else.`,
                 gracefulDegradation: true
             };
         }

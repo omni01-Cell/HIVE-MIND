@@ -3,20 +3,74 @@
 
 import { supabase } from './supabase.js';
 
+// ─────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────
+
+type GoalTriggerType = 'TIME' | 'EVENT';
+type GoalOrigin = 'self' | 'user' | 'system';
+type GoalStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+interface GoalCondition {
+    readonly from_user?: string;
+    readonly contains?: string;
+}
+
+interface GoalRow {
+    readonly id: string;
+    readonly title: string;
+    readonly description: string | null;
+    readonly status: GoalStatus;
+    readonly target_chat_id: string | null;
+    readonly priority: number;
+    readonly origin: GoalOrigin;
+    readonly trigger_type: GoalTriggerType;
+    readonly trigger_event: string | null;
+    readonly trigger_condition: GoalCondition | null;
+    readonly execute_at: string;
+    readonly created_at: string;
+    readonly result: string | null;
+}
+
+interface CreateGoalParams {
+    title: string;
+    description: string;
+    executeAt: string;
+    targetChatId?: string | null;
+    priority?: number;
+    origin?: GoalOrigin;
+    triggerType?: GoalTriggerType;
+    triggerEvent?: string | null;
+    triggerCondition?: GoalCondition;
+}
+
+interface TriggerMessage {
+    sender?: string;
+    senderName?: string;
+    text?: string;
+    chatId?: string;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
+function requireSupabase(): NonNullable<typeof supabase> {
+    if (!supabase) throw new Error('[GoalsService] Supabase client not initialized');
+    return supabase;
+}
+
 /**
  * Goals Service - Permet au bot de s'auto-assigner des tâches persistantes
  */
 export const goalsService = {
-    /**
-     * Crée un nouvel objectif autonome
-     * @param {Object} goal - { title, description, executeAt, targetChatId, priority, origin }
-     * @returns {Promise<Object>} L'objectif créé
-     */
     async createGoal({
         title, description, executeAt, targetChatId = null, priority = 5, origin = 'self', triggerType = 'TIME', triggerEvent = null, triggerCondition = {}
-    }: any) {
+    }: CreateGoalParams): Promise<GoalRow> {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await requireSupabase()
                 .from('autonomous_goals')
                 .insert({
                     title,
@@ -34,20 +88,16 @@ export const goalsService = {
 
             if (error) throw error;
             console.log(`[GoalsService] ✅ Objectif créé: "${title}"`);
-            return data;
-        } catch (error: any) {
-            console.error('[GoalsService] Erreur createGoal:', error.message);
+            return data as GoalRow;
+        } catch (error: unknown) {
+            console.error('[GoalsService] Erreur createGoal:', extractErrorMessage(error));
             throw error;
         }
     },
 
-    /**
-     * Récupère les objectifs en attente dont la date d'exécution est passée
-     * @returns {Promise<Array>}
-     */
-    async getPendingGoals() {
+    async getPendingGoals(): Promise<GoalRow[]> {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await requireSupabase()
                 .from('autonomous_goals')
                 .select('*')
                 .eq('status', 'pending')
@@ -56,87 +106,64 @@ export const goalsService = {
                 .order('execute_at', { ascending: true });
 
             if (error) throw error;
-            return data || [];
-        } catch (error: any) {
-            console.error('[GoalsService] Erreur getPendingGoals:', error.message);
+            return (data as GoalRow[]) || [];
+        } catch (error: unknown) {
+            console.error('[GoalsService] Erreur getPendingGoals:', extractErrorMessage(error));
             return [];
         }
     },
 
-    /**
-     * Alias pour getPendingGoals (utilisé par le scheduler)
-     * @returns {Promise<Array>}
-     */
-    async getDueGoals() {
+    async getDueGoals(): Promise<GoalRow[]> {
         return this.getPendingGoals();
     },
 
-    /**
-     * Marque un objectif comme "en cours"
-     * @param {string} goalId
-     */
-    async markInProgress(goalId: any) {
+    async markInProgress(goalId: string): Promise<void> {
         try {
-            const { error } = await supabase
+            const { error } = await requireSupabase()
                 .from('autonomous_goals')
                 .update({ status: 'in_progress' })
                 .eq('id', goalId);
 
             if (error) throw error;
-        } catch (error: any) {
-            console.error('[GoalsService] Erreur markInProgress:', error.message);
+        } catch (error: unknown) {
+            console.error('[GoalsService] Erreur markInProgress:', extractErrorMessage(error));
         }
     },
 
-    /**
-     * Marque un objectif comme complété
-     * @param {string} goalId
-     * @param {string} result - Résultat de l'exécution
-     */
-    async completeGoal(goalId: any, result: any) {
+    async completeGoal(goalId: string, result: unknown): Promise<void> {
         try {
-            const { error } = await supabase
+            const { error } = await requireSupabase()
                 .from('autonomous_goals')
                 .update({
                     status: 'completed',
-                    result: typeof result === 'object' ? JSON.stringify(result) : result
+                    result: typeof result === 'object' ? JSON.stringify(result) : String(result)
                 })
                 .eq('id', goalId);
 
             if (error) throw error;
             console.log(`[GoalsService] ✅ Objectif complété: ${goalId}`);
-        } catch (error: any) {
-            console.error('[GoalsService] Erreur completeGoal:', error.message);
+        } catch (error: unknown) {
+            console.error('[GoalsService] Erreur completeGoal:', extractErrorMessage(error));
         }
     },
 
-    /**
-     * Annule un objectif
-     * @param {string} goalId
-     */
-    async cancelGoal(goalId: any) {
+    async cancelGoal(goalId: string): Promise<void> {
         try {
-            const { error } = await supabase
+            const { error } = await requireSupabase()
                 .from('autonomous_goals')
                 .update({ status: 'cancelled' })
                 .eq('id', goalId);
 
             if (error) throw error;
             console.log(`[GoalsService] ⚠️ Objectif annulé: ${goalId}`);
-        } catch (error: any) {
-            console.error('[GoalsService] Erreur cancelGoal:', error.message);
+        } catch (error: unknown) {
+            console.error('[GoalsService] Erreur cancelGoal:', extractErrorMessage(error));
         }
     },
 
-    /**
-     * Vérifie si un message déclenche un objectif en attente (EVENT trigger)
-     * @param {Object} message - Message entrant
-     * @returns {Promise<Array>} Liste des objectifs déclenchés
-     */
-    async checkEventTriggers(message: any) {
+    async checkEventTriggers(message: TriggerMessage): Promise<GoalRow[]> {
         try {
-            // 1. Récupérer les objectifs événementiels en attente
-            const { data: eventGoals, error } = await supabase
+            const { data: eventGoals, error } = await requireSupabase()
                 .from('autonomous_goals')
                 .select('*')
                 .eq('status', 'pending')
@@ -145,17 +172,14 @@ export const goalsService = {
             if (error) throw error;
             if (!eventGoals || eventGoals.length === 0) return [];
 
-            const triggeredGoals = [];
+            const triggeredGoals: GoalRow[] = [];
 
             for (const goal of eventGoals) {
-                // Analyse de la condition
-                if (goal.trigger_event === 'WAIT_FOR_MESSAGE') {
-                    const condition = goal.trigger_condition || {};
+                if ((goal as GoalRow).trigger_event === 'WAIT_FOR_MESSAGE') {
+                    const condition: GoalCondition = (goal as GoalRow).trigger_condition || {};
                     let match = true;
 
-                    // Condition: Expéditeur spécifique
                     if (condition.from_user) {
-                        // Supporte JID complet ou juste le nom/numéro
                         const sender = message.sender || '';
                         const name = message.senderName || '';
                         if (!sender.includes(condition.from_user) && !name.includes(condition.from_user)) {
@@ -163,7 +187,6 @@ export const goalsService = {
                         }
                     }
 
-                    // Condition: Contenu (Mots-clés)
                     if (condition.contains && match) {
                         const text = (message.text || '').toLowerCase();
                         const keyword = condition.contains.toLowerCase();
@@ -172,56 +195,44 @@ export const goalsService = {
                         }
                     }
 
-                    // Condition: Chat spécifique
-                    if (goal.target_chat_id && match) {
-                        if (message.chatId !== goal.target_chat_id) {
+                    if ((goal as GoalRow).target_chat_id && match) {
+                        if (message.chatId !== (goal as GoalRow).target_chat_id) {
                             match = false;
                         }
                     }
 
                     if (match) {
-                        triggeredGoals.push(goal);
+                        triggeredGoals.push(goal as GoalRow);
                     }
                 }
             }
 
             return triggeredGoals;
-        } catch (error: any) {
-            console.error('[GoalsService] Erreur checkEventTriggers:', error.message);
+        } catch (error: unknown) {
+            console.error('[GoalsService] Erreur checkEventTriggers:', extractErrorMessage(error));
             return [];
         }
     },
 
-    /**
-     * Récupère tous les objectifs d'un chat
-     * @param {string} chatId
-     * @returns {Promise<Array>}
-     */
-    async getChatGoals(chatId: any) {
+    async getChatGoals(chatId: string): Promise<GoalRow[]> {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await requireSupabase()
                 .from('autonomous_goals')
                 .select('*')
                 .eq('target_chat_id', chatId)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            return data || [];
-        } catch (error: any) {
-            console.error('[GoalsService] Erreur getChatGoals:', error.message);
+            return (data as GoalRow[]) || [];
+        } catch (error: unknown) {
+            console.error('[GoalsService] Erreur getChatGoals:', extractErrorMessage(error));
             return [];
         }
     },
 
-    /**
-     * Parse une durée relative (ex: "2h", "1d", "tomorrow 9am") en timestamp
-     * @param {string} duration
-     * @returns {Date}
-     */
-    parseDuration(duration: any) {
+    parseDuration(duration: string): Date {
         const now = new Date();
 
-        // Patterns simples
         const hourMatch = duration.match(/^(\d+)h$/);
         if (hourMatch) {
             now.setHours(now.getHours() + parseInt(hourMatch[1]));
@@ -240,7 +251,6 @@ export const goalsService = {
             return now;
         }
 
-        // "tomorrow" = demain 9h
         if (duration.toLowerCase().includes('tomorrow')) {
             const tomorrow = new Date(now);
             tomorrow.setDate(tomorrow.getDate() + 1);
@@ -248,7 +258,6 @@ export const goalsService = {
             return tomorrow;
         }
 
-        // Fallback: 1 heure
         now.setHours(now.getHours() + 1);
         return now;
     }

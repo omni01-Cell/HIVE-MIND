@@ -2,6 +2,81 @@
 
 import { Sticker, StickerTypes } from 'wa-sticker-formatter';
 
+interface StickerContext {
+    transport?: {
+        downloadMedia?: (msg: unknown) => Promise<Buffer>;
+        sendSticker?: (chatId: string, buffer: Buffer) => Promise<void>;
+    };
+    message?: {
+        raw?: {
+            message?: {
+                imageMessage?: unknown;
+                videoMessage?: unknown;
+            };
+            key?: unknown;
+        };
+        quotedMsg?: {
+            message?: {
+                imageMessage?: unknown;
+                videoMessage?: unknown;
+            };
+        };
+    };
+    chatId?: string;
+}
+
+interface StickerArgs {
+    pack_name?: string;
+    author?: string;
+    url?: string;
+}
+
+interface MediaSource {
+    mediaMessage: {
+        message?: {
+            imageMessage?: unknown;
+            videoMessage?: unknown;
+        };
+        key?: unknown;
+    } | null;
+    directBuffer: Buffer | null;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+    return String(error);
+}
+
+async function resolveUrlBuffer(url: string): Promise<Buffer | null> {
+    try {
+        const response = await fetch(url);
+        if (response.ok) {
+            const arrayBuffer = await response.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+        }
+    } catch (e: unknown) {
+        console.error('[Sticker] URL download error:', e);
+    }
+    return null;
+}
+
+function extractMediaFromMessage(message: StickerContext['message']): MediaSource {
+    if (message?.raw?.message?.imageMessage || message?.raw?.message?.videoMessage) {
+        return { mediaMessage: message.raw ?? null, directBuffer: null };
+    }
+    if (message?.quotedMsg?.message) {
+        if (message.quotedMsg.message.imageMessage || message.quotedMsg.message.videoMessage) {
+            return {
+                mediaMessage: { message: message.quotedMsg.message, key: message.raw?.key },
+                directBuffer: null
+            };
+        }
+    }
+    return { mediaMessage: null, directBuffer: null };
+}
+
 export default {
     name: 'create_sticker',
     description: 'Creates a sticker from an image, video, or GIF.',
@@ -47,42 +122,21 @@ export default {
      * @param {Object} context - { transport, message, chatId, sender }
      * @param {string} toolName - Nom de l'outil
      */
-    async execute(args: any, context: any, toolName?: string) {
+    async execute(args: unknown, context: StickerContext, _toolName?: string) {
         const { transport, message, chatId } = context || {};
-        const { pack_name = 'Bot Stickers', author = 'Bot', url } = args;
+        const stickerArgs = args as StickerArgs;
+        const { pack_name = 'Bot Stickers', author = 'Bot', url } = stickerArgs;
 
         if (!transport || !chatId) {
             return { success: false, message: 'Transport or chatId missing from context.' };
         }
 
-        // Check if we have media
-        let mediaMessage: any = null;
-        let directBuffer: any = null;
-
-        // Case 0: Direct URL (via use_tool or other)
+        // Resolve media source
+        let directBuffer: Buffer | null = null;
         if (url) {
-            try {
-                // Import dynamique pour fetch (si non global) ou utiliser le fetch global
-                const response = await fetch(url);
-                if (response.ok) {
-                    const arrayBuffer = await response.arrayBuffer();
-                    directBuffer = Buffer.from(arrayBuffer);
-                }
-            } catch (e: any) {
-                console.error('[Sticker] URL download error:', e);
-            }
+            directBuffer = await resolveUrlBuffer(url);
         }
-
-        // Media in current message
-        if (message.raw?.message?.imageMessage || message.raw?.message?.videoMessage) {
-            mediaMessage = message.raw;
-        }
-        // Media in quoted message
-        else if (message.quotedMsg?.message) {
-            if (message.quotedMsg.message.imageMessage || message.quotedMsg.message.videoMessage) {
-                mediaMessage = { message: message.quotedMsg.message, key: message.raw.key };
-            }
-        }
+        const { mediaMessage } = extractMediaFromMessage(message);
 
         if (!mediaMessage && !directBuffer) {
             return {
@@ -93,7 +147,11 @@ export default {
 
         try {
             // Download media (either URL buffer or Message)
-            const mediaBuffer = directBuffer || await transport.downloadMedia({ raw: mediaMessage });
+            const downloadFn = transport.downloadMedia;
+            if (!downloadFn) {
+                return { success: false, message: 'Download function not available.' };
+            }
+            const mediaBuffer = directBuffer || await downloadFn({ raw: mediaMessage });
 
             // Create sticker
             const sticker = new Sticker(mediaBuffer, {
@@ -106,18 +164,21 @@ export default {
             const stickerBuffer = await sticker.toBuffer();
 
             // Send sticker
-            await transport.sendSticker(chatId, stickerBuffer);
+            const sendStickerFn = transport.sendSticker;
+            if (sendStickerFn) {
+                await sendStickerFn(chatId, stickerBuffer);
+            }
 
             return {
                 success: true,
                 message: 'Sticker created and sent successfully! 🎉'
             };
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Sticker Plugin] Error:', error);
             return {
                 success: false,
-                message: `Error creating sticker: ${error.message}`
+                message: `Error creating sticker: ${extractErrorMessage(error)}`
             };
         }
     }

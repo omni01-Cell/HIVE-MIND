@@ -1,7 +1,18 @@
+interface McpToolDefinition {
+    readonly type: string;
+    readonly function: {
+        readonly name: string;
+        readonly description: string;
+        readonly parameters: Record<string, unknown>;
+    };
+    readonly _mcpServer: string;
+    readonly _mcpTool: string;
+}
+
 interface McpToolsContext {
-    transport?: any;
+    transport?: unknown;
     chatId?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 export default {
@@ -11,7 +22,7 @@ export default {
     enabled: true,
 
     // toolDefinitions will be populated dynamically
-    toolDefinitions: [] as any[],
+    toolDefinitions: [] as McpToolDefinition[],
 
     async init() {
         console.log('[MCP Plugin] Fetching tools from connected servers...');
@@ -20,12 +31,12 @@ export default {
             const tools = await mcpClient.getTools();
             this.toolDefinitions = tools;
             console.log(`[MCP Plugin] Loaded ${tools.length} MCP tools.`);
-        } catch (e: any) {
-            console.error('[MCP Plugin] Failed to initialize tools:', e.message);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error('[MCP Plugin] Failed to initialize tools:', message);
         }
     },
-    async execute(args: unknown, context: McpToolsContext, toolName: string) {
-        const { transport, chatId } = context || {};
+    async execute(args: unknown, _context: McpToolsContext, toolName: string) {
 
         // toolName format: mcp__SERVERNAME__TOOLNAME
         const parts = toolName.split('__');

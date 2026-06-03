@@ -37,6 +37,33 @@ const userLock = new LockManager('user');
 // Clé Redis pour la queue de synchronisation (Set pour dédupliquer)
 const SYNC_QUEUE_KEY = 'queue:sync:users';
 
+interface UserData {
+    id?: string;
+    jid: string;
+    names: string[];
+    interaction_count: number;
+    last_seen?: number;
+    last_pushname?: string;
+    username?: string;
+    language?: string | null;
+    timezone?: string | null;
+    updated_at?: string;
+}
+
+interface SyncUpdate {
+    id: string;
+    username: string;
+    interaction_count: number;
+    language: string | null;
+    timezone: string | null;
+    updated_at: string;
+}
+
+interface LeaderboardEntry {
+    value: string;
+    score: number;
+}
+
 /**
  * Gestionnaire d'état centralisé pour les données utilisateur
  * Implémente le pattern "Write-Behind Cache"
@@ -45,7 +72,7 @@ export const StateManager = {
     /**
      * Récupère un profil utilisateur complet et sûr
      */
-    async getUser(identifier: any) {
+    async getUser(identifier: string): Promise<UserData> {
         const jid = await IdentityMap.resolve(identifier);
         const resolved = await db.resolveContextFromLegacyId(jid);
 
@@ -57,7 +84,7 @@ export const StateManager = {
         const cacheKey = `user:${uuid}:data`;
 
         // 1. Lecture Cache
-        let userData = await redis?.hGetAll(cacheKey);
+        let userData: Record<string, string> | null = await redis?.hGetAll(cacheKey) ?? null;
 
         // 2. Cache Miss: Lecture DB + Hydratation
         if (!userData || Object.keys(userData).length === 0) {
@@ -70,7 +97,7 @@ export const StateManager = {
 
             try {
                 // Double check après lock
-                userData = await redis?.hGetAll(cacheKey);
+                userData = await redis?.hGetAll(cacheKey) ?? null;
                 if (!userData || Object.keys(userData).length === 0) {
                     if (supabase) {
                         const { data } = await supabase.from('users').select('*').eq('id', uuid).single();
@@ -86,13 +113,20 @@ export const StateManager = {
             }
         }
 
-        return { jid, id: uuid, ...this._unflattenFromRedis(userData) };
+        const unflattened = this._unflattenFromRedis(userData);
+        return {
+            jid,
+            id: uuid,
+            names: unflattened.names ?? ['Inconnu'],
+            interaction_count: unflattened.interaction_count ?? 0,
+            ...unflattened
+        };
     },
 
     /**
      * Met à jour l'utilisateur (Atomique & Persistent)
      */
-    async updateUserInteraction(identifier: any, pushName: any) {
+    async updateUserInteraction(identifier: string, pushName: string | null): Promise<void> {
         const jid = await IdentityMap.resolve(identifier);
         const resolved = await db.resolveContextFromLegacyId(jid);
         if (!resolved || resolved.type !== 'user') return;
@@ -128,7 +162,7 @@ export const StateManager = {
     /**
      * Met à jour les préférences de l'utilisateur (Langue, TZ)
      */
-    async updatePreferences(identifier: any, preferences: { language?: string, timezone?: string }) {
+    async updatePreferences(identifier: string, preferences: { language?: string, timezone?: string }): Promise<void> {
         const jid = await IdentityMap.resolve(identifier);
         const resolved = await db.resolveContextFromLegacyId(jid);
         if (!resolved || resolved.type !== 'user') return;
@@ -150,7 +184,7 @@ export const StateManager = {
      * Worker de synchronisation (à appeler périodiquement)
      * Vide la queue Redis vers Supabase
      */
-    async processSyncQueue(batchSize: any = 50) {
+    async processSyncQueue(batchSize: number = 50): Promise<void> {
         if (!redis?.isOpen) return;
 
         // 1. Récupérer N items de la queue (ce sont des UUIDs maintenant)
@@ -159,21 +193,21 @@ export const StateManager = {
 
         console.log(`[StateManager] Syncing ${uuids.length} users to DB...`);
 
-        const updates = [];
+        const updates: SyncUpdate[] = [];
 
         // 2. Construire le batch
         const pipeline = redis.multi();
-        uuids.forEach((uuid: any) => pipeline.hGetAll(`user:${uuid}:data`));
+        uuids.forEach((uuid: string) => pipeline.hGetAll(`user:${uuid}:data`));
         const results = await pipeline.exec();
 
         for (let i = 0; i < uuids.length; i++) {
-            const data: any = results[i];
+            const data = results[i] as Record<string, string> | null;
 
             if (data && Object.keys(data).length > 0) {
                 updates.push({
                     id: uuids[i],
                     username: data.last_pushname || 'Inconnu', // Legacy logic
-                    interaction_count: parseInt(data.interaction_count || 0),
+                    interaction_count: parseInt(data.interaction_count || '0', 10),
                     language: data.language || null,
                     timezone: data.timezone || null,
                     updated_at: new Date().toISOString()
@@ -193,23 +227,23 @@ export const StateManager = {
     },
 
     // Helpers privés pour gérer les types Redis (tout est string)
-    _flattenForRedis(obj: any) {
+    _flattenForRedis(obj: Record<string, unknown>): Record<string, string> {
         const flat: Record<string, string> = {};
         for (const [k, v] of Object.entries(obj)) {
             if (v !== null && v !== undefined) flat[k] = String(v);
         }
         return flat;
     },
-    _unflattenFromRedis(obj: any) {
+    _unflattenFromRedis(obj: Record<string, string> | null): Partial<UserData> {
         if (!obj) return {};
-        const result = {
+        const result: Partial<UserData> = {
             ...obj,
-            interaction_count: parseInt(obj.interaction_count || 0)
+            interaction_count: parseInt(obj.interaction_count || '0', 10)
             // ajouter d'autres conversions de type si nécessaire
         };
         // Conversion last_seen si num
-        if (obj.last_seen && !isNaN(obj.last_seen)) {
-            result.last_seen = parseInt(obj.last_seen);
+        if (obj.last_seen && !isNaN(Number(obj.last_seen))) {
+            result.last_seen = parseInt(obj.last_seen, 10);
         }
         return result;
     },
@@ -217,7 +251,7 @@ export const StateManager = {
      * Incrémente l'activité d'un utilisateur DANS un groupe spécifique
      * Utilise Redis ZSET pour gérer le classement automatiquement
      */
-    async recordGroupActivity(groupJid: any, userJid: any) {
+    async recordGroupActivity(groupJid: string, userJid: string): Promise<void> {
         const key = `group:${groupJid}:leaderboard`;
 
         // ZINCRBY : Incrémente le score de l'utilisateur de 1.
@@ -232,7 +266,7 @@ export const StateManager = {
     /**
      * Récupère le classement (Top Talkers)
      */
-    async getGroupLeaderboard(groupJid: any, limit: any = 10) {
+    async getGroupLeaderboard(groupJid: string, limit: number = 10): Promise<LeaderboardEntry[]> {
         const key = `group:${groupJid}:leaderboard`;
 
         // ZREVRANGE : Récupère les membres triés du plus grand au plus petit score
@@ -248,7 +282,7 @@ export const StateManager = {
     /**
      * Récupère le score spécifique d'un utilisateur dans un groupe
      */
-    async getUserGroupScore(groupJid: any, userJid: any) {
+    async getUserGroupScore(groupJid: string, userJid: string): Promise<number> {
         const key = `group:${groupJid}:leaderboard`;
         const score = await redis.zScore(key, userJid);
         return score || 0;

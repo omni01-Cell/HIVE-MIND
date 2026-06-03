@@ -1,10 +1,14 @@
 import { permissionManager } from '../../../core/security/PermissionManager.js';
 import { persistentShell } from './PersistentShell.js';
-import * as path from 'path';
 import { z } from 'zod';
 import { defineZodTool } from '../../../utils/toolExecution.js';
 
 const MAX_OUTPUT_LENGTH = 30000;
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
 
 export default {
     name: 'dev_tools_bash',
@@ -89,11 +93,12 @@ export default {
                         userOutput: `🐚 *Bash Execution*:\n\`\`\`bash\n${command}\n\`\`\`\nStatus: ${isSuccess ? '✅ Success' : '❌ Failed (Code '+exitCode+')'}`
                     };
 
-                } catch (error: any) {
+                } catch (error: unknown) {
+                    const errorMsg = extractErrorMessage(error);
                     return {
                         success: false,
-                        llmOutput: `Fatal execution error: ${error.message}`,
-                        userOutput: `❌ *Bash Error* during execution of \`${command}\`\n_${error.message}_`
+                        llmOutput: `Fatal execution error: ${errorMsg}`,
+                        userOutput: `❌ *Bash Error* during execution of \`${command}\`\n_${errorMsg}_`
                     };
                 }
             }

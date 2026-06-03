@@ -2,7 +2,7 @@
 
 interface GoalsContext {
     chatId?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 interface CreateGoalArgs {
@@ -24,6 +24,13 @@ interface CompleteGoalArgs {
 
 interface CancelGoalArgs {
     goalId: string;
+}
+
+interface GoalListItem {
+    readonly id: string;
+    readonly title: string;
+    readonly status: string;
+    readonly execute_at: string;
 }
 
 export default {
@@ -140,10 +147,10 @@ export default {
                 const { title, description, executeIn = '1h', waitForUser, waitForKeyword } = createArgs;
 
                 // Determine trigger type
-                let triggerType = 'TIME';
-                let triggerEvent: any = null;
-                let triggerCondition: any = {};
-                let executeAt: any = null;
+                let triggerType: 'TIME' | 'EVENT' = 'TIME';
+                let triggerEvent: string | null = null;
+                let triggerCondition: Record<string, string> = {};
+                let executeAt: string = '';
 
                 if (waitForUser || waitForKeyword) {
                     triggerType = 'EVENT';
@@ -153,10 +160,10 @@ export default {
                     if (waitForKeyword) triggerCondition.contains = waitForKeyword;
 
                     // Set a far date (2099) for events to avoid Time Scheduler triggering
-                    executeAt = new Date('2099-12-31T23:59:59Z');
+                    executeAt = new Date('2099-12-31T23:59:59Z').toISOString();
                 } else {
                 // Time based
-                    executeAt = goalsService.parseDuration(executeIn);
+                    executeAt = goalsService.parseDuration(executeIn).toISOString();
                 }
 
                 // Create the goal
@@ -175,7 +182,7 @@ export default {
                 if (triggerType === 'EVENT') {
                     validMsg = `Execution on event: ${waitForUser ? `From "${waitForUser}"` : ''} ${waitForKeyword ? `Containing "${waitForKeyword}"` : ''}`;
                 } else {
-                    validMsg = `Scheduled execution: ${executeAt.toLocaleString('en-US')}`;
+                    validMsg = `Scheduled execution: ${new Date(executeAt).toLocaleString('en-US')}`;
                 }
 
                 return {
@@ -191,7 +198,7 @@ export default {
 
                 const filtered = status === 'all'
                     ? allGoals
-                    : allGoals.filter((g: any) => g.status === status);
+                    : allGoals.filter((g: GoalListItem) => g.status === status);
 
                 if (filtered.length === 0) {
                     return {
@@ -200,7 +207,7 @@ export default {
                     };
                 }
 
-                const list = filtered.map((g: any) =>
+                const list = filtered.map((g: GoalListItem) =>
                     `- [${g.status}] ${g.title}\n  Execution: ${new Date(g.execute_at).toLocaleString('en-US')}\n  ID: ${g.id}`
                 ).join('\n\n');
 

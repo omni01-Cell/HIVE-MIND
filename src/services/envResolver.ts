@@ -1,10 +1,16 @@
-// services/envResolver.js
+// services/envResolver.ts
 // ============================================================================
 // Module Unifié de Résolution des Variables d'Environnement
 // ============================================================================
 // Centralise TOUTE la logique de résolution .env pour éviter la fragmentation
 
 import { existsSync } from 'fs';
+
+interface EnvStats {
+    hits: number;
+    misses: number;
+    warnings: string[];
+}
 
 /**
  * Service singleton pour résoudre les variables d'environnement
@@ -13,13 +19,11 @@ import { existsSync } from 'fs';
  * - no_key / NO_KEY disables a key slot explicitly
  */
 export class EnvResolver {
-    resolved: any;
-    stats: any;
+    resolved: Map<string, string | null>;
+    stats: EnvStats;
 
     constructor() {
-        // Cache des résolutions pour performance
-        this.resolved = new Map();
-        // Compteur pour monitoring
+        this.resolved = new Map<string, string | null>();
         this.stats = {
             hits: 0,
             misses: 0,
@@ -29,58 +33,54 @@ export class EnvResolver {
 
     /**
      * Résout une valeur depuis .env avec plusieurs stratégies
-     * @param {string} value - Valeur brute (peut être placeholder, variable, ou valeur directe)
-     * @param {string} [varName] - Nom de variable suggéré (ex: 'GEMINI_KEY')
-     * @returns {string|null} - Valeur résolue ou null si introuvable
+     * @param value - Valeur brute (peut être placeholder, variable, ou valeur directe)
+     * @param [varName] - Nom de variable suggéré (ex: 'GEMINI_KEY')
+     * @returns Valeur résolue ou null si introuvable
      */
-    resolve(value: any, varName: any = null) {
+    resolve(value: unknown, varName: string | null = null): string | null {
         if (!value) return null;
-        if (typeof value !== 'string') return value;
+        if (typeof value !== 'string') return null;
         if (this._isDisabledKey(value)) return null;
 
         // Check cache
         const cacheKey = `${value}::${varName || ''}`;
         if (this.resolved.has(cacheKey)) {
             this.stats.hits++;
-            return this.resolved.get(cacheKey);
+            return this.resolved.get(cacheKey) ?? null;
         }
-
-        let resolvedValue: any = null;
 
         // Stratégie 1: Valeur directe (pas un placeholder)
         if (!this._isPlaceholder(value)) {
-            resolvedValue = value;
-            this._cache(cacheKey, resolvedValue);
-            return resolvedValue;
+            this._cache(cacheKey, value);
+            return value;
         }
 
         // Stratégie 2: Format ${VAR_NAME}
         if (value.startsWith('${') && value.endsWith('}')) {
-            const envKey = value.slice(2, -1); // Enlever ${ et }
-            resolvedValue = process.env[envKey];
-            if (resolvedValue && !this._isDisabledKey(resolvedValue)) {
-                this._cache(cacheKey, resolvedValue);
-                return resolvedValue;
+            const envKey = value.slice(2, -1);
+            const envValue = process.env[envKey];
+            if (envValue && !this._isDisabledKey(envValue)) {
+                this._cache(cacheKey, envValue);
+                return envValue;
             }
         }
 
         // Stratégie 3: Si varName fourni explicitement, l'essayer
         if (varName) {
-            if (process.env[varName] && !this._isDisabledKey(process.env[varName])) {
-                resolvedValue = process.env[varName];
-                this._cache(cacheKey, resolvedValue);
-                return resolvedValue;
+            const mainValue = process.env[varName];
+            if (mainValue && !this._isDisabledKey(mainValue)) {
+                this._cache(cacheKey, mainValue);
+                return mainValue;
             }
-            if (process.env[`${varName}_1`] && !this._isDisabledKey(process.env[`${varName}_1`])) {
-                resolvedValue = process.env[`${varName}_1`];
-                this._cache(cacheKey, resolvedValue);
-                return resolvedValue;
+            const indexedValue = process.env[`${varName}_1`];
+            if (indexedValue && !this._isDisabledKey(indexedValue)) {
+                this._cache(cacheKey, indexedValue);
+                return indexedValue;
             }
         }
 
         // Échec de résolution
         this.stats.misses++;
-
         this._cache(cacheKey, null);
         return null;
     }
@@ -89,7 +89,7 @@ export class EnvResolver {
      * Résout une clé provider strictement depuis PROVIDER_KEY / PROVIDER_KEY_N.
      * N'utilise pas credentials.json ni les anciens alias legacy.
      */
-    resolveProviderKey(providerName: any, keyIndex: any = null) {
+    resolveProviderKey(providerName: string, keyIndex: number | null = null): string | null {
         if (providerName === 'codex') {
             const codexKey = process.env.CODEX_KEY || process.env.CODEX_REFRESH_TOKEN || process.env.CODEX_ACCESS_TOKEN;
             if (codexKey && !this._isDisabledKey(codexKey)) {
@@ -138,12 +138,11 @@ export class EnvResolver {
     }
 
     /**
-     * Retourne les indices des clés disponibles pour un fournisseur donné (ex: [1, 2] pour GEMINI_KEY_1, GEMINI_KEY_2)
-     * Supporte de 1 à 7 clés. Retourne [1] si seule la clé sans suffixe (ex: GEMINI_KEY) existe.
-     * @param {string} providerName - Nom du provider (ex: 'GEMINI')
-     * @returns {number[]} - Liste des indices
+     * Retourne les indices des clés disponibles pour un fournisseur donné
+     * @param providerName - Nom du provider (ex: 'GEMINI')
+     * @returns Liste des indices
      */
-    getAvailableKeysForProvider(providerName: any) {
+    getAvailableKeysForProvider(providerName: string): number[] {
         if (providerName === 'codex') {
             const codexKey = process.env.CODEX_KEY || process.env.CODEX_REFRESH_TOKEN || process.env.CODEX_ACCESS_TOKEN;
             if (codexKey && !this._isDisabledKey(codexKey)) {
@@ -175,30 +174,33 @@ export class EnvResolver {
         }
 
         const prefix = `${providerName.toUpperCase()}_KEY`;
-        const indices = [];
+        const indices: number[] = [];
 
         for (let i = 1; i <= 7; i++) {
-            if (process.env[`${prefix}_${i}`] && !this._isDisabledKey(process.env[`${prefix}_${i}`])) {
+            const envValue = process.env[`${prefix}_${i}`];
+            if (envValue && !this._isDisabledKey(envValue)) {
                 indices.push(i);
             }
         }
 
-        if (indices.length === 0 && process.env[prefix] && !this._isDisabledKey(process.env[prefix])) {
-            indices.push(1); // Default to key 1 if no suffix
+        if (indices.length === 0) {
+            const baseValue = process.env[prefix];
+            if (baseValue && !this._isDisabledKey(baseValue)) {
+                indices.push(1);
+            }
         }
 
         return indices;
     }
 
-    _isDisabledKey(value: any) {
+    private _isDisabledKey(value: unknown): boolean {
         return typeof value === 'string' && value.trim().toLowerCase() === 'no_key';
     }
 
     /**
      * Vérifie si une valeur est un placeholder
-     * @private
      */
-    _isPlaceholder(value: any) {
+    private _isPlaceholder(value: string): boolean {
         return value.startsWith('${') ||
                value.startsWith('YOUR_') ||
                value === 'undefined' ||
@@ -207,16 +209,15 @@ export class EnvResolver {
 
     /**
      * Cache une résolution
-     * @private
      */
-    _cache(key: any, value: any) {
+    private _cache(key: string, value: string | null): void {
         this.resolved.set(key, value);
     }
 
     /**
      * Efface le cache (utile pour tests ou rechargement config)
      */
-    clearCache() {
+    clearCache(): void {
         this.resolved.clear();
         console.log('[EnvResolver] Cache vidé');
     }
@@ -224,7 +225,7 @@ export class EnvResolver {
     /**
      * Retourne les statistiques d'utilisation
      */
-    getStats() {
+    getStats(): EnvStats & { cacheSize: number; hitRate: number } {
         return {
             ...this.stats,
             cacheSize: this.resolved.size,
@@ -235,7 +236,7 @@ export class EnvResolver {
     /**
      * Affiche un rapport de diagnostic
      */
-    diagnose() {
+    diagnose(): void {
         const stats = this.getStats();
         console.log('\n[EnvResolver] 📊 Diagnostic:');
         console.log(`  Cache: ${stats.cacheSize} entrées`);
@@ -244,7 +245,7 @@ export class EnvResolver {
 
         if (stats.warnings.length > 0) {
             console.log(`\n  ⚠️ Warnings (${stats.warnings.length}):`);
-            stats.warnings.slice(0, 5).forEach((w: any) => console.log(`    - ${w}`));
+            stats.warnings.slice(0, 5).forEach((w: string) => console.log(`    - ${w}`));
             if (stats.warnings.length > 5) {
                 console.log(`    ... et ${stats.warnings.length - 5} autres`);
             }

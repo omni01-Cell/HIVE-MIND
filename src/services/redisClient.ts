@@ -9,11 +9,17 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 // Chargement sécurisé de l'URL depuis les credentials
-const getRedisUrl = () => {
+const getRedisUrl = (): string => {
     try {
         const creds = JSON.parse(readFileSync(join(__dirname, '..', 'config', 'credentials.json'), 'utf-8'));
-        let url = creds.redis?.url;
+        let url: string | undefined = creds.redis?.url;
 
         // Si la valeur est un nom de variable d'environnement (pas une URL), la résoudre
         if (url && !url.startsWith('redis://') && !url.startsWith('rediss://')) {
@@ -28,8 +34,8 @@ const getRedisUrl = () => {
 
         // Sanitize: remove any stray quotes from URL (common .env parsing issue)
         return url.replace(/["']/g, '').trim();
-    } catch (e: any) {
-        console.warn('[Redis] Impossible de lire credentials.json, repli sur localhost', e.message);
+    } catch (e: unknown) {
+        console.warn('[Redis] Impossible de lire credentials.json, repli sur localhost', extractErrorMessage(e));
         return process.env.REDIS_URL || 'redis://localhost:6379';
     }
 };
@@ -63,7 +69,7 @@ redis.on('connect', () => { /* Connexion silencieuse */ });
 redis.on('reconnecting', () => console.log('[Redis] Reconnexion en cours...'));
 
 // Connexion asynchrone
-let connectionPromise: any = null;
+let connectionPromise: Promise<void> | null = null;
 
 /**
  * Assure que Redis est connecté avant toute opération
@@ -71,12 +77,12 @@ let connectionPromise: any = null;
 /**
  * Assure que Redis est connecté avant toute opération
  */
-const ensureConnected = async () => {
+const ensureConnected = async (): Promise<void> => {
     if (redis.isOpen) return;
 
     if (!connectionPromise) {
-        connectionPromise = redis.connect().catch(err => {
-            console.warn('[Redis] ⚠️ Connexion impossible. Basculement transparent en mode Mock In-Memory pour ce cycle local:', err.message);
+        connectionPromise = redis.connect().then(() => {}).catch((err: unknown) => {
+            console.warn('[Redis] ⚠️ Connexion impossible. Basculement transparent en mode Mock In-Memory pour ce cycle local:', extractErrorMessage(err));
             switchToMock(redis);
             connectionPromise = Promise.resolve();
         });
@@ -110,19 +116,21 @@ const checkHealth = async () => {
             memory: usedMemory,
             clients: connectedClients
         };
-    } catch (e: any) {
-        return { status: 'error', error: e.message };
+    } catch (e: unknown) {
+        return { status: 'error', error: extractErrorMessage(e) };
     }
 };
 
 /**
  * Ferme proprement la connexion Redis
  */
-const disconnect = async () => {
+const disconnect = async (): Promise<void> => {
     if (redis.isOpen) {
         try {
             await redis.quit();
-        } catch {}
+        } catch {
+            // Ignorer les erreurs de fermeture
+        }
         console.log('[Redis] Connexion fermée proprement');
     }
 };
@@ -131,17 +139,26 @@ const disconnect = async () => {
 // MOCK REDIS IN-MEMORY FALLBACK (Pour les tests locaux sans serveur Redis)
 // =========================================================================
 
+interface StorageEntry {
+    value: string;
+    expiresAt: number | null;
+}
+
+interface MockSetOptions {
+    EX?: number;
+}
+
 class InMemoryRedisMock {
-    storage = new Map<string, { value: any, expiresAt: number | null }>();
+    storage = new Map<string, StorageEntry>();
     isOpen = true;
     isReady = true;
 
-    private _isExpired(entry: any) {
+    private _isExpired(entry: StorageEntry | undefined): boolean {
         if (!entry || entry.expiresAt === null) return false;
         return Date.now() > entry.expiresAt;
     }
 
-    async get(key: string) {
+    async get(key: string): Promise<string | null> {
         const entry = this.storage.get(key);
         if (this._isExpired(entry)) {
             this.storage.delete(key);
@@ -150,7 +167,7 @@ class InMemoryRedisMock {
         return entry ? String(entry.value) : null;
     }
 
-    async set(key: string, value: any, options: any = {}) {
+    async set(key: string, value: string, options: MockSetOptions = {}): Promise<string> {
         let expiresAt: number | null = null;
         if (options.EX) {
             expiresAt = Date.now() + options.EX * 1000;
@@ -159,19 +176,18 @@ class InMemoryRedisMock {
         return 'OK';
     }
 
-    async setEx(key: string, seconds: number, value: any) {
+    async setEx(key: string, seconds: number, value: string): Promise<string> {
         this.storage.set(key, { value, expiresAt: Date.now() + seconds * 1000 });
         return 'OK';
     }
 
-    async del(key: string) {
+    async del(key: string): Promise<number> {
         return this.storage.delete(key) ? 1 : 0;
     }
 
-    async keys(pattern: string) {
+    async keys(pattern: string): Promise<string[]> {
         const results: string[] = [];
         const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-        const now = Date.now();
         for (const [key, entry] of this.storage.entries()) {
             if (this._isExpired(entry)) {
                 this.storage.delete(key);
@@ -184,21 +200,21 @@ class InMemoryRedisMock {
         return results;
     }
 
-    async incr(key: string) {
+    async incr(key: string): Promise<number> {
         const val = await this.get(key);
         const next = (parseInt(val || '0') + 1);
-        this.storage.set(key, { value: next, expiresAt: this.storage.get(key)?.expiresAt || null });
+        this.storage.set(key, { value: String(next), expiresAt: this.storage.get(key)?.expiresAt || null });
         return next;
     }
 
-    async incrBy(key: string, value: number) {
+    async incrBy(key: string, value: number): Promise<number> {
         const val = await this.get(key);
         const next = (parseInt(val || '0') + value);
-        this.storage.set(key, { value: next, expiresAt: this.storage.get(key)?.expiresAt || null });
+        this.storage.set(key, { value: String(next), expiresAt: this.storage.get(key)?.expiresAt || null });
         return next;
     }
 
-    async expire(key: string, seconds: number) {
+    async expire(key: string, seconds: number): Promise<number> {
         const entry = this.storage.get(key);
         if (entry) {
             entry.expiresAt = Date.now() + seconds * 1000;
@@ -207,53 +223,53 @@ class InMemoryRedisMock {
         return 0;
     }
 
-    async ping() {
+    async ping(): Promise<string> {
         return 'PONG';
     }
 
-    async info() {
+    async info(): Promise<string> {
         return 'used_memory_human:1MB connected_clients:1';
     }
 
-    async quit() {
+    async quit(): Promise<void> {
         this.isOpen = false;
         this.isReady = false;
     }
 
-    async lPush(key: string, value: string) {
+    async lPush(key: string, value: string): Promise<number> {
         const entry = this.storage.get(key);
-        const list = entry ? JSON.parse(entry.value) : [];
+        const list: string[] = entry ? JSON.parse(entry.value) : [];
         list.unshift(value);
         this.storage.set(key, { value: JSON.stringify(list), expiresAt: entry?.expiresAt || null });
         return list.length;
     }
 
-    async rPop(key: string) {
+    async rPop(key: string): Promise<string | null> {
         const entry = this.storage.get(key);
         if (!entry) return null;
-        const list = JSON.parse(entry.value);
+        const list: string[] = JSON.parse(entry.value);
         const item = list.pop();
         this.storage.set(key, { value: JSON.stringify(list), expiresAt: entry.expiresAt });
         return item || null;
     }
 
-    async lRem(key: string, count: number, value: string) {
-        const entry = this.storage.get(key);
+    async lRem(_key: string, _count: number, _value: string): Promise<number> {
+        const entry = this.storage.get(_key);
         if (!entry) return 0;
         const list = JSON.parse(entry.value) as string[];
         let removed = 0;
         const filtered = list.filter(item => {
-            if (item === value) {
+            if (item === _value) {
                 removed++;
                 return false;
             }
             return true;
         });
-        this.storage.set(key, { value: JSON.stringify(filtered), expiresAt: entry.expiresAt });
+        this.storage.set(_key, { value: JSON.stringify(filtered), expiresAt: entry.expiresAt });
         return removed;
     }
 
-    async lRange(key: string, start: number, stop: number) {
+    async lRange(key: string, start: number, stop: number): Promise<string[]> {
         const entry = this.storage.get(key);
         if (!entry) return [];
         const list = JSON.parse(entry.value) as string[];
@@ -262,23 +278,25 @@ class InMemoryRedisMock {
     }
 
     multi() {
-        const queue: Array<() => Promise<any>> = [];
-        const mockInstance = this;
+        const queue: Array<() => Promise<unknown>> = [];
+        const incrBound = this.incr.bind(this);
+        const expireBound = this.expire.bind(this);
+        const incrByBound = this.incrBy.bind(this);
         return {
             incr(key: string) {
-                queue.push(() => mockInstance.incr(key));
+                queue.push(() => incrBound(key));
                 return this;
             },
             expire(key: string, seconds: number) {
-                queue.push(() => mockInstance.expire(key, seconds));
+                queue.push(() => expireBound(key, seconds));
                 return this;
             },
             incrBy(key: string, value: number) {
-                queue.push(() => mockInstance.incrBy(key, value));
+                queue.push(() => incrByBound(key, value));
                 return this;
             },
-            async exec() {
-                const results = [];
+            async exec(): Promise<unknown[]> {
+                const results: unknown[] = [];
                 for (const op of queue) {
                     results.push(await op());
                 }
@@ -288,28 +306,28 @@ class InMemoryRedisMock {
     }
 }
 
-function switchToMock(redisInstance: any) {
+function switchToMock(redisInstance: typeof redis): void {
     const mock = new InMemoryRedisMock();
 
     Object.defineProperty(redisInstance, 'isOpen', { get: () => mock.isOpen });
     Object.defineProperty(redisInstance, 'isReady', { get: () => mock.isReady });
 
-    redisInstance.get = mock.get.bind(mock);
-    redisInstance.set = mock.set.bind(mock);
-    redisInstance.setEx = mock.setEx.bind(mock);
-    redisInstance.del = mock.del.bind(mock);
-    redisInstance.keys = mock.keys.bind(mock);
-    redisInstance.incr = mock.incr.bind(mock);
-    redisInstance.incrBy = mock.incrBy.bind(mock);
-    redisInstance.expire = mock.expire.bind(mock);
-    redisInstance.ping = mock.ping.bind(mock);
-    redisInstance.info = mock.info.bind(mock);
-    redisInstance.quit = mock.quit.bind(mock);
-    redisInstance.lPush = mock.lPush.bind(mock);
-    redisInstance.rPop = mock.rPop.bind(mock);
-    redisInstance.lRem = mock.lRem.bind(mock);
-    redisInstance.lRange = mock.lRange.bind(mock);
-    redisInstance.multi = mock.multi.bind(mock);
+    redisInstance.get = mock.get.bind(mock) as never;
+    redisInstance.set = mock.set.bind(mock) as never;
+    redisInstance.setEx = mock.setEx.bind(mock) as never;
+    redisInstance.del = mock.del.bind(mock) as never;
+    redisInstance.keys = mock.keys.bind(mock) as never;
+    redisInstance.incr = mock.incr.bind(mock) as never;
+    redisInstance.incrBy = mock.incrBy.bind(mock) as never;
+    redisInstance.expire = mock.expire.bind(mock) as never;
+    redisInstance.ping = mock.ping.bind(mock) as never;
+    redisInstance.info = mock.info.bind(mock) as never;
+    redisInstance.quit = mock.quit.bind(mock) as never;
+    redisInstance.lPush = mock.lPush.bind(mock) as never;
+    redisInstance.rPop = mock.rPop.bind(mock) as never;
+    redisInstance.lRem = mock.lRem.bind(mock) as never;
+    redisInstance.lRange = mock.lRange.bind(mock) as never;
+    redisInstance.multi = mock.multi.bind(mock) as never;
 }
 
 export { redis, ensureConnected, checkHealth, disconnect };

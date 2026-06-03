@@ -1,4 +1,4 @@
-// services/groupService.js
+// services/groupService.ts
 // ============================================================================
 // SERVICE GROUPE UNIFIÉ (Cache + Aggressive Identity Linking)
 // ============================================================================
@@ -25,55 +25,134 @@
 import { redis } from './redisClient.js';
 import { StateManager } from './state/StateManager.js';
 import { supabase, db as supabaseDb } from './supabase.js';
+import { ServiceContainer } from '../core/ServiceContainer.js';
 
-/**
- * Service de gestion des groupes WhatsApp
- * Utilise l'injection de dépendances pour accéder à userService
- */
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+/** Participant brut tel que retourné par l'API WhatsApp */
+interface WaParticipant {
+    id: string;
+    jid?: string;
+    lid?: string;
+    name?: string;
+    notify?: string;
+    admin?: string | null;
+}
+
+/** Métadonnées WhatsApp d'un groupe */
+interface WaGroupMetadata {
+    subject?: string;
+    desc?: Buffer | string;
+    owner?: string;
+    subjectOwner?: string;
+    creation?: number;
+    participants: WaParticipant[];
+}
+
+/** Membre enrichi stocké dans le cache Redis */
+interface GroupMember {
+    jid: string;
+    lid: string | null;
+    phoneNumber: string | null;
+    name: string | null;
+    isAdmin: boolean;
+}
+
+/** Contexte social retourné par getContext */
+interface SocialContext {
+    type: 'GROUP' | 'PRIVATE';
+    sender: UserProfile;
+    group: GroupContextData | null;
+    senderIsAdmin: boolean;
+    senderLid: string | null;
+}
+
+/** Données du groupe dans le contexte social */
+interface GroupContextData {
+    jid: string;
+    name: string;
+    description: string;
+    owner: string;
+    admins: string[];
+    member_count: number;
+    tasks: unknown[];
+    bot_mission?: string;
+}
+
+/** Profil utilisateur simplifié */
+interface UserProfile {
+    jid: string;
+    names?: string[];
+    interaction_count?: number;
+    last_seen?: string;
+    language?: string;
+    timezone?: string;
+}
+
+/** Résultat d'une mission bot */
+interface BotMissionResult {
+    title: string | null;
+    description: string | null;
+    author: string | null;
+}
+
+/** Entrée de leaderboard */
+interface LeaderboardEntry {
+    value: string;
+    score: number;
+}
+
+/** Wrapper Supabase minimal pour les appels du groupService */
+interface SupabaseGroupWrapper {
+    getGroupConfig(jid: string): Promise<Record<string, unknown> | null>;
+}
+
+// ============================================================================
+// Service Implementation
+// ============================================================================
+
 export const groupService = {
-    /** @type {import('../core/ServiceContainer.js').ServiceContainer|null} */
-    container: null as any,
+    container: null as ServiceContainer | null,
 
-    /**
-     * Injecte le conteneur de services (appelé par ServiceContainer.register)
-     * @param {import('../core/ServiceContainer.js').ServiceContainer} container
-     */
-    setContainer(container: any) {
+    setContainer(container: ServiceContainer) {
         this.container = container;
     },
 
-    /**
-     * Getter pour userService (résolution lazy via container)
-     * @returns {import('./userService.js').userService}
-     */
     get userService() {
-        return this.container?.get('userService');
+        return this.container?.get('userService') as {
+            registerLid(jid: string, lid: string): Promise<void>;
+            resolveLid(identifier: string): Promise<string | null>;
+            getProfile(identifier: string): Promise<UserProfile>;
+        } | undefined;
     },
+
     /**
      * Met à jour le cache groupe avec les métadonnées WhatsApp
-     * @param {string} groupJid
-     * @param {Object} waMetadata - Métadonnées de l'API WhatsApp
      */
-    async updateGroup(groupJid: any, waMetadata: any) {
+    async updateGroup(groupJid: string, waMetadata: WaGroupMetadata) {
         const cacheKey = `group:${groupJid}:meta`;
 
         try {
             const admins = waMetadata.participants
-                .filter((p: any) => p.admin === 'admin' || p.admin === 'superadmin')
-                .map((p: any) => p.id);
+                .filter((p) => p.admin === 'admin' || p.admin === 'superadmin')
+                .map((p) => p.id);
 
-            // Phase Social Graph: Stocker TOUS les membres avec leurs noms (pour fuzzy matching)
-            const members = waMetadata.participants.map((p: any) => {
+            const members: GroupMember[] = waMetadata.participants.map((p) => {
                 const realJid = p.jid || p.id;
                 const lid = p.lid || (p.id.endsWith('@lid') ? p.id : null);
 
-                // Enregistrement immédiat du mapping
                 if (realJid.endsWith('@s.whatsapp.net') && lid && this.userService) {
-                    this.userService.registerLid(realJid, lid).catch(() => { });
+                    this.userService.registerLid(realJid, lid).catch(() => { /* fire-and-forget registration */ });
                 }
 
-                // RÉSOLUTION FIABLE DU NUMÉRO DE TÉLÉPHONE
-                let phoneJid: any = null;
+                let phoneJid: string | null = null;
                 if (realJid.endsWith('@s.whatsapp.net')) {
                     phoneJid = realJid;
                 }
@@ -87,11 +166,10 @@ export const groupService = {
                 };
             });
 
-            // [FIX] Enrichissement asynchrone des numéros de téléphone pour les utilisateurs LID-only
             if (this.userService) {
-                await Promise.all(members.map(async (m: any) => {
+                await Promise.all(members.map(async (m) => {
                     if (!m.phoneNumber && m.jid.endsWith('@lid')) {
-                        const resolved = await this.userService.resolveLid(m.jid);
+                        const resolved = await this.userService!.resolveLid(m.jid);
                         if (resolved && resolved.endsWith('@s.whatsapp.net')) {
                             m.phoneNumber = resolved;
                         }
@@ -99,7 +177,7 @@ export const groupService = {
                 }));
             }
 
-            const groupData = {
+            const groupData: Record<string, string> = {
                 jid: groupJid,
                 name: waMetadata.subject || '',
                 description: waMetadata.desc ? waMetadata.desc.toString() : '',
@@ -110,29 +188,22 @@ export const groupService = {
                 last_updated: Date.now().toString()
             };
 
-            // Stocker dans Redis
             await redis.hSet(cacheKey, groupData);
-            await redis.expire(cacheKey, 86400); // TTL 24h
+            await redis.expire(cacheKey, 86400);
 
-            // Phase 3: Sync du groupe lui-même dans 'groups' (CRITIQUE pour FKs)
             if (supabase) {
-                // Tenter de résoudre le founder s'il est au format LID
                 const founder = waMetadata.owner || waMetadata.subjectOwner;
-                let validFounderJid: any = null;
+                let validFounderJid: string | null = null;
 
                 if (founder) {
-                    // Si c'est déjà un JID valide
                     if (founder.includes('@s.whatsapp.net')) {
                         validFounderJid = founder;
-                    }
-                    // Si c'est un LID, on essaie de le résoudre
-                    else if (founder.endsWith('@lid') && this.userService) {
+                    } else if (founder.endsWith('@lid') && this.userService) {
                         const resolved = await this.userService.resolveLid(founder);
                         if (resolved) validFounderJid = resolved;
                     }
                 }
 
-                // S'assurer que le fondateur existe dans la table users (contrainte FK)
                 if (validFounderJid && this.userService) {
                     await this.userService.getProfile(validFounderJid);
                 }
@@ -142,28 +213,24 @@ export const groupService = {
                     platform_group_id: groupJid,
                     jid: groupJid,
                     name: waMetadata.subject || '',
-                    founder_jid: validFounderJid || null, // NULL si pas résolu, pour respecter la FK
+                    founder_jid: validFounderJid || null,
                     created_at: waMetadata.creation ? new Date(waMetadata.creation * 1000).toISOString() : new Date().toISOString()
                 }, { onConflict: 'platform,platform_group_id' });
 
-                // NOUVEAU: Synchronisation des admins
                 await this.syncAdminsToSupabase(groupJid, admins);
             }
 
             console.log(`[GroupService] Groupe mis à jour (Redis + DB): ${waMetadata.subject}`);
 
-
-        } catch (error: any) {
-            console.error('[GroupService] updateGroup error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GroupService] updateGroup error:', extractErrorMessage(error));
         }
     },
 
     /**
      * Vérifie si les données du groupe nécessitent une mise à jour
-     * @param {string} groupJid
-     * @returns {Promise<boolean>}
      */
-    async needsUpdate(groupJid: any) {
+    async needsUpdate(groupJid: string): Promise<boolean> {
         const cacheKey = `group:${groupJid}:meta`;
 
         try {
@@ -172,35 +239,32 @@ export const groupService = {
                 redis.hGet(cacheKey, 'members')
             ]);
 
-            // Pas de cache du tout
             if (!lastUpdated) return true;
 
-            // Cache existant mais sans membres (migration nécessaire)
             if (!members || members === '[]') {
                 console.log(`[GroupService] Cache obsolète (pas de membres): ${groupJid}`);
                 return true;
             }
 
-            // Cache trop vieux (>24h)
             const ONE_DAY = 24 * 60 * 60 * 1000;
             if ((Date.now() - parseInt(lastUpdated)) > ONE_DAY) {
                 return true;
             }
 
-            // CHECK 1: Vérifier si le cache contient des "mauvaises données" (LIDs au lieu de JIDs)
-            // C'est ce qui arrive si le bot a tourné avant le fix.
-            if (members.includes('@lid"')) { // Detection brutale mais efficace
+            if (members.includes('@lid"')) {
                 try {
-                    const parsedMembers = JSON.parse(members);
-                    const hasBadData = parsedMembers.some((m: any) => m.jid && m.jid.endsWith('@lid'));
+                    const parsedMembers = JSON.parse(members) as GroupMember[];
+                    const hasBadData = parsedMembers.some((m) => m.jid && m.jid.endsWith('@lid'));
                     if (hasBadData) {
                         console.log(`[GroupService] Cache corrompu détecté (LID as JID): ${groupJid} -> Force Sync`);
                         return true;
                     }
-                } catch (e: any) { }
+                } catch {
+                    // JSON parse échoué → cache corrompu, forcer sync
+                    return true;
+                }
             }
 
-            // CHECK 2: Vérifier si le groupe existe VRAIMENT dans la DB
             if (supabase) {
                 const { count, error } = await supabase
                     .from('groups')
@@ -215,59 +279,50 @@ export const groupService = {
 
             return false;
 
-        } catch (error: any) {
-            return true; // En cas d'erreur, forcer la mise à jour
+        } catch {
+            return true;
         }
     },
 
     /**
-     * Invalide le cache d'un groupe (appelé sur events promote/demote/remove)
-     * @param {string} groupJid
+     * Invalide le cache d'un groupe
      */
-    async invalidateCache(groupJid: any) {
+    async invalidateCache(groupJid: string) {
         const cacheKey = `group:${groupJid}:meta`;
 
         try {
             await redis.del(cacheKey);
             console.log(`[GroupService] Cache invalidé pour: ${groupJid}`);
-        } catch (error: any) {
-            console.error('[GroupService] invalidateCache error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GroupService] invalidateCache error:', extractErrorMessage(error));
         }
     },
 
     /**
      * Récupère la config/settings d'un groupe (Proxy vers Supabase)
-     * @param {string} groupJid
-     * @returns {Promise<Object>}
      */
-    async getGroupSettings(groupJid: any) {
+    async getGroupSettings(groupJid: string): Promise<Record<string, unknown>> {
         if (!supabase) return {};
         try {
-            // Utilise getGroupConfig de supabase.ts `db` wrapper (not the raw client)
-            const config = await supabaseDb.getGroupConfig(groupJid);
+            const config = await (supabaseDb as unknown as SupabaseGroupWrapper).getGroupConfig(groupJid);
             return config || {};
-        } catch (error: any) {
-            console.error('[GroupService] getGroupSettings error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GroupService] getGroupSettings error:', extractErrorMessage(error));
             return {};
         }
     },
 
     /**
      * Récupère le contexte complet pour le prompt système
-     * @param {string} chatJid - JID du chat (groupe ou privé)
-     * @param {string} senderJid - JID de l'expéditeur
-     * @param {Object} userProfile - Profil utilisateur (de userService)
-     * @returns {Promise<Object>}
      */
-    async getContext(chatJid: any, senderJid: any, userProfile: any) {
+    async getContext(chatJid: string, senderJid: string, userProfile: UserProfile): Promise<SocialContext> {
         const isGroup = chatJid.endsWith('@g.us');
 
-        const context = {
+        const context: SocialContext = {
             type: isGroup ? 'GROUP' : 'PRIVATE',
             sender: userProfile,
-            group: null as any,
+            group: null,
             senderIsAdmin: false,
-            // Passer le LID s'il est connu pour l'expéditeur (aide à la résolution downstream)
             senderLid: null
         };
 
@@ -276,11 +331,10 @@ export const groupService = {
         const cacheKey = `group:${chatJid}:meta`;
 
         try {
-            // 1. Essayer le cache Redis
             const cached = await redis.hGetAll(cacheKey);
 
             if (cached && Object.keys(cached).length > 0) {
-                const admins = JSON.parse(cached.admins || '[]');
+                const admins = JSON.parse(cached.admins || '[]') as string[];
 
                 context.group = {
                     jid: cached.jid,
@@ -289,12 +343,11 @@ export const groupService = {
                     owner: cached.owner,
                     admins,
                     member_count: parseInt(cached.member_count) || 0,
-                    tasks: [] // Les tâches viennent de Supabase group_configs
+                    tasks: []
                 };
 
                 context.senderIsAdmin = admins.includes(senderJid);
 
-                // 2. Enrichir avec bot_mission depuis Supabase
                 if (supabase) {
                     const { data: config } = await supabase
                         .from('groups')
@@ -302,14 +355,14 @@ export const groupService = {
                         .eq('platform_group_id', chatJid)
                         .single();
 
-                    if (config?.bot_mission) {
+                    if (config?.bot_mission && context.group) {
                         context.group.bot_mission = config.bot_mission;
                     }
                 }
             }
 
-        } catch (error: any) {
-            console.error('[GroupService] getContext error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GroupService] getContext error:', extractErrorMessage(error));
         }
 
         return context;
@@ -317,34 +370,29 @@ export const groupService = {
 
     /**
      * Récupère la liste des membres d'un groupe (depuis le cache Redis)
-     * @param {string} groupJid
-     * @returns {Promise<Array<{jid: string, isAdmin: boolean}>>}
      */
-    async getGroupMembers(groupJid: any) {
+    async getGroupMembers(groupJid: string): Promise<GroupMember[]> {
         const cacheKey = `group:${groupJid}:meta`;
 
         try {
             const membersJson = await redis.hGet(cacheKey, 'members');
 
             if (membersJson) {
-                const members = JSON.parse(membersJson);
+                const members = JSON.parse(membersJson) as GroupMember[];
 
-                // [FIX] Enrichir les membres avec les noms Supabase si name est null
                 if (this.userService) {
                     const enrichedMembers = await Promise.all(
-                        members.map(async (member: any) => {
-                            // Si le nom est déjà présent, pas besoin d'enrichir
+                        members.map(async (member) => {
                             if (member.name && member.name !== 'Inconnu') {
                                 return member;
                             }
 
-                            // Sinon, chercher dans Supabase via userService
                             try {
-                                const profile = await this.userService.getProfile(member.jid);
+                                const profile = await this.userService!.getProfile(member.jid);
                                 if (profile?.names?.[0] && profile.names[0] !== 'Inconnu') {
                                     return { ...member, name: profile.names[0] };
                                 }
-                            } catch (e: any) {
+                            } catch {
                                 // Ignore errors, garder le membre tel quel
                             }
 
@@ -359,19 +407,16 @@ export const groupService = {
             }
 
             return [];
-        } catch (error: any) {
-            console.error('[GroupService] getGroupMembers error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GroupService] getGroupMembers error:', extractErrorMessage(error));
             return [];
         }
     },
 
     /**
      * Récupère la mission bot d'un groupe (depuis Supabase)
-     * Utilisé par: gm_mission (group_manager plugin)
-     * @param {string} groupJid
-     * @returns {Promise<{title: string, description: string, author: string}|null>}
      */
-    async getBotMission(groupJid: any) {
+    async getBotMission(groupJid: string): Promise<BotMissionResult | null> {
         if (!supabase) return null;
 
         try {
@@ -390,23 +435,18 @@ export const groupService = {
             return {
                 title: data.name,
                 description: data.bot_mission,
-                author: null // L'auteur n'est pas stocké dans la version actuelle du schéma
+                author: null
             };
-        } catch (error: any) {
-            console.error('[GroupService] getBotMission error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GroupService] getBotMission error:', extractErrorMessage(error));
             return null;
         }
     },
 
     /**
      * Définit la mission bot d'un groupe
-     * Utilisé par: gm_setmission (group_manager plugin)
-     * @param {string} groupJid
-     * @param {string} title - Titre de la mission (stocké dans name)
-     * @param {string} description - Description de la mission (stocké dans bot_mission)
-     * @param {string} author - JID de l'auteur (stocké dans admins)
      */
-    async setBotMission(groupJid: any, title: any, description: any, author: any) {
+    async setBotMission(groupJid: string, title: string, description: string, _author: string) {
         if (!supabase) return;
 
         try {
@@ -422,8 +462,8 @@ export const groupService = {
             if (error) {
                 console.error('[GroupService] setBotMission error:', error);
             }
-        } catch (error: any) {
-            console.error('[GroupService] setBotMission error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GroupService] setBotMission error:', extractErrorMessage(error));
         }
     },
 
@@ -431,16 +471,11 @@ export const groupService = {
 
     /**
      * Synchronise les admins WhatsApp vers la table group_admins
-     * Appelé après updateGroup() pour persistance
-     * @param {string} groupJid
-     * @param {Array<string>} adminJids - Liste des JIDs des admins
-     * @param {string} promotedBy - JID de celui qui a fait l'action (optionnel)
      */
-    async syncAdminsToSupabase(groupJid: any, adminJids: any, promotedBy: any = null) {
+    async syncAdminsToSupabase(groupJid: string, adminJids: string[], promotedBy: string | null = null) {
         if (!supabase) return;
 
         try {
-            // 1. Récupérer les admins actuels dans Supabase pour ce groupe
             const { data: existingAdmins, error: fetchError } = await supabase
                 .from('group_admins')
                 .select('user_jid')
@@ -454,13 +489,12 @@ export const groupService = {
                 throw fetchError;
             }
 
-            const existingSet = new Set((existingAdmins || []).map((a: any) => a.user_jid));
-            const newSet = new Set(adminJids);
+            const existingSet = new Set<string>((existingAdmins || []).map((a: { user_jid: string }) => a.user_jid));
+            const newSet = new Set<string>(adminJids);
 
-            // 2. Ajouter les nouveaux admins
-            const toAdd = adminJids.filter((jid: any) => !existingSet.has(jid));
+            const toAdd = adminJids.filter((jid) => !existingSet.has(jid));
             if (toAdd.length > 0) {
-                const insertData = toAdd.map((jid: any) => ({
+                const insertData = toAdd.map((jid) => ({
                     group_jid: groupJid,
                     user_jid: jid,
                     role: 'admin',
@@ -472,8 +506,7 @@ export const groupService = {
                 console.log(`[GroupService] ${toAdd.length} admin(s) ajouté(s) à group_admins`);
             }
 
-            // 3. Supprimer les admins retirés (demote)
-            const toRemove = [...existingSet].filter((jid: any) => !newSet.has(jid));
+            const toRemove = [...existingSet].filter((jid) => !newSet.has(jid));
             if (toRemove.length > 0) {
                 await supabase
                     .from('group_admins')
@@ -483,20 +516,15 @@ export const groupService = {
 
                 console.log(`[GroupService] ${toRemove.length} admin(s) retiré(s) de group_admins`);
             }
-        } catch (error: any) {
-            console.error('[GroupService] syncAdminsToSupabase error:', error.message);
+        } catch (error: unknown) {
+            console.error('[GroupService] syncAdminsToSupabase error:', extractErrorMessage(error));
         }
     },
 
-
     /**
      * Vérifie si un utilisateur est admin dans un groupe (via Supabase)
-     * Utile pour les vérifications cross-data de permissions
-     * @param {string} groupJid
-     * @param {string} userJid
-     * @returns {Promise<boolean>}
      */
-    async isGroupAdmin(groupJid: any, userJid: any) {
+    async isGroupAdmin(groupJid: string, userJid: string): Promise<boolean> {
         if (!supabase) return false;
 
         try {
@@ -508,30 +536,25 @@ export const groupService = {
                 .maybeSingle();
 
             if (error) {
-                // Fallback Redis si table manquante ou erreur
                 const cacheKey = `group:${groupJid}:meta`;
                 const adminsJson = await redis.hGet(cacheKey, 'admins');
                 if (adminsJson) {
-                    const admins = JSON.parse(adminsJson);
+                    const admins = JSON.parse(adminsJson) as string[];
                     return admins.includes(userJid);
                 }
                 return false;
             }
 
             return !!data;
-        } catch (error: any) {
+        } catch {
             return false;
         }
     },
 
-
     /**
      * Liste tous les groupes où un utilisateur est admin
-     * Utilisé par: gm_mygroups (group_manager plugin)
-     * @param {string} userJid
-     * @returns {Promise<Array<string>>}
      */
-    async getAdminGroups(userJid: any) {
+    async getAdminGroups(userJid: string): Promise<string[]> {
         if (!supabase) return [];
 
         try {
@@ -540,20 +563,17 @@ export const groupService = {
                 .select('group_jid')
                 .eq('user_jid', userJid);
 
-            return (data || []).map((d: any) => d.group_jid);
-        } catch (error: any) {
-            console.error('[GroupService] getAdminGroups error:', error.message);
+            return (data || []).map((d: { group_jid: string }) => d.group_jid);
+        } catch (error: unknown) {
+            console.error('[GroupService] getAdminGroups error:', extractErrorMessage(error));
             return [];
         }
     },
 
     /**
      * Compte le nombre d'admins par groupe
-     * Utilisé par: gm_groupstats (group_manager plugin)
-     * @param {string} groupJid
-     * @returns {Promise<number>}
      */
-    async countAdmins(groupJid: any) {
+    async countAdmins(groupJid: string): Promise<number> {
         if (!supabase) return 0;
 
         try {
@@ -563,24 +583,23 @@ export const groupService = {
                 .eq('group_jid', groupJid);
 
             return count || 0;
-        } catch (error: any) {
+        } catch {
             return 0;
         }
     },
 
-
     /**
      * Enregistre une activité (Appelé par BotCore à chaque message de groupe)
      */
-    async trackActivity(groupJid: any, userJid: any) {
+    async trackActivity(groupJid: string, userJid: string) {
         await StateManager.recordGroupActivity(groupJid, userJid);
     },
 
     /**
      * Génère le rapport de stats pour la commande .stats ou gm_stats
      */
-    async getStatsReport(groupJid: any) {
-        const leaderboard = await StateManager.getGroupLeaderboard(groupJid, 10);
+    async getStatsReport(groupJid: string): Promise<string> {
+        const leaderboard = await StateManager.getGroupLeaderboard(groupJid, 10) as LeaderboardEntry[];
 
         if (!leaderboard || leaderboard.length === 0) {
             return '📊 Pas encore de statistiques pour ce groupe.';
@@ -588,13 +607,11 @@ export const groupService = {
 
         let report = '📊 **TOP 10 MEMBRES ACTIFS**\n';
 
-        // On résout les noms (Nécessite UserService pour convertir JID -> Nom)
         for (let i = 0; i < leaderboard.length; i++) {
             const entry = leaderboard[i];
             const jid = entry.value;
             const score = entry.score;
 
-            // Récupération optimisée du nom (déjà en cache Redis)
             let name = jid.split('@')[0];
             if (this.userService) {
                 const profile = await this.userService.getProfile(jid);
@@ -603,7 +620,6 @@ export const groupService = {
                 }
             }
 
-            // Médaille pour le top 3
             const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : `${i + 1}.`));
 
             report += `\n${medal} ${name} : ${score} msgs`;
@@ -614,4 +630,3 @@ export const groupService = {
 };
 
 export default groupService;
-

@@ -2,7 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
-import { BrowserResult, SnapshotResult, ScreenshotResult, BrowserExecOptions } from './types.js';
+import { BrowserResult, SnapshotResult, ScreenshotResult, BrowserExecOptions, RefInfo } from './types.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -84,18 +84,19 @@ export class BrowserService {
                     return { success: false, error: parsed.error || 'Unknown CLI error', data: parsed.data };
                 }
                 return { success: true, data: parsed.data };
-            } catch (e) {
+            } catch {
                 // If it's not JSON, return as raw string if success
                 return { success: true, data: stdout.trim() };
             }
-        } catch (error: any) {
-            let errorMessage = error.message;
-            if (error.stdout) {
+        } catch (error: unknown) {
+            let errorMessage = error instanceof Error ? error.message : String(error);
+            const errObj = error as Record<string, unknown>;
+            if (typeof errObj === 'object' && errObj !== null && 'stdout' in errObj && typeof errObj.stdout === 'string') {
                 try {
-                    const parsed = JSON.parse(error.stdout);
-                    return { success: false, error: parsed.error || error.message, data: parsed.data };
-                } catch (e) {
-                    errorMessage = error.stdout.trim();
+                    const parsed = JSON.parse(errObj.stdout);
+                    return { success: false, error: parsed.error || errorMessage, data: parsed.data };
+                } catch {
+                    errorMessage = errObj.stdout.trim();
                 }
             }
             return { success: false, error: errorMessage };
@@ -125,10 +126,11 @@ export class BrowserService {
         const result = await this.exec(args, { session });
         if (!result.success) return result as SnapshotResult;
 
+        const data = result.data as { snapshot?: string; refs?: Record<string, RefInfo> } | undefined;
         return {
             success: true,
-            snapshot: result.data?.snapshot || '',
-            refs: result.data?.refs || {}
+            snapshot: data?.snapshot || '',
+            refs: data?.refs || {}
         };
     }
 
@@ -157,10 +159,11 @@ export class BrowserService {
         const result = await this.exec(args, { session });
         if (!result.success) return result as ScreenshotResult;
 
+        const data = result.data as { annotatedRefs?: ScreenshotResult['annotatedRefs'] } | undefined;
         return {
             success: true,
             filePath,
-            annotatedRefs: result.data.annotatedRefs
+            annotatedRefs: data?.annotatedRefs
         };
     }
 
@@ -216,7 +219,7 @@ export class BrowserService {
             const { stdout } = await execFileAsync(this.binaryName, ['doctor', '--quick', '--offline', '--json']);
             const data = JSON.parse(stdout);
             return data.success === true;
-        } catch (e) {
+        } catch {
             return false;
         }
     }

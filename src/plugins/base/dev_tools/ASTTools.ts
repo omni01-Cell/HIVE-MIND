@@ -26,6 +26,224 @@ import { hashLines } from '../../../services/anchor/index.js';
 
 const execAsync = promisify(exec);
 
+// --- Type helpers ---
+
+interface ToolContext {
+    chatId?: string;
+    sourceChannel?: string;
+    message?: { sender?: string };
+}
+
+interface SkeletonArgs {
+    paths?: string[];
+}
+
+interface FunctionArgs {
+    file_path?: string;
+    function_name?: string;
+}
+
+interface ReferenceArgs {
+    symbol_name?: string;
+    search_paths?: string[];
+    find_type?: 'definition' | 'reference' | 'both';
+}
+
+interface SymbolReference {
+    filePath: string;
+    line: number;
+    lineText: string;
+    isDefinition: boolean;
+}
+
+interface FunctionResult {
+    startLine: number;
+    endLine: number;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+    return String(error);
+}
+
+// --- Helper functions to reduce complexity ---
+
+async function resolveFilePaths(searchPaths: string[]): Promise<string[]> {
+    const filePaths: string[] = [];
+    for (const searchPath of searchPaths) {
+        const absolutePath = path.isAbsolute(searchPath)
+            ? searchPath
+            : path.resolve(permissionManager.sandboxDir, searchPath);
+
+        if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {
+            await expandDirectory(absolutePath, filePaths);
+        } else if (fs.existsSync(absolutePath)) {
+            filePaths.push(absolutePath);
+        }
+    }
+    return filePaths;
+}
+
+async function expandDirectory(dirPath: string, filePaths: string[]): Promise<void> {
+    try {
+        const { stdout } = await execAsync(
+            `find "${dirPath}" -maxdepth 3 -type f \\( ${Object.keys(LANGUAGE_MAP).map(e => `-name "*.${e}"`).join(' -o ')} \\) | head -100`,
+            { timeout: 5000 }
+        );
+        filePaths.push(...stdout.split('\n').filter(Boolean));
+    } catch {
+        const entries = fs.readdirSync(dirPath);
+        for (const entry of entries) {
+            const fullPath = path.join(dirPath, entry);
+            const ext = path.extname(entry).toLowerCase().slice(1);
+            if (LANGUAGE_MAP[ext] && fs.statSync(fullPath).isFile()) {
+                filePaths.push(fullPath);
+            }
+        }
+    }
+}
+
+function formatReferenceOutput(
+    symbolName: string,
+    references: SymbolReference[]
+): string {
+    const byFile = new Map<string, SymbolReference[]>();
+    for (const ref of references) {
+        const existing = byFile.get(ref.filePath) || [];
+        existing.push(ref);
+        byFile.set(ref.filePath, existing);
+    }
+
+    let output = `Symbol "${symbolName}" — ${references.length} occurrence(s) in ${byFile.size} file(s):\n\n`;
+    for (const [filePath, refs] of byFile) {
+        const relPath = path.relative(permissionManager.sandboxDir, filePath);
+        output += `--- ${relPath} ---\n`;
+        for (const ref of refs) {
+            const tag = ref.isDefinition ? '[DEF]' : '[REF]';
+            output += `  ${tag} L${ref.line + 1}: ${ref.lineText.trim()}\n`;
+        }
+        output += '\n';
+    }
+    return output.trim();
+}
+
+function resolveExt(filePath: string): string {
+    return path.extname(filePath).toLowerCase().slice(1);
+}
+
+function resolveAbsolute(file_path: string): string {
+    return path.isAbsolute(file_path)
+        ? file_path
+        : path.resolve(permissionManager.sandboxDir, file_path);
+}
+
+async function handleGetSkeleton(args: SkeletonArgs): Promise<{ success: boolean; message: string }> {
+    const paths: string[] = args.paths || [];
+    if (paths.length === 0) {
+        return { success: false, message: 'Parameter "paths" required (array of file paths).' };
+    }
+
+    const results: string[] = [];
+    for (const filePath of paths) {
+        const absolutePath = resolveAbsolute(filePath);
+        if (!fs.existsSync(absolutePath)) {
+            results.push(`--- ${filePath} ---\nError: File does not exist.`);
+            continue;
+        }
+
+        const ext = resolveExt(absolutePath);
+        if (!LANGUAGE_MAP[ext]) {
+            results.push(`--- ${filePath} ---\nUnsupported language: .${ext}. Supported: ${Object.keys(LANGUAGE_MAP).join(', ')}`);
+            continue;
+        }
+
+        try {
+            const skeleton = await getFileSkeleton(absolutePath);
+            if (skeleton) {
+                results.push(`--- ${filePath} ---\n${skeleton}`);
+            } else {
+                results.push(`--- ${filePath} ---\nNo definitions found.`);
+            }
+        } catch (error: unknown) {
+            results.push(`--- ${filePath} ---\nAST Error: ${extractErrorMessage(error)}`);
+        }
+    }
+
+    return { success: true, message: results.join('\n\n') };
+}
+
+async function handleGetFunction(args: FunctionArgs): Promise<{ success: boolean; message: string }> {
+    const { file_path, function_name } = args;
+    if (!file_path || !function_name) {
+        return { success: false, message: 'Parameters "file_path" and "function_name" required.' };
+    }
+
+    const absolutePath = resolveAbsolute(file_path);
+    if (!fs.existsSync(absolutePath)) {
+        return { success: false, message: `File does not exist: ${file_path}` };
+    }
+
+    const ext = resolveExt(absolutePath);
+    if (!LANGUAGE_MAP[ext]) {
+        return {
+            success: false,
+            message: `Unsupported language: .${ext}. Supported: ${Object.keys(LANGUAGE_MAP).join(', ')}`
+        };
+    }
+
+    try {
+        const result: FunctionResult | null = await getFunction(absolutePath, function_name);
+        if (!result) {
+            return {
+                success: false,
+                message: `Function "${function_name}" not found in ${file_path}. Use get_file_skeleton to see available symbols.`
+            };
+        }
+
+        const fullContent = fs.readFileSync(absolutePath, 'utf8');
+        const hashedContent = hashLines(absolutePath, fullContent);
+        const hashedLines = hashedContent.split('\n');
+        const relevantLines = hashedLines.slice(result.startLine, result.endLine + 1);
+
+        return {
+            success: true,
+            message: `Function "${function_name}" (lines ${result.startLine + 1}-${result.endLine + 1}):\n${relevantLines.join('\n')}`
+        };
+    } catch (error: unknown) {
+        return { success: false, message: `AST Error: ${extractErrorMessage(error)}` };
+    }
+}
+
+async function handleFindReferences(args: ReferenceArgs): Promise<{ success: boolean; message: string }> {
+    const { symbol_name, search_paths, find_type = 'both' } = args;
+    if (!symbol_name || !search_paths?.length) {
+        return { success: false, message: 'Parameters "symbol_name" and "search_paths" required.' };
+    }
+
+    const filePaths = await resolveFilePaths(search_paths);
+    if (filePaths.length === 0) {
+        return { success: false, message: 'No supported files found in specified paths.' };
+    }
+
+    try {
+        const references = await findSymbolReferences(filePaths, symbol_name, find_type);
+
+        if (references.length === 0) {
+            return {
+                success: true,
+                message: `No ${find_type === 'definition' ? 'definition' : find_type === 'reference' ? 'reference' : 'occurrence'} found for "${symbol_name}" in ${filePaths.length} file(s).`
+            };
+        }
+
+        const output = formatReferenceOutput(symbol_name, references);
+        return { success: true, message: output };
+    } catch (error: unknown) {
+        return { success: false, message: `AST Error: ${extractErrorMessage(error)}` };
+    }
+}
+
 export default {
     name: 'dev_tools_ast',
     description: 'AST tools for structural code intelligence (skeleton, function extraction, references).',
@@ -101,184 +319,20 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: string) {
-        const { chatId, sourceChannel } = context;
-        const senderJid = context.message?.sender || 'system';
-
+    async execute(args: Record<string, unknown>, _context: ToolContext, toolName: string) {
         try {
             switch (toolName) {
-                case 'get_file_skeleton': {
-                    const paths: string[] = args.paths || [];
-                    if (paths.length === 0) {
-                        return { success: false, message: 'Parameter "paths" required (array of file paths).' };
-                    }
-
-                    const results: string[] = [];
-
-                    for (const filePath of paths) {
-                        const absolutePath = path.isAbsolute(filePath)
-                            ? filePath
-                            : path.resolve(permissionManager.sandboxDir, filePath);
-
-                        if (!fs.existsSync(absolutePath)) {
-                            results.push(`--- ${filePath} ---\nError: File does not exist.`);
-                            continue;
-                        }
-
-                        const ext = path.extname(absolutePath).toLowerCase().slice(1);
-                        if (!LANGUAGE_MAP[ext]) {
-                            results.push(`--- ${filePath} ---\nUnsupported language: .${ext}. Supported: ${Object.keys(LANGUAGE_MAP).join(', ')}`);
-                            continue;
-                        }
-
-                        try {
-                            const skeleton = await getFileSkeleton(absolutePath);
-                            if (skeleton) {
-                                results.push(`--- ${filePath} ---\n${skeleton}`);
-                            } else {
-                                results.push(`--- ${filePath} ---\nNo definitions found.`);
-                            }
-                        } catch (error: any) {
-                            results.push(`--- ${filePath} ---\nAST Error: ${error.message}`);
-                        }
-                    }
-
-                    return {
-                        success: true,
-                        message: results.join('\n\n')
-                    };
-                }
-
-                case 'get_function': {
-                    const { file_path, function_name } = args;
-                    if (!file_path || !function_name) {
-                        return { success: false, message: 'Parameters "file_path" and "function_name" required.' };
-                    }
-
-                    const absolutePath = path.isAbsolute(file_path)
-                        ? file_path
-                        : path.resolve(permissionManager.sandboxDir, file_path);
-
-                    if (!fs.existsSync(absolutePath)) {
-                        return { success: false, message: `File does not exist: ${file_path}` };
-                    }
-
-                    const ext = path.extname(absolutePath).toLowerCase().slice(1);
-                    if (!LANGUAGE_MAP[ext]) {
-                        return {
-                            success: false,
-                            message: `Unsupported language: .${ext}. Supported: ${Object.keys(LANGUAGE_MAP).join(', ')}`
-                        };
-                    }
-
-                    try {
-                        const result = await getFunction(absolutePath, function_name);
-                        if (!result) {
-                            return {
-                                success: false,
-                                message: `Function "${function_name}" not found in ${file_path}. Use get_file_skeleton to see available symbols.`
-                            };
-                        }
-
-                        // Return with hash-anchored lines for subsequent edit_file calls
-                        const fullContent = fs.readFileSync(absolutePath, 'utf8');
-                        const hashedContent = hashLines(absolutePath, fullContent);
-                        const hashedLines = hashedContent.split('\n');
-
-                        // Extract only the relevant hashed lines
-                        const relevantLines = hashedLines.slice(result.startLine, result.endLine + 1);
-
-                        return {
-                            success: true,
-                            message: `Function "${function_name}" (lines ${result.startLine + 1}-${result.endLine + 1}):\n${relevantLines.join('\n')}`
-                        };
-                    } catch (error: any) {
-                        return { success: false, message: `AST Error: ${error.message}` };
-                    }
-                }
-
-                case 'find_symbol_references': {
-                    const { symbol_name, search_paths, find_type = 'both' } = args;
-                    if (!symbol_name || !search_paths?.length) {
-                        return { success: false, message: 'Parameters "symbol_name" and "search_paths" required.' };
-                    }
-
-                    // Expand directories to file lists
-                    const filePaths: string[] = [];
-                    for (const searchPath of search_paths) {
-                        const absolutePath = path.isAbsolute(searchPath)
-                            ? searchPath
-                            : path.resolve(permissionManager.sandboxDir, searchPath);
-
-                        if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {
-                            // Find supported files in directory (non-recursive for safety)
-                            try {
-                                const supportedExts = Object.keys(LANGUAGE_MAP).map(e => `.${e}`).join(',');
-                                const { stdout } = await execAsync(
-                                    `find "${absolutePath}" -maxdepth 3 -type f \\( ${Object.keys(LANGUAGE_MAP).map(e => `-name "*.${e}"`).join(' -o ')} \\) | head -100`,
-                                    { timeout: 5000 }
-                                );
-                                filePaths.push(...stdout.split('\n').filter(Boolean));
-                            } catch {
-                                // Fallback: just use the directory listing
-                                const entries = fs.readdirSync(absolutePath);
-                                for (const entry of entries) {
-                                    const fullPath = path.join(absolutePath, entry);
-                                    const ext = path.extname(entry).toLowerCase().slice(1);
-                                    if (LANGUAGE_MAP[ext] && fs.statSync(fullPath).isFile()) {
-                                        filePaths.push(fullPath);
-                                    }
-                                }
-                            }
-                        } else if (fs.existsSync(absolutePath)) {
-                            filePaths.push(absolutePath);
-                        }
-                    }
-
-                    if (filePaths.length === 0) {
-                        return { success: false, message: 'No supported files found in specified paths.' };
-                    }
-
-                    try {
-                        const references = await findSymbolReferences(filePaths, symbol_name, find_type);
-
-                        if (references.length === 0) {
-                            return {
-                                success: true,
-                                message: `No ${find_type === 'definition' ? 'definition' : find_type === 'reference' ? 'reference' : 'occurrence'} found for "${symbol_name}" in ${filePaths.length} file(s).`
-                            };
-                        }
-
-                        // Group by file
-                        const byFile = new Map<string, typeof references>();
-                        for (const ref of references) {
-                            const existing = byFile.get(ref.filePath) || [];
-                            existing.push(ref);
-                            byFile.set(ref.filePath, existing);
-                        }
-
-                        let output = `Symbol "${symbol_name}" — ${references.length} occurrence(s) in ${byFile.size} file(s):\n\n`;
-                        for (const [filePath, refs] of byFile) {
-                            const relPath = path.relative(permissionManager.sandboxDir, filePath);
-                            output += `--- ${relPath} ---\n`;
-                            for (const ref of refs) {
-                                const tag = ref.isDefinition ? '[DEF]' : '[REF]';
-                                output += `  ${tag} L${ref.line + 1}: ${ref.lineText.trim()}\n`;
-                            }
-                            output += '\n';
-                        }
-
-                        return { success: true, message: output.trim() };
-                    } catch (error: any) {
-                        return { success: false, message: `AST Error: ${error.message}` };
-                    }
-                }
-
+                case 'get_file_skeleton':
+                    return await handleGetSkeleton(args as unknown as SkeletonArgs);
+                case 'get_function':
+                    return await handleGetFunction(args as unknown as FunctionArgs);
+                case 'find_symbol_references':
+                    return await handleFindReferences(args as unknown as ReferenceArgs);
                 default:
                     return null;
             }
-        } catch (error: any) {
-            return { success: false, message: `Error in ${toolName}: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error in ${toolName}: ${extractErrorMessage(error)}` };
         }
     }
 };

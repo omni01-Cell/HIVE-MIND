@@ -80,7 +80,7 @@ describe('Constraint Manifold (RuntimeSentinel integration)', () => {
 
         const projected = sentinel.projectActionSpace(rawTools, mockBlueprint);
         expect(projected.length).toBe(1);
-        expect(projected[0].function.name).toBe('read_file');
+        expect(projected[0].function?.name).toBe('read_file');
     });
 
     it('should behave unchanged if no blueprint is provided', async () => {

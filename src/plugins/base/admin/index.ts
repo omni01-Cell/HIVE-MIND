@@ -8,11 +8,19 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
+type AudioPermissionLevel = 'all' | 'admins_only' | 'none';
+
 interface AdminContext {
     sender?: string;
     chatId?: string;
     isGroup?: boolean;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 interface AdminSoftDeleteArgs { user_jid: string; reason?: string; }
@@ -22,8 +30,18 @@ interface AdminCheckDeletedArgs { user_jid: string; }
 interface AdminVoiceModeArgs { mode: string; }
 interface AdminAudioPermArgs { permission: string; }
 interface AdminAntiDeleteArgs { action: string; }
-interface AdminShowDeletedArgs { limit?: number; }
 interface AdminPvAudioArgs { action: string; }
+
+interface DeletedUserEntry {
+    jid?: string;
+    deleted_at?: string;
+}
+
+interface DeletedMessageItem {
+    deletedAt: number;
+    senderName?: string;
+    text?: string;
+}
 
 // Lazy loaded services
 const getServices = async () => {
@@ -137,7 +155,7 @@ export default {
         {
             pattern: /^\.voice\s+(restricted|full|status)$/i,
             name: 'admin_voice_mode',
-            extractArgs: (match: any) => ({ mode: match[1].toLowerCase() })
+            extractArgs: (match: RegExpMatchArray) => ({ mode: match[1].toLowerCase() })
         },
         {
             pattern: /^\.mute\.audio_for_none$/i,
@@ -168,7 +186,7 @@ export default {
         {
             pattern: /^\.antidelete\s+(on|off|status)$/i,
             name: 'admin_antidelete',
-            extractArgs: (match: any) => ({ action: match[1].toLowerCase() })
+            extractArgs: (match: RegExpMatchArray) => ({ action: match[1].toLowerCase() })
         },
         {
             pattern: /^\.deleted$/i,
@@ -179,7 +197,7 @@ export default {
         {
             pattern: /^\.pv\.audio\.(on|off|status)$/i,
             name: 'admin_pv_audio',
-            extractArgs: (match: any) => ({ action: match[1].toLowerCase() })
+            extractArgs: (match: RegExpMatchArray) => ({ action: match[1].toLowerCase() })
         }
     ],
 
@@ -187,7 +205,6 @@ export default {
      * Executes an admin command
      */
     async execute(args: unknown, context: AdminContext, toolName?: string) {
-        // Déstructuration défensive du contexte
         const { sender, chatId, isGroup } = context || {};
 
         if (!sender) {
@@ -196,7 +213,6 @@ export default {
 
         const { adminService } = await getServices();
 
-        // Verify that the user is a global admin
         const isGlobalAdmin = await adminService.isGlobalAdmin(sender);
         if (!isGlobalAdmin) {
             return {
@@ -205,43 +221,42 @@ export default {
             };
         }
 
-        // Dispatch based on command
         switch (toolName) {
-            case 'admin_soft_delete':
+            case 'admin_soft_delete': {
                 const softDeleteArgs = args as AdminSoftDeleteArgs;
                 return await this._softDelete(softDeleteArgs.user_jid, softDeleteArgs.reason);
-
-            case 'admin_restore':
+            }
+            case 'admin_restore': {
                 const restoreArgs = args as AdminRestoreArgs;
                 return await this._restore(restoreArgs.user_jid);
-
-            case 'admin_list_deleted':
+            }
+            case 'admin_list_deleted': {
                 const listDeletedArgs = args as AdminListDeletedArgs;
                 return await this._listDeleted(listDeletedArgs.limit || 20);
-
-            case 'admin_check_deleted':
+            }
+            case 'admin_check_deleted': {
                 const checkDeletedArgs = args as AdminCheckDeletedArgs;
                 return await this._checkDeleted(checkDeletedArgs.user_jid);
-
-            case 'admin_voice_mode':
+            }
+            case 'admin_voice_mode': {
                 const voiceModeArgs = args as AdminVoiceModeArgs;
                 return await this._setVoiceMode(voiceModeArgs.mode);
-
-            case 'admin_audio_perm':
+            }
+            case 'admin_audio_perm': {
                 const audioPermArgs = args as AdminAudioPermArgs;
                 return await this._setAudioPermission(audioPermArgs.permission, chatId as string, isGroup as boolean);
-
-            case 'admin_antidelete':
+            }
+            case 'admin_antidelete': {
                 const antiDeleteArgs = args as AdminAntiDeleteArgs;
                 return await this._toggleAntiDelete(antiDeleteArgs.action, chatId as string);
-
+            }
             case 'admin_show_deleted':
                 return await this._showDeletedMessages(chatId as string);
 
-            case 'admin_pv_audio':
+            case 'admin_pv_audio': {
                 const pvAudioArgs = args as AdminPvAudioArgs;
                 return await this._setPvAudio(pvAudioArgs.action, sender);
-
+            }
             default:
                 return { success: false, message: `Unknown command: ${toolName}` };
         }
@@ -265,8 +280,8 @@ export default {
                     message: '❌ User not found or already deleted.'
                 };
             }
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -275,14 +290,12 @@ export default {
      */
     async _restore(userJid: string) {
         try {
-            // restore is not yet implemented in userService V2 schema
-            // Returning a clear message so the admin knows the limitation
             return {
                 success: false,
                 message: `⚠️ Restore is not yet supported in the V2 schema. User ${userJid.split('@')[0]} cannot be restored automatically.`
             };
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -292,7 +305,7 @@ export default {
     async _listDeleted(limit: number) {
         try {
             const { userService } = await getServices();
-            const deletedUsers = await userService.listDeleted(limit);
+            const deletedUsers = await userService.listDeleted(limit) as DeletedUserEntry[];
 
             if (deletedUsers.length === 0) {
                 return {
@@ -301,7 +314,7 @@ export default {
                 };
             }
 
-            const list = deletedUsers.map((u: any, i: any) =>
+            const list = deletedUsers.map((u: DeletedUserEntry, i: number) =>
                 `${i + 1}. ${u.jid?.split('@')[0] || 'unknown'} - ${u.deleted_at ? new Date(u.deleted_at).toLocaleDateString('en-US') : '?'}`
             ).join('\n');
 
@@ -309,8 +322,8 @@ export default {
                 success: true,
                 message: `📋 **Deleted Users** (${deletedUsers.length}):\n\n${list}`
             };
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -326,8 +339,8 @@ export default {
                 success: true,
                 message: `Status for ${userJid.split('@')[0]}: ${status}`
             };
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -373,8 +386,8 @@ export default {
                         ? 'Voice notes will be transcribed only if they reply to the bot.'
                         : 'All voice notes will be transcribed (if the bot name is mentioned).')
             };
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -418,7 +431,7 @@ export default {
             }
 
             // Apply permission
-            await workingMemory.setAudioPermission(groupJid, permission);
+            await workingMemory.setAudioPermission(groupJid, permission as AudioPermissionLevel);
 
             const permLabels = {
                 'all': '🟢 Everyone can now send voice notes',
@@ -430,8 +443,8 @@ export default {
                 success: true,
                 message: `✅ Audio permission updated\n\n${permLabels[permission as keyof typeof permLabels]}`
             };
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -477,8 +490,8 @@ export default {
                     ? '🔴 **Private Chat Voice Notes DISABLED**\n\nVoice notes in private messages will no longer be transcribed.'
                     : '🟢 **Private Chat Voice Notes ENABLED**\n\nVoice notes in private messages will be transcribed again.'
             };
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -512,8 +525,8 @@ export default {
                     ? '✅ **Anti-Delete ENABLED**\n\nDeleted messages will be automatically reposted.'
                     : '✅ **Anti-Delete DISABLED**\n\nDeleted messages will no longer be reposted.'
             };
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     },
 
@@ -533,18 +546,19 @@ export default {
                 };
             }
 
-            const list = deletedMessages.map((m: any, i: any) => {
+            const list = deletedMessages.map((m: DeletedMessageItem, i: number) => {
                 const time = new Date(m.deletedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                const text = m.text.length > 50 ? m.text.substring(0, 50) + '...' : m.text;
-                return `${i + 1}. *${m.senderName}* (${time}):\n   "${text}"`;
+                const rawText = m.text ?? '';
+                const text = rawText.length > 50 ? rawText.substring(0, 50) + '...' : rawText;
+                return `${i + 1}. *${m.senderName ?? 'Unknown'}* (${time}):\n   "${text}"`;
             }).join('\n\n');
 
             return {
                 success: true,
                 message: `🗑️ **Recently Deleted Messages**\n\n${list}`
             };
-        } catch (error: any) {
-            return { success: false, message: `Error: ${error.message}` };
+        } catch (error: unknown) {
+            return { success: false, message: `Error: ${extractErrorMessage(error)}` };
         }
     }
 };

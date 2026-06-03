@@ -6,6 +6,7 @@ import { EmbeddingsService, EmbeddingConfig } from '../services/ai/EmbeddingsSer
 import { SemanticMemory, SemanticMemoryDependencies } from '../services/memory/SemanticMemory.js';
 import { logger } from '../utils/logger.js';
 import db from '../services/supabase.js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { CredentialsSchema, Credentials } from '../config/credentials.schema.js';
 import { ModelsConfigSchema, ModelsConfig } from '../config/config.schema.js';
 import { config as appConfig } from '../config/index.js';
@@ -162,7 +163,7 @@ export class ServiceContainer {
 
     private async registerMemoryServices() {
         const memoryDeps: SemanticMemoryDependencies = {
-            supabase: (this.get('supabase') as typeof db).client,
+            supabase: this.get('supabase') as SupabaseClient,
             embeddings: this.get('embeddings') as EmbeddingsService,
             logger: this.get('logger') as typeof logger
         };

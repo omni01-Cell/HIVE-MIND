@@ -1,5 +1,15 @@
 import { container } from '../../../core/container.js';
-import { workingMemory } from '../../../services/workingMemory.js';
+
+interface MessageRow {
+    readonly sender: string;
+    readonly content: string;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
 
 export const journalGenerator = {
 
@@ -7,7 +17,7 @@ export const journalGenerator = {
      * Génère un script audio basé sur l'activité récente
      * @param {string} chatId
      */
-    async generateDailyScript(chatId: any) {
+    async generateDailyScript(chatId: string) {
         console.log(`[DailyPulse] 🎙️ Génération du script pour ${chatId}...`);
 
         // 1. Récupérer l'historique (via WorkingMemory ou Supabase)
@@ -18,11 +28,11 @@ export const journalGenerator = {
         // On va supposer qu'on a accès aux logs via Supabase pour avoir de la matière
 
         const { supabase } = await import('../../../services/supabase.js');
-        let messages = [];
+        let messages: MessageRow[] = [];
 
         if (supabase) {
             // Récupérer les 50 derniers messages du jour
-            const { data, error } = await supabase
+            const { data, error: _dbError } = await supabase
                 .from('messages') // Si table messages existe (dépend de l'implém)
                 // Sinon on improvise avec ce qu'on a ou on demande à l'IA d'inventer si pas d'historique
                 // Pour ce MVP, on va utiliser le context actuel du bot s'il est chaud, ou un fallback
@@ -42,7 +52,7 @@ export const journalGenerator = {
         }
 
         // 2. Transformer les messages en texte brut pour le Prompt
-        const transcript = messages.map((m: any) => `${m.sender}: ${m.content}`).join('\n');
+        const transcript = messages.map((m: MessageRow) => `${m.sender}: ${m.content}`).join('\n');
 
         // 3. Prompt "Radio Host"
         const prompt = `
@@ -74,7 +84,7 @@ Si le chat est vide ou ennuyeux, moque-toi du silence.
      * Convertit le script en audio (TTS via Gemini Audio)
      * @param {string} script
      */
-    async produceAudio(script: any) {
+    async produceAudio(script: string) {
         try {
             const { createGeminiLiveProvider, HD_VOICES } = await import('../../../providers/geminiLive.js');
             const { readFileSync } = await import('fs');
@@ -102,8 +112,8 @@ Si le chat est vide ou ennuyeux, moque-toi du silence.
                 throw new Error('Pas de fichier audio généré');
             }
 
-        } catch (error: any) {
-            console.error('[DailyPulse] ❌ Erreur Audio TTS:', error);
+        } catch (error: unknown) {
+            console.error('[DailyPulse] ❌ Erreur Audio TTS:', extractErrorMessage(error));
             return null; // Fallback texte géré par l'appelant
         }
     }

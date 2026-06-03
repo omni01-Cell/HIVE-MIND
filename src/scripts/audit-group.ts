@@ -50,7 +50,7 @@ async function main() {
                 const redisMeta = await redis.hGetAll(cacheKey);
 
                 // 3. Supabase Data
-                const { data: dbMeta } = await supabase
+                const { data: dbMeta } = await supabase!
                     .from('groups')
                     .select('*')
                     .eq('jid', groupJid)

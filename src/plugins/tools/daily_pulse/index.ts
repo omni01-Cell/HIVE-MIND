@@ -1,6 +1,11 @@
+interface DailyPulseTransport {
+    sendText(chatId: string, text: string): Promise<void>;
+    sendVoiceNote(chatId: string, filePath: string, options?: { caption?: string }): Promise<void>;
+}
+
 interface DailyPulseContext {
     chatId?: string;
-    transport?: any;
+    transport?: DailyPulseTransport;
 }
 
 export default {
@@ -24,7 +29,7 @@ export default {
         }
     ],
 
-    async execute(args: unknown, context: DailyPulseContext, toolName: string) {
+    async execute(_args: unknown, context: DailyPulseContext, toolName: string) {
         const { chatId, transport } = context || {};
 
         if (!chatId || !transport) {

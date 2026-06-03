@@ -1,8 +1,8 @@
 interface DeepResearchContext {
     chatId?: string;
     sender?: string;
-    transport?: any;
-    [key: string]: any;
+    transport?: { sendText: (chatId: string, text: string) => Promise<void>; setPresence: (chatId: string, presence: string) => Promise<void> };
+    [key: string]: unknown;
 }
 
 interface StartDeepSearchArgs {
@@ -53,7 +53,7 @@ export default {
             try {
                 // 2. Launch Autonomous Agent via dynamic import
                 const { DeepResearchAgent } = await import('./research_agent.js');
-                const agent = new DeepResearchAgent(sender, chatId);
+                const agent = new DeepResearchAgent(sender ?? 'unknown', chatId);
                 const reportMarkdown = await agent.start(topic);
 
                 // 3. Génération du PDF via visual_reporter
@@ -65,10 +65,10 @@ export default {
                     await transport.sendText(chatId, '📝 **Analysis finished.** Generating PDF report...');
 
                     // Call the visual_reporter plugin
-                    const pdfResult = await visualReporter.execute('generate_pdf_report', {
+                    const pdfResult = await visualReporter.execute({
                         title: `Report: ${topic}`,
                         content: reportMarkdown
-                    }, context);
+                    }, context, 'generate_pdf_report');
 
                     if (pdfResult.success) {
                         return { success: true, message: '[DeepSearch] PDF report generated and sent successfully.' };
@@ -81,8 +81,9 @@ export default {
                     return { success: true, message: reportMarkdown };
                 }
 
-            } catch (error: any) {
-                console.error('[DeepResearch] Fatal Error:', error);
+            } catch (error: unknown) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.error('[DeepResearch] Fatal Error:', errorMsg);
                 return { success: false, message: 'Deep research failed. Check logs.' };
             }
         }

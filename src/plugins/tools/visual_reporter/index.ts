@@ -18,8 +18,12 @@ interface GeneratePdfArgs {
     sections?: PdfSection[];
 }
 
+interface VisualReporterTransport {
+    sendFile(chatId: string, filePath: string, fileName: string, caption: string): Promise<void>;
+}
+
 interface VisualReporterContext {
-    transport?: any;
+    transport?: VisualReporterTransport;
     chatId?: string;
 }
 
@@ -74,7 +78,7 @@ export const plugin = {
     /**
      * Generates a PDF and sends it
      */
-    async generatePdfReport({ title, content, filename, sections }: GeneratePdfArgs, transport: any, chatId: string) {
+    async generatePdfReport({ title, content, filename, sections }: GeneratePdfArgs, transport: VisualReporterTransport, chatId: string) {
         try {
             const safeFilename = (filename || 'report').replace(/[^a-z0-9]/gi, '_').toLowerCase();
             const tempDir = path.join(__dirname, '..', '..', 'temp');

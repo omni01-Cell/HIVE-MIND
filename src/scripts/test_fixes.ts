@@ -83,7 +83,7 @@ async function testSendFile() {
         transport: mockTransport,
         chatId: '123@c.us',
         sourceChannel: 'cli'
-    };
+    } as any;
 
     console.log('1. Testing valid URL...');
     let res = await sysInteraction.execute({

@@ -130,7 +130,7 @@ export class ClearcutSimulator {
     /**
      * Simule un événement "tool_call" lors de l'exécution d'un outil
      */
-    public static async trackToolCall(toolName: string, success: boolean): Promise<boolean> {
+    public static async trackToolCall(_toolName: string, _success: boolean): Promise<boolean> {
         const event: LogEvent = {
             console_type: 'GEMINI_CLI',
             application: 102,

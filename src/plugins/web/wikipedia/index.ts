@@ -1,14 +1,28 @@
 // Wikipedia search plugin
 
 interface WikipediaContext {
-    transport?: any;
+    transport?: {
+        downloadMedia?: (msg: unknown) => Promise<Buffer>;
+        sendMessage?: (chatId: string, content: unknown) => Promise<void>;
+    };
     chatId?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 interface WikipediaArgs {
     query: string;
     lang?: string;
+}
+
+interface TextMatch {
+    1: string;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+    return String(error);
 }
 
 export default {
@@ -23,7 +37,7 @@ export default {
             pattern: /\[wiki[:\s]+([^\]]+)\]/i,
             handler: 'search_wikipedia',
             description: 'Wikipedia search via [wiki:subject]',
-            extractArgs: (match: any) => ({ query: match[1].trim() })
+            extractArgs: (match: TextMatch) => ({ query: match[1].trim() })
         }
     ],
 
@@ -49,10 +63,9 @@ export default {
         }
     },
 
-    async execute(args: unknown, context: WikipediaContext, toolName?: string) {
+    async execute(args: unknown, _context: WikipediaContext, _toolName?: string) {
         const searchArgs = args as WikipediaArgs;
         const { query, lang = 'en' } = searchArgs;
-        const { transport, chatId } = context || {};
 
         if (!query) {
             return {
@@ -97,11 +110,12 @@ export default {
                 }
             };
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('[Wikipedia Plugin] Error:', error);
+            const errorMessage = extractErrorMessage(error);
 
             // Handle specific errors
-            if (error.message?.includes('page does not exist')) {
+            if (errorMessage.includes('page does not exist')) {
                 return {
                     success: false,
                     message: `The article "${query}" does not exist on Wikipedia.`
@@ -110,7 +124,7 @@ export default {
 
             return {
                 success: false,
-                message: `Search error: ${error.message}`
+                message: `Search error: ${errorMessage}`
             };
         }
     }

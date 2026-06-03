@@ -44,6 +44,122 @@ export interface RepairResult {
     readonly appliedFixes: readonly string[];
 }
 
+// Types pour les nœuds AST acorn
+interface AcornIdentifierNode {
+    readonly type: 'Identifier';
+    readonly name: string;
+}
+
+interface AcornObjectPatternNode {
+    readonly type: 'ObjectPattern';
+    readonly properties: readonly AcornPropertyNode[];
+}
+
+interface AcornArrayPatternNode {
+    readonly type: 'ArrayPattern';
+    readonly elements: readonly (AcornIdentifierNode | null)[];
+}
+
+interface AcornPropertyNode {
+    readonly key: AcornIdentifierNode;
+    readonly value: AcornIdentifierNode;
+    readonly computed: boolean;
+}
+
+interface AcornVariableDeclaratorNode {
+    readonly type: 'VariableDeclarator';
+    readonly id: AcornIdentifierNode | AcornObjectPatternNode | AcornArrayPatternNode;
+}
+
+interface AcornVariableDeclarationNode {
+    readonly type: 'VariableDeclaration';
+    readonly declarations: readonly AcornVariableDeclaratorNode[];
+}
+
+interface AcornBaseNode {
+    readonly type: string;
+}
+
+interface AcornFunctionDeclarationNode extends AcornBaseNode {
+    readonly type: 'FunctionDeclaration';
+    readonly id: AcornIdentifierNode | null;
+    readonly params: readonly AcornIdentifierNode[];
+}
+
+interface AcornArrowFunctionNode extends AcornBaseNode {
+    readonly type: 'ArrowFunctionExpression';
+    readonly params: readonly AcornIdentifierNode[];
+}
+
+interface AcornCatchClauseNode extends AcornBaseNode {
+    readonly type: 'CatchClause';
+    readonly param: AcornIdentifierNode | null;
+}
+
+interface AcornForInStatementNode extends AcornBaseNode {
+    readonly type: 'ForInStatement';
+    readonly left: AcornVariableDeclarationNode | AcornIdentifierNode;
+}
+
+interface AcornForOfStatementNode extends AcornBaseNode {
+    readonly type: 'ForOfStatement';
+    readonly left: AcornVariableDeclarationNode | AcornIdentifierNode;
+}
+
+interface AcornCallExpressionNode extends AcornBaseNode {
+    readonly type: 'CallExpression';
+    readonly callee: AcornIdentifierNode | AcornMemberExpressionNode;
+}
+
+interface AcornMemberExpressionNode extends AcornBaseNode {
+    readonly type: 'MemberExpression';
+    readonly object: AcornBaseNode;
+    readonly property: AcornIdentifierNode;
+    readonly computed: boolean;
+}
+
+interface AcornWhileStatementNode extends AcornBaseNode {
+    readonly type: 'WhileStatement';
+    readonly test: AcornLiteralNode;
+}
+
+interface AcornForStatementNode extends AcornBaseNode {
+    readonly type: 'ForStatement';
+    readonly test: AcornBaseNode | null;
+}
+
+interface AcornLiteralNode extends AcornBaseNode {
+    readonly type: 'Literal';
+    readonly value: boolean | string | number | null;
+}
+
+type _AcornWalkNode =
+    | AcornVariableDeclaratorNode
+    | AcornFunctionDeclarationNode
+    | AcornArrowFunctionNode
+    | AcornCatchClauseNode
+    | AcornForInStatementNode
+    | AcornForOfStatementNode
+    | AcornCallExpressionNode
+    | AcornMemberExpressionNode
+    | AcornWhileStatementNode
+    | AcornForStatementNode
+    | AcornIdentifierNode;
+
+interface AcornSyntaxError {
+    readonly message: string;
+    readonly loc?: {
+        readonly line: number;
+        readonly column: number;
+    };
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 // Globales JS toujours disponibles dans le sandbox
 const JS_BUILTINS = new Set([
     'console', 'JSON', 'Array', 'Object', 'Math', 'Date',
@@ -83,7 +199,6 @@ export function validateCode(
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
 
-    // Construire le set complet des identifiants autorisés
     const allowedGlobals = new Set([
         ...JS_BUILTINS,
         ...SANDBOX_HELPERS,
@@ -91,7 +206,6 @@ export function validateCode(
         'HIVE'
     ]);
 
-    // 1. Parse AST
     let ast: acorn.Node;
     try {
         ast = acorn.parse(code, {
@@ -100,65 +214,64 @@ export function validateCode(
             allowAwaitOutsideFunction: true,
             allowReturnOutsideFunction: true
         });
-    } catch (parseErr: any) {
+    } catch (parseErr: unknown) {
+        const syntaxErr = parseErr as AcornSyntaxError;
         errors.push({
             type: 'SYNTAX',
-            message: parseErr.message,
-            line: parseErr.loc?.line,
-            column: parseErr.loc?.column,
+            message: extractErrorMessage(parseErr),
+            line: syntaxErr.loc?.line,
+            column: syntaxErr.loc?.column,
             autoFixable: true
         });
         return { isValid: false, errors, warnings };
     }
 
-    // 2. Collecter les déclarations et usages
     const declaredVars = new Set<string>();
     const usedIdentifiers = new Set<string>();
     const calledFunctions = new Set<string>();
     const functionParams = new Set<string>();
 
-    // Collecter les déclarations de variables et paramètres de fonctions
     walk.simple(ast, {
-        VariableDeclarator(node: any) {
+        VariableDeclarator(node) {
             if (node.id?.type === 'Identifier') {
                 declaredVars.add(node.id.name);
             }
-            // Destructuring : const { a, b } = ...
             if (node.id?.type === 'ObjectPattern') {
                 for (const prop of node.id.properties || []) {
-                    if (prop.value?.type === 'Identifier') declaredVars.add(prop.value.name);
-                    else if (prop.key?.type === 'Identifier') declaredVars.add(prop.key.name);
+                    if (prop.type === 'Property') {
+                        if (prop.value?.type === 'Identifier') declaredVars.add(prop.value.name);
+                        else if (prop.key?.type === 'Identifier') declaredVars.add(prop.key.name);
+                    }
                 }
             }
-            // Array destructuring : const [a, b] = ...
             if (node.id?.type === 'ArrayPattern') {
                 for (const el of node.id.elements || []) {
                     if (el?.type === 'Identifier') declaredVars.add(el.name);
                 }
             }
         },
-        FunctionDeclaration(node: any) {
+        FunctionDeclaration(node) {
             if (node.id?.name) declaredVars.add(node.id.name);
             for (const param of node.params || []) {
                 if (param.type === 'Identifier') functionParams.add(param.name);
             }
         },
-        ArrowFunctionExpression(node: any) {
+        ArrowFunctionExpression(node) {
             for (const param of node.params || []) {
                 if (param.type === 'Identifier') functionParams.add(param.name);
             }
         },
-        CatchClause(node: any) {
+        CatchClause(node) {
             if (node.param?.type === 'Identifier') declaredVars.add(node.param.name);
         },
-        ForInStatement(node: any) {
+        ForInStatement(node) {
             if (node.left?.type === 'VariableDeclaration') {
                 for (const decl of node.left.declarations || []) {
                     if (decl.id?.type === 'Identifier') declaredVars.add(decl.id.name);
                 }
             }
         },
-        ForOfStatement(node: any) {
+        ForOfStatement(node) {
             if (node.left?.type === 'VariableDeclaration') {
                 for (const decl of node.left.declarations || []) {
                     if (decl.id?.type === 'Identifier') declaredVars.add(decl.id.name);
@@ -167,31 +280,25 @@ export function validateCode(
         }
     });
 
-    // Collecter les identifiants utilisés (pas les déclarations)
     walk.ancestor(ast, {
-        Identifier(node: any, ancestors: any[]) {
+        Identifier(node, _state, ancestors) {
             const parent = ancestors[ancestors.length - 2];
             if (!parent) return;
 
-            // Ignorer si c'est la partie gauche d'une déclaration
-            if (parent.type === 'VariableDeclarator' && parent.id === node) return;
-            // Ignorer les propriétés d'objets (obj.prop → ignorer 'prop')
-            if (parent.type === 'MemberExpression' && parent.property === node && !parent.computed) return;
-            // Ignorer les clés de propriétés d'objets littéraux
-            if (parent.type === 'Property' && parent.key === node && !parent.computed) return;
-            // Ignorer les labels
+            if (parent.type === 'VariableDeclarator' && (parent as AcornVariableDeclaratorNode).id === node) return;
+            if (parent.type === 'MemberExpression' && (parent as AcornMemberExpressionNode).property === node && !(parent as AcornMemberExpressionNode).computed) return;
+            if (parent.type === 'Property' && (parent as AcornPropertyNode).key === node && !(parent as AcornPropertyNode).computed) return;
             if (parent.type === 'LabeledStatement') return;
 
             usedIdentifiers.add(node.name);
         },
-        CallExpression(node: any) {
+        CallExpression(node) {
             if (node.callee?.type === 'Identifier') {
                 calledFunctions.add(node.callee.name);
             }
         }
     });
 
-    // 3. Vérifier les variables non définies
     for (const name of usedIdentifiers) {
         if (
             !declaredVars.has(name) &&
@@ -206,7 +313,6 @@ export function validateCode(
         }
     }
 
-    // 4. Vérifier les appels à des fonctions inexistantes
     for (const fnName of calledFunctions) {
         if (
             !availableTools.includes(fnName) &&
@@ -215,7 +321,6 @@ export function validateCode(
             !declaredVars.has(fnName) &&
             !functionParams.has(fnName)
         ) {
-            // Tenter de trouver un outil similaire (fuzzy)
             const suggestion = findClosestTool(fnName, [...availableTools]);
             const hint = suggestion
                 ? ` Vouliez-vous dire "${suggestion}" ?`
@@ -228,12 +333,11 @@ export function validateCode(
         }
     }
 
-    // 5. Bloquer les constructions dangereuses
     walk.simple(ast, {
-        CallExpression(node: any) {
+        CallExpression(node) {
             const calleeName =
-                node.callee?.name ||
-                node.callee?.property?.name;
+                (node.callee as AcornIdentifierNode)?.name ||
+                (node.callee as AcornMemberExpressionNode)?.property?.name;
             if (calleeName && UNSAFE_FUNCTIONS.has(calleeName)) {
                 errors.push({
                     type: 'UNSAFE_CONSTRUCT',
@@ -242,7 +346,7 @@ export function validateCode(
                 });
             }
         },
-        MemberExpression(node: any) {
+        MemberExpression(node) {
             if (
                 node.property?.type === 'Identifier' &&
                 (node.property.name === '__proto__' || node.property.name === 'constructor')
@@ -256,9 +360,8 @@ export function validateCode(
         }
     });
 
-    // 6. Warnings (non-bloquants)
     walk.simple(ast, {
-        WhileStatement(node: any) {
+        WhileStatement(node) {
             if (node.test?.type === 'Literal' && node.test.value === true) {
                 warnings.push({
                     type: 'INFINITE_LOOP',
@@ -266,7 +369,7 @@ export function validateCode(
                 });
             }
         },
-        ForStatement(node: any) {
+        ForStatement(node) {
             if (!node.test) {
                 warnings.push({
                     type: 'INFINITE_LOOP',
@@ -276,7 +379,6 @@ export function validateCode(
         }
     });
 
-    // 7. Warning si pas de `return` dans le code top-level
     const hasReturn = code.includes('return ');
     if (!hasReturn && calledFunctions.size > 0) {
         warnings.push({
@@ -312,7 +414,6 @@ export function autoRepairCode(
 
         const msg = error.message.toLowerCase();
 
-        // Fix 1: Parenthèses / accolades / crochets déséquilibrés
         if (msg.includes('unexpected end of input') || msg.includes('unexpected token')) {
             const parenDiff = countChar(repaired, '(') - countChar(repaired, ')');
             if (parenDiff > 0) {
@@ -333,7 +434,6 @@ export function autoRepairCode(
             }
         }
 
-        // Fix 2: Point-virgule manquant provoquant "unexpected identifier"
         if (msg.includes('unexpected identifier') && error.line && error.line > 1) {
             const lines = repaired.split('\n');
             const prevLine = lines[error.line - 2]?.trim();
@@ -344,7 +444,6 @@ export function autoRepairCode(
             }
         }
 
-        // Fix 3: Template literal mal fermé
         if (msg.includes('unterminated template')) {
             const backtickCount = countChar(repaired, '`');
             if (backtickCount % 2 !== 0) {
@@ -353,9 +452,7 @@ export function autoRepairCode(
             }
         }
 
-        // Fix 4: String non terminée
         if (msg.includes('unterminated string')) {
-            // Compter les guillemets simples et doubles non échappés
             const singleQuotes = (repaired.match(/(?<!\\)'/g) || []).length;
             if (singleQuotes % 2 !== 0) {
                 repaired += "'";
@@ -369,9 +466,6 @@ export function autoRepairCode(
         }
     }
 
-    // Fix global : `await` manquant sur les appels d'outils connus
-    // Pattern: `const x = search_web(...)` sans `await`
-    // On ne fait ce fix que si aucune erreur non-fixable n'a été trouvée
     const hasNonFixable = errors.some((e) => !e.autoFixable);
     if (!hasNonFixable) {
         const awaitPattern = /(\b(?:const|let|var)\s+\w+\s*=\s*)(?!await\s)(\w+\s*\()/g;
@@ -386,7 +480,6 @@ export function autoRepairCode(
         return { success: false, repairedCode: null, appliedFixes: [] };
     }
 
-    // Re-valider le code réparé (syntaxe uniquement)
     try {
         acorn.parse(repaired, {
             ecmaVersion: 2022,
@@ -431,7 +524,7 @@ export function countToolCalls(
         });
 
         walk.simple(ast, {
-            CallExpression(node: any) {
+            CallExpression(node) {
                 const name = node.callee?.type === 'Identifier'
                     ? node.callee.name
                     : null;
@@ -441,8 +534,6 @@ export function countToolCalls(
             }
         });
     } catch {
-        // Si le code ne parse pas, on ne peut pas compter → laisser passer
-        // La validation SafeScript gérera l'erreur après
         return 999;
     }
 
@@ -453,7 +544,6 @@ export function countToolCalls(
 // HELPERS
 // ─────────────────────────────────────────────────────────────
 
-/** Compte les occurrences d'un caractère dans une string */
 function countChar(str: string, char: string): number {
     let count = 0;
     for (let i = 0; i < str.length; i++) {
@@ -462,7 +552,6 @@ function countChar(str: string, char: string): number {
     return count;
 }
 
-/** Trouve l'outil le plus proche par distance de Levenshtein */
 function findClosestTool(input: string, tools: readonly string[]): string | null {
     const inputLower = input.toLowerCase();
     let bestMatch: string | null = null;
@@ -470,7 +559,6 @@ function findClosestTool(input: string, tools: readonly string[]): string | null
 
     for (const tool of tools) {
         const d = levenshtein(inputLower, tool.toLowerCase());
-        // Seuil : max 3 caractères de différence ou 40% de la longueur
         if (d < bestDistance && d <= Math.max(3, Math.floor(tool.length * 0.4))) {
             bestDistance = d;
             bestMatch = tool;
@@ -480,7 +568,6 @@ function findClosestTool(input: string, tools: readonly string[]): string | null
     return bestMatch;
 }
 
-/** Distance de Levenshtein (implémentation compacte) */
 function levenshtein(a: string, b: string): number {
     const m = a.length;
     const n = b.length;

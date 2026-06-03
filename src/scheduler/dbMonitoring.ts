@@ -52,7 +52,7 @@ export async function cleanupOldData() {
 
     try {
         // Appeler la fonction de cleanup via Supabase
-        const { error } = await databaseMonitor.supabase.rpc('cleanup_old_data');
+        const { error } = await databaseMonitor.supabase!.rpc('cleanup_old_data');
 
         if (error) {
             console.error('[Scheduler] Erreur cleanup:', error.message);

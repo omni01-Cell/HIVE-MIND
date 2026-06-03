@@ -1,8 +1,115 @@
 import { browserService } from '../../../services/browser/BrowserService.js';
+import type { BrowserResult as BrowserResultBase } from '../../../services/browser/types.js';
 
 const MAX_SNAPSHOT_LENGTH = 12000;
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+// --- Type helpers ---
+
+interface ToolContext {
+    chatId?: string;
+    sourceChannel?: string;
+    transport?: { sendMedia: (chatId: string, filePath: string, opts: Record<string, unknown>, channel: string) => Promise<void> };
+    onProgress?: (msg: string) => void;
+    message?: { sender?: string };
+}
+
+interface BrowserOpenArgs {
+    url?: string;
+}
+
+interface BrowserSnapshotArgs {
+    interactive_only?: boolean;
+}
+
+interface BrowserClickArgs {
+    selector?: string;
+}
+
+interface BrowserFillArgs {
+    selector?: string;
+    value?: string;
+}
+
+interface BrowserTypeArgs {
+    selector?: string;
+    text?: string;
+}
+
+interface BrowserScreenshotArgs {
+    name?: string;
+    url?: string;
+    full_page?: boolean;
+}
+
+interface BrowserGetTextArgs {
+    selector?: string;
+}
+
+interface BrowserEvalArgs {
+    javascript?: string;
+}
+
+interface BrowserScrollArgs {
+    direction?: string;
+    pixels?: number;
+}
+
+interface BrowserWaitArgs {
+    selector?: string;
+    text?: string;
+    url?: string;
+    timeout?: number;
+}
+
+interface BrowserPressArgs {
+    key?: string;
+}
+
+type BrowserToolArgs = BrowserOpenArgs & BrowserSnapshotArgs & BrowserClickArgs & BrowserFillArgs & BrowserTypeArgs & BrowserScreenshotArgs & BrowserGetTextArgs & BrowserEvalArgs & BrowserScrollArgs & BrowserWaitArgs & BrowserPressArgs;
+
+type BrowserResult = BrowserResultBase & { snapshot?: string; filePath?: string };
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
+async function handleScreenshot(
+    args: BrowserToolArgs,
+    session: string
+): Promise<BrowserResult> {
+    if (args.url) {
+        const openRes = await browserService.open(args.url, session);
+        if (openRes.success) {
+            await delay(3000);
+        }
+    }
+
+    await delay(2000);
+
+    await browserService.evaluate('if(!document.body.style.backgroundColor) document.body.style.backgroundColor = "white";', session);
+
+    let baseName = args.name;
+    if (!baseName) {
+        try {
+            const titleResult = await browserService.evaluate('document.title', session);
+            const titleData = titleResult.data as Record<string, unknown> | undefined;
+            if (titleResult && titleResult.success && titleData && typeof titleData.result === 'string') {
+                baseName = titleData.result.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 30);
+            }
+        } catch {
+            // Title extraction failed — fall back to default name
+        }
+        if (!baseName) baseName = 'page_capture';
+    }
+
+    const fileName = `screenshot_${baseName}_${Date.now()}.png`;
+
+    return browserService.screenshot(session, fileName, args.full_page);
+}
 
 export default {
     name: 'dev_tools_browser',
@@ -187,18 +294,18 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: string) {
+    async execute(args: BrowserToolArgs, context: ToolContext, toolName: string) {
         const { chatId } = context;
-        const session = browserService.getSessionName(chatId);
+        const session = browserService.getSessionName(chatId!);
 
         try {
             if (context.onProgress) context.onProgress(`Browser: ${toolName}...`);
 
-            let result: any;
+            let result: BrowserResult;
 
             switch (toolName) {
                 case 'browser_open':
-                    result = await browserService.open(args.url, session);
+                    result = await browserService.open(args.url!, session);
                     if (result.success) {
                         // Implicitly wait for SPA rendering
                         await delay(3000);
@@ -208,58 +315,31 @@ export default {
                     result = await browserService.snapshot(session, args.interactive_only ?? true);
                     break;
                 case 'browser_click':
-                    result = await browserService.click(args.selector, session);
+                    result = await browserService.click(args.selector!, session);
                     break;
                 case 'browser_fill':
-                    result = await browserService.fill(args.selector, args.value, session);
+                    result = await browserService.fill(args.selector!, args.value!, session);
                     break;
                 case 'browser_type':
-                    result = await browserService.type(args.selector, args.text, session);
+                    result = await browserService.type(args.selector!, args.text!, session);
                     break;
                 case 'browser_screenshot':
-                    // Auto-navigate if URL is provided
-                    if (args.url) {
-                        const openRes = await browserService.open(args.url, session);
-                        if (openRes.success) {
-                            await delay(3000);
-                        }
-                    }
-
-                    // Wait for any pending animations or lazy-loaded content
-                    await delay(2000);
-
-                    // Prevent transparent backgrounds from rendering as black
-                    await browserService.evaluate('if(!document.body.style.backgroundColor) document.body.style.backgroundColor = "white";', session);
-
-                    let baseName = args.name;
-                    if (!baseName) {
-                        try {
-                            const titleResult = await browserService.evaluate('document.title', session);
-                            if (titleResult && titleResult.success && titleResult.data && titleResult.data.result) {
-                                baseName = titleResult.data.result.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').substring(0, 30);
-                            }
-                        } catch(e) {}
-                        if (!baseName) baseName = 'page_capture';
-                    }
-
-                    const fileName = `screenshot_${baseName}_${Date.now()}.png`;
-
-                    result = await browserService.screenshot(session, fileName, args.full_page);
+                    result = await handleScreenshot(args, session);
                     break;
                 case 'browser_get_text':
-                    result = await browserService.getText(args.selector, session);
+                    result = await browserService.getText(args.selector!, session);
                     break;
                 case 'browser_eval':
-                    result = await browserService.evaluate(args.javascript, session);
+                    result = await browserService.evaluate(args.javascript!, session);
                     break;
                 case 'browser_scroll':
-                    result = await browserService.scroll(args.direction, args.pixels, session);
+                    result = await browserService.scroll(args.direction as 'up' | 'down' | 'left' | 'right', args.pixels, session);
                     break;
                 case 'browser_wait':
                     result = await browserService.wait(args, session);
                     break;
                 case 'browser_press':
-                    result = await browserService.press(args.key, session);
+                    result = await browserService.press(args.key!, session);
                     break;
                 case 'browser_back':
                     result = await browserService.back(session);
@@ -286,7 +366,7 @@ export default {
 
             // For screenshot, we send the file to the user
             if (toolName === 'browser_screenshot' && result.filePath && context.transport) {
-                await context.transport.sendMedia(chatId, result.filePath, { caption: 'Screenshot' }, context.sourceChannel);
+                await context.transport.sendMedia(chatId!, result.filePath, { caption: 'Screenshot' }, context.sourceChannel ?? '');
             }
 
             return {
@@ -295,11 +375,11 @@ export default {
                 userOutput: `🌐 *Browser* (${toolName}): ✅ Success`
             };
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
                 success: false,
-                llmOutput: `Fatal Browser Error (${toolName}): ${error.message}`,
-                userOutput: `❌ *Browser Fatal Error* (${toolName}): ${error.message}`
+                llmOutput: `Fatal Browser Error (${toolName}): ${extractErrorMessage(error)}`,
+                userOutput: `❌ *Browser Fatal Error* (${toolName}): ${extractErrorMessage(error)}`
             };
         }
     }

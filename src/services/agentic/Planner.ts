@@ -1,26 +1,101 @@
-// services/agentic/Planner.js
+// services/agentic/Planner.ts
 // ============================================================================
 // EXPLICIT PLANNER - Plan → Execute → Review for complex tasks
 // ============================================================================
-// Décompose les objectifs complexes en étapes séquentielles avec gestion
-// des dépendances et capacité de replanification en cas d'échec
 
 import { providerRouter } from '../../providers/index.js';
 import { actionMemory } from '../memory/ActionMemory.js';
-import { supabase } from '../supabase.js';
 import { tryParseJson } from '../../utils/ResponseFormatEnforcer.js';
 
-// ============================================================================
-// STEP VARIABLES INTERPOLATION UTILITIES
-// ============================================================================
+interface PlanStep {
+    id: number;
+    action: string;
+    tool: string;
+    params: Record<string, unknown>;
+    estimated_time: number;
+    depends_on: number[];
+}
 
-function extractValueFromStepResult(result: any, placeholderName: string): string {
+interface Plan {
+    steps: PlanStep[];
+    total_time_estimate: number;
+    complexity: 'low' | 'medium' | 'high';
+}
+
+interface ToolParameter {
+    type?: string;
+    description?: string;
+    properties?: Record<string, ToolParameter>;
+}
+
+interface ToolParameters {
+    properties?: Record<string, ToolParameter>;
+    required?: string[];
+}
+
+export interface ToolInfo {
+    function?: { name?: string; description?: string; parameters?: ToolParameters };
+    name?: string;
+    description?: string;
+    parameters?: ToolParameters;
+}
+
+interface ChatMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+}
+
+interface StepResult {
+    error?: boolean;
+    success?: boolean;
+    message?: string;
+    llmOutput?: unknown;
+    data?: unknown;
+    retries?: number;
+    [key: string]: unknown;
+}
+
+interface ExecutionLog {
+    planId: string;
+    goal: string;
+    plan: Plan;
+    startTime: number;
+    endTime?: number;
+    duration?: number;
+    completed: number[];
+    failed: number[];
+    results: Record<number, StepResult>;
+    _replanAttempt: boolean;
+    replanFailed?: boolean;
+}
+
+interface ReviewResult {
+    success: boolean;
+    successRate: number;
+    totalSteps: number;
+    completed: number;
+    failed: number;
+    duration: number;
+    efficiency: number;
+}
+
+interface PlanResult {
+    id: string;
+    goal: string;
+    steps: PlanStep[];
+    totalTime: number;
+    complexity: string;
+    status: string;
+}
+
+type PlanInput = Record<string, unknown>;
+
+function extractValueFromStepResult(result: StepResult | unknown, placeholderName: string): string {
     if (!result) return '';
 
-    // Extract output payload
-    let output = result.llmOutput;
+    let output: unknown = (result as StepResult).llmOutput;
     if (output === undefined) {
-        output = result.data;
+        output = (result as StepResult).data;
     }
     if (output === undefined) {
         output = result;
@@ -29,8 +104,7 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
     const isPathPlaceholder = placeholderName.toLowerCase().includes('path');
     const isUrlPlaceholder = placeholderName.toLowerCase().includes('url');
 
-    // Recursive object traversal to search exact case-insensitive key first
-    const findExactKey = (obj: any, targetKey: string): any => {
+    const findExactKey = (obj: Record<string, unknown>, targetKey: string): unknown => {
         if (!obj || typeof obj !== 'object') return undefined;
         const targetLower = targetKey.toLowerCase();
 
@@ -41,31 +115,38 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
         }
 
         for (const key in obj) {
-            const found = findExactKey(obj[key], targetKey);
-            if (found !== undefined) return found;
+            const val = obj[key];
+            if (val && typeof val === 'object') {
+                const found = findExactKey(val as Record<string, unknown>, targetKey);
+                if (found !== undefined) return found;
+            }
         }
         return undefined;
     };
 
-    // Recursive object traversal to search key patterns
-    const findKey = (obj: any, keys: string[]): any => {
+    const findKey = (obj: Record<string, unknown>, keys: string[]): unknown => {
         if (!obj || typeof obj !== 'object') return undefined;
         for (const key of keys) {
             if (key in obj) return obj[key];
         }
         for (const k in obj) {
-            const found = findKey(obj[k], keys);
-            if (found !== undefined) return found;
+            const val = obj[k];
+            if (val && typeof val === 'object') {
+                const found = findKey(val as Record<string, unknown>, keys);
+                if (found !== undefined) return found;
+            }
         }
         return undefined;
     };
 
     if (typeof output === 'object' && output !== null) {
-        // 1. Try to find exact case-insensitive key matching the placeholderName first
-        const exactMatch = findExactKey(output, placeholderName);
+        const outObj = output as Record<string, unknown>;
+
+        const exactMatch = findExactKey(outObj, placeholderName);
         if (exactMatch !== undefined) {
             if (typeof exactMatch === 'object' && exactMatch !== null) {
-                const subUrl = exactMatch.url || exactMatch.href || exactMatch.link;
+                const matchObj = exactMatch as Record<string, unknown>;
+                const subUrl = matchObj.url || matchObj.href || matchObj.link;
                 if (subUrl && typeof subUrl !== 'object') {
                     return String(subUrl);
                 }
@@ -74,21 +155,19 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
             return String(exactMatch);
         }
 
-        // 2. Fallbacks for paths and URLs if exact match was not found
         if (isPathPlaceholder) {
             const pathKeys = ['filePath', 'path', 'fileName', 'file', 'filepath'];
-            const foundPath = findKey(output, pathKeys);
+            const foundPath = findKey(outObj, pathKeys);
             if (foundPath) return String(foundPath);
         }
         if (isUrlPlaceholder) {
             const urlKeys = ['url', 'href', 'link'];
-            const foundUrl = findKey(output, urlKeys);
+            const foundUrl = findKey(outObj, urlKeys);
             if (foundUrl) return String(foundUrl);
         }
 
-        // General common keys
         const generalKeys = ['result', 'data', 'text', 'value', 'filePath', 'path', 'url'];
-        const foundGeneral = findKey(output, generalKeys);
+        const foundGeneral = findKey(outObj, generalKeys);
         if (foundGeneral !== undefined) {
             if (typeof foundGeneral === 'object') {
                 return JSON.stringify(foundGeneral);
@@ -96,15 +175,15 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
             return String(foundGeneral);
         }
 
-        // Default properties fallback
-        if (output.result !== undefined) {
-            return typeof output.result === 'object' ? JSON.stringify(output.result) : String(output.result);
+        if (outObj.result !== undefined) {
+            return typeof outObj.result === 'object' ? JSON.stringify(outObj.result) : String(outObj.result);
         }
-        if (output.data !== undefined) {
-            if (typeof output.data === 'object' && output.data.result !== undefined) {
-                return String(output.data.result);
+        if (outObj.data !== undefined) {
+            const dataObj = outObj.data as Record<string, unknown>;
+            if (typeof outObj.data === 'object' && dataObj?.result !== undefined) {
+                return String(dataObj.result);
             }
-            return typeof output.data === 'object' ? JSON.stringify(output.data) : String(output.data);
+            return typeof outObj.data === 'object' ? JSON.stringify(outObj.data) : String(outObj.data);
         }
 
         return JSON.stringify(output);
@@ -113,15 +192,15 @@ function extractValueFromStepResult(result: any, placeholderName: string): strin
     return String(output);
 }
 
-function formatToolForPlanner(t: any): string {
+function formatToolForPlanner(t: ToolInfo): string {
     const name = t.function?.name || t.name;
     const desc = t.function?.description || t.description || '';
     const params = t.function?.parameters || t.parameters;
 
     let paramsStr = '';
-    if (params && params.properties) {
+    if (params?.properties) {
         const required = params.required || [];
-        const props = Object.entries(params.properties).map(([key, val]: [string, any]) => {
+        const props = Object.entries(params.properties).map(([key, val]: [string, ToolParameter]) => {
             const req = required.includes(key) ? ' (REQUIRED)' : ' (optional)';
             const type = val.type ? `: ${val.type}` : '';
             return `     * ${key}${type}${req} - ${val.description || ''}`;
@@ -133,15 +212,13 @@ function formatToolForPlanner(t: any): string {
     return `- ${name}: ${desc}${paramsStr}`;
 }
 
-function interpolateParams(params: any, stepResults: any): any {
+function interpolateParams(params: PlanInput | string | unknown, stepResults: Record<number, StepResult>): unknown {
     if (!params) return params;
 
     if (typeof params === 'string') {
-        // Robust multi-format interpolation parsing to support {{steps.2.output.filePath}}, {{step_2_filePath}}, {{filePath_from_step_2}}
-        return params.replace(/\{\{([\s\S]+?)\}\}/g, (match, inner) => {
+        return params.replace(/\{\{([\s\S]+?)\}\}/g, (match, inner: string) => {
             const clean = inner.trim();
 
-            // Format 1: {{name_from_step_X}}
             const matchFromStep = clean.match(/^([a-zA-Z0-9_]+)_from_step_(\d+)$/i);
             if (matchFromStep) {
                 const name = matchFromStep[1];
@@ -151,19 +228,18 @@ function interpolateParams(params: any, stepResults: any): any {
                 return match;
             }
 
-            // Format 2: {{steps.X.output.name}} or {{step_X_name}} or {{step.X.name}}
-            const stepIdMatch = clean.match(/(?:step|steps)(?:\.|\s|_|-)?(\d+)/i);
+            const stepIdMatch = clean.match(/(?:step|steps)(?:[.\s_-])?(\d+)/i);
             if (stepIdMatch) {
                 const stepId = parseInt(stepIdMatch[1], 10);
                 const result = stepResults[stepId];
                 if (result) {
                     let propName = 'result';
-                    const parts = clean.split(/[\._\-]/).map((p: string) => p.trim());
+                    const parts = clean.split(/[._-]/).map((p: string) => p.trim());
                     const technicalWords = ['step', 'steps', 'output', 'result', String(stepId)];
                     const cleanParts = parts.filter((p: string) => p && !technicalWords.includes(p.toLowerCase()));
 
                     if (cleanParts.length > 0) {
-                        propName = cleanParts[0]; // take the custom property name, e.g. "filePath"
+                        propName = cleanParts[0];
                     }
 
                     const val = extractValueFromStepResult(result, propName);
@@ -183,9 +259,9 @@ function interpolateParams(params: any, stepResults: any): any {
     }
 
     if (typeof params === 'object' && params !== null) {
-        const interpolated: any = {};
+        const interpolated: Record<string, unknown> = {};
         for (const key in params) {
-            interpolated[key] = interpolateParams(params[key], stepResults);
+            interpolated[key] = interpolateParams((params as Record<string, unknown>)[key], stepResults);
         }
         return interpolated;
     }
@@ -193,12 +269,10 @@ function interpolateParams(params: any, stepResults: any): any {
     return params;
 }
 
+let json5: { parse: (s: string) => unknown } | null = null;
+let jsonRepair: ((s: string) => string) | null = null;
+let Ajv: (new (opts?: Record<string, unknown>) => { compile: (schema: Record<string, unknown>) => ((data: unknown) => boolean) & { errors?: unknown[] } }) | null = null;
 
-// 🛡️ Parsing JSON robuste - bibliothèques externes
-// Ces imports seront dynamiques pour éviter les erreurs si non installées
-let json5: any, jsonRepair: any, Ajv: any;
-
-// Chargement dynamique des bibliothèques (évite crash si pas installées)
 async function loadJsonLibraries() {
     if (json5 && jsonRepair && Ajv) return { json5, jsonRepair, Ajv };
 
@@ -207,23 +281,19 @@ async function loadJsonLibraries() {
         const jsonRepairModule = await import('jsonrepair');
         const ajvModule = await import('ajv');
 
-        // ESM: json5 exporte { default: { parse, stringify } }
-        json5 = json5Module.default || json5Module;
-        // ESM: jsonrepair exporte { jsonrepair: fn } directement
-        jsonRepair = jsonRepairModule;
-        // ESM: ajv exporte { default: AjvClass }
-        Ajv = ajvModule.default || ajvModule;
+        json5 = (json5Module.default || json5Module) as typeof json5;
+        jsonRepair = (jsonRepairModule as unknown as { jsonrepair?: (s: string) => string }).jsonrepair || (jsonRepairModule as unknown as (s: string) => string);
+        Ajv = (ajvModule.default || ajvModule) as typeof Ajv;
 
         console.log('[Planner] ✅ Bibliothèques JSON chargées (json5, jsonrepair, ajv)');
         return { json5, jsonRepair, Ajv };
-    } catch (e: any) {
-        console.warn('[Planner] ⚠️ Bibliothèques JSON non disponibles, fallback sur parsing natif:', e.message);
+    } catch (e: unknown) {
+        console.warn('[Planner] ⚠️ Bibliothèques JSON non disponibles, fallback sur parsing natif:', e instanceof Error ? e.message : String(e));
         return null;
     }
 }
 
-// Schéma de validation pour les plans
-const PLAN_SCHEMA = {
+const PLAN_SCHEMA: Record<string, unknown> = {
     type: 'object',
     properties: {
         steps: {
@@ -236,59 +306,55 @@ const PLAN_SCHEMA = {
                     tool: { type: 'string', minLength: 1 },
                     params: { type: 'object' },
                     estimated_time: { type: 'number', minimum: 0 },
-                    depends_on: {
-                        type: 'array',
-                        items: { type: 'number' }
-                    }
+                    depends_on: { type: 'array', items: { type: 'number' } }
                 },
                 required: ['id', 'action', 'tool']
             },
             minItems: 1
         },
         total_time_estimate: { type: 'number', minimum: 0 },
-        complexity: {
-            type: 'string',
-            enum: ['low', 'medium', 'high']
-        }
+        complexity: { type: 'string', enum: ['low', 'medium', 'high'] }
     },
     required: ['steps']
 };
 
-/**
- * Planificateur explicite pour tâches multi-étapes
- */
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+class CriticalFailureError extends Error {
+    constructor(public plan: PlanResult, public executionLog: ExecutionLog) {
+        super('Critical failure detected');
+        this.name = 'CriticalFailureError';
+    }
+}
+
 export class ExplicitPlanner {
-    complexityThreshold: any;
+    complexityThreshold: number;
 
     constructor() {
-        this.complexityThreshold = 3; // Nb d'outils estimés pour déclencher planning
+        this.complexityThreshold = 3;
     }
 
-    /**
-     * 🛡️ Parse le JSON du plan avec bibliothèques robustes et validation
-     * @param {string} planText - Texte JSON potentiellement malformé
-     * @returns {Object|null} - Plan validé ou null
-     */
-    async _parsePlanJson(planText: any) {
+    async _parsePlanJson(planText: string): Promise<Plan | null> {
         if (!planText) return null;
 
-        // Déclaration hors du try pour rester accessible dans le catch
         const cleanedJson = planText.trim();
 
         try {
-            let parsedPlan: any;
+            let parsedPlan: Plan | null = null;
             try {
-                parsedPlan = tryParseJson<any>(planText);
+                parsedPlan = tryParseJson<Plan>(planText);
                 console.log('[Planner] ✅ JSON parsé avec succès via tryParseJson');
-            } catch (err: any) {
-                console.warn('[Planner] ⚠️ tryParseJson a échoué, tentative de nettoyage manuel:', err.message);
+            } catch (err: unknown) {
+                console.warn('[Planner] ⚠️ tryParseJson a échoué, tentative de nettoyage manuel:', extractErrorMessage(err));
                 parsedPlan = this._parseJsonFallback(planText);
                 if (!parsedPlan) return null;
             }
 
             const libs = await loadJsonLibraries();
 
-            // 4. Valider contre le schéma (Ajv est déjà le constructor grâce au .default)
             if (libs && Ajv) {
                 try {
                     const ajv = new Ajv({ useDefaults: true, allErrors: true });
@@ -297,37 +363,31 @@ export class ExplicitPlanner {
                     if (!validate(parsedPlan)) {
                         console.warn('[Planner] ⚠️ Plan invalide selon schéma:', validate.errors);
 
-                        // Tenter de corriger automatiquement
-                        const correctedPlan = this._autoCorrectPlan(parsedPlan);
+                        const correctedPlan = this._autoCorrectPlan(parsedPlan as unknown as PlanInput);
                         if (correctedPlan) {
                             console.log('[Planner] ✅ Plan corrigé automatiquement');
                             return correctedPlan;
                         }
 
-                        console.warn(`[Planner] ⚠️ Plan invalide: ${validate.errors?.[0]?.message}`);
+                        const firstError = validate.errors?.[0] as { message?: string } | undefined;
+                        console.warn(`[Planner] ⚠️ Plan invalide: ${firstError?.message}`);
                     }
-                } catch (ajvErr: any) {
-                    console.warn('[Planner] ⚠️ Validation Ajv échouée, plan retourné sans validation:', ajvErr.message);
+                } catch (ajvErr: unknown) {
+                    console.warn('[Planner] ⚠️ Validation Ajv échouée, plan retourné sans validation:', extractErrorMessage(ajvErr));
                 }
             }
 
             return parsedPlan;
 
-        } catch (mainError: any) {
-            // Fallback: parsing natif avec nettoyage
-            console.warn('[Planner] ⚠️ Fallback parsing natif:', mainError.message);
+        } catch (mainError: unknown) {
+            console.warn('[Planner] ⚠️ Fallback parsing natif:', extractErrorMessage(mainError));
             return this._parseJsonFallback(cleanedJson);
         }
     }
 
-    /**
-     * 🛡️ Fallback parsing natif avec nettoyage manuel
-     * @private
-     */
-    _parseJsonFallback(jsonText: any) {
+    _parseJsonFallback(jsonText: string): Plan | null {
         try {
             let cleaned = jsonText.trim();
-            // Extraire d'abord la partie JSON
             const jsonBlockMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/);
             if (jsonBlockMatch) {
                 cleaned = jsonBlockMatch[1].trim();
@@ -341,104 +401,89 @@ export class ExplicitPlanner {
                 }
             }
 
-            // Nettoyage manuel (logique originale améliorée)
             const fixedJson = cleaned
-                .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // Guillemets clés
-                .replace(/'/g, '"') // Simple quotes → double
-                .replace(/,\s*([}\]])/g, '$1') // Virgules traînantes
-                .replace(/([{,]\s*)"([^"]+)"\s*:\s*'(.*?)'/g, '$1"$2":"$3"') // Valeurs simple quotes
+                .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+                .replace(/'/g, '"')
+                .replace(/,\s*([}\]])/g, '$1')
+                .replace(/([{,]\s*)"([^"]+)"\s*:\s*'(.*?)'/g, '$1"$2":"$3"')
                 .trim();
 
-            return JSON.parse(fixedJson);
+            return JSON.parse(fixedJson) as Plan;
 
-        } catch (e: any) {
-            console.error('[Planner] ❌ Échec parsing JSON après toutes les tentatives:', e.message);
+        } catch (e: unknown) {
+            console.error('[Planner] ❌ Échec parsing JSON après toutes les tentatives:', extractErrorMessage(e));
             return null;
         }
     }
 
-    /**
-     * 🛡️ Corrige automatiquement les plans mal formés
-     * @private
-     */
-    _autoCorrectPlan(plan: any) {
+    _autoCorrectPlan(plan: PlanInput): Plan | null {
         try {
-            const corrected = { ...plan };
+            const corrected = { ...plan } as Record<string, unknown>;
 
-            // S'assurer que steps existe et est un tableau
             if (!Array.isArray(corrected.steps)) {
                 corrected.steps = [];
             }
 
-            // Filtrer et corriger les étapes invalides
-            corrected.steps = corrected.steps
-                .filter((step: any) => step && typeof step === 'object')
-                .map((step: any, index: any) => {
-                    // Résoudre les synonymes possibles pour la propriété "tool"
-                    let resolvedTool = step.tool || step.tool_name || step.toolName || step.function || step.use_tool || step.action_type || step.command || null;
+            const steps = (corrected.steps as PlanInput[])
+                .filter((step): step is PlanInput => step && typeof step === 'object')
+                .map((step, index) => {
+                    const s = step as Record<string, unknown>;
+                    let resolvedTool = (s.tool || s.tool_name || s.toolName || s.function || s.use_tool || s.action_type || s.command || null) as string | null;
 
-                    // Si aucun outil n'est explicitement défini, tenter de l'inférer de l'action
-                    if (!resolvedTool && step.action) {
-                        const actionLower = String(step.action).toLowerCase();
+                    if (!resolvedTool && s.action) {
+                        const actionLower = String(s.action).toLowerCase();
                         if (actionLower.includes('screenshot') || actionLower.includes('capture')) {
                             resolvedTool = 'browser_screenshot';
                         } else if (actionLower.includes('scrape') || actionLower.includes('extraire') || actionLower.includes('github') || actionLower.includes('trending')) {
-                            resolvedTool = 'browser_open'; // Ouvrir d'abord
+                            resolvedTool = 'browser_open';
                         } else if (actionLower.includes('command') || actionLower.includes('bash') || actionLower.includes('terminal') || actionLower.includes('script')) {
                             resolvedTool = 'execute_bash_command';
                         } else if (actionLower.includes('file') || actionLower.includes('écrire') || actionLower.includes('write') || actionLower.includes('sauvegarder')) {
-                            resolvedTool = 'execute_bash_command'; // Fallback terminal pour création fichier
+                            resolvedTool = 'execute_bash_command';
                         } else {
-                            resolvedTool = 'execute_bash_command'; // Fallback universel sécurisé
+                            resolvedTool = 'execute_bash_command';
                         }
-                        console.log(`[Planner] 🔧 Auto-inferred tool "${resolvedTool}" for action: "${step.action}"`);
+                        console.log(`[Planner] 🔧 Auto-inferred tool "${resolvedTool}" for action: "${s.action}"`);
                     }
 
                     return {
-                        id: Number(step.id) || index + 1,
-                        action: String(step.action || 'unknown_action'),
+                        id: Number(s.id) || index + 1,
+                        action: String(s.action || 'unknown_action'),
                         tool: resolvedTool ? String(resolvedTool) : 'execute_bash_command',
-                        params: step.params || {},
-                        estimated_time: Number(step.estimated_time) || 10,
-                        depends_on: Array.isArray(step.depends_on) ? step.depends_on.map(Number) : []
+                        params: (s.params as Record<string, unknown>) || {},
+                        estimated_time: Number(s.estimated_time) || 10,
+                        depends_on: Array.isArray(s.depends_on) ? (s.depends_on as unknown[]).map(Number) : []
                     };
                 });
 
-            // S'assurer qu'il y a au moins une étape
-            if (corrected.steps.length === 0) {
+            corrected.steps = steps;
+
+            if (steps.length === 0) {
                 return null;
             }
 
-            // Ajouter les champs manquants avec valeurs par défaut
             corrected.total_time_estimate = Number(corrected.total_time_estimate) ||
-                corrected.steps.reduce((sum: any, step: any) => sum + (step.estimated_time || 0), 0);
+                steps.reduce((sum: number, step: PlanStep) => sum + (step.estimated_time || 0), 0);
 
-            corrected.complexity = ['low', 'medium', 'high'].includes(corrected.complexity)
+            corrected.complexity = ['low', 'medium', 'high'].includes(corrected.complexity as string)
                 ? corrected.complexity
                 : 'medium';
 
-            return corrected;
+            return corrected as unknown as Plan;
 
-        } catch (e: any) {
-            console.error('[Planner] Erreur auto-correction:', e.message);
+        } catch (e: unknown) {
+            console.error('[Planner] Erreur auto-correction:', extractErrorMessage(e));
             return null;
         }
     }
 
-    /**
-     * Détecte si une requête nécessite un plan explicite
-     * @param {string} userMessage
-     * @param {Array} tools - Outils disponibles
-     * @returns {Promise<boolean>}
-     */
-    async needsPlanning(userMessage: any, tools: any) {
-        // Keywords obvies
+    async needsPlanning(userMessage: string, tools: ToolInfo[]): Promise<boolean> {
         if (userMessage.match(/(plan|planifie|étapes|d'abord.*ensuite|puis|après)/i)) {
             return true;
         }
 
-        // Estimation rapide de complexité via IA
         try {
+            const toolNames = tools.map((t: ToolInfo) => t.function?.name || t.name || '').join(', ');
             const prompt = `<task>
 You are estimating task complexity for HIVE-MIND's explicit planner.
 Your estimate determines if multi-step planning is needed.
@@ -449,7 +494,7 @@ Your estimate determines if multi-step planning is needed.
 </user_request>
 
 <available_tools>
-${tools.map((t: any) => t.function?.name || t.name).join(', ')}
+${toolNames}
 </available_tools>
 
 <estimation_criteria>
@@ -479,19 +524,15 @@ Estimate:`;
             const estimate = match ? parseInt(match[0], 10) : NaN;
             return !isNaN(estimate) && estimate >= this.complexityThreshold;
 
-        } catch (e: any) {
-            return false; // Fallback: pas de planning
+        } catch {
+            return false;
         }
     }
 
-    /**
-     * Crée un plan d'action
-     * @param {string} goal - Objectif principal
-     * @param {Object} context - Contexte (tools, chatId, etc.)
-     * @returns {Promise<Object>} Plan structuré
-     */
-    async plan(goal: any, context: any) {
+    async plan(goal: string, context: { tools: ToolInfo[]; chatId: string }): Promise<PlanResult> {
         console.log('[Planner] 📋 Création du plan...');
+
+        const toolList = context.tools.map(formatToolForPlanner).join('\n');
 
         const planPrompt = `<role>
 You are HIVE-MIND's PLANNER agent specialized in multi-step task decomposition.
@@ -506,7 +547,7 @@ You will execute these steps sequentially, tracking system state between each ac
 </context>
 
 <available_tools>
-${context.tools.map(formatToolForPlanner).join('\n')}
+${toolList}
 </available_tools>
 
 <planning_instructions>
@@ -582,15 +623,15 @@ Plan:`;
 
         let attempts = 0;
         const maxAttempts = 5;
-        let plan: any = null;
-        const chatHistory: any[] = [
+        let plan: Plan | null = null;
+        const chatHistory: ChatMessage[] = [
             { role: 'system', content: 'Tu es un planificateur expert en décomposition de tâches. Tu dois impérativement respecter le schéma de sortie JSON demandé et diviser les tâches complexes en au moins 2 étapes distinctes.' },
             { role: 'user', content: planPrompt }
         ];
 
         while (attempts < maxAttempts) {
             attempts++;
-            let response: any = null;
+            let response: { content: string | null } | null = null;
             try {
                 response = await providerRouter.chat(chatHistory, { temperature: 0.3 });
                 if (!response?.content) {
@@ -602,17 +643,14 @@ Plan:`;
                     throw new Error('Échec du parsing JSON. Assure-toi de renvoyer un JSON valide conforme au schéma.');
                 }
 
-                // Validation de la structure globale du plan
                 if (!plan.steps || !Array.isArray(plan.steps) || plan.steps.length === 0) {
                     throw new Error('Le plan ne contient aucune étape dans le tableau "steps".');
                 }
 
-                // Construire la liste des outils disponibles
                 const availableToolNames = new Set(
-                    context.tools.map((t: any) => t.function?.name || t.name).filter(Boolean)
+                    context.tools.map((t: ToolInfo) => t.function?.name || t.name).filter(Boolean)
                 );
 
-                // Valider chaque étape individuellement
                 for (let i = 0; i < plan.steps.length; i++) {
                     const step = plan.steps[i];
                     if (!step || typeof step !== 'object') {
@@ -625,15 +663,14 @@ Plan:`;
                         throw new Error(`L'étape "${step.action}" (index ${i}) est invalide : la propriété "tool" est manquante.`);
                     }
                     if (typeof step.id !== 'number') {
-                        step.id = i + 1; // Auto-correction
+                        step.id = i + 1;
                     }
 
-                    // Validation et auto-correction des outils hallucinés
                     if (!availableToolNames.has(step.tool)) {
                         console.warn(`[Planner] ⚠️ Étape ${step.id}: outil "${step.tool}" halluciné`);
-                        const closest = [...availableToolNames].find((t: any) =>
-                            step.tool.includes(t) || t.includes(step.tool) ||
-                            step.tool.replace(/_/g, '').includes(t.replace(/_/g, ''))
+                        const closest = [...availableToolNames].find((t) =>
+                            t !== undefined && (step.tool.includes(t) || t.includes(step.tool) ||
+                            step.tool.replace(/_/g, '').includes(t.replace(/_/g, '')))
                         );
                         if (closest) {
                             console.log(`[Planner] 🔧 Auto-correction: "${step.tool}" → "${closest}"`);
@@ -644,28 +681,25 @@ Plan:`;
                     }
                 }
 
-                // Vérification métier : forcer au moins 2 étapes pour les requêtes complexes/composées
                 const isComplexQuery = goal.toLowerCase().match(/(?: et | puis | ensuite | après | extraire | extrais | résumé | screenshot | capture | faire | créer | sauvegarder | enregistrer)/i);
                 if (isComplexQuery && plan.steps.length < 2) {
-                    throw new Error('Le plan généré comporte seulement 1 étape. Pour cette tâche complexe, tu DOIS décomposer l\'action en au moins 2 étapes distinctes (ex: 1. Naviguer/Chercher les informations, 2. Formater/Extraire/Envoyer le livrable). Ne fusionne pas ces étapes.');
+                    throw new Error('Le plan généré comporte seulement 1 étape. Pour cette tâche complexe, tu DOIS décomposer l\'action en au moins 2 étapes distinctes.');
                 }
 
-                // Si toutes les vérifications passent, on sort de la boucle de retry
                 break;
-            } catch (err: any) {
-                console.warn(`[Planner] ⚠️ Tentative ${attempts}/${maxAttempts} échouée: ${err.message}`);
+            } catch (err: unknown) {
+                const errMsg = extractErrorMessage(err);
+                console.warn(`[Planner] ⚠️ Tentative ${attempts}/${maxAttempts} échouée: ${errMsg}`);
                 if (attempts >= maxAttempts) {
-                    throw new Error(`Planification impossible après ${maxAttempts} tentatives. Dernière erreur: ${err.message}`);
+                    throw new Error(`Planification impossible après ${maxAttempts} tentatives. Dernière erreur: ${errMsg}`);
                 }
-                // Alimenter l'historique pour la tentative suivante avec le feedback d'erreur
                 chatHistory.push({ role: 'assistant', content: response?.content || 'Plan malformé ou incomplet' });
-                chatHistory.push({ role: 'user', content: `ERREUR DE PLANIFICATION: ${err.message}\n\nVeuillez corriger le plan et me renvoyer uniquement le JSON valide contenant toutes les étapes nécessaires.` });
+                chatHistory.push({ role: 'user', content: `ERREUR DE PLANIFICATION: ${errMsg}\n\nVeuillez corriger le plan et me renvoyer uniquement le JSON valide contenant toutes les étapes nécessaires.` });
             }
         }
 
-        console.log(`[Planner] ✅ Plan validé après ${attempts} tentative(s) : ${plan.steps.length} étapes`);
+        console.log(`[Planner] ✅ Plan validé après ${attempts} tentative(s) : ${plan!.steps.length} étapes`);
 
-        // Stocker le plan dans ActionMemory
         const planId = await actionMemory.startAction(context.chatId, {
             type: 'explicit_plan',
             goal,
@@ -673,31 +707,112 @@ Plan:`;
             priority: 8
         });
 
-        console.log(`[Planner] ✅ Plan créé: ${plan.steps.length} étapes, ~${plan.total_time_estimate}s`);
+        console.log(`[Planner] ✅ Plan créé: ${plan!.steps.length} étapes, ~${plan!.total_time_estimate}s`);
 
         return {
-            id: planId,
+            id: planId ?? `fallback-${Date.now()}`,
             goal,
-            steps: plan.steps,
-            totalTime: plan.total_time_estimate,
-            complexity: plan.complexity,
+            steps: plan!.steps,
+            totalTime: plan!.total_time_estimate,
+            complexity: plan!.complexity,
             status: 'ready'
         };
     }
 
-    /**
-     * Exécute le plan étape par étape
-     * @param {Object} plan
-     * @param {Object} context - {executeToolFn, chatId, message}
-     * @returns {Promise<Object>} Résultat d'exécution
-     */
-    async execute(plan: any, context: any, initialExecutionLog?: any): Promise<any> {
+    private async _executeStepWithRetry(
+        step: PlanStep,
+        context: { executeToolFn: (toolCall: { id: string; function: { name: string; arguments: string } }, message: unknown) => Promise<StepResult>; chatId: string; message: unknown; tools: ToolInfo[] },
+        executionLog: ExecutionLog,
+        plan: PlanResult
+    ): Promise<StepResult | null> {
+        let retries = 0;
+        const MAX_RETRIES = 3;
+        let finalResult: StepResult | null = null;
+        let stepParams: Record<string, unknown> = (step.params || {}) as Record<string, unknown>;
+
+        while (retries < MAX_RETRIES) {
+            try {
+                const { validateToolArgs } = await import('../../utils/toolValidator.js');
+                const validation = validateToolArgs(step.tool, JSON.stringify(stepParams), context.tools || []);
+
+                if (!validation.valid) {
+                    throw new Error(`[SYSTEM REJECTION] : ${validation.formattedError}\nDIRECTIVE: Expected schema: ${JSON.stringify(validation.schema, null, 0)}`);
+                }
+
+                const toolCall = {
+                    id: `step_${step.id}_try_${retries}`,
+                    function: { name: step.tool, arguments: JSON.stringify(stepParams) }
+                };
+
+                finalResult = await context.executeToolFn(toolCall, context.message);
+                this._validateStepResult(finalResult);
+                break;
+
+            } catch (err: unknown) {
+                retries++;
+                const errMsg = extractErrorMessage(err);
+                console.warn(`[Planner] ⚠️ Étape ${step.id} (Essai ${retries}/${MAX_RETRIES}) échouée: ${errMsg}`);
+
+                if (retries >= MAX_RETRIES) {
+                    console.error(`[Planner] 🛑 Échec définitif de l'étape ${step.id} après ${MAX_RETRIES} essais.`);
+                    executionLog.failed.push(step.id);
+                    executionLog.results[step.id] = { error: true, success: false, message: errMsg };
+                    await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - ${errMsg}`);
+
+                    if (this._isCriticalFailure(step, err)) {
+                        console.warn('[Planner] 🛑 Échec critique, replanification...');
+                        throw new CriticalFailureError(plan, executionLog);
+                    }
+                    break;
+                }
+
+                stepParams = await this._requestSelfCorrection(step.id, step.tool, stepParams, errMsg);
+            }
+        }
+
+        return finalResult;
+    }
+
+    private _validateStepResult(finalResult: StepResult | null): void {
+        if (finalResult && (finalResult.error === true || finalResult.success === false)) {
+            throw new Error(finalResult.message || String(finalResult.error) || (typeof finalResult.llmOutput === 'string' ? finalResult.llmOutput : JSON.stringify(finalResult.llmOutput)) || 'erreur inconnue');
+        }
+
+        if (finalResult?.llmOutput && typeof (finalResult.llmOutput as Record<string, unknown>).exitCode === 'number' && (finalResult.llmOutput as Record<string, unknown>).exitCode !== 0) {
+            const stdout = (finalResult.llmOutput as Record<string, unknown>).stdout as string || '';
+            throw new Error(`[BASH EXIT CODE ${(finalResult.llmOutput as Record<string, unknown>).exitCode}] Command failed.\nOutput: ${stdout.substring(0, 500)}`);
+        }
+    }
+
+    private async _requestSelfCorrection(stepId: number, toolName: string, stepParams: Record<string, unknown>, errMsg: string): Promise<Record<string, unknown>> {
+        console.log(`[Planner] 🔄 Demande d'auto-correction au LLM pour l'étape ${stepId}...`);
+        const fixPrompt = `Your previous attempt to call tool "${toolName}" failed with the following error:\n<tool_use_error>${errMsg}</tool_use_error>\n\nYour previous parameters were:\n${JSON.stringify(stepParams)}\n\nFix the parameters and output ONLY the corrected JSON parameters object. Do NOT wrap in markdown.`;
+
+        try {
+            const providerRouterModule = (await import('../../providers/index.js')).providerRouter;
+            const fixResponse = await providerRouterModule.callServiceRecipe('PLANNER', [
+                { role: 'system', content: 'You are a JSON parameter corrector. Output strictly valid JSON.' },
+                { role: 'user', content: fixPrompt }
+            ]);
+
+            if (fixResponse && fixResponse.content) {
+                const { tryParseJson: tpj } = await import('../../utils/ResponseFormatEnforcer.js');
+                const parsed = tpj<Record<string, unknown>>(fixResponse.content || '');
+                if (parsed) return parsed;
+            }
+        } catch (aiErr) {
+            console.error('[Planner] Échec de la requête de correction:', aiErr);
+        }
+        return stepParams;
+    }
+
+    async execute(plan: PlanResult, context: { executeToolFn: (toolCall: { id: string; function: { name: string; arguments: string } }, message: unknown) => Promise<StepResult>; chatId: string; message: unknown; tools: ToolInfo[] }, initialExecutionLog?: Partial<ExecutionLog>): Promise<ExecutionLog> {
         console.log(`[Planner] 🚀 Exécution du plan: ${plan.steps.length} étapes`);
 
-        const executionLog: any = {
+        const executionLog: ExecutionLog = {
             planId: plan.id,
             goal: plan.goal,
-            plan,
+            plan: plan as unknown as Plan,
             startTime: initialExecutionLog?.startTime || Date.now(),
             completed: initialExecutionLog?.completed ? [...initialExecutionLog.completed] : [],
             failed: initialExecutionLog?.failed ? [...initialExecutionLog.failed] : [],
@@ -705,194 +820,117 @@ Plan:`;
             _replanAttempt: initialExecutionLog?._replanAttempt || false
         };
 
-        for (let i = 0; i < plan.steps.length; i++) {
-            const step = plan.steps[i];
-
-            if (executionLog.completed.includes(step.id)) {
-                console.log(`[Planner] ⏭️ Étape ${step.id} déjà complétée, passage.`);
-                continue;
-            }
-
-            console.log(`[Planner] Étape ${step.id}/${plan.steps.length}: ${step.action}`);
-
-            // Vérifier dépendances
-            if (step.depends_on && step.depends_on.length > 0) {
-                const depsReady = step.depends_on.every((depId: any) =>
-                    executionLog.completed.includes(depId)
-                );
-
-                if (!depsReady) {
-                    console.warn(`[Planner] ⚠️ Dépendances non satisfaites pour étape ${step.id}`);
-                    executionLog.failed.push(step.id);
-                    continue;
-                }
-            }
-
-            // Exécuter l'étape
+        for (const step of plan.steps) {
             try {
-                // Interpoler les paramètres avec les résultats des étapes précédentes
-                if (step.params) {
-                    step.params = interpolateParams(step.params, executionLog.results);
+                const result = await this._executeSingleStep(step, context, executionLog, plan);
+                if (result === 'continue') continue;
+                if (result === 'replanned') return executionLog;
+            } catch (e: unknown) {
+                if (e instanceof CriticalFailureError) {
+                    return await this._replan(e.plan, e.executionLog, context);
                 }
-
-                // [PRIORITY 4 FIX] Skip steps with no valid tool instead of executing 'unknown_tool'
-                const toolName = step.tool;
-                if (!toolName || toolName === 'unknown_tool') {
-                    console.warn(`[Planner] ⚠️ Étape ${step.id} ignorée: outil manquant ou invalide ("${toolName || 'null'}")`);
-                    executionLog.failed.push(step.id);
-                    executionLog.results[step.id] = { error: true, message: `Step skipped: no valid tool (was "${toolName || 'null'}")` };
-                    await actionMemory.updateStep(context.chatId, `⏭️ Étape ${step.id}: ${step.action} - outil manquant`);
-                    continue;
-                }
-
-                // [GLOBAL TOOL RETRY SYSTEM] Self-correcting loop inspired by Claude Code
-                let retries = 0;
-                const MAX_RETRIES = 3;
-                let finalResult: any = null;
-                let stepParams = step.params || {};
-
-                while (retries < MAX_RETRIES) {
-                    try {
-                        const { validateToolArgs } = await import('../../utils/toolValidator.js');
-                        const validation = validateToolArgs(toolName, JSON.stringify(stepParams), context.tools || []);
-
-                        if (!validation.valid) {
-                            throw new Error(`[SYSTEM REJECTION] : ${validation.formattedError}\nDIRECTIVE: Expected schema: ${JSON.stringify(validation.schema, null, 0)}`);
-                        }
-
-                        const toolCall = {
-                            id: `step_${step.id}_try_${retries}`,
-                            function: { name: toolName, arguments: JSON.stringify(stepParams) }
-                        };
-
-                        finalResult = await context.executeToolFn(toolCall, context.message);
-
-                        if (finalResult && (finalResult.error === true || finalResult.success === false)) {
-                            throw new Error(finalResult.message || finalResult.error || (typeof finalResult.llmOutput === 'string' ? finalResult.llmOutput : JSON.stringify(finalResult.llmOutput)) || 'erreur inconnue');
-                        }
-
-                        // WHY: Node.js async errors inside .then()/.catch() chains that don't call process.exit(1)
-                        // make bash return exit code 0 even when the program crashed at runtime.
-                        // We must explicitly check the exit code to catch these silent failures.
-                        if (
-                            finalResult &&
-                            finalResult.llmOutput &&
-                            typeof (finalResult.llmOutput as { exitCode?: number }).exitCode === 'number' &&
-                            (finalResult.llmOutput as { exitCode?: number }).exitCode !== 0
-                        ) {
-                            const stdout = (finalResult.llmOutput as { stdout?: string }).stdout || '';
-                            throw new Error(`[BASH EXIT CODE ${(finalResult.llmOutput as { exitCode: number }).exitCode}] Command failed.\nOutput: ${stdout.substring(0, 500)}`);
-                        }
-
-                        // Break out of retry loop on success
-                        break;
-
-                    } catch (err: any) {
-                        retries++;
-                        console.warn(`[Planner] ⚠️ Étape ${step.id} (Essai ${retries}/${MAX_RETRIES}) échouée: ${err.message}`);
-
-                        if (retries >= MAX_RETRIES) {
-                            console.error(`[Planner] 🛑 Échec définitif de l'étape ${step.id} après ${MAX_RETRIES} essais.`);
-                            executionLog.failed.push(step.id);
-                            executionLog.results[step.id] = { error: true, success: false, message: err.message };
-                            await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id}: ${step.action} - ${err.message}`);
-
-                            if (this._isCriticalFailure(step, err)) {
-                                console.warn('[Planner] 🛑 Échec critique, replanification...');
-                                return await this._replan(plan, executionLog, context);
-                            }
-                            break; // Continue to next step in plan
-                        }
-
-                        // --- SELF-CORRECTION AI CALL ---
-                        console.log(`[Planner] 🔄 Demande d'auto-correction au LLM pour l'étape ${step.id}...`);
-                        const fixPrompt = `Your previous attempt to call tool "${toolName}" failed with the following error:\n<tool_use_error>${err.message}</tool_use_error>\n\nYour previous parameters were:\n${JSON.stringify(stepParams)}\n\nFix the parameters and output ONLY the corrected JSON parameters object. Do NOT wrap in markdown.`;
-
-                        try {
-                            const providerRouter = (await import('../../providers/index.js')).providerRouter;
-                            const fixResponse = await providerRouter.callServiceRecipe('PLANNER', [
-                                { role: 'system', content: 'You are a JSON parameter corrector. Output strictly valid JSON.' },
-                                { role: 'user', content: fixPrompt }
-                            ]);
-
-                            if (fixResponse && fixResponse.content) {
-                                const { tryParseJson } = await import('../../utils/ResponseFormatEnforcer.js');
-                                const parsed = tryParseJson(fixResponse.content || '');
-                                if (parsed) stepParams = parsed;
-                            }
-                        } catch (aiErr) {
-                            console.error('[Planner] Échec de la requête de correction:', aiErr);
-                        }
-                    }
-                }
-
-                // If the loop finished successfully (or broke after max retries but didn't critical fail)
-                if (finalResult && !executionLog.failed.includes(step.id)) {
-                    finalResult.retries = retries;
-                    executionLog.results[step.id] = finalResult;
-                }
-
-                executionLog.completed.push(step.id);
-
-                // Mettre à jour ActionMemory
-                await actionMemory.updateStep(context.chatId, `✅ Étape ${step.id}: ${step.action}`);
-
-                console.log(`[Planner] ✅ Étape ${step.id} terminée`);
-
-            } catch (error: any) {
-                console.error(`[Planner] ❌ Échec étape ${step.id}:`, error.message);
-                executionLog.failed.push(step.id);
-
-                // Analyser si échec critique
-                if (this._isCriticalFailure(step, error)) {
-                    console.warn('[Planner] 🛑 Échec critique détecté, replanification...');
-                    return await this._replan(plan, executionLog, context);
-                }
-
-                // Sinon, continuer avec les autres étapes
-                await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id} échouée: ${error.message}`);
+                throw e;
             }
         }
 
-        executionLog.endTime = Date.now();
-        executionLog.duration = executionLog.endTime - executionLog.startTime;
-
-        console.log(`[Planner] 🏁 Plan terminé: ${executionLog.completed.length}/${plan.steps.length} étapes réussies`);
-
+        this._finalizeExecution(executionLog, plan.steps.length);
         return executionLog;
     }
 
-    /**
-     * Révise le plan après exécution
-     * @param {Object} executionLog
-     * @returns {Promise<Object>} Analyse
-     */
-    async review(executionLog: any) {
+    private async _executeSingleStep(
+        step: PlanStep,
+        context: { executeToolFn: (toolCall: { id: string; function: { name: string; arguments: string } }, message: unknown) => Promise<StepResult>; chatId: string; message: unknown; tools: ToolInfo[] },
+        executionLog: ExecutionLog,
+        plan: PlanResult
+    ): Promise<'continue' | 'replanned'> {
+        if (executionLog.completed.includes(step.id)) {
+            console.log(`[Planner] ⏭️ Étape ${step.id} déjà complétée, passage.`);
+            return 'continue';
+        }
+
+        console.log(`[Planner] Étape ${step.id}/${plan.steps.length}: ${step.action}`);
+
+        if (!this._areDependenciesMet(step, executionLog)) {
+            console.warn(`[Planner] ⚠️ Dépendances non satisfaites pour étape ${step.id}`);
+            executionLog.failed.push(step.id);
+            return 'continue';
+        }
+
+        if (step.params) {
+            step.params = interpolateParams(step.params, executionLog.results) as Record<string, unknown>;
+        }
+
+        if (!step.tool || step.tool === 'unknown_tool') {
+            console.warn(`[Planner] ⚠️ Étape ${step.id} ignorée: outil manquant ou invalide ("${step.tool || 'null'}")`);
+            executionLog.failed.push(step.id);
+            executionLog.results[step.id] = { error: true, message: `Step skipped: no valid tool (was "${step.tool || 'null'}")` };
+            await actionMemory.updateStep(context.chatId, `⏭️ Étape ${step.id}: ${step.action} - outil manquant`);
+            return 'continue';
+        }
+
+        try {
+            const finalResult = await this._executeStepWithRetry(step, context, executionLog, plan);
+            if (finalResult && !executionLog.failed.includes(step.id)) {
+                finalResult.retries = 0;
+                executionLog.results[step.id] = finalResult;
+            }
+            executionLog.completed.push(step.id);
+            await actionMemory.updateStep(context.chatId, `✅ Étape ${step.id}: ${step.action}`);
+            console.log(`[Planner] ✅ Étape ${step.id} terminée`);
+        } catch (error: unknown) {
+            console.error(`[Planner] ❌ Échec étape ${step.id}:`, extractErrorMessage(error));
+            executionLog.failed.push(step.id);
+
+            if (this._isCriticalFailure(step, error)) {
+                console.warn('[Planner] 🛑 Échec critique détecté, replanification...');
+                throw new CriticalFailureError(plan, executionLog);
+            }
+
+            await actionMemory.updateStep(context.chatId, `❌ Étape ${step.id} échouée: ${extractErrorMessage(error)}`);
+        }
+
+        return 'continue';
+    }
+
+    private _areDependenciesMet(step: PlanStep, executionLog: ExecutionLog): boolean {
+        if (!step.depends_on || step.depends_on.length === 0) return true;
+        return step.depends_on.every((depId: number) => executionLog.completed.includes(depId));
+    }
+
+    private _finalizeExecution(executionLog: ExecutionLog, totalSteps: number): void {
+        executionLog.endTime = Date.now();
+        executionLog.duration = executionLog.endTime - executionLog.startTime;
+        console.log(`[Planner] 🏁 Plan terminé: ${executionLog.completed.length}/${totalSteps} étapes réussies`);
+    }
+
+    async review(executionLog: ExecutionLog): Promise<ReviewResult> {
         console.log('[Planner] 📊 Révision post-exécution...');
 
         const successRate = executionLog.completed.length / (executionLog.completed.length + executionLog.failed.length);
 
-        const analysis = {
+        const analysis: ReviewResult = {
             success: successRate >= 0.8,
             successRate,
             totalSteps: executionLog.completed.length + executionLog.failed.length,
             completed: executionLog.completed.length,
             failed: executionLog.failed.length,
-            duration: executionLog.duration,
-            efficiency: executionLog.duration / ((executionLog.completed.length || 1) * 1000) // secs per step
+            duration: executionLog.duration || 0,
+            efficiency: (executionLog.duration || 0) / ((executionLog.completed.length || 1) * 1000)
         };
 
-        // Si succès, enregistrer dans Dream Service
         if (analysis.success) {
             try {
                 const { dreamService } = await import('../dreamService.js');
-                await (dreamService as any).recordPlanSuccess?.({
-                    goal: executionLog.goal,
-                    steps: executionLog.completed.length,
-                    duration: executionLog.duration,
-                    efficiency: analysis.efficiency
-                });
-            } catch (e: any) {
+                const recordFn = (dreamService as Record<string, unknown>).recordPlanSuccess;
+                if (typeof recordFn === 'function') {
+                    await recordFn({
+                        goal: executionLog.goal,
+                        steps: executionLog.completed.length,
+                        duration: executionLog.duration,
+                        efficiency: analysis.efficiency
+                    });
+                }
+            } catch {
                 // Optional feature
             }
         }
@@ -902,35 +940,24 @@ Plan:`;
         return analysis;
     }
 
-    /**
-     * Détecte si un échec est critique
-     */
-    _isCriticalFailure(step: any, error: any) {
-        // En mode de récupération adaptatif, n'importe quel échec d'étape est considéré comme critique
-        // pour déclencher une replanification intelligente (si pas déjà tentée).
+    _isCriticalFailure(_step: PlanStep, _error: unknown): boolean {
         return true;
     }
 
-    /**
-     * Replanifie après échec
-     */
-    async _replan(originalPlan: any, executionLog: any, context: any): Promise<any> {
-        // [PRIORITY 4 FIX] Anti-rebounce guard — replan only once
-        if ((executionLog as any)._replanAttempt) {
+    async _replan(originalPlan: PlanResult, executionLog: ExecutionLog, context: { executeToolFn: (toolCall: { id: string; function: { name: string; arguments: string } }, message: unknown) => Promise<StepResult>; chatId: string; message: unknown; tools: ToolInfo[] }): Promise<ExecutionLog> {
+        if (executionLog._replanAttempt) {
             console.warn('[Planner] 🛑 Replan already attempted, aborting to prevent infinite loop.');
-            return { ...executionLog, replanFailed: true };
+            return { ...executionLog, replanFailed: true } as ExecutionLog;
         }
-        (executionLog as any)._replanAttempt = true;
+        executionLog._replanAttempt = true;
 
         console.log('[Planner] 🔄 Replanification...');
 
-        // Build detailed tools list for the LLM
         const detailedToolsList = (context.tools || [])
             .map(formatToolForPlanner)
             .join('\n');
 
-        // Construit un log détaillé des étapes exécutées avec leurs résultats
-        const detailedStepsLog = originalPlan.steps.map((s: any) => {
+        const detailedStepsLog = originalPlan.steps.map((s: PlanStep) => {
             const result = executionLog.results[s.id];
             if (!result) return `- Step ${s.id} (${s.action}): Not executed`;
 
@@ -946,7 +973,6 @@ Plan:`;
                 outputStr = JSON.stringify(result);
             }
 
-            // Truncate output to avoid prompt bloat but keep crucial context (like accessibility tree)
             if (outputStr.length > 3000) {
                 outputStr = outputStr.substring(0, 3000) + '\n... [TRUNCATED]';
             }
@@ -956,6 +982,8 @@ Plan:`;
 - Params: ${JSON.stringify(s.params)}
 - Output/Error: ${outputStr}`;
         }).join('\n\n');
+
+        const toolListStr = detailedToolsList || 'No tool list provided';
 
         const replanPrompt = `<role>
 You are HIVE-MIND's adaptive PLANNER recovering from an execution failure.
@@ -976,67 +1004,43 @@ ${detailedStepsLog}
 </execution_history_details>
 
 <available_tools>
-${detailedToolsList || 'No tool list provided'}
+${toolListStr}
 </available_tools>
 
 <replanning_instructions>
 Formulate your new plan using these guidelines:
 1. FAILURE ANALYSIS: Analyze why the previous steps failed. Formulate an alternate strategy that circumvents the error.
-2. DECOMPOSE THE REMAINING TASK: Split complex remaining operations into separate steps (e.g., separate data collection from processing or file creation).
-3. MATCH TOOLS ACCURATELY: Choose tool names exclusively from the list of available tools. Verify that each selected tool exists exactly as defined.
+2. DECOMPOSE THE REMAINING TASK: Split complex remaining operations into separate steps.
+3. MATCH TOOLS ACCURATELY: Choose tool names exclusively from the list of available tools.
 4. CHOOSE THE RIGHT TOOL:
     - Use \`execute_bash_command\` for terminal actions, running Node scripts, and creating files in the filesystem.
     - Reserve \`code_execution\` only for lightweight orchestration of multiple existing HIVE tools.
-    - INLINE CODE RESTRICTIONS: Bash commands like \`node -e "..."\` are strictly FORBIDDEN by security policies and will be blocked. To run custom Node.js logic, you MUST plan a step to CREATE a physical script file (e.g. \`storage_hm/run.cjs\`) using tools or bash commands (like echo or cat), and then plan a subsequent step to RUN it with \`node storage_hm/run.cjs\`. Never attempt to run inline code.
-    - ES MODULES COMPATIBILITY: The HIVE-MIND project uses \`"type": "module"\` in its package.json. Therefore, any script file using CommonJS \`require()\` MUST have the \`.cjs\` extension (e.g., \`storage_hm/run.cjs\`), NOT \`.js\`. If you name it \`.js\`, Node.js will throw a ReferenceError (require is not defined). Systematically use the \`.cjs\` extension for temporary Node.js scripts.
-5. NODE.JS LIBRARY VERSIONS: When retrying with npm libraries, check their API version. For example, \`pdf-parse\` v2+ uses a class-based API: \`const { PDFParse } = require('pdf-parse'); const p = new PDFParse({ data: buffer }); const r = await p.getText();\`. NEVER use \`pdf(buffer)\`. Always add \`process.exitCode = 1; process.exit(1);\` in your \`.catch()\` blocks.
-6. DEFINE COMPLETE PARAMETERS: For every step, provide all required properties for the chosen tool. Use exact selectors or coordinates found in the execution log if navigating/clicking.
-7. PASS DATA SEQUENTIALLY: Reuse outputs from previous steps by using the variable interpolation syntax "{{step_X_propertyName}}" (e.g., {"filePath": "{{step_1_filePath}}"} or "{{step_1_result}}").
-8. DRAFT CONCISE QUERIES: When using search tools (\`google_ai_search\`, \`duckduck_search\`, \`wikipedia\`), write a short, concise search query (maximum of 15 words) for the query parameter. Avoid passing large chunks of text or variable references like "{{step_X_result}}".
+    - INLINE CODE RESTRICTIONS: Bash commands like \`node -e "..."\` are strictly FORBIDDEN.
+    - ES MODULES COMPATIBILITY: Any script file using CommonJS \`require()\` MUST have the \`.cjs\` extension.
+5. DEFINE COMPLETE PARAMETERS: For every step, provide all required properties for the chosen tool.
+6. PASS DATA SEQUENTIALLY: Reuse outputs from previous steps using "{{step_X_propertyName}}".
+7. DRAFT CONCISE QUERIES: When using search tools, write a short, concise search query (maximum 15 words).
 </replanning_instructions>
 
 <output_format>
 Your response must consist of two parts:
 1. A brief "Thinking" section explaining why the previous run failed and how you are adjusting the plan.
 2. A "Plan JSON" block containing the corrected structured plan, wrapped in markdown triple backticks.
-
-Example format:
-Thinking:
-The previous step failed because the selector was not found on the page. I will first use browser_eval to inspect the DOM, then click the correct element.
-
-\`\`\`json
-{
-  "steps": [
-    {
-      "id": 1,
-      "action": "Inspect the DOM to find the correct selector",
-      "tool": "browser_eval",
-      "params": {
-        "expression": "document.body.innerHTML"
-      },
-      "estimated_time": 10,
-      "depends_on": []
-    }
-  ],
-  "total_time_estimate": 10,
-  "complexity": "medium"
-}
-\`\`\`
 </output_format>
 
 New plan:`;
 
         let attempts = 0;
         const maxAttempts = 3;
-        let newPlan: any = null;
-        const chatHistory: any[] = [
+        let newPlan: Plan | null = null;
+        const chatHistory: ChatMessage[] = [
             { role: 'system', content: 'Tu es un planificateur expert en récupération d\'échecs.' },
             { role: 'user', content: replanPrompt }
         ];
 
         while (attempts < maxAttempts) {
             attempts++;
-            let response: any = null;
+            let response: { content: string | null } | null = null;
             try {
                 response = await providerRouter.chat(chatHistory, { temperature: 0.5 });
                 if (!response?.content) {
@@ -1048,12 +1052,11 @@ New plan:`;
                     throw new Error('Impossible de parser le nouveau plan JSON après replanification');
                 }
 
-                // Validate that all tools in the new plan actually exist
-                const validToolNames = new Set((context.tools || []).map((t: any) => t.function?.name || t.name));
-                const invalidSteps = (newPlan.steps || []).filter((s: any) => s.tool && !validToolNames.has(s.tool));
+                const validToolNames = new Set((context.tools || []).map((t: ToolInfo) => t.function?.name || t.name));
+                const invalidSteps = (newPlan.steps || []).filter((s: PlanStep) => s.tool && !validToolNames.has(s.tool));
                 if (invalidSteps.length > 0) {
-                    console.warn(`[Planner] ⚠️ Replan contains ${invalidSteps.length} invalid tool(s): ${invalidSteps.map((s: any) => s.tool).join(', ')}. Filtering out.`);
-                    newPlan.steps = (newPlan.steps || []).filter((s: any) => !s.tool || validToolNames.has(s.tool));
+                    console.warn(`[Planner] ⚠️ Replan contains ${invalidSteps.length} invalid tool(s): ${invalidSteps.map((s: PlanStep) => s.tool).join(', ')}. Filtering out.`);
+                    newPlan.steps = (newPlan.steps || []).filter((s: PlanStep) => !s.tool || validToolNames.has(s.tool));
                 }
 
                 if (!newPlan.steps || newPlan.steps.length === 0) {
@@ -1061,27 +1064,26 @@ New plan:`;
                 }
 
                 break;
-            } catch (err: any) {
-                console.warn(`[Planner] ⚠️ Tentative replan ${attempts}/${maxAttempts} échouée: ${err.message}`);
+            } catch (err: unknown) {
+                const errMsg = extractErrorMessage(err);
+                console.warn(`[Planner] ⚠️ Tentative replan ${attempts}/${maxAttempts} échouée: ${errMsg}`);
                 if (attempts >= maxAttempts) {
-                    console.error('[Planner] Erreur replanification:', err.message);
+                    console.error('[Planner] Erreur replanification:', errMsg);
                     return {
                         ...executionLog,
                         replanFailed: true
                     };
                 }
                 chatHistory.push({ role: 'assistant', content: response?.content || 'Plan malformé ou incomplet' });
-                chatHistory.push({ role: 'user', content: `ERREUR DE PLANIFICATION: ${err.message}\n\nVeuillez corriger le plan et me renvoyer uniquement le JSON valide.` });
+                chatHistory.push({ role: 'user', content: `ERREUR DE PLANIFICATION: ${errMsg}\n\nVeuillez corriger le plan et me renvoyer uniquement le JSON valide.` });
             }
         }
 
         console.log('[Planner] ✅ Nouveau plan créé, réexécution...');
 
-        // Execute with the new plan (guard flag already set, so no recursive replan)
-        return await this.execute({ ...originalPlan, steps: newPlan.steps }, context, executionLog);
+        return await this.execute({ ...originalPlan, steps: newPlan!.steps } as PlanResult, context, executionLog);
     }
 }
 
-// Export singleton
 export const planner = new ExplicitPlanner();
 export default planner;

@@ -5,11 +5,11 @@ import { SubAgentEngine } from '../../../services/agentic/SubAgentEngine.js';
  * Agent spécialisé pour le shopping comparatif, configuré via SubAgentEngine.
  */
 export class ShoppingAgent {
-    userId: any;
-    chatId: any;
+    userId: string;
+    chatId: string;
     engine: SubAgentEngine;
 
-    constructor(userId: any, chatId: any) {
+    constructor(userId: string, chatId: string) {
         this.userId = userId;
         this.chatId = chatId;
 
@@ -36,7 +36,7 @@ RÈGLES DU SHOPPING:
      * Lance une session de shopping
      * @param {string} query - La requête de shopping de l'utilisateur
      */
-    async start(query: any) {
+    async start(query: string) {
         const context = { chatId: this.chatId }; // Contexte minimum requis par les outils
         const result = await this.engine.run(`Trouve-moi le meilleur choix pour: "${query}"`, context);
         return result.message;

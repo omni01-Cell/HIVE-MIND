@@ -59,7 +59,7 @@ describe('AntiDeleteHandler unit tests', () => {
             text: 'Hello world'
         };
 
-        jest.spyOn(workingMemory, 'getStoredMessage').mockImplementation(async () => storedMsg);
+        jest.spyOn(workingMemory, 'getStoredMessage').mockImplementation(async () => storedMsg as any);
 
         await handler.handleUpdate(updates);
 

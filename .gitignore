@@ -43,7 +43,7 @@ storage_hm/test_document.pdf
 storage_hm/test.png
 storage_hm/screenshots/screenshot_fallback_1778789503976.png
 storage_hm/screenshots/smoke-test.png
-session/creds.json
+session/
 
 # Generated test artifacts
 Sandbox1/
@@ -58,5 +58,3 @@ analyze_graph.py
 docs/
 scratch/
 src/scratch/
-
-

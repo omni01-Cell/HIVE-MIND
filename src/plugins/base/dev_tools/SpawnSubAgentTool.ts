@@ -6,7 +6,19 @@
 // ============================================================================
 
 import { SubAgentEngine } from '../../../services/agentic/SubAgentEngine.js';
-import { pluginLoader } from '../../loader.js';
+
+interface SpawnSubAgentArgs {
+    name: string;
+    persona: string;
+    tools: string[];
+    mission: string;
+    mode?: 'fresh' | 'fork';
+}
+
+interface SpawnSubAgentContext {
+    conversationHistory?: Array<{ role: string; content: string }>;
+    [key: string]: unknown;
+}
 
 export default {
     name: 'spawn_sub_agent',
@@ -52,7 +64,7 @@ export default {
         }
     ],
 
-    async execute(args: any, context: any, toolName: string) {
+    async execute(args: SpawnSubAgentArgs, context: SpawnSubAgentContext, toolName: string) {
         if (toolName !== 'spawn_sub_agent') return null;
 
         const { name, persona, tools, mission, mode = 'fresh' } = args;

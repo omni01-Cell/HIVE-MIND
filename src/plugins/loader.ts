@@ -1,11 +1,12 @@
 // plugins/loader.js
-// plugins/loader.js
 // Dynamic plugin loader (Brick-Like system)
 
 import { readdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { eventBus, BotEvents } from '../core/events.js';
+import type { Dirent } from 'fs';
+import type { OpenAIToolDefinition } from '../services/ptc/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -17,98 +18,171 @@ const SAFE_FALLBACK_TOOLS = [
     'google_ai_search', 'read_file'
 ] as const;
 
-/**
- * Standard format that each plugin must expose
- * @typedef {Object} Plugin
- * @property {string} name - Unique plugin name
- * @property {string} description - Description for the AI
- * @property {string} version - Plugin version
- * @property {boolean} enabled - Enabled by default?
- * @property {Object} toolDefinition - OpenAI-compatible definition for function calling
- * @property {Function} execute - Execution function
- */
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+/** Shape of a raw plugin module as loaded from disk */
+interface PluginModule {
+    default?: Plugin;
+    [key: string]: unknown;
+}
+
+/** Standard format that each plugin must expose */
+interface Plugin {
+    readonly name: string;
+    readonly description: string;
+    readonly version: string;
+    readonly enabled?: boolean;
+    readonly toolDefinition?: OpenAIToolDefinition;
+    readonly toolDefinitions?: readonly OpenAIToolDefinition[];
+    readonly init?: () => Promise<void> | void;
+    readonly execute: (args: Record<string, unknown>, context: Record<string, unknown>, toolName: string) => Promise<PluginResult>;
+    readonly textMatchers?: readonly TextMatcher[];
+    readonly processor?: unknown;
+}
+
+/** Result returned by plugin.execute() */
+interface PluginResult {
+    readonly success: boolean;
+    readonly message: string;
+    readonly error?: string;
+    readonly gracefulDegradation?: boolean;
+    readonly [key: string]: unknown;
+}
+
+/** Textual matcher registered by a plugin */
+interface TextMatcher {
+    readonly pattern: RegExp;
+    readonly name?: string;
+    readonly handler?: string;
+    readonly description?: string;
+    readonly extractArgs?: (match: RegExpMatchArray, message: Record<string, unknown>, text: string) => Record<string, unknown> | null | undefined;
+}
+
+/** Resolved matcher with pluginName attached */
+interface ResolvedMatcher extends TextMatcher {
+    readonly pluginName: string;
+}
+
+/** Error recorded during loadAll */
+interface LoadError {
+    readonly name: string;
+    readonly error: string;
+}
+
+/** Minimal Supabase client interface (RPC + from) */
+interface SupabaseClient {
+    rpc(name: string, params: Record<string, unknown>): Promise<{ data: unknown; error: unknown }>;
+    from(table: string): {
+        select(columns: string): Promise<{ data: unknown; error: unknown }>;
+        delete(): {
+            in(column: string, values: readonly string[]): Promise<{ error: unknown }>;
+        };
+    };
+}
+
+/** Embeddings service returned by container */
+interface EmbeddingsService {
+    embed(text: string): Promise<number[] | null>;
+}
+
+/** ServiceContainer interface (subset used here) */
+interface ServiceContainer {
+    has(name: string): boolean;
+    get(name: string): unknown;
+}
+
+/** RAG tool row from Supabase */
+interface RagToolRow {
+    readonly name: string;
+    readonly description: string;
+    readonly definition: OpenAIToolDefinition;
+}
+
+/** Sync status returned by checkSyncStatus */
+interface SyncStatus {
+    readonly deleted: number;
+    readonly new: number;
+    readonly modified: number;
+}
+
+// ============================================================================
+// PluginLoader
+// ============================================================================
 
 class PluginLoader {
-    plugins: any;
-    toolToPlugin: any;
-    toolDefinitions: any;
-    textMatchers: any;
-    _loadErrors: any[] = [];
+    plugins: Map<string, Plugin>;
+    toolToPlugin: Map<string, string>;
+    toolDefinitions: OpenAIToolDefinition[];
+    textMatchers: ResolvedMatcher[];
+    _loadErrors: LoadError[] = [];
 
     constructor() {
         this.plugins = new Map();
-        this.toolToPlugin = new Map(); // Maps tool function names to plugin names
+        this.toolToPlugin = new Map();
         this.toolDefinitions = [];
-        this.textMatchers = [];        // Aggregation of plugin textual matchers
+        this.textMatchers = [];
     }
 
-    /**
-     * Loads all plugins from the /plugins directory
-     */
-    async loadAll() {
-        // Silent loading to not break progress bar
+    async loadAll(): Promise<Map<string, Plugin>> {
         const entries = await readdir(__dirname, { withFileTypes: true });
-        const categories = entries.filter((e: any) => e.isDirectory());
-        const loadErrors = [];
+        const categories = entries.filter((e: Dirent) => e.isDirectory());
+        const loadErrors: LoadError[] = [];
 
         for (const category of categories) {
             const catPath = join(__dirname, category.name);
             const pluginEntries = await readdir(catPath, { withFileTypes: true });
-            const pluginDirs = pluginEntries.filter((e: any) => e.isDirectory());
+            const pluginDirs = pluginEntries.filter((e: Dirent) => e.isDirectory());
 
             for (const dir of pluginDirs) {
                 try {
                     await this.load(`${category.name}/${dir.name}`);
-                } catch (error: any) {
-                    loadErrors.push({ name: dir.name, error: error.message });
+                } catch (error: unknown) {
+                    loadErrors.push({ name: dir.name, error: extractErrorMessage(error) });
                 }
             }
         }
 
-        // Errors will be logged after complete() if necessary
         this._loadErrors = loadErrors;
         return this.plugins;
     }
 
-    /**
-     * Loads a specific plugin
-     * @param {string} pluginName
-     */
-    async load(pluginName: any) {
+    async load(pluginName: string): Promise<void> {
         const pluginPath = join(__dirname, pluginName, 'index.js');
 
         try {
-            const pluginModule = await import(pathToFileURL(pluginPath).href);
-            const plugin = pluginModule.default || pluginModule;
+            const pluginModule = await import(pathToFileURL(pluginPath).href) as PluginModule;
+            const plugin: Plugin = pluginModule.default ?? (pluginModule as unknown as Plugin);
 
-            // Validation format
             this._validatePlugin(plugin, pluginName);
 
-            // 🛡️ Validation of tool structure (Audit #19 Approach B)
             if (plugin.toolDefinition) {
                 this._validateToolDefinition(plugin.toolDefinition, pluginName);
             }
             if (plugin.toolDefinitions) {
-                plugin.toolDefinitions.forEach((td: any) => this._validateToolDefinition(td, pluginName));
+                plugin.toolDefinitions.forEach((td: OpenAIToolDefinition) => this._validateToolDefinition(td, pluginName));
             }
 
             if (typeof plugin.init === 'function') {
                 try {
                     await plugin.init();
-                } catch (e: any) {
-                    console.error(`[PluginLoader] Error initializing plugin ${pluginName}:`, e.message);
+                } catch (error: unknown) {
+                    console.error(`[PluginLoader] Error initializing plugin ${pluginName}:`, extractErrorMessage(error));
                 }
             }
 
             if (!plugin.enabled) {
-
-                // Plugin disabled - silent
                 return;
             }
 
             this.plugins.set(plugin.name, plugin);
 
-            // Add tool definitions and map function names
             if (plugin.toolDefinitions) {
                 for (const toolDef of plugin.toolDefinitions) {
                     this.toolDefinitions.push(toolDef);
@@ -125,37 +199,31 @@ class PluginLoader {
                 }
             }
 
-            // Register textual matchers (silent)
             if (plugin.textMatchers && Array.isArray(plugin.textMatchers)) {
                 for (const matcher of plugin.textMatchers) {
                     this.textMatchers.push({
                         ...matcher,
                         pluginName: plugin.name
                     });
-                    // IMPORTANT: Map handler name to plugin
-                    const handlerName = matcher.name || matcher.handler;
+                    const handlerName = matcher.name ?? matcher.handler;
                     if (handlerName) {
                         this.toolToPlugin.set(handlerName, plugin.name);
                     }
                 }
             }
 
-            // Silent event
             eventBus.publish(BotEvents.PLUGIN_LOADED, { name: plugin.name });
 
-        } catch (error: any) {
-            if (error.code !== 'ERR_MODULE_NOT_FOUND') {
+        } catch (error: unknown) {
+            const errWithCode = error as { code?: string };
+            if (errWithCode.code !== 'ERR_MODULE_NOT_FOUND') {
                 throw error;
             }
-            // Plugin without index.js - silent
         }
     }
 
-    /**
-     * Validates that a plugin has the correct format
-     */
-    _validatePlugin(plugin: any, name: any) {
-        const required = ['name', 'description', 'version', 'execute'];
+    _validatePlugin(plugin: Plugin, name: string): void {
+        const required = ['name', 'description', 'version', 'execute'] as const;
         for (const prop of required) {
             if (!plugin[prop]) {
                 throw new Error(`Plugin ${name} is missing property: ${prop}`);
@@ -166,11 +234,7 @@ class PluginLoader {
         }
     }
 
-    /**
-     * Validates tool definition structure (Audit #19)
-     * @private
-     */
-    _validateToolDefinition(toolDef: any, pluginName: any) {
+    _validateToolDefinition(toolDef: OpenAIToolDefinition, pluginName: string): boolean {
         if (!toolDef.function) {
             throw new Error(`Plugin ${pluginName}: tool definition is missing "function" object`);
         }
@@ -189,7 +253,6 @@ class PluginLoader {
             throw new Error(`Plugin ${pluginName}: missing parameters for tool "${name}"`);
         }
 
-        // Check parameters format (Standard JSON Schema)
         if (parameters.type !== 'object' || !parameters.properties) {
             console.warn(`[PluginLoader] ⚠️ Tool "${name}" (Plugin: ${pluginName}) uses non-standard parameters format`);
         }
@@ -197,25 +260,12 @@ class PluginLoader {
         return true;
     }
 
-    /**
-     * Récupère un plugin par son nom
-
-     * @param {string} name
-     * @returns {Plugin|undefined}
-     */
-    get(name: any) {
+    get(name: string): Plugin | undefined {
         return this.plugins.get(name);
     }
 
-    /**
-     * Executes a plugin with Graceful Degradation
-     * @param {string} toolName - Tool name
-     * @param {Object} args - Arguments for the plugin
-     * @param {Object} context - Execution context
-     */
-    async execute(toolName: any, args: any, context: any) {
-        // Resolve tool name to parent plugin
-        const pluginName = this.toolToPlugin.get(toolName) || toolName;
+    async execute(toolName: string, args: Record<string, unknown>, context: Record<string, unknown>): Promise<PluginResult> {
+        const pluginName = this.toolToPlugin.get(toolName) ?? toolName;
         const plugin = this.plugins.get(pluginName);
 
         if (!plugin) {
@@ -227,112 +277,75 @@ class PluginLoader {
         }
 
         try {
-            // Pass tool name to plugin for multi-tool plugins
             const result = await plugin.execute(args, context, toolName);
             eventBus.publish(BotEvents.PLUGIN_EXECUTED, { name: toolName, args, result });
             return result;
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
             eventBus.publish(BotEvents.PLUGIN_ERROR, { name: toolName, error });
-            console.error(`[PluginLoader] ⚠️ Error in ${toolName}:`, error.message);
+            console.error(`[PluginLoader] ⚠️ Error in ${toolName}:`, errorMessage);
 
             return {
                 success: false,
-                message: `TOOL_ERROR: Tool "${toolName}" encountered an error - ${error.message}. You can inform the user and continue with other requests.`,
-                error: error.message,
+                message: `TOOL_ERROR: Tool "${toolName}" encountered an error - ${errorMessage}. You can inform the user and continue with other requests.`,
+                error: errorMessage,
                 gracefulDegradation: true
             };
         }
     }
 
-    // ========================================================================
-    // TEXT MATCHERS SYSTEM (Textual command decoupling)
-    // ========================================================================
-
-    /**
-     * Searches for a textual handler matching given text
-     * Allows plugins to declare their own regex patterns
-     *
-     * @param {string} text - Text to analyze
-     * @param {Object} message - Full WhatsApp message (for mentions, etc.)
-     * @returns {{name: string, args: Object}|null} - Parsed command or null
-     *
-     * @example
-     * const cmd = pluginLoader.findTextHandler("[ban:@user]", message);
-     * // { name: 'whatsapp_ban_user', args: { user_jid: '123@s.whatsapp.net' } }
-     */
-    findTextHandler(text: any, message: any = {}) {
+    findTextHandler(text: string, message: Record<string, unknown> = {}): { name: string; args: Record<string, unknown> } | null {
         if (!text) return null;
 
         for (const matcher of this.textMatchers) {
             try {
                 const match = text.match(matcher.pattern);
                 if (match) {
-                    // Use extractArgs if defined, otherwise return captured groups
                     const args = matcher.extractArgs
                         ? matcher.extractArgs(match, message, text)
                         : { captures: match.slice(1) };
 
-                    // Check if args are valid (e.g. user_jid must exist)
                     if (args === null || args === undefined) continue;
 
-                    // Support both "name" and "handler" for backwards compatibility
-                    const handlerName = matcher.name || matcher.handler;
+                    const handlerName = matcher.name ?? matcher.handler;
                     console.log(`[TextMatcher] ✓ Pattern found: ${handlerName} (plugin: ${matcher.pluginName})`);
                     return {
-                        name: handlerName,
+                        name: handlerName ?? '',
                         args
                     };
                 }
-            } catch (error: any) {
-                console.error(`[TextMatcher] Error in matcher ${matcher.handler}:`, error.message);
+            } catch (error: unknown) {
+                console.error(`[TextMatcher] Error in matcher ${matcher.handler}:`, extractErrorMessage(error));
             }
         }
 
         return null;
     }
 
-    /**
-     * Returns all tool definitions for the AI
-     * @returns {Array}
-     */
-    getToolDefinitions() {
+    getToolDefinitions(): OpenAIToolDefinition[] {
         return this.toolDefinitions;
     }
 
-    // ========================================================================
-    // DYNAMIC TOOL SELECTION (RAG for Tools - Phase 2)
-    // ========================================================================
-
-    /**
-     * Returns the most relevant tools for a given request
-     * Uses semantic search on bot_tools table
-     *
-     * @param {string} userMessage - User message
-     * @param {number} limit - Max tools to return (default: 5)
-     * @param {number} fallbackLimit - If RAG fails, how many tools to send (default: 10)
-     * @returns {Promise<Array>} - Relevant tool definitions
-     *
-     * @example
-     * const tools = await pluginLoader.getRelevantTools("ban this guy", 5);
-     * // Returns the 5 tools closest to "ban"
-     */
-    async getRelevantTools(userMessage: any, limit: any = 5, fallbackLimit: any = 10, options: any = {}) {
+    async getRelevantTools(
+        userMessage: string,
+        limit: number = 5,
+        fallbackLimit: number = 10,
+        options: { forceModeration?: boolean } = {}
+    ): Promise<OpenAIToolDefinition[]> {
         const { forceModeration } = options;
-        // Dynamic import to avoid circular dependencies
-        const { supabase } = await import('../services/supabase.js');
-        const { container } = await import('../core/ServiceContainer.js');
+        const { supabase } = await import('../services/supabase.js') as { supabase: SupabaseClient | null };
+        const { container } = await import('../core/ServiceContainer.js') as { container: ServiceContainer };
 
-        // Use EmbeddingsService singleton from container (avoids duplication)
-        let embeddings: any = null;
+        let embeddings: EmbeddingsService | null = null;
         try {
             if (container.has('embeddings')) {
-                embeddings = container.get('embeddings');
+                embeddings = container.get('embeddings') as EmbeddingsService;
                 console.log('[PluginLoader] ✅ EmbeddingsService loaded from container (singleton)');
             } else {
                 console.warn('[PluginLoader] EmbeddingsService not available in container');
             }
-        } catch (e: any) {
-            console.warn('[PluginLoader] Error loading EmbeddingsService from container:', e.message);
+        } catch (error: unknown) {
+            console.warn('[PluginLoader] Error loading EmbeddingsService from container:', extractErrorMessage(error));
         }
 
         if (!supabase || !embeddings) {
@@ -341,7 +354,6 @@ class PluginLoader {
         }
 
         try {
-            // 1. Generate user request embedding
             const queryVector = await embeddings.embed(userMessage);
 
             if (!queryVector) {
@@ -349,102 +361,82 @@ class PluginLoader {
                 return this.toolDefinitions.slice(0, fallbackLimit);
             }
 
-            // 2. Search for similar tools in bot_tools
             const { data, error } = await supabase.rpc('match_tools', {
                 query_embedding: queryVector,
                 match_count: limit
             });
 
             if (error) {
-                console.error('[PluginLoader] match_tools error:', error.message);
+                console.error('[PluginLoader] match_tools error:', extractErrorMessage(error));
                 return this.toolDefinitions.slice(0, fallbackLimit);
             }
 
-            if (!data || data.length === 0) {
+            const ragTools = data as RagToolRow[] | null;
+            if (!ragTools || ragTools.length === 0) {
                 console.warn('[PluginLoader] No tools found by RAG, fallback to base tools');
-                return this.toolDefinitions.filter((t: any) =>
-                    t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name)
+                return this.toolDefinitions.filter((t: OpenAIToolDefinition) =>
+                    t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name as typeof SAFE_FALLBACK_TOOLS[number])
                 );
             }
 
-            // 3. Merge with CORE TOOLS (Always available tools)
-            const CORE_TOOLS = [
+            const CORE_TOOL_NAMES = [
                 'get_my_capabilities', 'send_message', 'send_file', 'use_tool',
                 'code_execution', 'execute_bash_command', 'run_scratchpad',
                 'get_file_skeleton', 'get_function', 'edit_file', 'read_file',
                 'list_directory', 'grep_search',
                 'db_document_read', 'db_document_save', 'db_document_search', 'db_document_delete',
                 'google_ai_search',
-                // WHY: Browser tools must always be available for the Planner.
-                // RAG non-determinism causes these to be missing in ~30% of calls,
-                // which makes the Planner delete browser-related steps as "hallucinated".
                 'browser_screenshot', 'browser_snapshot',
                 'browser_open', 'browser_click', 'browser_fill', 'browser_eval',
                 'firecrawl_scrape', 'firecrawl_search',
                 'start_deep_search', 'spawn_sub_agent'
             ];
 
-            // [SENTIENCE] If AI is angry, arm the system (with renamed tools)
             if (forceModeration) {
-                CORE_TOOLS.push('whatsapp_ban_user', 'whatsapp_kick_user', 'whatsapp_mute_user', 'whatsapp_warn_user', 'whatsapp_tagall');
+                CORE_TOOL_NAMES.push('whatsapp_ban_user', 'whatsapp_kick_user', 'whatsapp_mute_user', 'whatsapp_warn_user', 'whatsapp_tagall');
             }
 
-            const coreToolDefs = this.toolDefinitions.filter((t: any) =>
-                t.function && CORE_TOOLS.includes(t.function.name)
+            const coreToolDefs = this.toolDefinitions.filter((t: OpenAIToolDefinition) =>
+                t.function && CORE_TOOL_NAMES.includes(t.function.name)
             );
 
-            // Map RAG tools
-            const relevantTools = data.map((tool: any) => tool.definition);
+            const relevantTools: OpenAIToolDefinition[] = ragTools.map((tool: RagToolRow) => tool.definition);
 
-            // Add Core Tools if not already there
             for (const coreTool of coreToolDefs) {
-                if (!relevantTools.find((t: any) => t.function.name === coreTool.function.name)) {
+                if (!relevantTools.find((t: OpenAIToolDefinition) => t.function.name === coreTool.function.name)) {
                     relevantTools.push(coreTool);
                 }
             }
 
             console.log(`[PluginLoader] 🎯 ${relevantTools.length} tools selected (RAG + Core):`,
-                relevantTools.map((t: any) => t.function.name).join(', ')
+                relevantTools.map((t: OpenAIToolDefinition) => t.function.name).join(', ')
             );
 
             return relevantTools;
 
-        } catch (error: any) {
-            console.error('[PluginLoader] getRelevantTools error:', error.message);
-            return this.toolDefinitions.filter((t: any) =>
-                t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name)
+        } catch (error: unknown) {
+            console.error('[PluginLoader] getRelevantTools error:', extractErrorMessage(error));
+            return this.toolDefinitions.filter((t: OpenAIToolDefinition) =>
+                t.function && SAFE_FALLBACK_TOOLS.includes(t.function.name as typeof SAFE_FALLBACK_TOOLS[number])
             );
         }
     }
 
-
-    /**
-     * Lists all loaded plugins
-     * @returns {Array<{name, description, version}>}
-     */
-    /**
-     * Checks tool sync status with Supabase
-     * Removes obsolete tools and signals changes
-     * @param {Object} supabase - Supabase client
-     * @returns {Promise<{deleted: number, new: number, modified: number}>}
-     */
-    async checkSyncStatus(supabase: any) {
+    async checkSyncStatus(supabase: SupabaseClient | null): Promise<SyncStatus> {
         if (!supabase) return { deleted: 0, new: 0, modified: 0 };
 
         try {
-            // 1. Get current tools (loaded)
             const loadedTools = this.getToolDefinitions();
-            const loadedToolHashes = new Map();
+            const loadedToolHashes = new Map<string, string>();
 
             for (const tool of loadedTools) {
                 const name = tool.function?.name;
-                const description = tool.function?.description || '';
+                const description = tool.function?.description ?? '';
                 if (name) {
                     loadedToolHashes.set(name, this._generateToolHash(name, description));
                 }
             }
 
-            // 2. Get tools from database
             const { data: dbTools, error } = await supabase
                 .from('bot_tools')
                 .select('name, description');
@@ -455,10 +447,10 @@ class PluginLoader {
             let newTools = 0;
             let modified = 0;
 
-            if (dbTools) {
-                // 3. Identify and delete obsolete tools
-                const dbToolNames = dbTools.map((t: any) => t.name);
-                const obsoleteTools = dbToolNames.filter((name: any) => !loadedToolHashes.has(name));
+            const dbRows = dbTools as Array<{ name: string; description: string }> | null;
+            if (dbRows) {
+                const dbToolNames = dbRows.map((t) => t.name);
+                const obsoleteTools = dbToolNames.filter((name) => !loadedToolHashes.has(name));
 
                 if (obsoleteTools.length > 0) {
                     const { error: deleteError } = await supabase
@@ -471,9 +463,8 @@ class PluginLoader {
                     }
                 }
 
-                // 4. Identify new and modified tools
                 for (const [name, hash] of loadedToolHashes.entries()) {
-                    const dbTool = dbTools.find((t: any) => t.name === name);
+                    const dbTool = dbRows.find((t) => t.name === name);
                     if (!dbTool) {
                         newTools++;
                     } else {
@@ -487,47 +478,38 @@ class PluginLoader {
 
             return { deleted, new: newTools, modified };
 
-        } catch (error: any) {
-            console.error('[PluginLoader] Sync check error:', error);
+        } catch (error: unknown) {
+            console.error('[PluginLoader] Sync check error:', extractErrorMessage(error));
             return { deleted: 0, new: 0, modified: 0 };
         }
     }
 
-    /**
-     * Generates a simple hash to detect changes
-     */
-    _generateToolHash(name: any, description: any) {
+    _generateToolHash(name: string, description: string): string {
         return `${name}:${description.trim()}`;
     }
 
-    list() {
-        return Array.from(this.plugins.values()).map((p: any) => ({
+    list(): Array<{ name: string; description: string; version: string }> {
+        return Array.from(this.plugins.values()).map((p: Plugin) => ({
             name: p.name,
             description: p.description,
             version: p.version
         }));
     }
 
-    /**
-     * Reloads a specific plugin
-     * @param {string} name
-     */
-    async reload(name: any) {
+    async reload(name: string): Promise<void> {
         const plugin = this.plugins.get(name);
         if (plugin) {
-            // Remove old definition
             this.toolDefinitions = this.toolDefinitions.filter(
-                (t: any) => t.function?.name !== name
+                (t: OpenAIToolDefinition) => t.function?.name !== name
             );
             this.plugins.delete(name);
         }
 
-        // Find the plugin path across categories
         const categories = await readdir(__dirname, { withFileTypes: true });
-        for (const category of categories.filter((e: any) => e.isDirectory())) {
+        for (const category of categories.filter((e: Dirent) => e.isDirectory())) {
             const catPath = join(__dirname, category.name);
             const plugins = await readdir(catPath, { withFileTypes: true });
-            const dir = plugins.find((e: any) => e.isDirectory() && e.name === name);
+            const dir = plugins.find((e: Dirent) => e.isDirectory() && e.name === name);
             if (dir) {
                 await this.load(`${category.name}/${name}`);
                 return;

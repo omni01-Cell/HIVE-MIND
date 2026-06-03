@@ -35,7 +35,7 @@ export default {
         }
     ],
 
-    async execute(args: unknown, context: EventManagerContext, toolName?: string) {
+    async execute(_args: unknown, _context: EventManagerContext, toolName?: string) {
         if (toolName === 'read_event_inbox') {
             const events = await eventInboxService.getUnreadEvents(20);
             if (events.length === 0) return { success: true, message: 'Inbox is empty.' };

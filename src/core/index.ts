@@ -16,7 +16,7 @@ import { scheduler } from '../scheduler/index.js';
 import { extractToolCallsFromText, parseToolArguments } from '../utils/toolCallExtractor.js';
 import { isStorable } from '../utils/helpers.js';
 import { detectResponseDefects, sanitizeResponse } from '../utils/responseSanitizer.js';
-import { validateToolArgs } from '../utils/toolValidator.js';
+import { validateToolArgs, ToolDef } from '../utils/toolValidator.js';
 
 // [PTC] Programmatic Tool Calling — Pilier D AION
 import { ptcExecutor, buildToolFunctions } from '../services/ptc/index.js';
@@ -46,6 +46,7 @@ try {
 import { SchedulerHandler, GroupHandler } from './handlers/index.js';
 // [V3] Unified Context Engineering
 import { tieredContextLoader } from './context/TieredContextLoader.js';
+import type { ToolInfo } from '../services/agentic/Planner.js';
 import { permissionManager } from './security/PermissionManager.js';
 import { blueprintManager, AgentBlueprint } from './blueprint/AgentBlueprint.js';
 import { fileStateCache } from '../utils/fileStateCache.js';
@@ -739,7 +740,7 @@ export class BotCore {
 
         // ======== COMMANDES TEXTUELLES PLUGINS (ex: .shutdown, .devcontact) ========
         // Le système générique permet à tout plugin de définir des commandes textuelles
-        const textCommand = pluginLoader.findTextHandler(text, message);
+        const textCommand = pluginLoader.findTextHandler(text, message as unknown as Record<string, unknown>);
         if (textCommand) {
             console.log(`[Core] ⌨️ Commande textuelle détectée: ${textCommand.name}`);
 
@@ -889,7 +890,7 @@ export class BotCore {
                     const hiveCfg = container.get('config');
 
                     // Construire le contexte via le loader unifié V3
-                    const context: any = await tieredContextLoader.load(chatId, message);
+                    const context: any = await tieredContextLoader.load(chatId, message as unknown as { sender: string; sourceChannel?: string; [key: string]: unknown });
 
                     const relevantTools = await this._getLiveAudioTools();
 
@@ -1134,7 +1135,7 @@ export class BotCore {
             // ==================================================================================
 
             // 1. Load unified context (L1 Hot Cache — Passport + Scratchpad + ActionHistory + Chat)
-            const fullContext = await tieredContextLoader.load(chatId, message);
+            const fullContext = await tieredContextLoader.load(chatId, message as unknown as { sender: string; sourceChannel?: string; [key: string]: unknown });
             const activeBlueprint = (fullContext as any).blueprint || this.currentBlueprint;
 
             // 2. Build LLM history
@@ -1193,14 +1194,14 @@ export class BotCore {
                 const { planner } = await import('../services/agentic/Planner.js');
                 const needsPlanning = await planner.needsPlanning(
                     typeof userContent === 'string' ? userContent : text,
-                    relevantTools
+                    relevantTools as unknown as ToolInfo[]
                 );
 
                 if (needsPlanning) {
                     console.log('[Planner] 📋 Tâche complexe détectée, création d\'un plan...');
                     const plan = await planner.plan(
                         typeof userContent === 'string' ? userContent : text,
-                        { tools: relevantTools, chatId, message }
+                        { tools: relevantTools as unknown as ToolInfo[], chatId }
                     );
 
                     if (plan) {
@@ -1214,7 +1215,7 @@ export class BotCore {
                                     blueprint: activeBlueprint
                                 });
                             },
-                            tools: relevantTools,
+                            tools: relevantTools as unknown as ToolInfo[],
                             chatId,
                             message
                         });
@@ -1368,7 +1369,7 @@ RULES:
                         usedFamily = null; // Déverrouille la famille
                         try {
                             response = await providerRouter.chat(history, {
-                                tools: relevantTools,
+                            tools: relevantTools as unknown as ToolInfo[],
                                 category: 'AGENTIC'
                             });
                         } catch (fallbackErr: any) {
@@ -1472,7 +1473,7 @@ RULES:
                             // the tool fails silently and the LLM doesn't self-correct.
                             // This validates against the JSON Schema `required` array and returns
                             // a structured error that guides the LLM to retry with correct params.
-                            const validation = validateToolArgs(toolName, toolCall.function.arguments || '{}', relevantTools);
+                            const validation = validateToolArgs(toolName, toolCall.function.arguments || '{}', relevantTools as unknown as ToolDef[]);
                             if (!validation.valid) {
                                 const retryKey = `${toolName}:${toolCall.id}`;
                                 const currentRetries = toolRetryCount.get(retryKey) || 0;
@@ -2044,9 +2045,10 @@ I need to write a file using write_to_file.
                     tool: toolName,
                     params: parsedParams,
                     result: toolResult,
+                    error: null,
                     duration_ms: 0,
                     chatId,
-                    timestamp: Date.now()
+                    timestamp: Date.now().toString()
                 }).catch(e => console.error('[Eval] Error:', e.message));
             }
 

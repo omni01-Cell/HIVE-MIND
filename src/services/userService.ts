@@ -1,4 +1,4 @@
-// services/userService.js
+// services/userService.ts
 // ============================================================================
 // SERVICE UTILISATEUR UNIFIÉ (Façade)
 // ============================================================================
@@ -16,33 +16,43 @@ import { supabase } from './supabase.js';
 import { redis } from './redisClient.js';
 
 // ============================================================================
-// JSDoc Type Definitions
+// Type Definitions
 // ============================================================================
 
-/**
- * @typedef {Object} UserProfile
- * @property {string} jid - WhatsApp JID (ex: "1234567890@s.whatsapp.net")
- * @property {string[]} names - Liste des noms connus (pushnames)
- * @property {number} interaction_count - Nombre total d'interactions
- * @property {string} [last_seen] - Dernière activité (ISO timestamp)
- */
+interface UserProfile {
+    jid: string;
+    names: string[];
+    interaction_count: number;
+    last_seen?: string;
+    language?: string;
+    timezone?: string;
+}
 
-/**
- * @typedef {Object} UserCandidate
- * @property {string} jid - WhatsApp JID
- * @property {string} name - Nom correspondant
- * @property {number} confidence - Score de confiance (0-1)
- */
+interface UserCandidate {
+    jid: string;
+    name: string;
+    confidence: number;
+}
 
-/**
- * @typedef {Object} UserState
- * @property {string} jid - WhatsApp JID
- * @property {string} [username] - Nom d'utilisateur
- * @property {string} [last_pushname] - Dernier pushname WhatsApp
- * @property {number} [interaction_count] - Compteur d'interactions
- * @property {string} [last_seen] - Dernière activité
- * @property {string} [hash] - Hash unique (3 caractères)
- */
+interface SupabaseUserRow {
+    jid: string;
+    username?: string;
+    interaction_count?: number;
+}
+
+interface GroupMember {
+    jid: string;
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
 
 // ============================================================================
 // User Service Implementation
@@ -55,51 +65,48 @@ import { redis } from './redisClient.js';
 export const userService = {
     /**
      * Enregistre une interaction utilisateur via StateManager (Buffer Redis)
-     * @param {string} identifier
-     * @param {string} pushName
-     * @param {string} groupJid - Optionnel
+     * @param identifier - Identifiant utilisateur (JID ou LID)
+     * @param pushName - Nom d'affichage WhatsApp
+     * @param _groupJid - JID du groupe (optionnel, non utilisé)
      */
-    async recordInteraction(identifier: any, pushName: any, groupJid: any = null) {
+    async recordInteraction(identifier: string, pushName: string, _groupJid: string | null = null) {
         try {
-            // 1. Résolution d'identité (Tenter de trouver le vrai JID si c'est un LID)
-            // Cela évite de créditer un "Ghost User" si on connait déjà le vrai compte
             const resolvedJid = await this.resolveLid(identifier) || identifier;
 
             await StateManager.updateUserInteraction(resolvedJid, pushName);
-        } catch (e: any) {
-            console.error('[UserService] Error recording interaction:', e.message);
+        } catch (e: unknown) {
+            console.error('[UserService] Error recording interaction:', extractErrorMessage(e));
         }
     },
 
     /**
      * Récupère le profil via StateManager (Cache-First)
-     * @param {string} identifier
-     * @returns {Promise<Object>}
+     * @param identifier - Identifiant utilisateur
+     * @returns Profil utilisateur ou fallback sûr
      */
-    async getProfile(identifier: any) {
+    async getProfile(identifier: string): Promise<UserProfile> {
         try {
             const user = await StateManager.getUser(identifier);
             return {
-                jid: user.jid,
-                names: [user.last_pushname || user.username].filter(Boolean),
+                jid: String(user.jid),
+                names: [user.last_pushname || user.username].filter(Boolean) as string[],
                 interaction_count: user.interaction_count || 0,
-                last_seen: user.last_seen,
-                language: user.language,
-                timezone: user.timezone
+                last_seen: typeof user.last_seen === 'number' ? String(user.last_seen) : undefined,
+                language: user.language ?? undefined,
+                timezone: user.timezone ?? undefined
             };
-        } catch (e: any) {
-            console.error('[UserService] Error fetching profile:', e.message);
-            // Fallback safe
+        } catch (e: unknown) {
+            console.error('[UserService] Error fetching profile:', extractErrorMessage(e));
             const fallbackId = identifier ? identifier.split(':')[0] : 'unknown';
             return { jid: fallbackId, names: ['Inconnu'], interaction_count: 0 };
         }
     },
 
-    async updatePreferences(identifier: any, preferences: { language?: string, timezone?: string }) {
+    async updatePreferences(identifier: string, preferences: { language?: string, timezone?: string }) {
         await StateManager.updatePreferences(identifier, preferences);
     },
 
-    async registerLid(jid: any, lid: any) {
+    async registerLid(jid: string, lid: string) {
         await IdentityMap.register(jid, lid);
     },
 
@@ -112,27 +119,25 @@ export const userService = {
         return IdentityMap.getLidForJid(jid);
     },
 
-    async resolveLid(identifier: any) {
+    async resolveLid(identifier: string): Promise<string | null> {
         return await IdentityMap.resolve(identifier);
     },
 
     /**
      * Récupère ou génère le hash unique d'un utilisateur (pour Speaker Injection)
-     * @param {string} jid - JID de l'utilisateur
-     * @returns {Promise<string>} - Hash de 3 caractères (ex: "A7X")
+     * @param jid - JID de l'utilisateur
+     * @returns Hash de 3 caractères (ex: "A7X")
      */
-    async getSpeakerHash(jid: any) {
+    async getSpeakerHash(jid: string | null | undefined): Promise<string> {
         if (!jid) return 'UNK';
 
         const resolvedJid = await this.resolveLid(jid) || jid;
 
         try {
-            // 1. Check cache Redis
             const cacheKey = `user:${resolvedJid}:data`;
             const cachedHash = await redis?.hGet(cacheKey, 'hash');
             if (cachedHash) return cachedHash;
 
-            // 2. Check Supabase
             if (supabase) {
                 const { data } = await supabase
                     .from('users')
@@ -141,13 +146,11 @@ export const userService = {
                     .single();
 
                 if (data?.hash) {
-                    // Cache it
                     await redis?.hSet(cacheKey, 'hash', data.hash);
                     return data.hash;
                 }
             }
 
-            // 3. Generate and store
             const crypto = await import('crypto');
             const hash = crypto.createHash('md5')
                 .update(resolvedJid)
@@ -155,10 +158,8 @@ export const userService = {
                 .substring(0, 3)
                 .toUpperCase();
 
-            // Store in cache
             await redis?.hSet(cacheKey, 'hash', hash);
 
-            // Store in Supabase (upsert)
             if (supabase) {
                 await supabase
                     .from('users')
@@ -167,9 +168,8 @@ export const userService = {
             }
 
             return hash;
-        } catch (e: any) {
-            console.error('[UserService] getSpeakerHash error:', e.message);
-            // Fallback: generate hash without storing
+        } catch (e: unknown) {
+            console.error('[UserService] getSpeakerHash error:', extractErrorMessage(e));
             const crypto = await import('crypto');
             return crypto.createHash('md5')
                 .update(resolvedJid)
@@ -192,43 +192,38 @@ export const userService = {
     /**
      * Vérifie si un utilisateur a été soft-deleted
      */
-    async isDeleted(userJid: any) {
-        // Soft delete non supporté dans le schéma V2 actuel
+    async isDeleted(_userJid: string) {
         return false;
     },
 
     /**
      * Soft delete un utilisateur
      */
-    async softDelete(userJid: any) {
-        // Soft delete non supporté
+    async softDelete(_userJid: string) {
         console.warn('[UserService] Soft delete not supported in V2 schema');
         return false;
     },
 
-    async listDeleted(limit: any = 20) {
-        // Non supporté
+    async listDeleted(_limit: number = 20) {
         return [];
     },
 
     // ======== RESOLUTION NOM -> JID (Gardé tel quel car lecture seule complexe) ========
-    async resolveByName(name: any, groupJid: any = null) {
+    async resolveByName(name: string, groupJid: string | null = null): Promise<UserCandidate[]> {
         if (!name || name.length < 2) return [];
         const searchName = name.toLowerCase().trim();
-        const candidates = [];
+        const candidates: UserCandidate[] = [];
 
         try {
             if (supabase) {
                 const { data: exactMatches } = await supabase
                     .from('users')
-                    .select('jid, username, interaction_count') // last_pushname n'existe pas dans le schema user ? Attends, flattenForRedis utilise last_pushname mais DB user a interaction_count et username.
-                    // Verification schema: users table a username. Pas last_pushname.
-                    // Mais StateManager sync username = last_pushname. Donc c'est bon.
+                    .select('jid, username, interaction_count')
                     .or(`username.ilike.${searchName}`)
                     .limit(10);
 
                 if (exactMatches) {
-                    for (const user of exactMatches) {
+                    for (const user of exactMatches as SupabaseUserRow[]) {
                         const matchedName = user.username || 'Inconnu';
                         candidates.push({
                             jid: user.jid,
@@ -239,25 +234,26 @@ export const userService = {
                 }
             }
 
-            // Filtrage groupe (Redis)
             if (groupJid && candidates.length > 0) {
                 const groupKey = `group:${groupJid}:meta`;
                 const membersJson = await redis?.hGet(groupKey, 'members');
                 if (membersJson) {
-                    const members = JSON.parse(membersJson);
-                    const memberJids = new Set(members.map((m: any) => m.jid));
-                    return candidates.filter((c: any) => memberJids.has(c.jid)).sort((a: any, b: any) => b.confidence - a.confidence);
+                    const members = JSON.parse(membersJson) as GroupMember[];
+                    const memberJids = new Set(members.map((m) => m.jid));
+                    return candidates
+                        .filter((c) => memberJids.has(c.jid))
+                        .sort((a, b) => b.confidence - a.confidence);
                 }
             }
-            return candidates.sort((a: any, b: any) => b.confidence - a.confidence);
+            return candidates.sort((a, b) => b.confidence - a.confidence);
 
-        } catch (error: any) {
-            console.error('[UserService] resolveByName error:', error.message);
+        } catch (error: unknown) {
+            console.error('[UserService] resolveByName error:', extractErrorMessage(error));
             return [];
         }
     },
 
-    async resolveToJid(name: any, groupJid: any = null) {
+    async resolveToJid(name: string, groupJid: string | null = null): Promise<string | null> {
         const candidates = await this.resolveByName(name, groupJid);
         if (candidates.length > 0 && candidates[0].confidence > 0.7) return candidates[0].jid;
         return null;

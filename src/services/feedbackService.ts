@@ -5,12 +5,25 @@ import { eventBus, BotEvents } from '../core/events.js';
 import { supabase } from './supabase.js';
 import { agentMemory } from './agentMemory.js';
 
+interface ReactionData {
+    chatId: string;
+    messageId: string;
+    sender: string;
+    reaction: string;
+    timestamp: unknown;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
 export const feedbackService = {
     /**
      * Initialise les écouteurs de feedback
      */
     init() {
-        eventBus.subscribe(BotEvents.REACTION_RECEIVED, this.handleReaction.bind(this));
+        eventBus.subscribe(BotEvents.REACTION_RECEIVED, this.handleReaction.bind(this) as (...args: unknown[]) => void);
         // Log removed to avoid interfering with startup progress bar
     },
 
@@ -18,7 +31,7 @@ export const feedbackService = {
      * Traite une réaction reçue
      * @param {Object} data - { chatId, messageId, sender, reaction, timestamp }
      */
-    async handleReaction(data: any) {
+    async handleReaction(data: ReactionData) {
         const { chatId, messageId, reaction } = data;
 
         // On ne traite que les pouces pour le feedback binaire
@@ -32,10 +45,11 @@ export const feedbackService = {
             // Note: On utilise un filtre explicite sur le rôle 'assistant' pour éviter de tagguer des messages utilisateurs
             // [FIX] On fait d'abord un select pour ne pas écraser les autres métadonnées (comme les tags)
             // Et on utilise context_id plutôt que chat_id legacy si possible
+            if (!supabase) return;
             const { db } = await import('./supabase.js');
             const resolved = await db.resolveContextFromLegacyId(chatId);
 
-            const { data: memories, error } = await supabase
+            const { data: memories, error: _dbError } = await supabase
                 .from('memories')
                 .select('id, metadata')
                 .eq('context_id', resolved ? resolved.context_id : chatId)
@@ -65,8 +79,8 @@ export const feedbackService = {
 
             console.log(`[FeedbackService] ✅ Feedback ${reaction} enregistré pour ${messageId}`);
 
-        } catch (error: any) {
-            console.error('[FeedbackService] Erreur processing reaction:', error.message);
+        } catch (error: unknown) {
+            console.error('[FeedbackService] Erreur processing reaction:', extractErrorMessage(error));
         }
     }
 };

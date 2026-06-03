@@ -53,9 +53,10 @@ export class ProgrammaticExecutor {
                 const fn = t.function;
                 const params = fn.parameters?.properties
                     ? Object.entries(fn.parameters.properties)
-                        .map(([key, val]: [string, any]) => {
-                            const type = val.type || 'any';
-                            const desc = val.description || '';
+                        .map(([key, val]) => {
+                            const prop = val as { type?: string; description?: string };
+                            const type = prop.type || 'any';
+                            const desc = prop.description || '';
                             return `    - ${key}: ${type}${desc ? ` — ${desc}` : ''}`;
                         })
                         .join('\n')
@@ -226,7 +227,7 @@ ${SANDBOX_HELPERS_SOURCE}
         const serializableOutput = this.safeSerialize(output, toolCalls);
 
         // Extraire le SleepResult si HIVE.sleepAndWake() a été appelé dans le script
-        const capturedSleep: SleepResult | undefined = (sandboxGlobals as any).__hiveSleepResult;
+        const capturedSleep: SleepResult | undefined = (sandboxGlobals as Record<string, unknown>).__hiveSleepResult as SleepResult | undefined;
 
         return {
             result: capturedSleep
@@ -331,7 +332,7 @@ ${SANDBOX_HELPERS_SOURCE}
                 }
             };
         } else {
-            // Si pas de bridge, injecter un stub no-op qui ne crash pas
+            // Fallback: injecter un objet HIVE factice qui ne plante pas
             globals['HIVE'] = {
                 sleepAndWake: async (_delayMs: number, _wakePrompt: string) => ({
                     type: 'SLEEP_ERROR',

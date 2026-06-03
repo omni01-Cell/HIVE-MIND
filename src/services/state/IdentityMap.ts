@@ -17,6 +17,12 @@
 //
 // ============================================================================
 
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return String(error);
+}
+
 import { redis } from '../redisClient.js';
 import { supabase } from '../supabase.js';
 import { extractNumericId } from '../../utils/jidHelper.js';
@@ -71,7 +77,7 @@ export const IdentityMap = {
      * // Si pas de mapping, retourne l'original
      * await IdentityMap.resolve('inconnu@lid'); // 'inconnu@lid'
      */
-    async resolve(identifier: any) {
+    async resolve(identifier: string | null | undefined) {
         if (!identifier) return null;
 
         // Groupes: pas de résolution nécessaire
@@ -126,11 +132,11 @@ export const IdentityMap = {
     // MÉTHODE DE FUSION D'IDENTITÉ (Ghost User Merge)
     // ========================================================================
 
-    async register(id1: any, id2: any) {
+    async register(id1: string | null | undefined, id2: string | null | undefined) {
         if (!id1 || !id2) return;
 
-        let phoneJid: any = null;
-        let deviceLid: any = null;
+        let phoneJid: string | null = null;
+        let deviceLid: string | null = null;
 
         if (id1.includes('@s.whatsapp.net')) phoneJid = id1;
         else if (id1.includes('@lid')) deviceLid = id1;
@@ -172,8 +178,10 @@ export const IdentityMap = {
                     const debugIdentity = await redis?.get('config:debug:identity') === 'true';
                     if (debugIdentity) console.log(`[IdentityMap] 👻 Fusion fantôme: ${deviceLid} -> ${phoneJid}`);
 
-                    const ghostXp = parseInt(ghostIdentity.users?.interaction_count || 0);
-                    const realXp = parseInt(realIdentity.users?.interaction_count || 0);
+                    const ghostUsers = ghostIdentity.users as unknown as { interaction_count?: number } | null;
+                    const realUsers = realIdentity.users as unknown as { interaction_count?: number } | null;
+                    const ghostXp = parseInt(String(ghostUsers?.interaction_count || 0));
+                    const realXp = parseInt(String(realUsers?.interaction_count || 0));
                     const newXp = ghostXp + realXp;
 
                     // 1. Assigner le LID au vrai user_id
@@ -221,8 +229,8 @@ export const IdentityMap = {
                     }
                 }
 
-            } catch (error: any) {
-                console.error('[IdentityMap] Erreur process identity:', error.message);
+            } catch (error: unknown) {
+                console.error('[IdentityMap] Erreur process identity:', extractErrorMessage(error));
             }
         }
     }

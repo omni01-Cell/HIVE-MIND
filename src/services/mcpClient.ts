@@ -13,9 +13,39 @@ export interface McpServerConfig {
   url?: string;
 }
 
+interface McpToolDefinition {
+    type: string;
+    function: {
+        name: string;
+        description: string;
+        parameters: Record<string, unknown>;
+    };
+    _mcpServer: string;
+    _mcpTool: string;
+}
+
+interface McpToolResult {
+    success: boolean;
+    data?: unknown;
+    error?: string;
+    isError?: boolean;
+    raw?: unknown;
+}
+
+interface McpToolContent {
+    type: string;
+    text?: string;
+}
+
+function extractErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return 'Unknown error';
+}
+
 class McpClientService {
     private clients: Map<string, Client> = new Map();
-    private toolsCache: any[] = [];
+    private toolsCache: McpToolDefinition[] = [];
     private connectingPromise: Promise<void> | null = null;
 
     constructor() {}
@@ -25,15 +55,15 @@ class McpClientService {
         if (existsSync(configPath)) {
             try {
                 const content = readFileSync(configPath, 'utf-8');
-                return JSON.parse(content);
-            } catch (e) {
-                console.error('[MCP] Failed to parse .mcprc', e);
+                return JSON.parse(content) as Record<string, McpServerConfig>;
+            } catch (error: unknown) {
+                console.error('[MCP] Failed to parse .mcprc', extractErrorMessage(error));
             }
         }
         return {};
     }
 
-    async connectAll() {
+    async connectAll(): Promise<void> {
         if (this.connectingPromise) return this.connectingPromise;
 
         this.connectingPromise = (async () => {
@@ -58,8 +88,8 @@ class McpClientService {
                     await client.connect(transport);
                     this.clients.set(name, client);
                     console.log(`[MCP] ✅ Connected to server: ${name}`);
-                } catch (e: any) {
-                    console.error(`[MCP] ❌ Failed to connect to server ${name}:`, e.message);
+                } catch (error: unknown) {
+                    console.error(`[MCP] ❌ Failed to connect to server ${name}:`, extractErrorMessage(error));
                 }
             }
         })();
@@ -67,11 +97,10 @@ class McpClientService {
         return this.connectingPromise;
     }
 
-    async getTools() {
+    async getTools(): Promise<McpToolDefinition[]> {
         await this.connectAll();
 
-        // We recreate the cache to catch any newly connected servers
-        const tools: any[] = [];
+        const tools: McpToolDefinition[] = [];
         for (const [name, client] of this.clients.entries()) {
             try {
                 const result = await client.request(
@@ -84,22 +113,21 @@ class McpClientService {
                         function: {
                             name: `mcp__${name}__${tool.name}`,
                             description: tool.description || `MCP Tool from ${name}`,
-                            parameters: tool.inputSchema
+                            parameters: tool.inputSchema as Record<string, unknown>
                         },
-                        // Metadata for routing later
                         _mcpServer: name,
                         _mcpTool: tool.name
                     });
                 }
-            } catch (e: any) {
-                console.error(`[MCP] Failed to get tools from ${name}:`, e.message);
+            } catch (error: unknown) {
+                console.error(`[MCP] Failed to get tools from ${name}:`, extractErrorMessage(error));
             }
         }
         this.toolsCache = tools;
         return tools;
     }
 
-    async callTool(serverName: string, toolName: string, args: any) {
+    async callTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<McpToolResult> {
         const client = this.clients.get(serverName);
         if (!client) {
             throw new Error(`[MCP] Server ${serverName} not connected`);
@@ -115,7 +143,7 @@ class McpClientService {
             );
 
             if (result.isError) {
-                return { success: false, error: result.error || 'Unknown MCP error', isError: true };
+                return { success: false, error: (result.error as string) || 'Unknown MCP error', isError: true };
             }
 
             if ('toolResult' in result) {
@@ -123,16 +151,17 @@ class McpClientService {
             }
 
             if ('content' in result && Array.isArray(result.content)) {
-                const texts = result.content
-                    .filter((c: any) => c.type === 'text')
-                    .map((c: any) => c.text)
+                const texts = (result.content as McpToolContent[])
+                    .filter((c) => c.type === 'text')
+                    .map((c) => c.text)
                     .join('\n');
                 return { success: true, data: texts, raw: result.content };
             }
             return { success: true, data: result };
-        } catch (e: any) {
-            console.error(`[MCP] Failed to call tool ${toolName} on ${serverName}:`, e.message);
-            return { success: false, error: e.message };
+        } catch (error: unknown) {
+            const errorMessage = extractErrorMessage(error);
+            console.error(`[MCP] Failed to call tool ${toolName} on ${serverName}:`, errorMessage);
+            return { success: false, error: errorMessage };
         }
     }
 }
