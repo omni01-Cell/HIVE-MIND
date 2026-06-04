@@ -55,6 +55,32 @@ import { stripHashes } from '../services/anchor/lineHashing.js';
 // DTC Phase 1: Les admins globaux sont maintenant dans Supabase via adminService
 // Le chargement se fait de manière asynchrone dans init()
 
+// ── Media Indexer (Gemini Embedding 2 — lazy init) ─────────────────────
+let _mediaIndexer: import('../services/media/MediaIndexer.js').MediaIndexer | null = null;
+let _mediaIndexerLoading = false;
+
+async function getMediaIndexer(): Promise<import('../services/media/MediaIndexer.js').MediaIndexer | null> {
+    if (_mediaIndexer) return _mediaIndexer;
+    if (_mediaIndexerLoading) return null;
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
+    if (!geminiKey) return null;
+    _mediaIndexerLoading = true;
+    try {
+        const { MultimodalEmbeddingService } = await import('../services/ai/MultimodalEmbeddingService.js');
+        const { MediaIndexer } = await import('../services/media/MediaIndexer.js');
+        const svc = new MultimodalEmbeddingService({ geminiKey });
+        svc.init();
+        _mediaIndexer = new MediaIndexer(svc);
+        console.log('[Core] 📁 MediaIndexer initialisé');
+        return _mediaIndexer;
+    } catch (e: unknown) {
+        console.warn('[Core] MediaIndexer non disponible:', e instanceof Error ? e.message : e);
+        return null;
+    } finally {
+        _mediaIndexerLoading = false;
+    }
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let persona: { name: string; traits?: string[]; interests?: string[]; role?: string };
@@ -1053,6 +1079,15 @@ export class BotCore {
 
                     fs.writeFileSync(filePath, buffer);
                     console.log(`[Core] ✅ Fichier téléchargé: ${filePath}`);
+
+                    // Indexer le fichier dans MediaDB (fire-and-forget)
+                    getMediaIndexer().then((indexer) => {
+                        if (indexer) {
+                            indexer.indexFile(chatId, filePath).catch((err: unknown) => {
+                                console.warn('[Core] MediaIndexer error:', err instanceof Error ? err.message : err);
+                            });
+                        }
+                    }).catch(() => { /* MediaIndexer disabled */ });
 
                     // Planifier la suppression automatique (10 minutes)
                     setTimeout(() => {
