@@ -17,3 +17,12 @@ We are migrating to **TypeScript** to:
 - Eliminate runtime type errors.
 - Enforce strict coding standards across the entire "Hive".
 - Improve maintainability and developer experience through clear interfaces and contracts.
+
+## Design Note — Native Zod Tool Schemas (2026-06-04)
+
+Goal: migrate Zod-defined tools away from the direct `zod-to-json-schema` conversion path and use Zod v4's native `z.toJSONSchema` API instead.
+
+Tradeoffs:
+- Keep `OpenAIToolDefinition` as the runtime provider contract because adapters and validators already consume OpenAI-compatible JSON Schema.
+- Use native Zod schema generation directly so the exposed tool schema contains full JSON Schema content (`type`, `properties`, `required`, `additionalProperties`) rather than only metadata.
+- Preserve `_zodSchema` on tool definitions so execution still validates with native Zod rather than trusting provider arguments.

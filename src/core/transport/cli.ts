@@ -9,11 +9,19 @@ export const cliTransport = {
      * Connecte au service de messagerie (ici le terminal)
      */
     connect: async () => {
-        // En mode test automatisé, ne pas s'abonner à process.stdin pour éviter le blocage SIGTTIN
+        // En mode test automatisé ou batterie, ne pas s'abonner à process.stdin
+        // pour éviter le blocage SIGTTIN et la pollution du readline interactif.
         const isTest = process.env.APP_ENV === 'test' || process.env.NODE_ENV === 'test';
+        const isBattery = process.env.APP_ENV === 'battery';
         if (isTest) {
             console.log('\n======================================');
             console.log('🤖 HIVE-MIND CLI Transport (Mode Test - Entrée standard désactivée)');
+            console.log('======================================\n');
+            return;
+        }
+        if (isBattery) {
+            console.log('\n======================================');
+            console.log('🤖 HIVE-MIND CLI Transport (Mode Battery - messageCallback actif, readline désactivé)');
             console.log('======================================\n');
             return;
         }

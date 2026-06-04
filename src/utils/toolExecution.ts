@@ -1,7 +1,6 @@
 // src/utils/toolExecution.ts
 
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ToolExecutionError, ValidationRetryError } from './toolErrors.js';
 
 export interface ToolDefinition<T extends z.ZodTypeAny> {
@@ -22,22 +21,17 @@ export interface ZodTool {
 }
 
 /**
- * Creates a standard JSON Schema tool definition from a Zod schema.
+ * Creates a standard tool definition from a native Zod JSON Schema.
  */
 export function defineZodTool<T extends z.ZodTypeAny>(toolDef: ToolDefinition<T>) {
-    const jsonSchema = zodToJsonSchema(toolDef.schema as unknown as Parameters<typeof zodToJsonSchema>[0], { target: 'jsonSchema7' }) as Record<string, unknown>;
-
-    // Ensure the schema doesn't allow additional properties (strict mode)
-    if (jsonSchema.type === 'object') {
-        jsonSchema.additionalProperties = false;
-    }
+    const parameters = z.toJSONSchema(toolDef.schema) as Record<string, unknown>;
 
     return {
         type: 'function',
         function: {
             name: toolDef.name,
             description: toolDef.description,
-            parameters: jsonSchema
+            parameters
         },
         _zodSchema: toolDef.schema,
         _execute: toolDef.execute
@@ -50,14 +44,16 @@ function parseRawArgs(rawArgs: string | object): unknown {
         return JSON.parse(rawArgs);
     } catch (e) {
         const err = e as Error;
-        throw new ValidationRetryError(`<tool_use_error>JSONParseError: Invalid JSON format. ${err.message}</tool_use_error>`);
+        const detail = `JSONParseError: Invalid JSON format. ${err.message}`;
+        throw new ValidationRetryError(`<tool_use_error>${detail}</tool_use_error>`);
     }
 }
 
 function handleExecutionError(e: unknown, toolName: string, parsedArgs: unknown): never {
     if (e instanceof z.ZodError) {
         const errors = e.issues.map((err) => `- ${err.path.join('.')}: ${err.message}`).join('\\n');
-        const formatted = `<tool_use_error>InputValidationError: Parameter constraints violated.\\n${errors}</tool_use_error>`;
+        const body = `InputValidationError: Parameter constraints violated.\\n${errors}`;
+        const formatted = `<tool_use_error>${body}</tool_use_error>`;
         throw new ValidationRetryError(formatted);
     }
 
@@ -84,4 +80,3 @@ export async function executeZodTool(tool: ZodTool, rawArgs: string | object, co
         handleExecutionError(e, tool.function?.name || 'unknown', parsedArgs);
     }
 }
-
