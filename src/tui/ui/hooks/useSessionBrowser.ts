@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { HistoryItemWithoutId } from '../types.js';
+import { HistoryItemWithoutId } from '../contexts/UIStateContext.js';
 import path from 'node:path';
 import {
     convertSessionToHistoryFormats,
@@ -17,7 +17,7 @@ export { convertSessionToHistoryFormats };
 import type { Part } from '@google/genai';
 
 export const useSessionBrowser = (
-    config: Config,
+    config: HiveConfig,
     onLoadHistory: (
     uiHistory: HistoryItemWithoutId[],
     clientHistory: Array<

@@ -6,16 +6,10 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Box, Text, useStdin } from 'ink';
-import {
-    ApprovalMode,
-    validatePlanPath,
-    validatePlanContent,
-    QuestionType,
-    type Config,
-    type EditorType,
-    processSingleFileContent,
-    debugLogger
-} from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { ApprovalMode } from '../contexts/UIStateContext.js';
+import { validatePlanPath, validatePlanContent, QuestionType, EditorType, processSingleFileContent, Storage } from '../contexts/UIStateContext.js';
 import { theme } from '../semantic-colors.js';
 import { useConfig } from '../contexts/ConfigContext.js';
 import { AskUserDialog } from './AskUserDialog.js';
@@ -65,7 +59,7 @@ const StatusMessage: React.FC<{
   children: React.ReactNode;
 }> = ({ children }) => <Box paddingX={1}>{children}</Box>;
 
-function usePlanContent(planPath: string, config: Config): PlanContentState {
+function usePlanContent(planPath: string, config: HiveConfig): PlanContentState {
     const [version, setVersion] = useState(0);
     const [state, setState] = useState<Omit<PlanContentState, 'refresh'>>({
         status: PlanStatus.Loading
@@ -81,9 +75,10 @@ function usePlanContent(planPath: string, config: Config): PlanContentState {
 
         const load = async () => {
             try {
+                const storage = new Storage(config.getProjectRoot());
                 const pathError = await validatePlanPath(
                     planPath,
-                    config.storage.getPlansDir(),
+                    storage.getPlansDir(),
                     config.getProjectRoot()
                 );
                 if (ignore) return;
@@ -101,8 +96,8 @@ function usePlanContent(planPath: string, config: Config): PlanContentState {
 
                 const result = await processSingleFileContent(
                     planPath,
-                    config.storage.getPlansDir(),
-                    config.getFileSystemService()
+                    storage.getPlansDir(),
+                    config.getFileService()
                 );
 
                 if (ignore) return;
@@ -244,6 +239,7 @@ export const ExitPlanModeDialog: React.FC<ExitPlanModeDialogProps> = ({
             <AskUserDialog
                 questions={[
                     {
+                        id: '0',
                         type: QuestionType.CHOICE,
                         header: 'Approval',
                         question: planContent,
@@ -267,9 +263,9 @@ export const ExitPlanModeDialog: React.FC<ExitPlanModeDialogProps> = ({
                 onSubmit={(answers) => {
                     const answer = answers['0'];
                     if (answer === ApprovalOption.Auto) {
-                        onApprove(ApprovalMode.AUTO_EDIT);
+                        onApprove(ApprovalMode.SEMI);
                     } else if (answer === ApprovalOption.Manual) {
-                        onApprove(ApprovalMode.DEFAULT);
+                        onApprove(ApprovalMode.ALWAYS);
                     } else if (answer) {
                         onFeedback(answer);
                     }

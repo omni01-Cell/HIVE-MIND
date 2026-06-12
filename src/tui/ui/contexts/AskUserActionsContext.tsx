@@ -5,7 +5,7 @@
  */
 
 import React, { createContext, useContext, useMemo } from 'react';
-import type { Question } from '@google/gemini-cli-core';
+import type { Question } from '../../../core/types/BotTypes.js';
 
 export interface AskUserState {
   questions: Question[];

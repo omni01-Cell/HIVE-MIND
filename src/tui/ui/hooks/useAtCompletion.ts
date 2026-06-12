@@ -7,18 +7,13 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
 import * as path from 'node:path';
-import {
-    FileSearchFactory,
-    escapePath,
-    FileDiscoveryService,
-    type Config,
-    type FileSearch
-} from '@google/gemini-cli-core';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { FileSearchFactory, escapePath, FileDiscoveryService, FileSearch } from '../contexts/UIStateContext.js';
 import {
     MAX_SUGGESTIONS_TO_SHOW,
     type Suggestion
 } from '../components/SuggestionsDisplay.js';
-import { CommandKind } from '../commands/types.js';
+import { CommandKind } from '../contexts/UIStateContext.js';
 import { AsyncFzf } from 'fzf';
 
 const DEFAULT_SEARCH_TIMEOUT_MS = 5000;
@@ -104,7 +99,7 @@ function atCompletionReducer(
 export interface UseAtCompletionProps {
   enabled: boolean;
   pattern: string;
-  config: Config | undefined;
+  config: HiveConfig | undefined;
   cwd: string;
   setSuggestions: (suggestions: Suggestion[]) => void;
   setIsLoadingSuggestions: (isLoading: boolean) => void;
@@ -116,7 +111,7 @@ interface ResourceSuggestionCandidate {
 }
 
 function buildResourceCandidates(
-    config?: Config
+    config?: HiveConfig
 ): ResourceSuggestionCandidate[] {
     const registry = config?.getResourceRegistry?.();
     if (!registry) {
@@ -139,7 +134,7 @@ function buildResourceCandidates(
     return resources;
 }
 
-function buildAgentCandidates(config?: Config): Suggestion[] {
+function buildAgentCandidates(config?: HiveConfig): Suggestion[] {
     const registry = config?.getAgentRegistry?.();
     if (!registry) {
         return [];
@@ -204,7 +199,7 @@ async function searchAgentCandidates(
 }
 
 async function initializeFileSearchers(
-    config: Config | undefined,
+    config: HiveConfig | undefined,
     cwd: string,
     fileSearchMap: React.MutableRefObject<Map<string, FileSearch>>,
     initEpoch: React.MutableRefObject<number>

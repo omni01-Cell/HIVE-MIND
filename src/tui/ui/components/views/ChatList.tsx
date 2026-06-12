@@ -7,7 +7,7 @@
 import type React from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../../semantic-colors.js';
-import type { ChatDetail } from '../../types.js';
+import { ChatDetail } from '../../contexts/UIStateContext.js';
 
 interface ChatListProps {
   chats: readonly ChatDetail[];

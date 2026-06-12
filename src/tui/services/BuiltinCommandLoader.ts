@@ -5,10 +5,8 @@
  * Pas d'extensions, pas de MCP, pas de Gemma, pas de skills.
  */
 
-import type { ICommandLoader } from './types.js';
-import {
-    type SlashCommand
-} from '../ui/commands/types.js';
+import { ICommandLoader } from '../ui/contexts/UIStateContext.js';
+import { SlashCommand } from '../ui/contexts/UIStateContext.js';
 import { aboutCommand } from '../ui/commands/aboutCommand.js';
 import { clearCommand } from '../ui/commands/clearCommand.js';
 import { commandsCommand } from '../ui/commands/commandsCommand.js';

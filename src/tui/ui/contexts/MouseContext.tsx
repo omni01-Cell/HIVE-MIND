@@ -6,7 +6,7 @@
 
 import { useStdin } from 'ink';
 import { ESC } from '../utils/input.js';
-import { debugLogger } from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
 import { appEvents, AppEvent } from '../../utils/events.js';
 import {
     isIncompleteMouseSequence,

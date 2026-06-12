@@ -4,14 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    CoreToolCallStatus,
-    belongsInConfirmationQueue
-} from '@google/gemini-cli-core';
-import {
-    type HistoryItemWithoutId,
-    type IndividualToolCallDisplay
-} from '../types.js';
+import { CoreToolCallStatus } from '../contexts/UIStateContext.js';
+import { belongsInConfirmationQueue } from '../contexts/UIStateContext.js';
+import { HistoryItemWithoutId, IndividualToolCallDisplay } from '../contexts/UIStateContext.js';
 import {
     getAllToolCalls,
     buildToolVisibilityContextFromDisplay

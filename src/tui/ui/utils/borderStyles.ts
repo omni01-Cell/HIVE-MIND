@@ -4,15 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CoreToolCallStatus } from '@google/gemini-cli-core';
+import { CoreToolCallStatus } from '../contexts/UIStateContext.js';
 import { isShellTool } from '../components/messages/ToolShared.js';
 import { theme } from '../semantic-colors.js';
-import type {
-    HistoryItem,
-    HistoryItemWithoutId,
-    HistoryItemToolGroup,
-    IndividualToolCallDisplay
-} from '../types.js';
+import { HistoryItem, HistoryItemWithoutId, IndividualToolCallDisplay } from '../contexts/UIStateContext.js';
+import { HistoryItemToolGroup } from '../contexts/UIStateContext.js';
 import type { BackgroundTask } from '../hooks/shellReducer.js';
 import type { TrackedToolCall } from '../hooks/useToolScheduler.js';
 

@@ -31,11 +31,12 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { terminalCapabilityManager } from './terminalCapabilityManager.js';
 
-import { debugLogger, homedir } from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
+import { homedir } from 'os';
 import { useEffect } from 'react';
 import { persistentState } from '../../utils/persistentState.js';
 import { requestConsentInteractive } from '../../config/extensions/consent.js';
-import type { ConfirmationRequest } from '../types.js';
+import { ConfirmationRequest } from '../contexts/UIStateContext.js';
 import type { UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';
 
 type AddItemFn = UseHistoryManagerReturn['addItem'];

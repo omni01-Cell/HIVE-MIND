@@ -25,11 +25,9 @@ import { ACTIVE_SHELL_MAX_LINES } from '../../constants.js';
 import { useAlternateBuffer } from '../../hooks/useAlternateBuffer.js';
 import { useUIState } from '../../contexts/UIStateContext.js';
 import { useToolActions } from '../../contexts/ToolActionsContext.js';
-import {
-    type Config,
-    ShellExecutionService,
-    CoreToolCallStatus
-} from '@google/gemini-cli-core';
+import { CoreToolCallStatus } from '../../contexts/UIStateContext.js';
+import { HiveConfig } from '../../../config/hiveConfig.js';
+import { ShellExecutionService } from '../../contexts/UIStateContext.js';
 import {
     calculateShellMaxLines,
     calculateToolContentMaxLines,
@@ -37,7 +35,7 @@ import {
 } from '../../utils/toolLayoutUtils.js';
 
 export interface ShellToolMessageProps extends ToolMessageProps {
-  config?: Config;
+  config?: HiveConfig;
   isExpandable?: boolean;
 }
 

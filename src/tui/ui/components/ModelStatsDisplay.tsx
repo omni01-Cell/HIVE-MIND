@@ -19,12 +19,8 @@ import {
 } from '../contexts/SessionContext.js';
 import { Table, type Column } from './Table.js';
 import { useSettings } from '../contexts/SettingsContext.js';
-import {
-    getDisplayString,
-    isAutoModel,
-    LlmRole
-} from '@google/gemini-cli-core';
-import type { QuotaStats } from '../types.js';
+import { getDisplayString, isAutoModel, LlmRole } from '../contexts/UIStateContext.js';
+import { QuotaStats } from '../contexts/UIStateContext.js';
 import { QuotaStatsInfo } from './QuotaStatsInfo.js';
 
 interface StatRowData {

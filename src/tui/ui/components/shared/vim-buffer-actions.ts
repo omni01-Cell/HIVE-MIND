@@ -5,7 +5,7 @@
  */
 
 import { cpLen, cpSlice, toCodePoints } from '../../utils/textUtils.js';
-import { assumeExhaustive } from '@google/gemini-cli-core';
+import { assumeExhaustive } from '../../contexts/UIStateContext.js';
 
 export type VimAction = Extract<
   TextBufferAction,

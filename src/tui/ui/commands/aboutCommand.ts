@@ -4,19 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    CommandKind,
-    type CommandContext,
-    type SlashCommand
-} from './types.js';
+import { CommandKind, CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
 import process from 'node:process';
-import { MessageType, type HistoryItemAbout } from '../types.js';
-import {
-    IdeClient,
-    UserAccountManager,
-    debugLogger,
-    getVersion
-} from '@google/gemini-cli-core';
+import { MessageType } from '../contexts/UIStateContext.js';
+import { HistoryItemAbout } from '../contexts/UIStateContext.js';
+import { debugLogger } from '../../utils/errors.js';
+import { IdeClient, UserAccountManager, getVersion } from '../contexts/UIStateContext.js';
 
 export const aboutCommand: SlashCommand = {
     name: 'about',
@@ -38,7 +31,7 @@ export const aboutCommand: SlashCommand = {
       context.services.agentContext?.config.getModel() || 'Unknown';
         const cliVersion = await getVersion();
         const selectedAuthType =
-      context.services.settings.merged.security.auth.selectedType || '';
+      context.services.settings?.merged?.security?.auth?.selectedType || '';
         const gcpProject = process.env['GOOGLE_CLOUD_PROJECT'] || '';
         const ideClient = await getIdeClientName(context);
 

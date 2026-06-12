@@ -1,9 +1,4 @@
-/**
- * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
- */
-
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { getBoundingBox, type DOMElement } from 'ink';
 import { useMouse, type MouseEvent } from '../hooks/useMouse.js';
 import { terminalCapabilityManager } from '../utils/terminalCapabilityManager.js';

@@ -5,10 +5,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import type {
-    ConversationRecord,
-    MessageRecord
-} from '@google/gemini-cli-core';
+import { ConversationRecord, MessageRecord } from '../contexts/UIStateContext.js';
 import {
     calculateTurnStats,
     calculateRewindImpact,

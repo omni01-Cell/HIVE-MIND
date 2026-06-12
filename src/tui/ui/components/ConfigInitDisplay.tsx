@@ -6,13 +6,10 @@
 
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import {
-    CoreEvent,
-    coreEvents,
-    type McpClient,
-    MCPServerStatus
-} from '@google/gemini-cli-core';
-import { GeminiSpinner } from './GeminiSpinner.js';
+import { MCPServerStatus } from '../contexts/UIStateContext.js';
+import { CoreEvent, coreEvents } from '../../utils/coreEvents.js';
+import { McpClient } from '../contexts/UIStateContext.js';
+import { HiveSpinner } from './HiveSpinner.js';
 import { theme } from '../semantic-colors.js';
 
 export const ConfigInitDisplay = ({
@@ -68,7 +65,7 @@ export const ConfigInitDisplay = ({
     return (
         <Box marginTop={1}>
             <Text>
-                <GeminiSpinner /> <Text color={theme.text.primary}>{message}</Text>
+                <HiveSpinner /> <Text color={theme.text.primary}>{message}</Text>
             </Text>
         </Box>
     );

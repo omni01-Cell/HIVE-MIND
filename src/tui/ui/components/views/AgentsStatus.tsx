@@ -7,7 +7,7 @@
 import { Box, Text } from 'ink';
 import type React from 'react';
 import { theme } from '../../semantic-colors.js';
-import type { AgentDefinitionJson } from '../../types.js';
+import { AgentDefinitionJson } from '../../contexts/UIStateContext.js';
 import { MarkdownDisplay } from '../../utils/MarkdownDisplay.js';
 
 interface AgentsStatusProps {

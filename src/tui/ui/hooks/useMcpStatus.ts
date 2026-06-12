@@ -5,14 +5,11 @@
  */
 
 import { useEffect, useState } from 'react';
-import {
-    type Config,
-    coreEvents,
-    MCPDiscoveryState,
-    CoreEvent
-} from '@google/gemini-cli-core';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { coreEvents, CoreEvent } from '../../utils/coreEvents.js';
+import { MCPDiscoveryState } from '../contexts/UIStateContext.js';
 
-export function useMcpStatus(config: Config) {
+export function useMcpStatus(config: HiveConfig) {
     const [discoveryState, setDiscoveryState] = useState<MCPDiscoveryState>(
         () =>
             config.getMcpClientManager()?.getDiscoveryState() ??

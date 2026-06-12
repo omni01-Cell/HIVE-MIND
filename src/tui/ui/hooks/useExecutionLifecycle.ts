@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {
-    HistoryItemWithoutId,
-    IndividualToolCallDisplay
-} from '../types.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { HistoryItemWithoutId, IndividualToolCallDisplay, AnsiOutput, CoreToolCallStatus } from '../contexts/UIStateContext.js';
+import { PartListUnion, GeminiClient, ExecutionLifecycleService, CompletionBehavior } from '../contexts/UIStateContext.js';
+import { escapeShellArg } from '../utils/formatters.js';
+import { isBinary } from '../contexts/UIStateContext.js';
 import { useCallback, useReducer, useRef, useEffect } from 'react';
-import { type PartListUnion } from '@google/genai';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 import { SHELL_COMMAND_NAME } from '../constants.js';
 import { formatBytes } from '../utils/formatters.js';
@@ -210,7 +210,7 @@ function finalizeShellResult(
     finalStatus: CoreToolCallStatus,
     initialToolDisplay: IndividualToolCallDisplay,
     userMessageTimestamp: number,
-    config: Config,
+    config: HiveConfig,
     geminiClient: GeminiClient,
     addItemToHistory: UseHistoryManagerReturn['addItem'],
     registerBackgroundTask: (pid: number, command: string, initialOutput: string | AnsiOutput, completionBehavior?: CompletionBehavior) => void,
@@ -255,7 +255,7 @@ interface ShellCommandParams {
     userMessageTimestamp: number;
     isWindows: boolean;
     targetDir: string;
-    config: Config;
+    config: HiveConfig;
     terminalWidth: number | undefined;
     terminalHeight: number | undefined;
     onDebugMessage: (msg: string) => void;
@@ -405,7 +405,7 @@ export const useExecutionLifecycle = (
   >,
     onExec: (command: Promise<void>) => void,
     onDebugMessage: (message: string) => void,
-    config: Config,
+    config: HiveConfig,
     geminiClient: GeminiClient,
     setShellInputFocused: (value: boolean) => void,
     terminalWidth?: number,

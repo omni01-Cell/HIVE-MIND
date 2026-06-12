@@ -5,12 +5,11 @@
  */
 
 import * as path from 'node:path';
-import type { PartListUnion, PartUnion } from '@google/genai';
 import { Buffer } from 'node:buffer';
-import type {
-    HistoryItemToolGroup,
-    IndividualToolCallDisplay
-} from '../types.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { IndividualToolCallDisplay } from '../contexts/UIStateContext.js';
+import { HistoryItemToolGroup, PartListUnion, PartUnion } from '../contexts/UIStateContext.js';
+import { REFERENCE_CONTENT_START, REFERENCE_CONTENT_END } from '../contexts/UIStateContext.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 
 const REF_CONTENT_HEADER = `\n${REFERENCE_CONTENT_START}`;
@@ -50,7 +49,7 @@ export const AT_COMMAND_PATH_REGEX_SOURCE =
 
 interface HandleAtCommandParams {
   query: string;
-  config: Config;
+  config: HiveConfig;
   addItem: UseHistoryManagerReturn['addItem'];
   onDebugMessage: (message: string) => void;
   messageId: number;
@@ -126,7 +125,7 @@ function parseAllAtCommands(
 
 function categorizeAtCommands(
     commandParts: AtCommandPart[],
-    config: Config
+    config: HiveConfig
 ): {
   agentParts: AtCommandPart[];
   resourceParts: AtCommandPart[];
@@ -164,7 +163,7 @@ function categorizeAtCommands(
  */
 export async function checkPermissions(
     query: string,
-    config: Config
+    config: HiveConfig
 ): Promise<string[]> {
     const commandParts = parseAllAtCommands(query);
     const { fileParts } = categorizeAtCommands(commandParts, config);
@@ -210,7 +209,7 @@ interface IgnoredFile {
  */
 async function resolveFilePaths(
     fileParts: AtCommandPart[],
-    config: Config,
+    config: HiveConfig,
     onDebugMessage: (message: string) => void,
     signal: AbortSignal
 ): Promise<{ resolvedFiles: ResolvedFile[]; ignoredFiles: IgnoredFile[] }> {
@@ -350,7 +349,7 @@ function constructInitialQuery(
  */
 async function readMcpResources(
     resourceParts: AtCommandPart[],
-    config: Config,
+    config: HiveConfig,
     signal: AbortSignal
 ): Promise<{
   parts: PartUnion[];
@@ -445,7 +444,7 @@ async function readMcpResources(
  */
 async function readLocalFiles(
     resolvedFiles: ResolvedFile[],
-    config: Config,
+    config: HiveConfig,
     signal: AbortSignal,
     userMessageTimestamp: number
 ): Promise<{
@@ -592,7 +591,7 @@ function reportIgnoredFiles(
 function resolveDisplayPath(
     filePathSpecInContent: string,
     resolvedFiles: ResolvedFile[],
-    config: Config
+    config: HiveConfig
 ): string {
     const resolvedFile = resolvedFiles.find(
         (rf) =>
@@ -620,7 +619,7 @@ function resolveDisplayPath(
  */
 async function globSearchForPath(
     pathName: string,
-    config: Config,
+    config: HiveConfig,
     globTool: { buildAndExecute: (args: Record<string, unknown>, signal: AbortSignal) => Promise<{ llmContent: unknown }> },
     signal: AbortSignal,
     onDebugMessage: (message: string) => void

@@ -5,7 +5,7 @@
  */
 
 import { formatDuration } from '../utils/formatters.js';
-import { CommandKind, type SlashCommand } from './types.js';
+import { CommandKind, SlashCommand } from '../contexts/UIStateContext.js';
 
 export const quitCommand: SlashCommand = {
     name: 'quit',

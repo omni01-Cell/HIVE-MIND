@@ -6,7 +6,7 @@
 
 import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
-import type { ThoughtSummary } from '@google/gemini-cli-core';
+import { ThoughtSummary } from '../../utils/formatters.js';
 import { theme } from '../../semantic-colors.js';
 import { normalizeEscapedNewlines } from '../../utils/textUtils.js';
 

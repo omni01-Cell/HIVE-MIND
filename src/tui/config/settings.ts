@@ -9,19 +9,41 @@ import * as path from 'node:path';
 import { platform } from 'node:os';
 import * as dotenv from 'dotenv';
 import process from 'node:process';
-import {
-    CoreEvent,
-    FatalConfigError,
-    GEMINI_DIR,
-    getErrorMessage,
-    getFsErrorMessage,
-    Storage,
-    coreEvents,
-    homedir,
-    AuthType,
-    type AdminControlsSettings,
-    createCache
-} from '@google/gemini-cli-core';
+import { getErrorMessage } from '../utils/errors.js';
+import { homedir } from 'os';
+import { CoreEvent, coreEvents } from '../utils/coreEvents.js';
+import { AuthType } from '../ui/contexts/UIStateContext.js';
+
+export class FatalConfigError extends Error {
+    exitCode = 1;
+}
+
+export const GEMINI_DIR = '.hivemind';
+
+export function getFsErrorMessage(err: any): string {
+    if (!err) return 'Unknown FS error';
+    return err.message || String(err);
+}
+
+export interface AdminControlsSettings {
+    strictModeDisabled?: boolean;
+    mcpSetting?: any;
+    cliFeatureSetting?: any;
+}
+
+export function createCache<K, V>(_options: any): any {
+    const map = new Map<K, V>();
+    return {
+        getOrCreate: (key: K, fn: () => V) => {
+            if (!map.has(key)) {
+                map.set(key, fn());
+            }
+            return map.get(key);
+        },
+        clear: () => map.clear()
+    };
+}
+
 import stripJsonComments from 'strip-json-comments';
 import { DefaultLight } from '../ui/themes/builtin/light/default-light.js';
 import { DefaultDark } from '../ui/themes/builtin/dark/default-dark.js';
@@ -33,8 +55,11 @@ import {
     type MergeStrategy,
     type SettingsSchema,
     type SettingDefinition,
+    type SettingsType,
+    type SettingsValue,
+    TOGGLE_TYPES,
     getSettingsSchema
-} from './settingsSchema.js';
+} from './hiveSettingsSchema.js';
 
 export {
     type Settings,
@@ -43,6 +68,9 @@ export {
     type MergeStrategy,
     type SettingsSchema,
     type SettingDefinition,
+    type SettingsType,
+    type SettingsValue,
+    TOGGLE_TYPES,
     getSettingsSchema
 };
 
@@ -77,7 +105,7 @@ export function getMergeStrategyForPath(
     return current?.mergeStrategy;
 }
 
-export const USER_SETTINGS_PATH = Storage.getGlobalSettingsPath();
+export const USER_SETTINGS_PATH = path.join(homedir(), '.hivemind', 'settings.json');
 export const USER_SETTINGS_DIR = path.dirname(USER_SETTINGS_PATH);
 export const DEFAULT_EXCLUDED_ENV_VARS = [
     'DEBUG',
@@ -124,7 +152,7 @@ export function getSystemDefaultsPath(): string {
     );
 }
 
-export type { DnsResolutionOrder } from './settingsSchema.js';
+export type { DnsResolutionOrder } from './hiveSettingsSchema.js';
 
 export enum SettingScope {
   User = 'User',
@@ -275,7 +303,7 @@ export function mergeSettings(
         user,
         safeWorkspace,
         system
-    ) as MergedSettings;
+    ) as unknown as MergedSettings;
 }
 
 /**
@@ -293,7 +321,7 @@ export function createTestMergedSettings(
         getMergeStrategyForPath,
         getDefaultsFromSchema(),
         overrides
-    ) as MergedSettings;
+    ) as unknown as MergedSettings;
 }
 
 /**
@@ -744,7 +772,7 @@ export function resetSettingsCacheForTesting() {
 }
 
 export function isWorktreeEnabled(settings: LoadedSettings): boolean {
-    return settings.merged.experimental.worktrees;
+    return !!settings.merged.experimental.worktrees;
 }
 
 /**
@@ -772,8 +800,7 @@ function _doLoadSettings(workspaceDir: string): LoadedSettings {
     const systemSettingsPath = getSystemSettingsPath();
     const systemDefaultsPath = getSystemDefaultsPath();
 
-    const storage = new Storage(workspaceDir);
-    const workspaceSettingsPath = storage.getWorkspaceSettingsPath();
+    const workspaceSettingsPath = path.join(workspaceDir, '.hivemind', 'settings.json');
 
     const load = (
         filePath: string

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { type ToolVisibilityContext } from '@google/gemini-cli-core';
+import { ToolVisibilityContext } from '../contexts/UIStateContext.js';
 
 /**
  * Maps an IndividualToolCallDisplay from the CLI to a ToolVisibilityContext for core logic.

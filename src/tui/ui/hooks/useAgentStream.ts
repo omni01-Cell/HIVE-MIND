@@ -5,23 +5,11 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import {
-    getErrorMessage,
-    MessageSenderType,
-    debugLogger,
-    geminiPartsToContentParts,
-    displayContentToString,
-    parseThought,
-    CoreToolCallStatus,
-    type ApprovalMode,
-    Kind,
-    type ThoughtSummary,
-    type RetryAttemptPayload,
-    type AgentEvent,
-    type AgentProtocol,
-    type Logger,
-    type Part
-} from '@google/gemini-cli-core';
+import type { MessageSenderType } from '../../../core/types/BotTypes.js';
+import { ThoughtSummary, displayContentToString, parseThought } from '../utils/formatters.js';
+import { CoreToolCallStatus, Kind, Part, ApprovalMode, RetryAttemptPayload, StreamingState, MessageType, HistoryItemWithoutId, IndividualToolCallDisplay, LoopDetectionConfirmationRequest } from '../contexts/UIStateContext.js';
+import { geminiPartsToContentParts, AgentEvent, AgentProtocol, Logger } from '../contexts/UIStateContext.js';
+import { getErrorMessage, debugLogger } from '../../utils/errors.js';
 import { findLastSafeSplitPoint } from '../utils/markdownUtilities.js';
 import { getToolGroupBorderAppearance } from '../utils/borderStyles.js';
 import { type BackgroundTask } from './useExecutionLifecycle.js';
@@ -74,13 +62,13 @@ function handleAgentEvent(
                         geminiMessageBufferRef.current += part.text;
                         const splitPoint = findLastSafeSplitPoint(geminiMessageBufferRef.current);
                         if (splitPoint === geminiMessageBufferRef.current.length) {
-                            setPendingHistoryItem({ type: 'gemini', text: geminiMessageBufferRef.current });
+                            setPendingHistoryItem({ type: 'assistant', text: geminiMessageBufferRef.current });
                         } else {
                             const before = geminiMessageBufferRef.current.substring(0, splitPoint);
                             const after = geminiMessageBufferRef.current.substring(splitPoint);
-                            addItem({ type: 'gemini', text: before }, userMessageTimestampRef.current);
+                            addItem({ type: 'assistant', text: before }, userMessageTimestampRef.current);
                             geminiMessageBufferRef.current = after;
-                            setPendingHistoryItem({ type: 'gemini_content', text: after });
+                            setPendingHistoryItem({ type: 'assistant_content', text: after });
                         }
                     } else if (part.type === 'thought') {
                         setThought(parseThought(part.thought));
@@ -259,7 +247,7 @@ function pushCompletedToolsToHistoryEffect(
     isFirstToolInGroupRef.current ||
     (!hasEmittedBoxInTurnRef.current && hasBoxInBatch);
 
-        const historyItem: HistoryItemToolDisplayGroup = {
+        const historyItem: HistoryItemWithoutId = {
             type: 'tool_display_group',
             tools: toolsToPush.map((tc) => ({
                 name: tc.name,

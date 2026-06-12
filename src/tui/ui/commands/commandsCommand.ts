@@ -4,33 +4,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FileCommandLoader } from '../../services/FileCommandLoader.js';
-import {
-    type CommandContext,
-    type SlashCommand,
-    type SlashCommandActionReturn,
-    CommandKind
-} from './types.js';
-import {
-    MessageType,
-    type HistoryItemError,
-    type HistoryItemInfo
-} from '../types.js';
+import { MessageType, HistoryItemInfo } from '../contexts/UIStateContext.js';
+import { HistoryItemError, FileCommandLoader } from '../contexts/UIStateContext.js';
+import { CommandContext, SlashCommand, SlashCommandActionReturn, CommandKind } from '../contexts/UIStateContext.js';
 
 /**
  * Action for the default `/commands` invocation.
  * Displays a message prompting the user to use a subcommand.
  */
 async function defaultAction(
-    _context: CommandContext,
+    context: CommandContext,
     _args: string
 ): Promise<void | SlashCommandActionReturn> {
-    return {
-        type: 'message',
-        messageType: 'info',
-        content:
-      'Use "/commands list" to view available .toml files, or "/commands reload" to reload custom command definitions.'
-    };
+    context.ui.addItem({
+        type: MessageType.INFO,
+        text: 'Use "/commands list" to view available .toml files, or "/commands reload" to reload custom command definitions.'
+    } as HistoryItemInfo, Date.now());
 }
 
 /**
@@ -51,7 +40,7 @@ async function listSubcommandAction(
             if (group.error) {
                 results.push(`- (Error reading directory: ${group.error})`);
             } else {
-                group.files.forEach((file) => results.push(`- ${file}`));
+                group.files.forEach((file: string) => results.push(`- ${file}`));
             }
         }
 
@@ -61,12 +50,11 @@ async function listSubcommandAction(
 
         if (results.length === 1) {
             // Only the note is present
-            return {
-                type: 'message',
-                messageType: 'info',
-                content:
-          'No custom command files (.toml) found.\n\n_Note: MCP prompts are dynamically loaded from configured MCP servers._'
-            };
+            context.ui.addItem({
+                type: MessageType.INFO,
+                text: 'No custom command files (.toml) found.\n\n_Note: MCP prompts are dynamically loaded from configured MCP servers._'
+            } as HistoryItemInfo, Date.now());
+            return;
         }
 
         context.ui.addItem(

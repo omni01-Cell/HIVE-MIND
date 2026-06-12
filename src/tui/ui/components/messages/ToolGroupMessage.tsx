@@ -14,20 +14,8 @@ import { DenseToolMessage } from './DenseToolMessage.js';
 import { theme } from '../../semantic-colors.js';
 import { useConfig } from '../../contexts/ConfigContext.js';
 import { isShellTool } from './ToolShared.js';
-import {
-    isVisibleInToolGroup,
-    Kind,
-    EDIT_DISPLAY_NAME,
-    GLOB_DISPLAY_NAME,
-    WEB_SEARCH_DISPLAY_NAME,
-    READ_FILE_DISPLAY_NAME,
-    LS_DISPLAY_NAME,
-    GREP_DISPLAY_NAME,
-    WEB_FETCH_DISPLAY_NAME,
-    WRITE_FILE_DISPLAY_NAME,
-    READ_MANY_FILES_DISPLAY_NAME,
-    isFileDiff
-} from '@google/gemini-cli-core';
+import { Kind } from '../../contexts/UIStateContext.js';
+import { isVisibleInToolGroup, EDIT_DISPLAY_NAME, GLOB_DISPLAY_NAME, WEB_SEARCH_DISPLAY_NAME, READ_FILE_DISPLAY_NAME, LS_DISPLAY_NAME, GREP_DISPLAY_NAME, WEB_FETCH_DISPLAY_NAME, WRITE_FILE_DISPLAY_NAME, READ_MANY_FILES_DISPLAY_NAME, isFileDiff } from '../../contexts/UIStateContext.js';
 import { buildToolVisibilityContextFromDisplay } from '../../utils/historyUtils.js';
 import { useUIState } from '../../contexts/UIStateContext.js';
 import { getToolGroupBorderAppearance } from '../../utils/borderStyles.js';

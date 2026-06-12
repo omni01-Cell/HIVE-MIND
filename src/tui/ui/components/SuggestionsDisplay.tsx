@@ -7,7 +7,7 @@
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
 import { ExpandableText, MAX_WIDTH } from './shared/ExpandableText.js';
-import { CommandKind } from '../commands/types.js';
+import { CommandKind } from '../contexts/UIStateContext.js';
 import { Colors } from '../colors.js';
 import { sanitizeForDisplay } from '../utils/textUtils.js';
 

@@ -13,14 +13,14 @@ import {
 import { themeManager, DEFAULT_THEME } from '../themes/theme-manager.js';
 import { DefaultLight } from '../themes/builtin/light/default-light.js';
 import { useSettings } from '../contexts/SettingsContext.js';
-import type { Config } from '@google/gemini-cli-core';
+import { HiveConfig } from '../../config/hiveConfig.js';
 import { useTerminalContext } from '../contexts/TerminalContext.js';
 import { SettingScope } from '../../config/settings.js';
 import type { UIActions } from '../contexts/UIActionsContext.js';
 
 export function useTerminalTheme(
     handleThemeSelect: UIActions['handleThemeSelect'],
-    config: Config,
+    config: HiveConfig,
     refreshStatic: () => void
 ) {
     const settings = useSettings();

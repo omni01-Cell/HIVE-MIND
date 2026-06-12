@@ -4,13 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    debugLogger,
-    startMemoryService,
-    type Config
-} from '@google/gemini-cli-core';
+import { debugLogger } from './errors.js';
+import { HiveConfig } from '../config/hiveConfig.js';
+import { startMemoryService } from '../ui/contexts/UIStateContext.js';
 
-export function startAutoMemoryIfEnabled(config: Config): void {
+export function startAutoMemoryIfEnabled(config: HiveConfig): void {
     if (!config.isAutoMemoryEnabled()) {
         return;
     }

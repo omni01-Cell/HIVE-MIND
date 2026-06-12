@@ -12,12 +12,8 @@ import { AnsiOutputText, AnsiLineText } from '../AnsiOutput.js';
 import { SlicingMaxSizedBox } from '../shared/SlicingMaxSizedBox.js';
 import { MaxSizedBox } from '../shared/MaxSizedBox.js';
 import { theme } from '../../semantic-colors.js';
-import {
-    type AnsiOutput,
-    type AnsiLine,
-    isSubagentProgress,
-    isStructuredToolResult
-} from '@google/gemini-cli-core';
+import { AnsiOutput, AnsiLine } from '../../contexts/UIStateContext.js';
+import { isSubagentProgress, isStructuredToolResult } from '../../contexts/UIStateContext.js';
 import { useUIState } from '../../contexts/UIStateContext.js';
 import { tryParseJSON } from '../../../utils/jsonoutput.js';
 import { useAlternateBuffer } from '../../hooks/useAlternateBuffer.js';

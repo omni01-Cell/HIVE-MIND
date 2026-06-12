@@ -7,7 +7,7 @@
 import { Box, Text } from 'ink';
 import type React from 'react';
 import { theme } from '../../semantic-colors.js';
-import type { HistoryItemGemmaStatus } from '../../types.js';
+import { HistoryItemGemmaStatus } from '../../contexts/UIStateContext.js';
 
 type GemmaStatusProps = Omit<HistoryItemGemmaStatus, 'id' | 'type'>;
 

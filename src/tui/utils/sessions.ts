@@ -4,20 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    deleteStoredSession,
-    generateSummary,
-    writeToStderr,
-    writeToStdout,
-    type Config
-} from '@google/gemini-cli-core';
+import { HiveConfig } from '../config/hiveConfig.js';
+import { deleteStoredSession, generateSummary, writeToStderr, writeToStdout } from '../ui/contexts/UIStateContext.js';
 import {
     formatRelativeTime,
     SessionSelector,
     type SessionInfo
 } from './sessionUtils.js';
 
-export async function listSessions(config: Config): Promise<void> {
+export async function listSessions(config: HiveConfig): Promise<void> {
     // Generate summary for most recent session if needed
     await generateSummary(config);
 
@@ -52,7 +47,7 @@ export async function listSessions(config: Config): Promise<void> {
 }
 
 export async function deleteSession(
-    config: Config,
+    config: HiveConfig,
     sessionIndex: string
 ): Promise<void> {
     const sessionSelector = new SessionSelector(config.storage);

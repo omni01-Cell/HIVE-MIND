@@ -7,7 +7,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { debugLogger, isNodeError, Storage } from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
+import { isNodeError, Storage } from '../contexts/UIStateContext.js';
 
 const MAX_HISTORY_LENGTH = 100;
 

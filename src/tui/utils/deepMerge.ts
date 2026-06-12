@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MergeStrategy } from '../config/settingsSchema.js';
+import { MergeStrategy } from '../config/hiveSettingsSchema.js';
 
 export type Mergeable =
   | string

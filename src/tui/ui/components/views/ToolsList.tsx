@@ -7,7 +7,7 @@
 import type React from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../../semantic-colors.js';
-import { type ToolDefinition } from '../../types.js';
+import { ToolDefinition } from '../../contexts/UIStateContext.js';
 import { MarkdownDisplay } from '../../utils/MarkdownDisplay.js';
 
 interface ToolsListProps {

@@ -4,17 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MCPServerStatus, type MCPServerConfig } from '@google/gemini-cli-core';
+import { MCPServerStatus, MCPServerConfig } from '../../contexts/UIStateContext.js';
 import { Box, Text } from 'ink';
 import type React from 'react';
 import { MAX_MCP_RESOURCES_TO_SHOW } from '../../constants.js';
 import { theme } from '../../semantic-colors.js';
-import type {
-    HistoryItemMcpStatus,
-    JsonMcpPrompt,
-    JsonMcpResource,
-    JsonMcpTool
-} from '../../types.js';
+import { HistoryItemMcpStatus, JsonMcpPrompt, JsonMcpResource, JsonMcpTool } from '../../contexts/UIStateContext.js';
 
 interface McpStatusProps {
   servers: Record<string, MCPServerConfig>;

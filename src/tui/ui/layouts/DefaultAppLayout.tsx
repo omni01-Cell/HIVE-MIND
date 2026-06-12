@@ -16,7 +16,7 @@ import { useFlickerDetector } from '../hooks/useFlickerDetector.js';
 import { useAlternateBuffer } from '../hooks/useAlternateBuffer.js';
 import { CopyModeWarning } from '../components/CopyModeWarning.js';
 import { BackgroundTaskDisplay } from '../components/BackgroundTaskDisplay.js';
-import { StreamingState } from '../types.js';
+import { StreamingState } from '../contexts/UIStateContext.js';
 import { useInputState } from '../contexts/InputContext.js';
 
 export const DefaultAppLayout: React.FC = () => {

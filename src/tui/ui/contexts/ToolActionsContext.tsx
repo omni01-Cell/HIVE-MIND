@@ -4,16 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    IdeClient,
-    ToolConfirmationOutcome,
-    MessageBusType,
-    type Config,
-    type ToolConfirmationPayload,
-    type SerializableConfirmationDetails,
-    debugLogger
-} from '@google/gemini-cli-core';
-import type { IndividualToolCallDisplay } from '../types.js';
+import { debugLogger } from '../../utils/errors.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { ToolConfirmationOutcome } from './UIStateContext.js';
+import { IdeClient, MessageBusType, ToolConfirmationPayload, SerializableConfirmationDetails } from './UIStateContext.js';
+import { IndividualToolCallDisplay } from './UIStateContext.js';
 
 type LegacyConfirmationDetails = SerializableConfirmationDetails & {
   onConfirm: (
@@ -57,7 +52,7 @@ export const useToolActions = (): ToolActionsContextValue => {
 
 interface ToolActionsProviderProps {
   children: React.ReactNode;
-  config: Config;
+  config: HiveConfig;
   toolCalls: IndividualToolCallDisplay[];
   isExpanded: (callId: string) => boolean;
   toggleExpansion: (callId: string) => void;

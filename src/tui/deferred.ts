@@ -4,11 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { ArgumentsCamelCase, CommandModule } from 'yargs';
-import {
-    coreEvents,
-    ExitCodes,
-    getAdminErrorMessage
-} from '@google/gemini-cli-core';
+import { coreEvents } from './utils/coreEvents.js';
+export enum ExitCodes {
+    SUCCESS = 0,
+    ERROR = 1,
+    CANCELLED = 130,
+    FATAL_CONFIG_ERROR = 1,
+}
+
+export function getAdminErrorMessage(type: string, _config?: any): string {
+    return `Admin capability ${type} is disabled by policy settings.`;
+}
 import { runExitCleanup } from './utils/cleanup.js';
 import type { MergedSettings } from './config/settings.js';
 import process from 'node:process';

@@ -24,81 +24,26 @@ import {
 } from 'ink';
 import { App } from './App.js';
 import { AppContext } from './contexts/AppContext.js';
-import { UIStateContext, type UIState } from './contexts/UIStateContext.js';
+import { UIStateContext, type UIState, HistoryItem, ConfirmationRequest, PermissionConfirmationRequest, StreamingState, IdeInfo, IdeContext, ApprovalMode, AgentDefinition } from './contexts/UIStateContext.js';
 import { QuotaContext } from './contexts/QuotaContext.js';
 import {
     UIActionsContext,
     type UIActions
 } from './contexts/UIActionsContext.js';
 import { ConfigContext } from './contexts/ConfigContext.js';
-import {
-    type HistoryItem,
-    AuthState,
-    type ConfirmationRequest,
-    type PermissionConfirmationRequest,
-    type QuotaStats,
-    MessageType,
-    StreamingState,
-    type HistoryItemInfo
-} from './types.js';
 import { checkPermissions } from './hooks/atCommandProcessor.js';
 import { ToolActionsProvider } from './contexts/ToolActionsContext.js';
 import { MouseProvider } from './contexts/MouseContext.js';
 import { ScrollProvider } from './contexts/ScrollProvider.js';
-import {
-    type StartupWarning,
-    type Config,
-    type IdeInfo,
-    type IdeContext,
-    type UserTierId,
-    type GeminiUserTier,
-    type UserFeedbackPayload,
-    type HookSystemMessagePayload,
-    type AgentDefinition,
-    type ApprovalMode,
-    IdeClient,
-    ideContextStore,
-    getErrorMessage,
-    getAllGeminiMdFilenames,
-    AuthType,
-    clearCachedCredentialFile,
-    type ResumedSessionData,
-    recordExitFail,
-    ShellExecutionService,
-    saveApiKey,
-    debugLogger,
-    isValidEditorType,
-    coreEvents,
-    CoreEvent,
-    flattenMemory,
-    type MemoryChangedPayload,
-    writeToStdout,
-    disableMouseEvents,
-    enterAlternateScreen,
-    enableMouseEvents,
-    disableLineWrapping,
-    shouldEnterAlternateScreen,
-    startupProfiler,
-    SessionStartSource,
-    SessionEndReason,
-    generateSummary,
-    type ConsentRequestPayload,
-    type AgentsDiscoveredPayload,
-    ChangeAuthRequestedError,
-    ProjectIdRequiredError,
-    buildUserSteeringHintPrompt,
-    logBillingEvent,
-    ApiKeyUpdatedEvent,
-    LegacyAgentProtocol,
-    type InjectionSource
-} from '@google/gemini-cli-core';
+import { getErrorMessage, debugLogger } from '../utils/errors.js';
+import { HiveConfig } from '../config/hiveConfig.js';
+import { coreEvents, CoreEvent } from '../utils/coreEvents.js';
+import { AuthType } from '../../config/hiveSettingsSchema.js';
 // validateAuthMethod supprimé — non nécessaire pour HIVE-MIND
 import process from 'node:process';
 import { useHistory } from './hooks/useHistoryManager.js';
 import { useMemoryMonitor } from './hooks/useMemoryMonitor.js';
 import { useThemeCommand } from './hooks/useThemeCommand.js';
-import { useAuthCommand } from './auth/useAuth.js';
-import { useQuotaAndFallback } from './hooks/useQuotaAndFallback.js';
 import { useEditorSettings } from './hooks/useEditorSettings.js';
 import { useSettingsCommand } from './hooks/useSettingsCommand.js';
 import { useModelCommand } from './hooks/useModelCommand.js';
@@ -118,7 +63,168 @@ import { basename } from 'node:path';
 import { computeTerminalTitle } from '../utils/windowTitle.js';
 import { useTextBuffer } from './components/shared/text-buffer.js';
 import { useLogger } from './hooks/useLogger.js';
-import { useGeminiStream } from './hooks/useGeminiStream.js';
+// IdeIntegrationNudgeResult, UpdateObject, setUpdateHandler, relaunchApp, useExtensionUpdates, useConfirmUpdateRequests, ExtensionManager, requestConsentInteractive mockes localement :
+
+const useConfirmUpdateRequests = () => {
+    return {
+        addConfirmUpdateExtensionRequest: () => {},
+        confirmUpdateExtensionRequests: []
+    };
+};
+
+const useExtensionUpdates = (..._args: any[]) => {
+    return {
+        extensionsUpdateState: new Map(),
+        extensionsUpdateStateInternal: new Map(),
+        dispatchExtensionStateUpdate: () => {}
+    };
+};
+
+type ExtensionManager = any;
+const requestConsentInteractive = (..._args: any[]) => {};
+type IdeIntegrationNudgeResult = any;
+type UpdateObject = any;
+const setUpdateHandler = (..._args: any[]) => {};
+const relaunchApp = () => {};
+
+export const MessageType = {
+    TEXT: 'text',
+    ERROR: 'error',
+    SYSTEM: 'system',
+    INFO: 'info',
+    WARNING: 'warning',
+    COMPRESSION: 'compression',
+    ABOUT: 'about',
+    HINT: 'hint',
+    USER: 'user',
+    ASSISTANT: 'assistant'
+} as any;
+
+export type HistoryItemInfo = any;
+
+export enum AuthState {
+    Authenticated = 'authenticated',
+    Unauthenticated = 'unauthenticated',
+    Updating = 'updating',
+    AwaitingLoginRestart = 'awaiting_login_restart',
+    AwaitingApiKeyInput = 'awaiting_api_key_input'
+}
+
+export interface QuotaStats {
+    used?: number;
+    remaining?: number;
+    limit?: number;
+    resetTime?: any;
+}
+
+export interface StartupWarning {
+    id: string;
+    message: string;
+    severity: 'warning' | 'info';
+}
+
+export type UserTierId = 'free' | 'pro' | 'enterprise';
+
+export interface GeminiUserTier {
+    id: UserTierId;
+    name: string;
+}
+
+export interface UserFeedbackPayload {
+    itemId: string;
+    feedback: 'thumbs_up' | 'thumbs_down';
+}
+
+export interface HookSystemMessagePayload {
+    type: string;
+    message: string;
+}
+
+export enum NewAgentsChoice {
+    ACKNOWLEDGE = 'acknowledge',
+    DISMISS = 'dismiss'
+}
+
+export class IdeClient {
+    id = 'tui-mock-ide';
+    name = 'TUI Mock IDE';
+    static async getInstance(): Promise<IdeClient> {
+        return new IdeClient();
+    }
+    isInitialized(): boolean {
+        return true;
+    }
+    getEditorContext(): any {
+        return {};
+    }
+    getCurrentIde(): any {
+        return null;
+    }
+    getDetectedIdeDisplayName(): string {
+        return 'TUI Mock IDE';
+    }
+}
+
+export const ideContextStore = {
+    subscribe: (callback: (state: any) => void) => {
+        // noop
+        return () => {};
+    },
+    get: () => ({ editors: [], trustLevel: 'trusted' })
+};
+
+export const getAllGeminiMdFilenames = () => [];
+export const clearCachedCredentialFile = () => {};
+export type ResumedSessionData = any;
+export const recordExitFail = () => {};
+export const ShellExecutionService = {
+    kill: (_pid: number) => {}
+};
+export const saveApiKey = (_key: string) => {};
+export const isValidEditorType = (_editor: string) => true;
+export const flattenMemory = () => [];
+export type MemoryChangedPayload = any;
+export const writeToStdout = (data: string) => process.stdout.write(data);
+export const disableMouseEvents = () => {};
+export const enterAlternateScreen = () => {};
+export const enableMouseEvents = () => {};
+export const disableLineWrapping = () => {};
+export const shouldEnterAlternateScreen = () => false;
+export const startupProfiler = {
+    start: () => {},
+    stop: () => {},
+    mark: () => {}
+};
+
+export enum SessionStartSource {
+    CLI = 'cli',
+    TUI = 'tui',
+    Resume = 'resume',
+    Startup = 'startup',
+    Clear = 'clear',
+}
+
+export enum SessionEndReason {
+    QUIT = 'quit',
+    ERROR = 'error',
+    Clear = 'clear',
+    Exit = 'exit',
+}
+
+export const generateSummary = () => Promise.resolve();
+export type ConsentRequestPayload = any;
+export type AgentsDiscoveredPayload = any;
+
+export class ChangeAuthRequestedError extends Error {}
+export class ProjectIdRequiredError extends Error {}
+
+export const buildUserSteeringHintPrompt = () => '';
+export const logBillingEvent = () => {};
+
+export class ApiKeyUpdatedEvent {}
+export const LegacyAgentProtocol = { V1: 'v1', V2: 'v2' } as any;
+export enum InjectionSource { USER = 'user', SYSTEM = 'system' }
+
 import { useAgentStream } from './hooks/useAgentStream.js';
 import { type BackgroundTask } from './hooks/useExecutionLifecycle.js';
 import { useVim } from './hooks/vim.js';
@@ -127,39 +233,26 @@ import { type InitializationResult } from '../core/initializer.js';
 import { startAutoMemoryIfEnabled } from '../utils/autoMemory.js';
 import { useFocus } from './hooks/useFocus.js';
 import { useKeypress, type Key } from './hooks/useKeypress.js';
+import { SlashCommand } from './commands/types.js';
 import { KeypressPriority } from './contexts/KeypressContext.js';
 import { Command } from './key/keyMatchers.js';
 import { useLoadingIndicator } from './hooks/useLoadingIndicator.js';
 import { useShellInactivityStatus } from './hooks/useShellInactivityStatus.js';
-import { useFolderTrust } from './hooks/useFolderTrust.js';
-import { useIdeTrustListener } from './hooks/useIdeTrustListener.js';
-import { type IdeIntegrationNudgeResult } from './IdeIntegrationNudge.js';
 import { appEvents, AppEvent, TransientMessageType } from '../utils/events.js';
-import { type UpdateObject } from './utils/updateCheck.js';
-import { setUpdateHandler } from '../utils/handleAutoUpdate.js';
 import {
     registerCleanup,
     removeCleanup,
     runExitCleanup
 } from '../utils/cleanup.js';
-import { relaunchApp } from '../utils/processUtils.js';
 import type { SessionInfo } from '../utils/sessionUtils.js';
 import { useMessageQueue } from './hooks/useMessageQueue.js';
 import { useMcpStatus } from './hooks/useMcpStatus.js';
 import { useApprovalModeIndicator } from './hooks/useApprovalModeIndicator.js';
 import { useSessionStats } from './contexts/SessionContext.js';
 import { useGitBranchName } from './hooks/useGitBranchName.js';
-import {
-    useConfirmUpdateRequests,
-    useExtensionUpdates
-} from './hooks/useExtensionUpdates.js';
 import { ShellFocusContext } from './contexts/ShellFocusContext.js';
-import { type ExtensionManager } from '../config/extension-manager.js';
-import { requestConsentInteractive } from '../config/extensions/consent.js';
 import { useSessionBrowser } from './hooks/useSessionBrowser.js';
 import { useSessionResume } from './hooks/useSessionResume.js';
-import { useIncludeDirsTrust } from './hooks/useIncludeDirsTrust.js';
-import { isWorkspaceTrusted } from '../config/trustedFolders.js';
 import { useSettings } from './contexts/SettingsContext.js';
 import { terminalCapabilityManager } from './utils/terminalCapabilityManager.js';
 import { useInputHistoryStore } from './hooks/useInputHistoryStore.js';
@@ -172,7 +265,6 @@ import {
     QUEUE_ERROR_DISPLAY_DURATION_MS,
     EXPAND_HINT_DURATION_MS
 } from './constants.js';
-import { NewAgentsChoice } from './components/NewAgentsNotification.js';
 import { isSlashCommand } from './utils/commandUtils.js';
 import { parseSlashCommand } from '../utils/commands.js';
 import { useTerminalTheme } from './hooks/useTerminalTheme.js';
@@ -192,7 +284,7 @@ import {
 } from './utils/historyUtils.js';
 
 interface AppContainerProps {
-  config: Config;
+  config: HiveConfig;
   startupWarnings?: StartupWarning[];
   version: string;
   initializationResult: InitializationResult;
@@ -231,7 +323,7 @@ interface GlobalKeypressContext {
     isAlternateBuffer: boolean;
     embeddedShellFocused: boolean;
     isBackgroundTaskVisible: boolean;
-    activePtyId: string | null;
+    activePtyId: string | null | undefined;
     ideContextState: unknown;
     showErrorDetails: boolean;
     // Refs
@@ -242,12 +334,12 @@ interface GlobalKeypressContext {
     backgroundTasks: Map<number, unknown>;
     // Actions
     setShortcutsHelpVisible: (v: boolean) => void;
-    setMouseMode: (fn: (prev: boolean) => boolean) => void;
-    setConstrainHeight: (fn: (prev: boolean) => boolean) => void;
+    setMouseMode: (fn: boolean | ((prev: boolean) => boolean)) => void;
+    setConstrainHeight: (fn: boolean | ((prev: boolean) => boolean)) => void;
     setCopyModeEnabled: (v: boolean) => void;
-    setShowErrorDetails: (fn: (prev: boolean) => boolean) => void;
-    setShowFullTodos: (fn: (prev: boolean) => boolean) => void;
-    setRenderMarkdown: (fn: (prev: boolean) => boolean) => void;
+    setShowErrorDetails: (fn: boolean | ((prev: boolean) => boolean)) => void;
+    setShowFullTodos: (fn: boolean | ((prev: boolean) => boolean)) => void;
+    setRenderMarkdown: (fn: boolean | ((prev: boolean) => boolean)) => void;
     setEmbeddedShellFocused: (v: boolean) => void;
     setIsBackgroundTaskListOpen: (v: boolean) => void;
     handleCtrlCPress: () => void;
@@ -255,10 +347,10 @@ interface GlobalKeypressContext {
     handleSuspend: () => void;
     handleSlashCommand: (cmd: string) => void;
     cancelOngoingRequest?: () => void;
-    backgroundCurrentExecution: () => void;
+    backgroundCurrentExecution?: () => void;
     toggleBackgroundTasks: () => void;
     refreshStatic: () => void;
-    showTransientMessage: (msg: {text: string; type: unknown}) => void;
+    showTransientMessage: (msg: any) => void;
     triggerExpandHint: (v: boolean) => void;
     toggleAllExpansion: (callIds: string[]) => void;
     dumpCurrentFrame?: (filename: string) => void;
@@ -269,11 +361,9 @@ interface GlobalKeypressContext {
     history: unknown[];
     pendingHistoryItems: unknown[];
     TransientMessageType: typeof TransientMessageType;
-    config: Config;
+    config: HiveConfig;
 }
 
-
-type Key = { name?: string; ctrl?: boolean; meta?: boolean; shift?: boolean; sequence?: string };
 
 function handleDebugAndHelpKeys(ctx: GlobalKeypressContext, key: Key): boolean | null {
     if (ctx.debugKeystrokeLogging) {
@@ -286,14 +376,14 @@ function handleDebugAndHelpKeys(ctx: GlobalKeypressContext, key: Key): boolean |
 }
 
 function handleMouseAndCopyKeys(ctx: GlobalKeypressContext, key: Key): boolean | null {
-    if (keyMatchers[Command.TOGGLE_MOUSE_MODE](key)) {
+    if (ctx.keyMatchers[Command.TOGGLE_MOUSE_MODE](key)) {
         ctx.setMouseMode((prev: boolean) => !prev);
         if (ctx.mouseMode && !ctx.isAlternateBuffer) {
             appEvents.emit(AppEvent.ScrollToBottom);
         }
         return true;
     }
-    if (ctx.isAlternateBuffer && keyMatchers[Command.TOGGLE_COPY_MODE](key)) {
+    if (ctx.isAlternateBuffer && ctx.keyMatchers[Command.TOGGLE_COPY_MODE](key)) {
         ctx.setCopyModeEnabled(true);
         disableMouseEvents();
         return true;
@@ -302,23 +392,23 @@ function handleMouseAndCopyKeys(ctx: GlobalKeypressContext, key: Key): boolean |
 }
 
 function handleAppControlKeys(ctx: GlobalKeypressContext, key: Key): boolean | null {
-    if (keyMatchers[Command.QUIT](key)) {
+    if (ctx.keyMatchers[Command.QUIT](key)) {
         void ctx.cancelOngoingRequest?.();
         ctx.handleCtrlCPress();
         return true;
     }
-    if (keyMatchers[Command.EXIT](key)) {
+    if (ctx.keyMatchers[Command.EXIT](key)) {
         if (ctx.bufferRef.current.text.length > 0) {
             return false;
         }
         ctx.handleCtrlDPress();
         return true;
     }
-    if (keyMatchers[Command.SUSPEND_APP](key)) {
+    if (ctx.keyMatchers[Command.SUSPEND_APP](key)) {
         ctx.handleSuspend();
         return null;
     }
-    if (keyMatchers[Command.DUMP_FRAME](key)) {
+    if (ctx.keyMatchers[Command.DUMP_FRAME](key)) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `snapshot-${timestamp}.json`;
         if (ctx.dumpCurrentFrame) {
@@ -327,7 +417,7 @@ function handleAppControlKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
         }
         return true;
     }
-    if (keyMatchers[Command.START_RECORDING](key)) {
+    if (ctx.keyMatchers[Command.START_RECORDING](key)) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `recording-${timestamp}.json`;
         if (ctx.startRecording) {
@@ -337,7 +427,7 @@ function handleAppControlKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
         }
         return true;
     }
-    if (keyMatchers[Command.STOP_RECORDING](key)) {
+    if (ctx.keyMatchers[Command.STOP_RECORDING](key)) {
         if (ctx.stopRecording) {
             ctx.stopRecording();
             debugLogger.log(
@@ -347,7 +437,7 @@ function handleAppControlKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
         }
         return true;
     }
-    if (keyMatchers[Command.TOGGLE_COPY_MODE](key) && !ctx.isAlternateBuffer) {
+    if (ctx.keyMatchers[Command.TOGGLE_COPY_MODE](key) && !ctx.isAlternateBuffer) {
         ctx.showTransientMessage({
             text: 'Use Ctrl+O to expand and collapse blocks of content.',
             type: ctx.TransientMessageType.Warning
@@ -373,7 +463,7 @@ function handleDisplayKeys(ctx: GlobalKeypressContext, key: Key): boolean | null
     if (!ctx.constrainHeight) {
         enteringConstrainHeightMode = true;
         ctx.setConstrainHeight(true);
-        if (keyMatchers[Command.SHOW_MORE_LINES](key)) {
+        if (ctx.keyMatchers[Command.SHOW_MORE_LINES](key)) {
             toggleLastTurnTools();
         }
         if (!ctx.isAlternateBuffer) {
@@ -381,29 +471,15 @@ function handleDisplayKeys(ctx: GlobalKeypressContext, key: Key): boolean | null
         }
     }
 
-    if (keyMatchers[Command.SHOW_ERROR_DETAILS](key)) {
-        if (ctx.devtoolsEnabled) {
-            void (async () => {
-                const { toggleDevToolsPanel } = await import(
-                    '../utils/devtoolsService.js'
-                );
-                await toggleDevToolsPanel(
-                    ctx.config,
-                    ctx.showErrorDetails,
-                    () => ctx.setShowErrorDetails((prev: boolean) => !prev),
-                    () => ctx.setShowErrorDetails(true)
-                );
-            })();
-        } else {
-            ctx.setShowErrorDetails((prev: boolean) => !prev);
-        }
+    if (ctx.keyMatchers[Command.SHOW_ERROR_DETAILS](key)) {
+        ctx.setShowErrorDetails((prev: boolean) => !prev);
         return true;
     }
-    if (keyMatchers[Command.SHOW_FULL_TODOS](key)) {
+    if (ctx.keyMatchers[Command.SHOW_FULL_TODOS](key)) {
         ctx.setShowFullTodos((prev: boolean) => !prev);
         return true;
     }
-    if (keyMatchers[Command.TOGGLE_MARKDOWN](key)) {
+    if (ctx.keyMatchers[Command.TOGGLE_MARKDOWN](key)) {
         ctx.setRenderMarkdown((prev: boolean) => {
             const newValue = !prev;
             ctx.refreshStatic();
@@ -412,7 +488,7 @@ function handleDisplayKeys(ctx: GlobalKeypressContext, key: Key): boolean | null
         return true;
     }
     if (
-        keyMatchers[Command.SHOW_IDE_CONTEXT_DETAIL](key) &&
+        ctx.keyMatchers[Command.SHOW_IDE_CONTEXT_DETAIL](key) &&
         ctx.config.getIdeMode() &&
         ctx.ideContextState
     ) {
@@ -420,7 +496,7 @@ function handleDisplayKeys(ctx: GlobalKeypressContext, key: Key): boolean | null
         return true;
     }
     if (
-        keyMatchers[Command.SHOW_MORE_LINES](key) &&
+        ctx.keyMatchers[Command.SHOW_MORE_LINES](key) &&
         !enteringConstrainHeightMode
     ) {
         ctx.setConstrainHeight(false);
@@ -433,8 +509,8 @@ function handleDisplayKeys(ctx: GlobalKeypressContext, key: Key): boolean | null
 
 function handleShellFocusKeys(ctx: GlobalKeypressContext, key: Key): boolean | null {
     if (
-        (keyMatchers[Command.FOCUS_SHELL_INPUT](key) ||
-            keyMatchers[Command.UNFOCUS_BACKGROUND_SHELL_LIST](key)) &&
+        (ctx.keyMatchers[Command.FOCUS_SHELL_INPUT](key) ||
+            ctx.keyMatchers[Command.UNFOCUS_BACKGROUND_SHELL_LIST](key)) &&
         (ctx.activePtyId || (ctx.isBackgroundTaskVisible && ctx.backgroundTasks.size > 0))
     ) {
         if (ctx.embeddedShellFocused) {
@@ -468,8 +544,8 @@ function handleShellFocusKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
         return true;
     }
     if (
-        keyMatchers[Command.UNFOCUS_SHELL_INPUT](key) ||
-        keyMatchers[Command.UNFOCUS_BACKGROUND_SHELL](key)
+        ctx.keyMatchers[Command.UNFOCUS_SHELL_INPUT](key) ||
+        ctx.keyMatchers[Command.UNFOCUS_BACKGROUND_SHELL](key)
     ) {
         if (ctx.embeddedShellFocused) {
             ctx.setEmbeddedShellFocused(false);
@@ -477,7 +553,7 @@ function handleShellFocusKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
         }
         return false;
     }
-    if (keyMatchers[Command.TOGGLE_BACKGROUND_SHELL](key)) {
+    if (ctx.keyMatchers[Command.TOGGLE_BACKGROUND_SHELL](key)) {
         if (ctx.activePtyId) {
             ctx.backgroundCurrentExecution();
         } else {
@@ -493,7 +569,7 @@ function handleShellFocusKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
         }
         return true;
     }
-    if (keyMatchers[Command.TOGGLE_BACKGROUND_SHELL_LIST](key)) {
+    if (ctx.keyMatchers[Command.TOGGLE_BACKGROUND_SHELL_LIST](key)) {
         if (ctx.backgroundTasks.size > 0 && ctx.isBackgroundTaskVisible) {
             if (!ctx.embeddedShellFocused) {
                 ctx.setEmbeddedShellFocused(true);
@@ -513,15 +589,15 @@ interface SubmitContext {
     isMcpOrConfigReady: boolean;
     isCompressing: boolean;
     isConfigInitialized: boolean;
-    config: Config;
+    config: HiveConfig;
     submittedValue: string;
-    slashCommands: unknown[] | null;
+    slashCommands: readonly SlashCommand[] | null | undefined;
     handleSlashCommand: (cmd: string) => void;
     handleHintSubmit: (hint: string) => void;
-    submitQuery: (query: unknown) => void;
+    submitQuery: (query: any, options?: any, _prompt_id?: string) => void | Promise<void>;
     addInput: (input: string) => void;
     addMessage: (msg: string) => void;
-    setPermissionConfirmationRequest: (req: unknown) => void;
+    setPermissionConfirmationRequest: (req: any) => void;
     messageQueueLength: number;
 }
 
@@ -596,7 +672,7 @@ export const AppContainer = (props: AppContainerProps) => {
     useContext(InkAppContext);
     const recordingFilenameRef = useRef<string | null>(null);
     const historyManager = useHistory({
-        chatRecordingService: config.getGeminiClient()?.getChatRecordingService()
+        chatRecordingService: (config.getGeminiClient() as any)?.getChatRecordingService()
     });
 
     useMemoryMonitor(historyManager);
@@ -623,7 +699,7 @@ export const AppContainer = (props: AppContainerProps) => {
   >(null);
     const [showPrivacyNotice, setShowPrivacyNotice] = useState<boolean>(false);
     const [themeError, setThemeError] = useState<string | null>(
-        initializationResult.themeError
+        initializationResult.themeError as string | null
     );
     const [isProcessing, setIsProcessing] = useState<boolean>(false);
     const [embeddedShellFocused, setEmbeddedShellFocused] = useState(false);
@@ -681,7 +757,7 @@ export const AppContainer = (props: AppContainerProps) => {
     const activeHooks = useHookDisplayState();
     const [updateInfo, setUpdateInfo] = useState<UpdateObject | null>(null);
     const [isTrustedFolder, setIsTrustedFolder] = useState<boolean | undefined>(
-        () => isWorkspaceTrusted(settings.merged).isTrusted
+        true
     );
 
     const [queueErrorMessage, setQueueErrorMessage] = useTimedMessage<string>(
@@ -732,7 +808,7 @@ export const AppContainer = (props: AppContainerProps) => {
 
     const extensionManager = config.getExtensionLoader() as ExtensionManager;
     // We are in the interactive CLI, update how we request consent and settings.
-    extensionManager.setRequestConsent((description) =>
+    extensionManager.setRequestConsent((description: any) =>
         requestConsentInteractive(description, addConfirmUpdateExtensionRequest)
     );
     extensionManager.setRequestSetting();
@@ -859,7 +935,7 @@ export const AppContainer = (props: AppContainerProps) => {
 
             if (result) {
                 const additionalContext = result.getAdditionalContext();
-                const geminiClient = config.getGeminiClient();
+                const geminiClient = config.getGeminiClient() as any;
                 if (additionalContext && geminiClient) {
                     await geminiClient.addHistory({
                         role: 'user',
@@ -869,11 +945,6 @@ export const AppContainer = (props: AppContainerProps) => {
                     });
                 }
             }
-
-            // Fire-and-forget: generate summary for previous session in background
-            generateSummary(config).catch((e) => {
-                debugLogger.warn('Background summary generation failed:', e);
-            });
         })();
         const cleanupFn = async () => {
             // Turn off mouse scroll.
@@ -885,9 +956,6 @@ export const AppContainer = (props: AppContainerProps) => {
                     ShellExecutionService.kill(pid)
                 )
             );
-
-            const ideClient = await IdeClient.getInstance();
-            await ideClient.disconnect();
 
             // Fire SessionEnd hook on cleanup (only if hooks are enabled)
             await config?.getHookSystem()?.fireSessionEndEvent(SessionEndReason.Exit);
@@ -1073,57 +1141,29 @@ export const AppContainer = (props: AppContainerProps) => {
         settings,
         setThemeError,
         historyManager.addItem,
-        initializationResult.themeError,
+        initializationResult.themeError as string | null,
         refreshStatic
     );
     // Poll for terminal background color changes to auto-switch theme
     useTerminalTheme(handleThemeSelect, config, refreshStatic);
-    const {
-        authState,
-        setAuthState,
-        authError,
-        onAuthError,
-        apiKeyDefaultValue,
-        reloadApiKey,
-        accountSuspensionInfo,
-        setAccountSuspensionInfo
-    } = useAuthCommand(
-        settings,
-        config,
-        initializationResult.authError,
-        initializationResult.accountSuspensionInfo
-    );
-    const [authContext, setAuthContext] = useState<{ requiresRestart?: boolean }>(
-        {}
-    );
+    // Auth command simulated locally (no auth for local admin TUI)
+    const [authState, setAuthState] = useState<AuthState>(AuthState.Authenticated);
+    const [authError, setAuthError] = useState<string | null>(null);
+    const onAuthError = useCallback((err: string | null) => { setAuthError(err); }, []);
+    const setAuthContext = useCallback((_ctx: any) => {}, []);
+    const apiKeyDefaultValue = undefined;
+    const reloadApiKey = useCallback(async () => '', []);
+    const accountSuspensionInfo = null;
+    const setAccountSuspensionInfo = useCallback((_info: any) => {}, []);
 
-    useEffect(() => {
-        if (authState === AuthState.Authenticated && authContext.requiresRestart) {
-            setAuthState(AuthState.AwaitingLoginRestart);
-            setAuthContext({});
-        }
-    }, [authState, authContext, setAuthState]);
-
-    const {
-        proQuotaRequest,
-        handleProQuotaChoice,
-        validationRequest,
-        handleValidationChoice,
-        // G1 AI Credits
-        overageMenuRequest,
-        handleOverageMenuChoice,
-        emptyWalletRequest,
-        handleEmptyWalletChoice
-    } = useQuotaAndFallback({
-        config,
-        historyManager,
-        userTier,
-        paidTier,
-        settings,
-        setModelSwitchedFromQuotaError,
-        onShowAuthSelection: () => setAuthState(AuthState.Updating),
-        errorVerbosity: settings.merged.ui.errorVerbosity
-    });
+    const proQuotaRequest = null;
+    const handleProQuotaChoice = useCallback(() => {}, []);
+    const validationRequest = null;
+    const handleValidationChoice = useCallback(() => {}, []);
+    const overageMenuRequest = null;
+    const handleOverageMenuChoice = useCallback(() => {}, []);
+    const emptyWalletRequest = null;
+    const handleEmptyWalletChoice = useCallback(() => {}, []);
 
     // Derive auth state variables for backward compatibility with UIStateContext
     const isAuthDialogOpen = authState === AuthState.Updating;
@@ -1245,7 +1285,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
     useEffect(() => {
     // Only sync when not currently authenticating
         if (authState === AuthState.Authenticated) {
-            setUserTier(config.getUserTier());
+            setUserTier(config.getUserTier() as any);
             setPaidTier(config.getUserPaidTier());
         }
     }, [config, authState]);
@@ -1438,7 +1478,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             );
             if (config.getDebugMode()) {
                 debugLogger.log(
-                    `[DEBUG] Refreshed memory content in config: ${flattenedMemory.substring(
+                    `[DEBUG] Refreshed memory content in config: ${JSON.stringify(flattenedMemory).substring(
                         0,
                         200
                     )}...`
@@ -1475,8 +1515,8 @@ Logging in with Google... Restarting Gemini CLI to continue.
 
     useEffect(() => {
         if (pendingRestorePrompt) {
-            const lastHistoryUserMsg = historyManager.history.findLast(
-                (h) => h.type === 'user'
+            const lastHistoryUserMsg = [...historyManager.history].reverse().find(
+                (h: any) => h.type === 'user'
             );
             const lastUserMsg = inputHistory.at(-1);
 
@@ -1504,27 +1544,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
         return hint;
     }, []);
 
-    useEffect(() => {
-        const hintListener = (text: string, source: InjectionSource) => {
-            if (source !== 'user_steering' && source !== 'background_completion') {
-                return;
-            }
-            pendingHintsRef.current.push(text);
-            setPendingHintCount((prev) => prev + 1);
-        };
-        config.injectionService.onInjection(hintListener);
-        return () => {
-            config.injectionService.offInjection(hintListener);
-        };
-    }, [config]);
-
-    const streamAgent = useMemo(
-        () =>
-            config?.getAgentSessionInteractiveEnabled()
-                ? new LegacyAgentProtocol({ config, getPreferredEditor })
-                : undefined,
-        [config, getPreferredEditor]
-    );
+    const streamAgent = undefined;
 
     const agentStreamResult = useAgentStream({
         agent: streamAgent,
@@ -1533,35 +1553,13 @@ Logging in with Google... Restarting Gemini CLI to continue.
         isShellFocused: embeddedShellFocused,
         logger
     });
-    const geminiStreamResult = useGeminiStream(
-        config.getGeminiClient(),
-        historyManager.history,
-        historyManager.addItem,
-        config,
-        settings,
-        setDebugMessage,
-        handleSlashCommand,
-        shellModeActive,
-        getPreferredEditor,
-        onAuthError,
-        performMemoryRefresh,
-        modelSwitchedFromQuotaError,
-        setModelSwitchedFromQuotaError,
-        onCancelSubmit,
-        setEmbeddedShellFocused,
-        terminalWidth,
-        terminalHeight,
-        embeddedShellFocused,
-        consumePendingHints
-    );
-
-    const activeStream = streamAgent ? agentStreamResult : geminiStreamResult;
+    const activeStream = agentStreamResult;
 
     const {
         streamingState,
         submitQuery,
         initError,
-        pendingHistoryItems: pendingGeminiHistoryItems,
+        pendingHistoryItems: pendingAssistantHistoryItems,
         thought,
         cancelOngoingRequest,
         pendingToolCalls,
@@ -1579,8 +1577,8 @@ Logging in with Google... Restarting Gemini CLI to continue.
     } = activeStream;
 
     const pendingHistoryItems = useMemo(
-        () => [...pendingSlashCommandHistoryItems, ...pendingGeminiHistoryItems],
-        [pendingSlashCommandHistoryItems, pendingGeminiHistoryItems]
+        () => [...pendingSlashCommandHistoryItems, ...pendingAssistantHistoryItems],
+        [pendingSlashCommandHistoryItems, pendingAssistantHistoryItems]
     );
 
     toggleBackgroundTasksRef.current = toggleBackgroundTasks;
@@ -1980,23 +1978,18 @@ Logging in with Google... Restarting Gemini CLI to continue.
     type: TransientMessageType;
   }>(WARNING_PROMPT_DURATION_MS);
 
-    const {
-        isFolderTrustDialogOpen,
-        discoveryResults: folderDiscoveryResults,
-        handleFolderTrustSelect,
-        isRestarting
-    } = useFolderTrust(settings, setIsTrustedFolder, historyManager.addItem);
+    const isFolderTrustDialogOpen = false;
+    const folderDiscoveryResults = null;
+    const handleFolderTrustSelect = useCallback(() => {}, []);
+    const isRestarting = false;
 
     const policyUpdateConfirmationRequest =
     config.getPolicyUpdateConfirmationRequest();
     const [isPolicyUpdateDialogOpen, setIsPolicyUpdateDialogOpen] = useState(
         !!policyUpdateConfirmationRequest
     );
-    const {
-        needsRestart: ideNeedsRestart,
-        restartReason: ideTrustRestartReason
-    } = useIdeTrustListener();
-    useIncludeDirsTrust(config, isTrustedFolder, historyManager, setCustomDialog);
+    const ideNeedsRestart = false;
+    const ideTrustRestartReason = undefined;
 
     const tabFocusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -2622,7 +2615,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             geminiMdFileCount,
             streamingState,
             initError,
-            pendingGeminiHistoryItems,
+            pendingAssistantHistoryItems: pendingAssistantHistoryItems,
             thought,
             isInputActive,
             isVoiceModeEnabled,
@@ -2735,7 +2728,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             geminiMdFileCount,
             streamingState,
             initError,
-            pendingGeminiHistoryItems,
+            pendingAssistantHistoryItems,
             thought,
             isInputActive,
             isVoiceModeEnabled,

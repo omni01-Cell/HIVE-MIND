@@ -50,6 +50,7 @@ export class GttsTTSAdapter {
 
         try {
             // Import dynamique
+            // @ts-ignore - node-gtts does not have types installed
             const gtts = (await import('node-gtts')).default;
             const ttsInstance = gtts(language);
 

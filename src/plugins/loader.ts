@@ -333,7 +333,7 @@ class PluginLoader {
         options: { forceModeration?: boolean } = {}
     ): Promise<OpenAIToolDefinition[]> {
         const { forceModeration } = options;
-        const { supabase } = await import('../services/supabase.js') as { supabase: SupabaseClient | null };
+        const { supabase } = await import('../services/supabase.js') as unknown as { supabase: SupabaseClient | null };
         const { container } = await import('../core/ServiceContainer.js') as { container: ServiceContainer };
 
         let embeddings: EmbeddingsService | null = null;

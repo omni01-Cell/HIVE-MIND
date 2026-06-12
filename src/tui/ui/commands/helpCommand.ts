@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CommandKind, type SlashCommand } from './types.js';
-import { MessageType, type HistoryItemHelp } from '../types.js';
+import { CommandKind, SlashCommand } from '../contexts/UIStateContext.js';
+import { MessageType } from '../contexts/UIStateContext.js';
+import { HistoryItemHelp } from '../contexts/UIStateContext.js';
 
 export const helpCommand: SlashCommand = {
     name: 'help',

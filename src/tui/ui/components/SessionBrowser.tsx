@@ -11,14 +11,14 @@ import { Colors } from '../colors.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { useKeypress } from '../hooks/useKeypress.js';
 import path from 'node:path';
-import type { Config } from '@google/gemini-cli-core';
+import { HiveConfig } from '../../config/hiveConfig.js';
 
 /**
  * Props for the main SessionBrowser component.
  */
 export interface SessionBrowserProps {
   /** Application configuration object */
-  config: Config;
+  config: HiveConfig;
   /** Callback when user selects a session to resume */
   onResumeSession: (session: SessionInfo) => void;
   /** Callback when user deletes a session */
@@ -412,7 +412,7 @@ export const useSessionBrowserState = (
 /**
  * Hook to load sessions on mount.
  */
-const useLoadSessions = (config: Config, state: SessionBrowserState) => {
+const useLoadSessions = (config: HiveConfig, state: SessionBrowserState) => {
     const {
         setSessions,
         setLoading,

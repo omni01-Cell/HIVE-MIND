@@ -7,7 +7,7 @@
 import React, { useCallback, useMemo, useRef } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
-import type { ConsoleMessageItem } from '../types.js';
+import { ConsoleMessageItem } from '../contexts/UIStateContext.js';
 import {
     ScrollableList,
     type ScrollableListRef

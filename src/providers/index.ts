@@ -858,13 +858,31 @@ export async function loadAdapters(): Promise<void> {
             'anthropic': ['anthropic'],
             'mistral': ['mistral'],
             'codestral': ['codestral'],
-            'kimi': ['kimi'],         // Kimi Code (API spéciale coding agents)
-            'moonshot': ['moonshot'], // Moonshot AI standard
-            'github': ['github'],     // GitHub Models (Free Tier)
-            'groq': ['groq'],         // Groq LPU (Fast Inference)
-            'huggingface': ['huggingface'], // HF Router
-            'nvidia': ['nvidia'],       // NVIDIA AI Platform (NIM)
-            'openrouter': ['openrouter'] // OpenRouter (Multi-provider fast gateway)
+            'kimi': ['kimi'],
+            'moonshot': ['moonshot'],
+            'github': ['github'],
+            'groq': ['groq'],
+            'huggingface': ['huggingface'],
+            'nvidia': ['nvidia'],
+            'openrouter': ['openrouter'],
+            'cerebras': ['cerebras'],
+            'cohere': ['cohere'],
+            'cloudflare': ['cloudflare'],
+            'fireworks': ['fireworks'],
+            'baseten': ['baseten'],
+            'nebius': ['nebius'],
+            'novita': ['novita'],
+            'ai21': ['ai21'],
+            'upstage': ['upstage'],
+            'nlpcloud': ['nlpcloud'],
+            'alibaba': ['alibaba'],
+            'modal': ['modal'],
+            'inferencenet': ['inferencenet'],
+            'hyperbolic': ['hyperbolic'],
+            'sambanova': ['sambanova'],
+            'scaleway': ['scaleway'],
+            'vercel': ['vercel'],
+            'opencodezen': ['opencodezen']
         };
 
         for (const [fileName, registerNames] of Object.entries(adapterMapping)) {

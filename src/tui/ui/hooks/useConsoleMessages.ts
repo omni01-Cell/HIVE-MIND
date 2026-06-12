@@ -5,12 +5,9 @@
  */
 
 import { useCallback, useSyncExternalStore } from 'react';
-import type { ConsoleMessageItem } from '../types.js';
-import {
-    coreEvents,
-    CoreEvent,
-    type ConsoleLogPayload
-} from '@google/gemini-cli-core';
+import { ConsoleMessageItem } from '../contexts/UIStateContext.js';
+import { coreEvents, CoreEvent } from '../../utils/coreEvents.js';
+import { ConsoleLogPayload } from '../contexts/UIStateContext.js';
 
 export interface UseErrorCountReturn {
   errorCount: number;

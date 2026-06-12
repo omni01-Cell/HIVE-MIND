@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { StreamingState } from '../types.js';
+import { StreamingState } from '../contexts/UIStateContext.js';
 
 export interface UseMessageQueueOptions {
   isConfigInitialized: boolean;

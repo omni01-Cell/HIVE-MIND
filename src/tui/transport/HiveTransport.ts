@@ -1,19 +1,11 @@
 /**
  * HiveTransport — Pont entre TUI et core HIVE-MIND
  *
- * Implémente TransportInterface pour permettre au TUI de communiquer
- * avec le core HIVE-MIND via le même mécanisme que WhatsApp/Discord/Telegram.
- *
- * Flux :
- *   TUI submitQuery(text)
- *     → HiveTransport.sendText("tui-local", text)
- *     → core._handleMessage(BotEvent)
- *     → ReAct loop → LLM → tools → response
- *     → HiveTransport.sendText() (core envoie la réponse)
- *     → onMessage callback
- *     → TUI affiche la réponse
+ * Implémente TransportInterface pour connecter le TUI au core.
+ * Hérite de EventEmitter pour notifier l'UI Ink locale des réponses et états du core.
  */
 
+import { EventEmitter } from 'events';
 import type { MessageData, BotEvent } from '../../core/types/BotTypes.js';
 
 type MessageCallback = (message: MessageData) => void;
@@ -21,206 +13,170 @@ type GroupEventCallback = (event: BotEvent) => void;
 
 const TUI_CHAT_ID = 'tui-local';
 
-class HiveTransportImpl {
+class HiveTransportImpl extends EventEmitter {
     private messageCallbacks: MessageCallback[] = [];
     private groupEventCallbacks: GroupEventCallback[] = [];
     private isInitialized = false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private core: any = null;
+    private pendingConfirmations: Map<string, { resolve: (res: any) => void }> = new Map();
+
+    constructor() {
+        super();
+    }
 
     /**
-   * Initialise le transport et le core HIVE-MIND
-   */
+     * Initialise le transport
+     */
     async connect(): Promise<void> {
-        if (this.isInitialized) {
-            console.log('[HiveTransport] Déjà initialisé');
-            return;
-        }
-
-        try {
-            // Import dynamique du core pour éviter les dépendances circulaires
-            const { botCore } = await import('../../core/index.js');
-            this.core = botCore;
-
-            // Initialiser le core si ce n'est pas déjà fait
-            if (!this.core.isReady) {
-                await this.core.init();
-            }
-
-            this.isInitialized = true;
-            console.log('[HiveTransport] ✅ Connecté au core HIVE-MIND');
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.error('[HiveTransport] ❌ Erreur de connexion:', message);
-            throw error;
-        }
+        this.isInitialized = true;
+        console.log('[HiveTransport] ✅ Connecté');
+        this.emit('connection_status', { connected: true });
     }
 
     /**
-   * Arrêt propre du transport
-   */
+     * Arrêt propre du transport
+     */
     async disconnect(): Promise<void> {
-        if (!this.isInitialized) {
-            return;
-        }
-
-        try {
-            // Le core gère son propre arrêt
-            this.isInitialized = false;
-            this.messageCallbacks = [];
-            this.groupEventCallbacks = [];
-            console.log('[HiveTransport] Déconnecté');
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.error('[HiveTransport] Erreur de déconnexion:', message);
-        }
+        this.isInitialized = false;
+        this.messageCallbacks = [];
+        this.groupEventCallbacks = [];
+        console.log('[HiveTransport] Déconnecté');
+        this.emit('connection_status', { connected: false });
     }
 
     /**
-   * Envoie un message texte au core
-   * C'est la méthode clé : le TUI l'appelle quand l'utilisateur soumet une requête
-   */
-    async sendText(chatId: string, text: string, options: Record<string, unknown> = {}): Promise<void> {
-        if (!this.isInitialized || !this.core) {
-            throw new Error('[HiveTransport] Pas connecté au core');
-        }
+     * Envoie un message texte du core vers le TUI
+     */
+    async sendText(chatId: string, text: string, options: Record<string, unknown> = {}): Promise<any> {
+        const message: MessageData = {
+            chatId: chatId || TUI_CHAT_ID,
+            sender: 'assistant',
+            text,
+            isGroup: false,
+            sourceChannel: 'ink-cli',
+            ...options
+        };
 
-        // Créer un BotEvent pour le core
-        const event: BotEvent = {
-            data: {
-                chatId: chatId || TUI_CHAT_ID,
-                sender: 'tui-user',
-                senderName: 'TUI User',
-                text,
-                isGroup: false,
-                sourceChannel: 'tui',
-                ...options
-            }
-        } as BotEvent;
-
-        // Envoyer au core via _handleMessage
-        try {
-            await this.core._handleMessage(event);
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.error('[HiveTransport] Erreur _handleMessage:', message);
-
-            // Notifier les callbacks de l'erreur
-            this.notifyMessageCallbacks({
-                chatId: chatId || TUI_CHAT_ID,
-                sender: 'system',
-                text: `❌ Erreur: ${message}`,
-                isGroup: false,
-                sourceChannel: 'tui'
-            });
-        }
+        this.emit('message', message);
+        return { success: true, messageId: `tui-msg-${Date.now()}` };
     }
 
     /**
-   * Envoie un média
-   */
-    async sendMedia(chatId: string, _media: unknown, _options: Record<string, unknown> = {}): Promise<void> {
-        console.log('[HiveTransport] sendMedia:', chatId);
+     * Envoie un média (image, vidéo, audio, document) du core vers le TUI
+     */
+    async sendMedia(chatId: string, media: any, options: Record<string, unknown> = {}): Promise<any> {
+        const type = options.type || 'document';
+        const filename = options.filename || 'media';
+        const caption = options.caption || '';
+
+        this.emit('media', { chatId, media, type, filename, caption });
+        return { success: true };
     }
 
     /**
-   * Envoie une note vocale
-   */
-    async sendVoiceNote(chatId: string, _audio: unknown, _options: Record<string, unknown> = {}): Promise<void> {
-        console.log('[HiveTransport] sendVoiceNote:', chatId);
+     * Envoie une note vocale du core vers le TUI
+     */
+    async sendVoiceNote(chatId: string, audio: any, options: Record<string, unknown> = {}): Promise<any> {
+        this.emit('voice', { chatId, audio, options });
+        return { success: true };
     }
 
     /**
-   * Envoie un fichier
-   */
-    async sendFile(chatId: string, _filePath: string, fileName: string, _caption: string = ''): Promise<void> {
-        console.log('[HiveTransport] sendFile:', chatId, fileName);
+     * Envoie un fichier du core vers le TUI
+     */
+    async sendFile(chatId: string, filePath: string, fileName: string, caption: string = ''): Promise<any> {
+        this.emit('file', { chatId, filePath, fileName, caption });
+        return { success: true };
     }
 
     /**
-   * Envoie un sticker
-   */
-    async sendSticker(chatId: string, _stickerBuffer: Buffer): Promise<void> {
-        console.log('[HiveTransport] sendSticker:', chatId);
+     * Envoie un sticker du core vers le TUI
+     */
+    async sendSticker(chatId: string, stickerBuffer: Buffer): Promise<any> {
+        this.emit('sticker', { chatId, stickerBuffer });
+        return { success: true };
     }
 
     /**
-   * Récupère les métadonnées d'un groupe
-   */
+     * Récupère les métadonnées d'un groupe (non applicable au TUI local)
+     */
     async getGroupMetadata(_groupId: string): Promise<Record<string, unknown>> {
         return { name: 'TUI Group', participants: [], admins: [] };
     }
 
     /**
-   * Télécharge un média depuis un message
-   */
+     * Télécharge un média (non applicable au TUI local)
+     */
     async downloadMedia(_message: unknown): Promise<Buffer> {
         return Buffer.from('');
     }
 
     /**
-   * Enregistre le callback pour les nouveaux messages
-   * C'est ici que le core envoie les réponses au TUI
-   */
+     * Enregistre le callback pour les nouveaux messages (appelé par TransportManager)
+     */
     onMessage(callback: MessageCallback): void {
         this.messageCallbacks.push(callback);
     }
 
     /**
-   * Enregistre le callback pour les événements de groupe
-   */
+     * Enregistre le callback pour les événements de groupe
+     */
     onGroupEvent(callback: GroupEventCallback): void {
         this.groupEventCallbacks.push(callback);
     }
 
     /**
-   * Met à jour la présence (typing indicator)
-   */
+     * Met à jour la présence (ex: typing indicator)
+     */
     async setPresence(chatId: string, presence: string): Promise<void> {
-    // Le TUI peut afficher "En train d'écrire..." si nécessaire
-        if (presence === 'composing') {
-            console.log(`[HiveTransport] ${chatId} est en train d'écrire...`);
-        }
+        this.emit('presence', { chatId, presence });
     }
 
     /**
-   * Envoie une réponse structurée
-   */
-    async sendUniversalResponse(chatId: string, response: { markdown?: string; plainText?: string }, _options: Record<string, unknown> = {}): Promise<void> {
+     * Envoie une réponse structurée (Universal Response)
+     */
+    async sendUniversalResponse(chatId: string, response: any, options: Record<string, unknown> = {}): Promise<any> {
         const text = response.markdown || response.plainText || '';
         if (text) {
-            this.notifyMessageCallbacks({
-                chatId: chatId || TUI_CHAT_ID,
-                sender: 'assistant',
-                text,
-                isGroup: false,
-                sourceChannel: 'tui'
-            });
+            await this.sendText(chatId, text, options);
         }
+        if (response.visual) {
+            this.emit('visual_response', { chatId, visual: response.visual });
+        }
+        return { success: true };
     }
 
     /**
-   * Vérifie si un utilisateur est admin (toujours false pour le TUI)
-   */
+     * Vérifie si un utilisateur est admin du canal TUI (toujours true car owner@local)
+     */
     async isAdmin(_groupId: string, _userId: string): Promise<boolean> {
-        return false;
+        return true;
     }
 
     /**
-   * Envoie une réaction
-   */
-    async sendReaction(chatId: string, _key: unknown, emoji: string): Promise<void> {
-        console.log('[HiveTransport] sendReaction:', chatId, emoji);
+     * Envoie une réaction
+     */
+    async sendReaction(chatId: string, key: any, emoji: string): Promise<boolean> {
+        this.emit('reaction', { chatId, key, emoji });
+        return true;
     }
 
     /**
-   * Notifie tous les callbacks de message
-   * Appelé par le core quand il envoie une réponse
-   */
-    private notifyMessageCallbacks(message: MessageData): void {
+     * Méthode interne pour pousser l'input utilisateur vers le core (User -> Core)
+     */
+    submitUserMessage(text: string, options: Record<string, unknown> = {}): void {
+        const msg: MessageData = {
+            chatId: TUI_CHAT_ID,
+            sender: 'owner@local',
+            senderName: 'TUI Admin',
+            text,
+            isGroup: false,
+            sourceChannel: 'ink-cli',
+            ...options
+        };
+
         for (const callback of this.messageCallbacks) {
             try {
-                callback(message);
+                callback(msg);
             } catch (error: unknown) {
                 console.error('[HiveTransport] Erreur dans callback message:', error);
             }
@@ -228,35 +184,51 @@ class HiveTransportImpl {
     }
 
     /**
-   * Notifie tous les callbacks d'événements de groupe
-   */
-    private notifyGroupEventCallbacks(event: BotEvent): void {
-        for (const callback of this.groupEventCallbacks) {
-            try {
-                callback(event);
-            } catch (error: unknown) {
-                console.error('[HiveTransport] Erreur dans callback groupe:', error);
-            }
-        }
-    }
-
-    /**
-   * Retourne l'identifiant du chat local
-   */
+     * Retourne l'identifiant du chat local
+     */
     getChatId(): string {
         return TUI_CHAT_ID;
     }
 
     /**
-   * Vérifie si le transport est connecté
-   */
+     * Vérifie si le transport est connecté
+     */
     isConnected(): boolean {
         return this.isInitialized;
+    }
+
+    /**
+     * Workspace actif pour la TUI (bypass sandbox)
+     */
+    getWorkspace(): string {
+        return process.cwd();
+    }
+
+    /**
+     * Envoie une requête de confirmation HITL vers le TUI
+     */
+    async requestConfirmation(type: string, data: any, description: string): Promise<{ approved: boolean; feedback?: string }> {
+        const id = `conf-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return new Promise((resolve) => {
+            this.pendingConfirmations.set(id, { resolve });
+            this.emit('confirmation_request', { id, type, data, description });
+        });
+    }
+
+    /**
+     * Soumet la réponse de l'utilisateur TUI à une requête de confirmation
+     */
+    submitConfirmationResponse(id: string, approved: boolean, feedback?: string): void {
+        const pending = this.pendingConfirmations.get(id);
+        if (pending) {
+            this.pendingConfirmations.delete(id);
+            pending.resolve({ approved, feedback });
+        }
     }
 }
 
 // Instance singleton
 export const hiveTransport = new HiveTransportImpl();
 
-// Export par défaut pour compatibilité
+// Export par défaut
 export default hiveTransport;

@@ -9,13 +9,9 @@ import os from 'node:os';
 import pathMod, * as path from 'node:path';
 import { useState, useCallback, useEffect, useMemo, useReducer } from 'react';
 import { LRUCache } from 'mnemonist';
-import {
-    coreEvents,
-    debugLogger,
-    getErrorMessage,
-    unescapePath,
-    type EditorType
-} from '@google/gemini-cli-core';
+import { debugLogger, getErrorMessage } from '../../../utils/errors.js';
+import { coreEvents } from '../../../utils/coreEvents.js';
+import { unescapePath, EditorType } from '../../contexts/UIStateContext.js';
 import {
     toCodePoints,
     cpLen,

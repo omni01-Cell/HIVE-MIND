@@ -4,15 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    uiTelemetryService,
-    SessionEndReason,
-    SessionStartSource,
-    flushTelemetry,
-    resetBrowserSession
-} from '@google/gemini-cli-core';
-import { CommandKind, type SlashCommand } from './types.js';
-import { MessageType } from '../types.js';
+import { uiTelemetryService, SessionEndReason, SessionStartSource, flushTelemetry, resetBrowserSession } from '../contexts/UIStateContext.js';
+import { CommandKind, SlashCommand } from '../contexts/UIStateContext.js';
+import { MessageType } from '../contexts/UIStateContext.js';
 import { randomUUID } from 'node:crypto';
 
 export const clearCommand: SlashCommand = {

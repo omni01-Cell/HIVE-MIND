@@ -51,7 +51,7 @@ export const AlternateBufferQuittingDisplay = () => {
                     key={i}
                     availableTerminalHeight={undefined}
                     terminalWidth={uiState.mainAreaWidth}
-                    item={{ ...item, id: 0 }}
+                    item={{ ...item, id: 0 } as any}
                     isPending={true}
                 />
             ))}
@@ -62,12 +62,12 @@ export const AlternateBufferQuittingDisplay = () => {
                     </Text>
                     <Box marginTop={1}>
                         <ToolStatusIndicator
-                            status={confirmingTool.tool.status}
+                            status={confirmingTool.tool.status as any}
                             name={confirmingTool.tool.name}
                         />
                         <ToolInfo
                             name={confirmingTool.tool.name}
-                            status={confirmingTool.tool.status}
+                            status={confirmingTool.tool.status as any}
                             description={confirmingTool.tool.description}
                             emphasis="high"
                         />

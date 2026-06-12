@@ -2,6 +2,7 @@ import { describe, it, beforeEach, jest, expect } from '@jest/globals';
 
 // 1. Mock fs readFileSync and existsSync
 import * as fsActual from 'fs';
+import * as fsPromisesActual from 'fs/promises';
 jest.unstable_mockModule('fs', () => ({
     ...fsActual,
     readFileSync: jest.fn((path: any, options: any) => {
@@ -42,6 +43,45 @@ jest.unstable_mockModule('../../../core/blueprint/AgentBlueprint.js', () => ({
             }
             return dummyBlueprint;
         })
+    }
+}));
+
+// Mocks pour fs/promises et le learningEngine pour tester le Skill System
+const mockFsPromisesReaddir = jest.fn<any>(async (dirPath: string) => {
+    if (String(dirPath).endsWith('survival')) {
+        return [{ isDirectory: () => true, name: 'pdf' }] as any;
+    }
+    return [];
+});
+
+const mockFsPromisesReadFile = jest.fn<any>(async (filePath: string) => {
+    if (String(filePath).includes('survival') && (String(filePath).endsWith('SKILL.md') || String(filePath).endsWith('skill.md'))) {
+        return '---\nname: pdf\ndescription: "read pdf files"\n---\nInstruction detail here.';
+    }
+    throw new Error('File not found');
+});
+
+jest.unstable_mockModule('fs/promises', () => ({
+    ...fsPromisesActual,
+    readdir: mockFsPromisesReaddir,
+    readFile: mockFsPromisesReadFile
+}));
+
+const mockRouteSkills = jest.fn<any>(async (query: string) => {
+    if (query.includes('sombre') || query.includes('expert-query')) {
+        return {
+            yamlBlock: '---\nname: theme-factory\ndescription: "A skill to style artifacts with beautiful themes"\n---',
+            comments: ['user dark theme is better in this situation, do ...']
+        };
+    }
+    return null;
+});
+
+jest.unstable_mockModule('../../../services/learning/LearningEngine.js', () => ({
+    learningEngine: {
+        routeSkills: mockRouteSkills,
+        getAllExpertSkills: jest.fn(async () => []),
+        getCommentsForSkill: jest.fn(async () => [])
     }
 }));
 
@@ -132,5 +172,45 @@ describe('TieredContextLoader (MindOS & Constraints Integration)', () => {
         expect(context.systemPrompt).toContain('<mindos_drives>');
         expect(context.systemPrompt).toContain('- custom_drive');
         expect(context.systemPrompt).not.toContain('- drive_a');
+    });
+
+    describe('Skill System Integration', () => {
+        it('should inject survival skills metadata in <survie-skills> XML block', async () => {
+            const context = await tieredContextLoader.load('user123@s.whatsapp.net', {
+                sender: 'user123',
+                senderName: 'John',
+                sourceChannel: 'whatsapp',
+                text: 'unrelated message'
+            });
+
+            expect(context.systemPrompt).toContain('<survie-skills>');
+            expect(context.systemPrompt).toContain('name: pdf');
+            expect(context.systemPrompt).toContain('path: "skills/survival/pdf/SKILL.md"');
+            expect(context.systemPrompt).not.toContain('Instruction detail here.'); // progressive disclosure
+        });
+
+        it('should dynamically inject routed expert skills and guidelines in <skills> XML block', async () => {
+            const context = await tieredContextLoader.load('user123@s.whatsapp.net', {
+                sender: 'user123',
+                senderName: 'John',
+                sourceChannel: 'whatsapp',
+                text: 'expert-query test theme'
+            });
+
+            expect(context.systemPrompt).toContain('<skills>');
+            expect(context.systemPrompt).toContain('name: theme-factory');
+            expect(context.systemPrompt).toContain('<comment>user dark theme is better in this situation, do ...</comment>');
+        });
+
+        it('should not inject <skills> XML block if no expert skill matches user message sementically', async () => {
+            const context = await tieredContextLoader.load('user123@s.whatsapp.net', {
+                sender: 'user123',
+                senderName: 'John',
+                sourceChannel: 'whatsapp',
+                text: 'unrelated message'
+            });
+
+            expect(context.systemPrompt).not.toContain('<skills>');
+        });
     });
 });

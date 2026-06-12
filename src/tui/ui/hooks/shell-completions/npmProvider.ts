@@ -6,7 +6,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { ShellCompletionProvider, CompletionResult } from './types.js';
+import { ShellCompletionProvider, CompletionResult } from '../../contexts/UIStateContext.js';
 import { escapeShellPath } from '../useShellCompletion.js';
 
 const NPM_SUBCOMMANDS = [

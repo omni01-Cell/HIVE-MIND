@@ -5,6 +5,7 @@
  */
 
 import { runSyncCleanup } from './cleanup.js';
+import type { HiveConfig } from '../config/hiveConfig.js';
 
 interface ErrorWithCode extends Error {
   exitCode?: number;
@@ -12,11 +13,49 @@ interface ErrorWithCode extends Error {
   status?: string | number;
 }
 
+export class FatalToolExecutionError extends Error {
+    exitCode = 1;
+}
+
+export class FatalCancellationError extends Error {
+    exitCode = 130;
+}
+
+export class FatalTurnLimitedError extends Error {
+    exitCode = 1;
+}
+
+export const debugLogger = {
+    debug: (...args: any[]) => console.debug('[Debug]', ...args),
+    log: (...args: any[]) => console.debug('[Debug]', ...args),
+    info: (...args: any[]) => console.info('[Info]', ...args),
+    warn: (...args: any[]) => console.warn('[Warn]', ...args),
+    error: (...args: any[]) => console.error('[Error]', ...args),
+};
+
+export function parseAndFormatApiError(error: any, _authType?: any): string {
+    if (!error) return 'Unknown error';
+    return error.message || String(error);
+}
+
+export function isFatalToolError(_errorType?: string): boolean {
+    return false;
+}
+
+export function getErrorMessage(error: any): string {
+    if (!error) return 'Unknown error';
+    if (typeof error === 'string') return error;
+    return error.message || String(error);
+}
+
+export function checkExhaustive(x: never): never {
+    throw new Error(`Unreachable case: ${JSON.stringify(x)}`);
+}
+
 /**
  * Extracts the appropriate error code from an error object.
  */
 function extractErrorCode(error: unknown): string | number {
-
     const errorWithCode = error as ErrorWithCode;
 
     // Prioritize exitCode for FatalError types, fall back to other codes
@@ -42,70 +81,27 @@ function getNumericExitCode(errorCode: string | number): number {
 
 /**
  * Handles errors consistently for both JSON and text output formats.
- * In JSON mode, outputs formatted JSON error and exits.
- * In streaming JSON mode, emits a result event with error status.
- * In text mode, outputs error message and re-throws.
  */
 export function handleError(
     error: unknown,
-    config: Config,
+    config: HiveConfig,
     customErrorCode?: string | number
 ): never {
-    const errorMessage = parseAndFormatApiError(
-        error,
-        config.getContentGeneratorConfig()?.authType
-    );
+    const errorMessage = parseAndFormatApiError(error);
 
-    if (config.getOutputFormat() === OutputFormat.STREAM_JSON) {
-        const streamFormatter = new StreamJsonFormatter();
-        const errorCode = customErrorCode ?? extractErrorCode(error);
-        const metrics = uiTelemetryService.getMetrics();
-
-        streamFormatter.emitEvent({
-            type: JsonStreamEventType.RESULT,
-            timestamp: new Date().toISOString(),
-            status: 'error',
-            error: {
-                type: getErrorType(error),
-                message: errorMessage
-            },
-            stats: streamFormatter.convertToStreamStats(metrics, 0)
-        });
-
-        runSyncCleanup();
-        process.exit(getNumericExitCode(errorCode));
-    } else if (config.getOutputFormat() === OutputFormat.JSON) {
-        const formatter = new JsonFormatter();
-        const errorCode = customErrorCode ?? extractErrorCode(error);
-
-        const formattedError = formatter.formatError(
-            error instanceof Error ? error : new Error(getErrorMessage(error)),
-            errorCode,
-            config.getSessionId()
-        );
-
-        coreEvents.emitFeedback('error', formattedError);
-        runSyncCleanup();
-        process.exit(getNumericExitCode(errorCode));
-    } else {
-        throw error;
-    }
+    const errorCode = customErrorCode ?? extractErrorCode(error);
+    console.error(errorMessage);
+    runSyncCleanup();
+    process.exit(getNumericExitCode(errorCode));
 }
 
 /**
  * Handles tool execution errors specifically.
- *
- * Fatal errors (e.g., NO_SPACE_LEFT) cause the CLI to exit immediately,
- * as they indicate unrecoverable system state.
- *
- * Non-fatal errors (e.g., INVALID_TOOL_PARAMS, FILE_NOT_FOUND, PATH_NOT_IN_WORKSPACE)
- * are logged to stderr and the error response is sent back to the model,
- * allowing it to self-correct.
  */
 export function handleToolError(
     toolName: string,
     toolError: Error,
-    config: Config,
+    _config: HiveConfig,
     errorType?: string,
     resultDisplay?: string
 ): void {
@@ -115,30 +111,7 @@ export function handleToolError(
 
     if (isFatal) {
         const toolExecutionError = new FatalToolExecutionError(errorMessage);
-        if (config.getOutputFormat() === OutputFormat.STREAM_JSON) {
-            const streamFormatter = new StreamJsonFormatter();
-            const metrics = uiTelemetryService.getMetrics();
-            streamFormatter.emitEvent({
-                type: JsonStreamEventType.RESULT,
-                timestamp: new Date().toISOString(),
-                status: 'error',
-                error: {
-                    type: errorType ?? 'FatalToolExecutionError',
-                    message: toolExecutionError.message
-                },
-                stats: streamFormatter.convertToStreamStats(metrics, 0)
-            });
-        } else if (config.getOutputFormat() === OutputFormat.JSON) {
-            const formatter = new JsonFormatter();
-            const formattedError = formatter.formatError(
-                toolExecutionError,
-                errorType ?? toolExecutionError.exitCode,
-                config.getSessionId()
-            );
-            coreEvents.emitFeedback('error', formattedError);
-        } else {
-            coreEvents.emitFeedback('error', errorMessage);
-        }
+        console.error(errorMessage);
         runSyncCleanup();
         process.exit(toolExecutionError.exitCode);
     }
@@ -150,79 +123,23 @@ export function handleToolError(
 /**
  * Handles cancellation/abort signals consistently.
  */
-export function handleCancellationError(config: Config): never {
+export function handleCancellationError(_config: HiveConfig): never {
     const cancellationError = new FatalCancellationError('Operation cancelled.');
 
-    if (config.getOutputFormat() === OutputFormat.STREAM_JSON) {
-        const streamFormatter = new StreamJsonFormatter();
-        const metrics = uiTelemetryService.getMetrics();
-        streamFormatter.emitEvent({
-            type: JsonStreamEventType.RESULT,
-            timestamp: new Date().toISOString(),
-            status: 'error',
-            error: {
-                type: getErrorType(cancellationError),
-                message: cancellationError.message
-            },
-            stats: streamFormatter.convertToStreamStats(metrics, 0)
-        });
-        runSyncCleanup();
-        process.exit(cancellationError.exitCode);
-    } else if (config.getOutputFormat() === OutputFormat.JSON) {
-        const formatter = new JsonFormatter();
-        const formattedError = formatter.formatError(
-            cancellationError,
-            cancellationError.exitCode,
-            config.getSessionId()
-        );
-
-        coreEvents.emitFeedback('error', formattedError);
-        runSyncCleanup();
-        process.exit(cancellationError.exitCode);
-    } else {
-        coreEvents.emitFeedback('error', cancellationError.message);
-        runSyncCleanup();
-        process.exit(cancellationError.exitCode);
-    }
+    console.error(cancellationError.message);
+    runSyncCleanup();
+    process.exit(cancellationError.exitCode);
 }
 
 /**
  * Handles max session turns exceeded consistently.
  */
-export function handleMaxTurnsExceededError(config: Config): never {
+export function handleMaxTurnsExceededError(_config: HiveConfig): never {
     const maxTurnsError = new FatalTurnLimitedError(
         'Reached max session turns for this session. Increase the number of turns by specifying maxSessionTurns in settings.json.'
     );
 
-    if (config.getOutputFormat() === OutputFormat.STREAM_JSON) {
-        const streamFormatter = new StreamJsonFormatter();
-        const metrics = uiTelemetryService.getMetrics();
-        streamFormatter.emitEvent({
-            type: JsonStreamEventType.RESULT,
-            timestamp: new Date().toISOString(),
-            status: 'error',
-            error: {
-                type: getErrorType(maxTurnsError),
-                message: maxTurnsError.message
-            },
-            stats: streamFormatter.convertToStreamStats(metrics, 0)
-        });
-        runSyncCleanup();
-        process.exit(maxTurnsError.exitCode);
-    } else if (config.getOutputFormat() === OutputFormat.JSON) {
-        const formatter = new JsonFormatter();
-        const formattedError = formatter.formatError(
-            maxTurnsError,
-            maxTurnsError.exitCode,
-            config.getSessionId()
-        );
-
-        coreEvents.emitFeedback('error', formattedError);
-        runSyncCleanup();
-        process.exit(maxTurnsError.exitCode);
-    } else {
-        coreEvents.emitFeedback('error', maxTurnsError.message);
-        runSyncCleanup();
-        process.exit(maxTurnsError.exitCode);
-    }
+    console.error(maxTurnsError.message);
+    runSyncCleanup();
+    process.exit(maxTurnsError.exitCode);
 }

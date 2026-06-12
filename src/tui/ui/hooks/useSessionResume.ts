@@ -5,13 +5,16 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { HistoryItemWithoutId } from '../types.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { HistoryItemWithoutId, Part } from '../contexts/UIStateContext.js';
+import { ResumedSessionData, HistoryTurn } from '../contexts/UIStateContext.js';
+import { coreEvents } from '../../utils/coreEvents.js';
+import { convertSessionToClientHistory } from '../contexts/UIStateContext.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 import { convertSessionToHistoryFormats } from './useSessionBrowser.js';
-import type { Part } from '@google/genai';
 
 interface UseSessionResumeParams {
-  config: Config;
+  config: HiveConfig;
   historyManager: UseHistoryManagerReturn;
   refreshStatic: () => void;
   isGeminiClientInitialized: boolean;

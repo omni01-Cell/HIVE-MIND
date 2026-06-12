@@ -10,7 +10,7 @@ import type {
     LoadableSettingScope,
     LoadedSettings
 } from '../../config/settings.js'; // Import LoadedSettings, AppSettings, MergedSetting
-import { MessageType } from '../types.js';
+import { MessageType } from '../contexts/UIStateContext.js';
 import process from 'node:process';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 import { useTerminalContext } from '../contexts/TerminalContext.js';

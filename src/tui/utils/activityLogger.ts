@@ -10,13 +10,10 @@ import zlib from 'node:zlib';
 import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
-import {
-    CoreEvent,
-    coreEvents,
-    debugLogger,
-    type ConsoleLogPayload,
-    type Config
-} from '@google/gemini-cli-core';
+import { debugLogger } from './errors.js';
+import { HiveConfig } from '../config/hiveConfig.js';
+import { CoreEvent, coreEvents } from './coreEvents.js';
+import { ConsoleLogPayload } from '../ui/contexts/UIStateContext.js';
 import WebSocket from 'ws';
 
 const ACTIVITY_ID_HEADER = 'x-activity-request-id';
@@ -685,7 +682,7 @@ export class ActivityLogger extends EventEmitter {
  */
 function setupFileLogging(
     capture: ActivityLogger,
-    config: Config,
+    config: HiveConfig,
     customPath?: string
 ) {
     const logFile =
@@ -731,7 +728,7 @@ function flushTransportBuffer(
     capture: ActivityLogger,
     transportBuffer: object[],
     sessionId: string | null,
-    config: Config,
+    config: HiveConfig,
     sendMessage: (message: object) => void
 ) {
     if (
@@ -786,7 +783,7 @@ function setupNetworkLogging(
     capture: ActivityLogger,
     host: string,
     port: number,
-    config: Config,
+    config: HiveConfig,
     onReconnectFailed?: () => void
 ) {
     const transportBuffer: object[] = [];
@@ -995,7 +992,7 @@ function bridgeCoreEvents(capture: ActivityLogger) {
  * @param options Transport configuration: network (WebSocket) or file (JSONL)
  */
 export function initActivityLogger(
-    config: Config,
+    config: HiveConfig,
     options:
     | {
         mode: 'network';
@@ -1031,7 +1028,7 @@ export function initActivityLogger(
  * Used for promotion re-entry without re-bridging coreEvents.
  */
 export function addNetworkTransport(
-    config: Config,
+    config: HiveConfig,
     host: string,
     port: number,
     onReconnectFailed?: () => void

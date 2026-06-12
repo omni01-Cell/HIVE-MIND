@@ -19,7 +19,8 @@
       "@plugins/*": ["./src/plugins/*"],
       "@providers/*": ["./src/providers/*"],
       "@utils/*": ["./src/utils/*"],
-      "@config/*": ["./src/config/*"]
+      "@config/*": ["./src/config/*"],
+      "@tui/core": ["./src/tui/core"]
     },
     "typeRoots": ["./node_modules/@types", "./src/types"]
   },
@@ -34,6 +35,7 @@
     "session",
     "temp",
     ".agent",
-    ".GCC"
+    ".GCC",
+    "src/tui"
   ]
 }

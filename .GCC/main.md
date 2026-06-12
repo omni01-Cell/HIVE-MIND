@@ -1,6 +1,7 @@
 # Current task context
 
 ## 🏆 Major Milestones (Archived Epics)
+- **[2026-06-11] Epic TUI Refactoring & Fixes** : Résolution de l'erreur d'exécution `useSettings` (Provider lifecycle) dans la TUI (`src/tui/`), élimination de toutes les erreurs de type strict TypeScript et de linter ESLint dans les fichiers cibles de la TUI, validée par audit forensique et test de boot E2E.
 - **[2026-06-04] Epic Gemini Embedding 2** : Indexation multimodale complète (images, vidéos, audio, PDF) via Gemini Embedding 2 (3072 dims) avec recherche vectorielle locale HNSW + JSON atomique dans `/mediaDB/`. 4 fichiers créés (MultimodalEmbeddingService, MediaIndexer, MediaSearch + intégration core/index.ts). Summary LLM optionnel pour images, rétention 30j + cap 500 entries/context. 40 nouveaux tests (360 total).
 - **[2026-06-03] Epic ESLint Eradication** : Éradication complète de 1257 erreurs ESLint sur 81+ fichiers (`src/services/`, `src/plugins/`, `src/core/`, `src/config/`, `src/scheduler/`, `src/scripts/`, `src/tests/`). Types `any` → interfaces strictes, `error: unknown` + `extractErrorMessage`, `no-case-declarations` par extraction de handlers, `prefer-const`, `no-empty`, `max-depth`, `complexity` tous résolus. Corrections TS post-ESLint dans 15+ fichiers. 317 tests au vert, 0 régression.
 - **[2026-06-08] Epic ESLint TUI Eradication** : Éradication complète de 348 erreurs ESLint dans `src/tui/` (composants Ink/React). Résolu : no-duplicate-imports (90, script Python bulk merge), no-shadow (84, suppression destructuring redondante), no-warning-comments (16), max-depth (42, early returns + helpers), no-param-reassign (9), no-unused-vars (8), no-explicit-any (5), react-hooks/rules-of-hooks (2). Refactoring : ToolConfirmationMessage (3 helpers + sub-component), ScrollProvider (2 helpers), SessionBrowser (2 key handlers). Fichiers morts Gemini supprimés (liteRtServerManager, agentSettings, hookSettings, SlashCommandConflictHandler). 3 géants (AppContainer/InputPrompt/useGeminiStream) en eslint-disable ciblé. TSC 0 erreur, ESLint 0 erreur (23 warnings react-hooks/exhaustive-deps).
@@ -19,65 +20,23 @@
 - **Epic SOTA Browser Agent Integration** : Installation agent-browser + Chrome for Testing, BrowserService (CLI wrapper), BrowserTools plugin (13 outils browser_*), Intégration PTC, System Prompt browser instructions, Sécurité & Guardrails (NVM path, type safety, sendMedia fix).
 
 ## Objective
-Concevoir et implémenter le système de compétences autonomes (Skill System) basé sur l'état de l'art (arXiv juin 2026).
+Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant. Documents de référence :
+- `.GCC/tui-adaptation-analysis.md` — Analyse technique complète
+- `.GCC/tui-adaptation-plan.md` — Plan d'exécution avec décision sur chaque fonctionnalité
 
 ## Decisions made
-- [2026-06-06] [SKILL-SYSTEM] Finalisation et validation sémantique du Skill System (standard agentskills.io). Progressive disclosure validée, tests unitaires et E2E au vert (100% vert, 0 erreur de compilation, 0 warning linter).
-- [2026-06-06] [SKILL-SYSTEM] Choix de l'architecture agentskills.io en progressive disclosure : les compétences de survie sont situées sous skills/survival/<nom_du_skill>/SKILL.md (YAML injecté par TieredContextLoader dans <survie-skills>) et la compétence experte theme-factory est copiée directement de l'hôte, routée par le Learner dans <skills> avec commentaires. L'agent lit les fichiers SKILL.md à la demande. Aucun skill de survie n'est créé.
-- [2026-06-05] [TUI-MIGRATION] Ancien CLI readline déplacé dans `src/scripts/cli-legacy/` comme utilitaire de test. Ré-exports maintenus dans `src/core/cli.ts` et `src/core/transport/cli.ts` pour compatibilité backward. TransportManager charge le TUI HIVE-MIND en priorité (`src/tui/transport/HiveTransport.ts`), fallback sur ancien InkCLIAdapter. Scripts npm `cli` et `tui` pointent vers le nouveau TUI.
-- [2026-06-05] [TUI] Architecture TUI basée sur Gemini CLI — Copie sélective des 142 fichiers UI (composants Ink/React, hooks, contextes, thèmes) avec suppression de la logique Gemini (auth, quota, MCP, sandbox, voice). Création de `HiveAdapter.ts` comme pont entre l'UI et le core HIVE-MIND. Conserve ToolConfirmationQueue (approbation), sélection @fichier, commandes slash.
-- [2026-06-04] [NATIVE-ZOD] `defineZodTool` utilise désormais `z.toJSONSchema` pour produire un schéma JSON complet (`type`, `properties`, `required`, `additionalProperties: false`) et conserve `_zodSchema` pour valider les arguments à l'exécution avec Zod natif. Les dépendances directes `zod-to-json-schema` et `openai/helpers/zod` sont absentes du chemin outil.
-- [2026-06-04] [GEMINI-EMBEDDING-2] Architecture 3 couches : MultimodalEmbeddingService (API REST + HNSW + JSON) → MediaIndexer (détection modality + orchestration) → MediaSearch (recherche cross-modale). Intégration fire-and-forget dans core/index.ts après chaque téléchargement media WhatsApp. Summary LLM optionnel (gemini-2.0-flash) pour images uniquement. Rétention 30 jours + cap 500 entries par contexte.
-- [2026-06-04] [HNWSLIB] hnswlib-node v3.0.0 installé (C++ natif). Mock manuel `src/__mocks__/hnswlib-node.js` pour tests Jest (incompatible avec jest.unstable_mockModule).
-- [2026-06-04] [EMBEDDING-DIMS] 3072 dimensions (qualité maximale Gemini Embedding 2). Indépendant des embeddings texte existants (gemini-embedding-001, 1024 dims).
-- [2026-06-03] [ESLINT-EPIC] Éradication complète de 1257 erreurs ESLint sur 81+ fichiers. Types `any` remplacés par des interfaces strictes, catches `error: unknown` + `extractErrorMessage`, `no-case-declarations` corrigés par extraction de handlers, `prefer-const`, `no-empty`, `max-depth`, `complexity` tous résolus. Création de `CriticalFailureError` dans Planner.ts pour réduire la complexité.
-- [2026-06-03] [ESLINT-TS] Corrections TS post-ESLint dans 81+ fichiers. Pattern `requireSupabase()` ajouté dans moderationService, goalsService, agentMemory. Cast `as unknown as` pour les types Supabase imbriqués. `performFullCheck()` retourne désormais `HealthReport` au lieu de `void`.
-- [2026-06-03] [TESTS] 317 tests passent (52 suites). Aucune régression détectée.
+- [2026-06-11] [TUI-ANALYSIS] Analyse complète de la TUI (82k lignes, 250 fichiers) et du core HIVE-MIND (5k lignes, 14 fichiers). La TUI est un fork Gemini CLI non connecté au vrai core. Le stub `@tui/core` (1035 lignes) est utilisé par 100+ fichiers. La couche transport (`src/tui/transport/`, 1045 lignes) existe mais n'est jamais branchée.
+- [2026-06-11] [TUI-STRICT-ANY] Détection d'erreurs implicites 'any' suite à la réactivation de `noImplicitAny: true`. Décidé d'explorer et d'appliquer des types stricts ou de déclarer les modules non-typés (`semver`, `ansi-regex`).
+- [2026-06-11] [TUI-R1] Passing `settings` as a parameter to `useIdeTrustListener` to resolve the SettingsProvider mounting context order.
 
 ## Current status
-- ✅ Done: Conception, implémentation et validation E2E du Skill System (standard agentskills.io)
-- 🔄 In progress: Aucun
-- ✅ Done: Migration native Zod tool schemas — `src/utils/toolExecution.ts`
-- ✅ Done: ESLint 0 erreurs (1257 → 0, 81+ fichiers corrigés)
-- ✅ Done: TSC 0 erreurs (105 → 0)
-- ✅ Done: Tests 360/360 au vert
-- ✅ Done: [2026-06-05] TUI complet basé sur Gemini CLI — 325 fichiers copiés, stubs créés, TSC 0 erreur
-- ✅ Done: [2026-06-06] TUI HIVE-MIND complet (7 phases) :
-  - Phase 1: HiveTransport (TransportInterface, 14 méthodes)
-  - Phase 2: HiveClient (GeminiClient interface)
-  - Phase 3: HiveHitlBridge (ToolConfirmationQueue ↔ PermissionManager)
-  - Phase 4: HiveFileService (sélection @file)
-  - Phase 5: 8 slash commands HIVE-MIND (/status, /plugins, /memory, /routes, /groups, /cron, /security, /voice)
-  - Phase 6: hiveConfig.ts (~80 lignes, pas 1181)
-  - Phase 7: Nettoyage ~3200 lignes Gemini CLI supprimées
-  - TSC 0 erreur, architecture modulaire respectée (core = logique, transport = affichage)
-- ✅ Done: [2026-06-06] Nettoyage TUI — 145 fichiers Gemini CLI superflus supprimés (554 → 409 fichiers) :
-  - Dossiers supprimés : acp/, commands/extensions/, commands/gemma/, commands/mcp/, commands/skills/, config/extensions/, config/mcp/, ui/components/triage/, ui/privacy/, test-utils/, patches/
-  - Fichiers supprimés : nonInteractive*, sandbox*, gemini.tsx, interactiveCli.tsx, validateNonInterActiveAuth.ts
-  - 36 commandes UI mortes supprimées (agents, bugMemory, compress, copy, corgi, docs, editor, exportSession, extensions, gemmaStatus, hooks, ide, init, mcp, permissions, plan, policies, privacy, profile, restore, resume, settings, setupGithub, shortcuts, skills, stats, tasks, terminalSetup, tools, upgrade, vim, voice, directory, footer, oncall, rewind)
-  - 9 utils morts supprimés (agentUtils, gitUtils, hookUtils, logCleanup, readStdin, skillUtils, terminalTheme, userStartupWarnings, worktreeSetup)
-  - 4 composants morts supprimés (ConfigExtensionDialog, HooksDialog, HookStatusDisplay, RewindViewer)
-  - BuiltinCommandLoader réécrit : 9 commandes utiles only (about, clear, commands, help, quit, theme, model, memory, hiveCommands)
-  - TSC 0 erreur, ESLint --fix appliqué
-- ✅ Done: [2026-06-08] ESLint TUI eradication complète (348 → 0 erreurs) :
-  - no-duplicate-imports (90): script Python bulk merge sur 80+ fichiers
-  - no-shadow (84): suppression destructuring redondante, 3 sous-agents
-  - no-warning-comments (16): TODO → commentaires plats
-  - max-depth (42): early returns + helpers dans sessionCleanup, slashCommandProcessor, atCommandProcessor, rewindFileOps
-  - no-param-reassign (9): copies locales des paramètres
-  - no-unused-vars (8): imports supprimés, préfixe `_`
-  - no-explicit-any (5): typage strict
-  - react-hooks/rules-of-hooks (2): appels hooks inconditionnels
-  - Refactoring : ToolConfirmationMessage (3 helpers + ToolConfirmationLayout), ScrollProvider (2 helpers), SessionBrowser (2 key handlers)
-  - Fichiers morts supprimés : liteRtServerManager, agentSettings, hookSettings, SlashCommandConflictHandler
-  - 3 géants (AppContainer/InputPrompt/useGeminiStream) : eslint-disable ciblé (1200-2100 lignes chacun)
-  - TSC 0 erreur, ESLint 0 erreur (23 warnings react-hooks/exhaustive-deps)
+- ✅ Done: Analyse exhaustive TUI ↔ Core (document `.GCC/tui-adaptation-analysis.md`)
+- ✅ Done: Suppression définitive de `src/tui/ui/types.ts`.
+- 🔄 In progress: Redirection des imports brisés qui référençaient `src/tui/ui/types.ts` (comme dans `src/tui/ui/commands/types.ts` vers `UIStateContext.tsx`).
+- 🔄 In progress: Diagnostic de compilation avec `npx tsc -p src/tui/tsconfig.json --noEmit`.
 
 ## Next action
-Aucune. Epic ESLint TUI terminé et entièrement validé (348→0 erreurs, TSC 0 erreur). Prochaine étape : commit des changements.
-
-## Next action
-Continuer la résolution du backlog ESLint sur `src/services/` et `src/plugins/` en ciblant les fichiers suivants (1251 erreurs restantes).
+Résoudre les erreurs d'imports dans `src/tui/ui/commands/types.ts` en important `HistoryItem`, `HistoryItemWithoutId` et `ConfirmationRequest` depuis `../contexts/UIStateContext.js`, et les types d'agents/loggers du core, puis corriger les erreurs TS restantes rapportées par tsc.
 
 ## Abandoned branches
 - [2026-06-05] feature-tui (branche supprimée) → Recréation de l'UI dans `src/tui/` basée sur Gemini CLI

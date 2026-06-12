@@ -252,8 +252,31 @@ export class PermissionManager {
             (async () => {
                 // ── LOGIC 0: CLI / TUI (Local Admin) ──
                 // The user physically at the terminal is the admin by default.
-                if (sourceChannel === 'cli') {
-                    console.log('[Permission] 💻 Local CLI request, asking directly in terminal.');
+                if (sourceChannel === 'cli' || sourceChannel === 'tui') {
+                    console.log(`[Permission] 💻 Local ${sourceChannel.toUpperCase()} request, asking directly in terminal.`);
+                    
+                    // Pour le TUI, utiliser le système de confirmation du TUI
+                    if (sourceChannel === 'tui') {
+                        try {
+                            const { hiveTransport } = await import('../../tui/transport/HiveTransport.js');
+                            const response = await hiveTransport.requestConfirmation(
+                                'permission_request',
+                                { chatId, senderJid, actionDescription },
+                                actionDescription
+                            );
+                            
+                            this._cleanup(requestId, numericId);
+                            resolvePromise({
+                                granted: response.approved,
+                                feedback: response.feedback
+                            });
+                            return;
+                        } catch (importErr) {
+                            console.warn('[Permission] ⚠️ TUI bridge unavailable, fallback to terminal:', importErr);
+                        }
+                    }
+                    
+                    // Fallback pour le CLI classique
                     await this._startInBandFallback(pending, true);
                     return;
                 }

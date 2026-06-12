@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    CommandKind,
-    type OpenDialogActionReturn,
-    type SlashCommand
-} from './types.js';
+import { CommandKind, OpenDialogActionReturn, SlashCommand } from '../contexts/UIStateContext.js';
 
 export const themeCommand: SlashCommand = {
     name: 'theme',

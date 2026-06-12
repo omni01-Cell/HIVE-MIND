@@ -6,16 +6,9 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {
-    debugLogger,
-    sanitizeFilenamePart,
-    SESSION_FILE_PREFIX,
-    Storage,
-    TOOL_OUTPUTS_DIR,
-    type Config,
-    deleteSessionArtifactsAsync,
-    deleteSubagentSessionDirAndArtifactsAsync
-} from '@google/gemini-cli-core';
+import { debugLogger } from './errors.js';
+import { HiveConfig } from '../config/hiveConfig.js';
+import { sanitizeFilenamePart, SESSION_FILE_PREFIX, Storage, TOOL_OUTPUTS_DIR, deleteSessionArtifactsAsync, deleteSubagentSessionDirAndArtifactsAsync } from '../ui/contexts/UIStateContext.js';
 import type { Settings, SessionRetentionSettings } from '../config/settings.js';
 import { getAllSessionFiles, type SessionFileEntry } from './sessionUtils.js';
 
@@ -87,7 +80,7 @@ function deriveShortIdFromFileName(fileName: string): string | null {
  */
 async function cleanupSessionAndSubagentsAsync(
     sessionId: string,
-    config: Config
+    config: HiveConfig
 ): Promise<void> {
     const tempDir = config.storage.getProjectTempDir();
     const chatsDir = path.join(tempDir, 'chats');
@@ -152,7 +145,7 @@ async function processShortIdBranch(
     shortId: string,
     allFiles: SessionFileEntry[],
     chatsDir: string,
-    config: Config
+    config: HiveConfig
 ): Promise<{ deleted: number; skipped: number; failed: number }> {
     let deleted = 0;
     let skipped = 0;
@@ -205,7 +198,7 @@ async function processShortIdBranch(
  * Main entry point for session cleanup during CLI startup
  */
 export async function cleanupExpiredSessions(
-    config: Config,
+    config: HiveConfig,
     settings: Settings
 ): Promise<CleanupResult> {
     const result: CleanupResult = {
@@ -443,7 +436,7 @@ function parseRetentionPeriod(period: string): number {
  * Validates retention configuration
  */
 function validateRetentionConfig(
-    config: Config,
+    config: HiveConfig,
     retentionConfig: SessionRetentionSettings
 ): string | null {
     if (!retentionConfig.enabled) {

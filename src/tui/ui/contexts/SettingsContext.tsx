@@ -5,7 +5,14 @@
  */
 
 import React, { useContext, useMemo, useSyncExternalStore } from 'react';
-import { checkExhaustive } from '@google/gemini-cli-core';
+import { checkExhaustive } from '../../utils/errors.js';
+import {
+    LoadedSettings,
+    LoadedSettingsSnapshot,
+    LoadableSettingScope,
+    SettingsFile,
+    SettingScope
+} from '../../config/settings.js';
 
 export const SettingsContext = React.createContext<LoadedSettings | undefined>(
     undefined

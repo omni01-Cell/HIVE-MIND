@@ -6,7 +6,7 @@
 
 import { useEffect } from 'react';
 import process from 'node:process';
-import { type HistoryItemWithoutId, MessageType } from '../types.js';
+import { HistoryItemWithoutId, MessageType } from '../contexts/UIStateContext.js';
 
 export const MEMORY_WARNING_THRESHOLD = 7 * 1024 * 1024 * 1024; // 7GB in bytes
 export const MEMORY_CHECK_INTERVAL = 60 * 1000; // one minute

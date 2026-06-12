@@ -9,7 +9,7 @@ import type {
     LoadableSettingScope,
     LoadedSettings
 } from '../../config/settings.js';
-import { MessageType } from '../types.js';
+import { MessageType } from '../contexts/UIStateContext.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 
 import { SettingPaths } from '../../config/settingPaths.js';

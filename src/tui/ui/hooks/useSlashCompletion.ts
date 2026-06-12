@@ -7,12 +7,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { AsyncFzf } from 'fzf';
 import type { Suggestion } from '../components/SuggestionsDisplay.js';
-import {
-    CommandKind,
-    type CommandContext,
-    type SlashCommand
-} from '../commands/types.js';
-import { debugLogger } from '@google/gemini-cli-core';
+import { CommandKind, CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
+import { debugLogger } from '../../utils/errors.js';
 
 // Type alias for improved type safety based on actual fzf result structure
 type FzfCommandResult = {

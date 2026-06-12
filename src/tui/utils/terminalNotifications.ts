@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { debugLogger, writeToStdout } from '@google/gemini-cli-core';
+import { debugLogger } from './errors.js';
+import { writeToStdout } from '../ui/contexts/UIStateContext.js';
 import type { LoadedSettings } from '../config/settings.js';
 import { sanitizeForDisplay } from '../ui/utils/textUtils.js';
 import { TerminalCapabilityManager } from '../ui/utils/terminalCapabilityManager.js';
@@ -87,7 +88,8 @@ export enum TerminalNotificationMethod {
 export function getNotificationMethod(
     settings: LoadedSettings
 ): TerminalNotificationMethod {
-    switch (settings.merged.general?.notificationMethod) {
+    const general = settings.merged.general as any;
+    switch (general?.notificationMethod) {
         case TerminalNotificationMethod.Osc9:
             return TerminalNotificationMethod.Osc9;
         case TerminalNotificationMethod.Osc777:

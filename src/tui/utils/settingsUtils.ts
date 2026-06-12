@@ -4,15 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Settings } from '../config/settings.js';
 import {
     getSettingsSchema,
+    type Settings,
     type SettingDefinition,
     type SettingsSchema,
     type SettingsType,
     type SettingsValue
-} from '../config/settingsSchema.js';
-import { ExperimentFlags, type Config } from '@google/gemini-cli-core';
+} from '../config/settings.js';
+import { HiveConfig } from '../config/hiveConfig.js';
+import { ExperimentFlags } from '../ui/contexts/UIStateContext.js';
 
 // The schema is now nested, but many parts of the UI and logic work better
 // with a flattened structure and dot-notation keys. This section flattens the
@@ -88,7 +89,7 @@ export function getDefaultValue(key: string): SettingsValue {
  */
 export function getEffectiveDefaultValue(
     key: string,
-    config?: Config
+    config?: HiveConfig
 ): SettingsValue {
     if (key === 'model.compressionThreshold' && config) {
         const experiments = config.getExperiments();

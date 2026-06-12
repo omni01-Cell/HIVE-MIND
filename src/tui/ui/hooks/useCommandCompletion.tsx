@@ -6,7 +6,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Suggestion } from '../components/SuggestionsDisplay.js';
-import type { CommandContext, SlashCommand } from '../commands/types.js';
+import { CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
 import { toCodePoints } from '../utils/textUtils.js';
 import { isSlashCommand } from '../utils/commandUtils.js';
 import { useAtCompletion } from './useAtCompletion.js';
@@ -17,7 +17,7 @@ import {
     PROMPT_COMPLETION_MIN_LENGTH,
     type PromptCompletion
 } from './usePromptCompletion.js';
-import type { Config } from '@google/gemini-cli-core';
+import { HiveConfig } from '../../config/hiveConfig.js';
 import { useCompletion } from './useCompletion.js';
 
 export enum CompletionMode {
@@ -67,7 +67,7 @@ export interface UseCommandCompletionOptions {
   commandContext: CommandContext;
   reverseSearchActive?: boolean;
   shellModeActive: boolean;
-  config?: Config;
+  config?: HiveConfig;
   active: boolean;
 }
 

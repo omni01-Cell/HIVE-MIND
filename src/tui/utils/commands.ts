@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { type SlashCommand } from '../ui/commands/types.js';
+import { SlashCommand } from '../ui/contexts/UIStateContext.js';
 
 export type ParsedSlashCommand = {
   commandToExecute: SlashCommand | undefined;

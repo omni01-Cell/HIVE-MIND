@@ -5,8 +5,8 @@
  */
 
 import { createContext, useContext } from 'react';
-import type { QuotaStats } from '../types.js';
-import type { UserTierId } from '@google/gemini-cli-core';
+import { QuotaStats } from './UIStateContext.js';
+import { UserTierId } from './UIStateContext.js';
 import type {
     ProQuotaDialogRequest,
     ValidationDialogRequest,

@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
-import { ToolCallStatus, mapCoreStatusToDisplayStatus } from '../../types.js';
+import { ToolCallStatus, mapCoreStatusToDisplayStatus } from '../../contexts/UIStateContext.js';
 import { CliSpinner } from '../CliSpinner.js';
 import {
     SHELL_COMMAND_NAME,
@@ -15,13 +15,10 @@ import {
     SHELL_FOCUS_HINT_DELAY_MS
 } from '../../constants.js';
 import { theme } from '../../semantic-colors.js';
-import {
-    type Config,
-    SHELL_TOOL_NAME,
-    isCompletedAskUserTool,
-    type ToolResultDisplay,
-    CoreToolCallStatus
-} from '@google/gemini-cli-core';
+import { CoreToolCallStatus } from '../../contexts/UIStateContext.js';
+import { ToolResultDisplay } from '../../contexts/UIStateContext.js';
+import { HiveConfig } from '../../../config/hiveConfig.js';
+import { SHELL_TOOL_NAME, isCompletedAskUserTool } from '../../contexts/UIStateContext.js';
 import { useInactivityTimer } from '../../hooks/useInactivityTimer.js';
 import { formatCommand } from '../../key/keybindingUtils.js';
 import { Command } from '../../key/keyBindings.js';
@@ -47,7 +44,7 @@ export function isShellTool(name: string): boolean {
 export function isThisShellFocusable(
     name: string,
     status: CoreToolCallStatus,
-    config?: Config
+    config?: HiveConfig
 ): boolean {
     return !!(
         isShellTool(name) &&

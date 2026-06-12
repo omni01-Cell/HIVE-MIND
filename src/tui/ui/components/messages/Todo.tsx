@@ -5,9 +5,9 @@
  */
 
 import React, { useMemo } from 'react';
-import { type TodoList } from '@google/gemini-cli-core';
+import { TodoList } from '../../contexts/UIStateContext.js';
 import { useUIState } from '../../contexts/UIStateContext.js';
-import type { HistoryItemToolGroup } from '../../types.js';
+import { HistoryItemToolGroup } from '../../contexts/UIStateContext.js';
 import { Checklist } from '../Checklist.js';
 import type { ChecklistItemData } from '../ChecklistItem.js';
 import { formatCommand } from '../../key/keybindingUtils.js';

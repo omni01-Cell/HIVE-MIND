@@ -10,7 +10,7 @@ import {
     type SettingDefinition,
     type SettingCollectionDefinition,
     SETTINGS_SCHEMA_DEFINITIONS
-} from './settingsSchema.js';
+} from './hiveSettingsSchema.js';
 
 // Helper to build Zod schema from the JSON-schema-like definitions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,21 +91,19 @@ function buildEnumSchema(
         return z.enum(values as [string, ...string[]]);
     } else if (values.every((v) => typeof v === 'number')) {
         return z.union(
-
-      values.map((v) => z.literal(v)) as [
-        z.ZodLiteral<number>,
-        z.ZodLiteral<number>,
-        ...Array<z.ZodLiteral<number>>,
-      ]
+            values.map((v) => z.literal(v)) as unknown as [
+                z.ZodTypeAny,
+                z.ZodTypeAny,
+                ...z.ZodTypeAny[]
+            ]
         );
     } else {
         return z.union(
-
-      values.map((v) => z.literal(v)) as [
-        z.ZodLiteral<unknown>,
-        z.ZodLiteral<unknown>,
-        ...Array<z.ZodLiteral<unknown>>,
-      ]
+            values.map((v) => z.literal(v)) as unknown as [
+                z.ZodTypeAny,
+                z.ZodTypeAny,
+                ...z.ZodTypeAny[]
+            ]
         );
     }
 }
@@ -316,19 +314,21 @@ export function formatValidationError(
     const displayedIssues = error.issues.slice(0, MAX_ERRORS_TO_DISPLAY);
 
     for (const issue of displayedIssues) {
-        const path = issue.path.reduce(
-            (acc, curr) =>
-                typeof curr === 'number'
+        const pathStr = issue.path.reduce(
+            (acc: string, curr: any) => {
+                const keyStr = typeof curr === 'symbol' ? curr.toString() : String(curr);
+                return typeof curr === 'number'
                     ? `${acc}[${curr}]`
-                    : `${acc ? acc + '.' : ''}${curr}`,
+                    : `${acc ? acc + '.' : ''}${keyStr}`;
+            },
             ''
         );
-        lines.push(`Error in: ${path || '(root)'}`);
+        lines.push(`Error in: ${pathStr || '(root)'}`);
         lines.push(`    ${issue.message}`);
 
         if (issue.code === 'invalid_type') {
-            const expected = issue.expected;
-            const received = issue.received;
+            const expected = (issue as any).expected;
+            const received = (issue as any).received;
             lines.push(`Expected: ${expected}, but received: ${received}`);
         }
         lines.push('');

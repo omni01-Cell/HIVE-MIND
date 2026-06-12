@@ -12,7 +12,10 @@ import { theme } from '../semantic-colors.js';
 import {
     SettingScope,
     type LoadableSettingScope,
-    type Settings
+    type Settings,
+    type SettingsType,
+    type SettingsValue,
+    TOGGLE_TYPES
 } from '../../config/settings.js';
 import {
     getScopeItems,
@@ -33,12 +36,7 @@ import {
     type SettingsState
 } from '../contexts/SettingsContext.js';
 import { getCachedStringWidth } from '../utils/textUtils.js';
-import {
-    type SettingsType,
-    type SettingsValue,
-    TOGGLE_TYPES
-} from '../../config/settingsSchema.js';
-import { debugLogger } from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
 
 import { useSearchBuffer } from '../hooks/useSearchBuffer.js';
 import {

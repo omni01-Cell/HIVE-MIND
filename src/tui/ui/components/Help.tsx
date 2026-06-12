@@ -7,7 +7,7 @@
 import type React from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
-import { type SlashCommand, CommandKind } from '../commands/types.js';
+import { SlashCommand, CommandKind } from '../contexts/UIStateContext.js';
 import { KEYBOARD_SHORTCUTS_URL } from '../constants.js';
 import { sanitizeForDisplay } from '../utils/textUtils.js';
 import { formatCommand } from '../key/keybindingUtils.js';

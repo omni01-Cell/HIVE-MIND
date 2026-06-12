@@ -11,7 +11,8 @@ import { theme } from '../semantic-colors.js';
 import { useUIState } from '../contexts/UIStateContext.js';
 import { debugState } from '../debug.js';
 import { appEvents, AppEvent } from '../../utils/events.js';
-import { coreEvents, CoreEvent, debugLogger } from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
+import { coreEvents, CoreEvent } from '../../utils/coreEvents.js';
 
 // Frames that render at least this far before or after an action are considered
 // idle frames.

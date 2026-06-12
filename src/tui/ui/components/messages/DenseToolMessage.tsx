@@ -6,22 +6,10 @@
 
 import React, { useMemo, useRef, useState } from 'react';
 import { Box, Text, type DOMElement } from 'ink';
-import {
-    CoreToolCallStatus,
-    type FileDiff,
-    type ListDirectoryResult,
-    type ReadManyFilesResult,
-    isFileDiff,
-    hasSummary,
-    isGrepResult,
-    isListResult,
-    isReadManyFilesResult
-} from '@google/gemini-cli-core';
-import {
-    type IndividualToolCallDisplay,
-    type ToolResultDisplay,
-    isTodoList
-} from '../../types.js';
+import { CoreToolCallStatus } from '../../contexts/UIStateContext.js';
+import { FileDiff, ListDirectoryResult, ReadManyFilesResult, isFileDiff, hasSummary, isGrepResult, isListResult, isReadManyFilesResult } from '../../contexts/UIStateContext.js';
+import { IndividualToolCallDisplay } from '../../contexts/UIStateContext.js';
+import { ToolResultDisplay, isTodoList } from '../../contexts/UIStateContext.js';
 import { useAlternateBuffer } from '../../hooks/useAlternateBuffer.js';
 import { ToolStatusIndicator } from './ToolShared.js';
 import { theme } from '../../semantic-colors.js';

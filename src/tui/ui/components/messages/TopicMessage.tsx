@@ -6,14 +6,8 @@
 
 import React, { useCallback, useEffect, useId, useRef } from 'react';
 import { Box, Text, type DOMElement } from 'ink';
-import {
-    UPDATE_TOPIC_TOOL_NAME,
-    UPDATE_TOPIC_DISPLAY_NAME,
-    TOPIC_PARAM_TITLE,
-    TOPIC_PARAM_SUMMARY,
-    TOPIC_PARAM_STRATEGIC_INTENT
-} from '@google/gemini-cli-core';
-import type { IndividualToolCallDisplay } from '../../types.js';
+import { UPDATE_TOPIC_TOOL_NAME, UPDATE_TOPIC_DISPLAY_NAME, TOPIC_PARAM_TITLE, TOPIC_PARAM_SUMMARY, TOPIC_PARAM_STRATEGIC_INTENT } from '../../contexts/UIStateContext.js';
+import { IndividualToolCallDisplay } from '../../contexts/UIStateContext.js';
 import { theme } from '../../semantic-colors.js';
 import { useOverflowActions } from '../../contexts/OverflowContext.js';
 import { useToolActions } from '../../contexts/ToolActionsContext.js';

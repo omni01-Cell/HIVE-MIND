@@ -7,14 +7,9 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
-import {
-    shortenPath,
-    tildeifyPath,
-    getDisplayString,
-    checkExhaustive,
-    AuthType,
-    UserAccountManager
-} from '@google/gemini-cli-core';
+import { checkExhaustive } from '../../utils/errors.js';
+import { shortenPath, tildeifyPath } from '../utils/formatters.js';
+import { getDisplayString, AuthType, UserAccountManager } from '../contexts/UIStateContext.js';
 import { ConsoleSummaryDisplay } from './ConsoleSummaryDisplay.js';
 import process from 'node:process';
 import os from 'node:os';
@@ -33,7 +28,7 @@ import {
     type FooterItemId,
     deriveItemsFromLegacySettings
 } from '../../config/footerItems.js';
-import { isDevelopment } from '../../utils/installationInfo.js';
+const isDevelopment = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true';
 
 const HOSTNAME = os.hostname();
 

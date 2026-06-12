@@ -8,16 +8,12 @@ import { createContext, useContext } from 'react';
 import { type Key } from '../hooks/useKeypress.js';
 import { type IdeIntegrationNudgeResult } from '../IdeIntegrationNudge.js';
 import { type FolderTrustChoice } from '../components/FolderTrustDialog.js';
-import {
-    type AuthType,
-    type EditorType,
-    type AgentDefinition
-} from '@google/gemini-cli-core';
+import { AgentDefinition, NewAgentsChoice } from './UIStateContext.js';
+import { AuthType, EditorType } from './UIStateContext.js';
 import { type LoadableSettingScope } from '../../config/settings.js';
-import type { AuthState } from '../types.js';
+import { AuthState } from './UIStateContext.js';
 import { type PermissionsDialogProps } from '../components/PermissionsModifyTrustDialog.js';
 import type { SessionInfo } from '../../utils/sessionUtils.js';
-import { type NewAgentsChoice } from '../components/NewAgentsNotification.js';
 import type { OverageMenuIntent, EmptyWalletIntent } from './UIStateContext.js';
 
 export interface UIActions {

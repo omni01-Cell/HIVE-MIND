@@ -5,34 +5,264 @@
  */
 
 import { createContext, useContext } from 'react';
-import type {
-    HistoryItem,
-    ThoughtSummary,
-    ConfirmationRequest,
-    LoopDetectionConfirmationRequest,
-    HistoryItemWithoutId,
-    StreamingState,
-    ActiveHook,
-    PermissionConfirmationRequest
-} from '../types.js';
-import type { CommandContext, SlashCommand } from '../commands/types.js';
-
-import type {
-    IdeContext,
-    ApprovalMode,
-    IdeInfo,
-    AuthType,
-    FallbackIntent,
-    ValidationIntent,
-    AgentDefinition,
-    FolderDiscoveryResults,
-    PolicyUpdateConfirmationRequest
-} from '@google/gemini-cli-core';
+import { createContext, useContext } from 'react';
+import { CommandContext, SlashCommand } from './UIStateContext.js';
 import { type TransientMessageType } from '../../utils/events.js';
 import type { DOMElement } from 'ink';
 import type { SessionStatsState } from '../contexts/SessionContext.js';
 import type { ExtensionUpdateState } from '../state/extensions.js';
 import type { UpdateObject } from '../utils/updateCheck.js';
+import { AuthType } from '../../config/hiveSettingsSchema.js';
+
+export type Kind = 'text' | 'image' | 'video' | 'file' | 'tool_call' | 'tool_result' | 'error';
+
+export interface Part {
+    kind?: Kind;
+    text?: string;
+    media?: any;
+    toolCall?: any;
+    toolResult?: any;
+    error?: any;
+}
+
+export type CoreToolCallStatus = 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'executing' | 'success' | 'error' | 'cancelled' | 'scheduled';
+
+export enum ApprovalMode {
+    ALWAYS = 'always',
+    NEVER = 'never',
+    SEMI = 'semi',
+}
+
+export enum StreamingState {
+    Idle = 'idle',
+    Responding = 'responding',
+    WaitingForConfirmation = 'waiting_for_confirmation'
+}
+
+export interface ThoughtSummary {
+    id: string;
+    title: string;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+    durationMs?: number;
+    thoughts?: string;
+    subject?: string;
+}
+
+export interface HistoryItem {
+    id: number;
+    type:
+        | 'thinking'
+        | 'hint'
+        | 'user'
+        | 'user_shell'
+        | 'assistant'
+        | 'assistant_content'
+        | 'info'
+        | 'warning'
+        | 'error'
+        | 'about'
+        | 'help'
+        | 'stats'
+        | 'model_stats'
+        | 'tool_stats'
+        | 'model'
+        | 'quit'
+        | 'tool_group'
+        | 'tool_display_group'
+        | 'subagent'
+        | 'compression'
+        | 'export_session'
+        | 'extensions_list'
+        | 'tools_list'
+        | 'skills_list'
+        | 'agents_list'
+        | 'mcp_status'
+        | 'gemma_status'
+        | 'chat_list';
+    text?: string;
+    parts?: Part[];
+    thought?: string;
+    timestamp?: number;
+    metadata?: Record<string, any>;
+    [key: string]: any;
+}
+
+export type HistoryItemWithoutId = Omit<HistoryItem, 'id'>;
+
+export interface ConfirmationRequest {
+    id?: string;
+    title?: string;
+    message?: string;
+    onApprove?: () => void;
+    onDeny?: () => void;
+    prompt?: any;
+    onConfirm?: (confirmed: boolean) => void;
+}
+
+export interface PermissionConfirmationRequest {
+    id: string;
+    permission: string;
+    files: string[];
+    onComplete: (result: { allowed: boolean }) => void;
+    onAllow: () => void;
+    onDeny: () => void;
+}
+
+export interface IdeInfo {
+    name: string;
+    version: string;
+    editor: string;
+}
+
+export interface IdeContext {
+    editors: IdeInfo[];
+    trustLevel: string;
+    workspaceState?: {
+        openFiles?: string[];
+    };
+}
+
+export enum MCPServerStatus {
+    CONNECTED = 'connected',
+    CONNECTING = 'connecting',
+    DISCONNECTED = 'disconnected',
+}
+
+export interface MCPServerConfig {
+    name: string;
+    status: string;
+    extension?: {
+        name: string;
+    };
+    description?: string;
+}
+
+export interface JsonMcpTool {
+    name: string;
+    serverName: string;
+    description?: string;
+    schema?: {
+        parametersJsonSchema?: any;
+        parameters?: any;
+    };
+}
+
+export interface JsonMcpPrompt {
+    name: string;
+    serverName: string;
+    description?: string;
+}
+
+export interface JsonMcpResource {
+    name: string;
+    serverName: string;
+    uri?: string;
+    mimeType?: string;
+    description?: string;
+}
+
+export interface HistoryItemMcpStatus {
+    authStatus: Record<string, string>;
+    enablementState: Record<string, { enabled: boolean; isSessionDisabled?: boolean }>;
+}
+
+export interface Question {
+    id: string;
+    text?: string;
+    type: 'boolean' | 'string' | 'choice' | string;
+    choices?: string[];
+    header?: string;
+    question?: string;
+    placeholder?: string;
+    unconstrainedHeight?: boolean;
+    multiSelect?: boolean;
+    options?: Array<{ label: string; description?: string; value?: any }>;
+}
+
+export enum WarningPriority {
+    High = 'high',
+    Medium = 'medium',
+    Low = 'low'
+}
+
+export interface ConsoleMessageItem {
+    id: string;
+    text: string;
+    type: 'log' | 'info' | 'warn' | 'error';
+    timestamp: number;
+}
+
+export enum ToolConfirmationOutcome {
+    Cancel = 'cancel',
+    Proceed = 'proceed',
+    ProceedAlways = 'proceed_always',
+}
+
+export interface ToolCallConfirmationDetails {
+    type: string;
+    title: string;
+    command: string;
+    rootCommand: string;
+    rootCommands: string[];
+    commands: string[];
+    onConfirm: (outcome: ToolConfirmationOutcome) => Promise<void> | void;
+}
+
+export interface IndividualToolCallDisplay {
+    callId: string;
+    name: string;
+    description: string;
+    status: CoreToolCallStatus | 'awaiting_approval';
+    isClientInitiated?: boolean;
+    resultDisplay?: any;
+    confirmationDetails?: ToolCallConfirmationDetails;
+}
+
+export interface AgentDefinition {
+    name: string;
+    displayName: string;
+    description?: string;
+    kind?: string;
+    experimental?: boolean;
+    modelConfig?: any;
+    runConfig?: any;
+}
+
+export interface RetryAttemptPayload {
+    model: string;
+    attempt: number;
+    maxAttempts: number;
+}
+
+export interface CompressionStatus {
+    isCompressing: boolean;
+    savingRatio?: number;
+}
+
+export interface AnsiToken {
+    text: string;
+    color?: string;
+    bgColor?: string;
+    bold?: boolean;
+    dim?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    fg?: string;
+    bg?: string;
+    inverse?: boolean;
+}
+
+export type AnsiLine = AnsiToken[];
+export type AnsiOutput = AnsiLine[];
+
+export type CustomTheme = any;
+export type FallbackIntent = any;
+export type ValidationIntent = any;
+export type FolderDiscoveryResults = any;
+export type PolicyUpdateConfirmationRequest = any;
+export type ActiveHook = any;
+export type LoopDetectionConfirmationRequest = any;
+
 
 export interface ProQuotaDialogRequest {
   failedModel: string;
@@ -80,7 +310,7 @@ export interface EmptyWalletDialogRequest {
 }
 
 import { type UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';
-import { type RestartReason } from '../hooks/useIdeTrustListener.js';
+export type RestartReason = any;
 import type { TerminalBackgroundColor } from '../utils/terminalCapabilityManager.js';
 import type { BackgroundTask } from '../hooks/useExecutionLifecycle.js';
 
@@ -132,7 +362,7 @@ export interface UIState {
   geminiMdFileCount: number;
   streamingState: StreamingState;
   initError: string | null;
-  pendingGeminiHistoryItems: HistoryItemWithoutId[];
+  pendingAssistantHistoryItems: HistoryItemWithoutId[];
   thought: ThoughtSummary | null;
   isInputActive: boolean;
   isVoiceModeEnabled: boolean;

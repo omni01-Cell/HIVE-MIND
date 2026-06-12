@@ -11,6 +11,7 @@
  * - Safety (Sentinel VIGIL)
  */
 
+import { SlashCommand, CommandKind, CommandContext } from '../contexts/UIStateContext.js';
 
 /**
  * Commande /status — État du bot HIVE-MIND
@@ -19,9 +20,8 @@ export const hiveStatusCommand: SlashCommand = {
     name: 'status',
     altNames: ['etat', 'state'],
     description: 'Affiche l\'état complet du bot HIVE-MIND',
-    kind: CommandKind.BUILTIN,
-    isEnabled: () => true,
-    execute: async (context: CommandContext) => {
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
         const { addItem } = context.ui;
 
         try {
@@ -88,8 +88,6 @@ export const hiveStatusCommand: SlashCommand = {
                 text: `❌ Erreur lors de la récupération du statut: ${message}`
             }, Date.now());
         }
-
-        return { type: 'handled' as const };
     }
 };
 
@@ -100,16 +98,15 @@ export const hivePluginsCommand: SlashCommand = {
     name: 'plugins',
     altNames: ['extensions', 'addons'],
     description: 'Liste les plugins HIVE-MIND chargés',
-    kind: CommandKind.BUILTIN,
-    isEnabled: () => true,
-    execute: async (context: CommandContext) => {
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
         const { addItem } = context.ui;
 
         try {
             const { pluginLoader } = await import('../../../plugins/loader.js');
 
             const tools = pluginLoader.getToolDefinitions();
-            const toolNames = tools.map((t: { function?: { name?: string } }) => t.function?.name).filter(Boolean);
+            const toolNames = tools.map((t: { function?: { name?: string } }) => t.function?.name).filter((n): n is string => typeof n === 'string');
 
             let pluginsText = '🔌 *Plugins HIVE-MIND*\n\n';
             pluginsText += `**Nombre d'outils:** ${toolNames.length}\n\n`;
@@ -128,8 +125,6 @@ export const hivePluginsCommand: SlashCommand = {
                 text: `❌ Erreur lors de la récupération des plugins: ${message}`
             }, Date.now());
         }
-
-        return { type: 'handled' as const };
     }
 };
 
@@ -140,9 +135,8 @@ export const hiveMemoryCommand: SlashCommand = {
     name: 'memory',
     altNames: ['memoire', 'mem'],
     description: 'Affiche l\'état de la mémoire distribuée',
-    kind: CommandKind.BUILTIN,
-    isEnabled: () => true,
-    execute: async (context: CommandContext) => {
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
         const { addItem } = context.ui;
 
         try {
@@ -197,8 +191,6 @@ export const hiveMemoryCommand: SlashCommand = {
                 text: `❌ Erreur lors de la récupération de la mémoire: ${message}`
             }, Date.now());
         }
-
-        return { type: 'handled' as const };
     }
 };
 
@@ -209,9 +201,8 @@ export const hiveRoutesCommand: SlashCommand = {
     name: 'routes',
     altNames: ['router', 'keys'],
     description: 'Affiche l\'état du Smart Router V2 et des clés API',
-    kind: CommandKind.BUILTIN,
-    isEnabled: () => true,
-    execute: async (context: CommandContext) => {
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
         const { addItem } = context.ui;
 
         try {
@@ -247,8 +238,6 @@ export const hiveRoutesCommand: SlashCommand = {
                 text: `❌ Erreur lors de la récupération des routes: ${message}`
             }, Date.now());
         }
-
-        return { type: 'handled' as const };
     }
 };
 
@@ -259,9 +248,8 @@ export const hiveGroupsCommand: SlashCommand = {
     name: 'groups',
     altNames: ['groupes', 'grp'],
     description: 'Liste les groupes WhatsApp/Discord gérés',
-    kind: CommandKind.BUILTIN,
-    isEnabled: () => true,
-    execute: async (context: CommandContext) => {
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
         const { addItem } = context.ui;
 
         try {
@@ -273,7 +261,7 @@ export const hiveGroupsCommand: SlashCommand = {
             if (groupService) {
                 // Récupérer les groupes depuis la base
                 const { supabase } = await import('../../../services/supabase.js');
-                const { data: groups } = await supabase
+                const { data: groups } = await (supabase as any)
                     .from('groups')
                     .select('id, name, platform')
                     .limit(10);
@@ -301,8 +289,6 @@ export const hiveGroupsCommand: SlashCommand = {
                 text: `❌ Erreur lors de la récupération des groupes: ${message}`
             }, Date.now());
         }
-
-        return { type: 'handled' as const };
     }
 };
 
@@ -313,9 +299,8 @@ export const hiveCronCommand: SlashCommand = {
     name: 'cron',
     altNames: ['scheduler', 'taches'],
     description: 'Affiche les tâches planifiées (cron jobs)',
-    kind: CommandKind.BUILTIN,
-    isEnabled: () => true,
-    execute: async (context: CommandContext) => {
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
         const { addItem } = context.ui;
 
         try {
@@ -346,8 +331,6 @@ export const hiveCronCommand: SlashCommand = {
                 text: `❌ Erreur lors de la récupération des crons: ${message}`
             }, Date.now());
         }
-
-        return { type: 'handled' as const };
     }
 };
 
@@ -358,9 +341,8 @@ export const hiveSecurityCommand: SlashCommand = {
     name: 'security',
     altNames: ['securite', 'secu'],
     description: 'Affiche l\'état du système de sécurité (Sentinel, HITL)',
-    kind: CommandKind.BUILTIN,
-    isEnabled: () => true,
-    execute: async (context: CommandContext) => {
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
         const { addItem } = context.ui;
 
         try {
@@ -399,8 +381,6 @@ export const hiveSecurityCommand: SlashCommand = {
                 text: `❌ Erreur lors de la récupération de la sécurité: ${message}`
             }, Date.now());
         }
-
-        return { type: 'handled' as const };
     }
 };
 
@@ -411,9 +391,8 @@ export const hiveVoiceCommand: SlashCommand = {
     name: 'voice',
     altNames: ['vocal', 'tts'],
     description: 'Affiche l\'état du système vocal (TTS, STT, Live)',
-    kind: CommandKind.BUILTIN,
-    isEnabled: () => true,
-    execute: async (context: CommandContext) => {
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
         const { addItem } = context.ui;
 
         try {
@@ -446,8 +425,6 @@ export const hiveVoiceCommand: SlashCommand = {
                 text: `❌ Erreur lors de la récupération de la voix: ${message}`
             }, Date.now());
         }
-
-        return { type: 'handled' as const };
     }
 };
 

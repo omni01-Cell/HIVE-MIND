@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    type ConfirmationRequest,
-    type HistoryItemWithoutId,
-    type PermissionConfirmationRequest
-} from '../types.js';
+import { ConfirmationRequest, HistoryItemWithoutId, PermissionConfirmationRequest } from '../contexts/UIStateContext.js';
 import { type ReactNode } from 'react';
 import { type RunEventNotificationEvent } from '../../utils/terminalNotifications.js';
 import { getConfirmingToolState } from './confirmingTool.js';

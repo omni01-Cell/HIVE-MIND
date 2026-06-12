@@ -14,7 +14,7 @@ import {
     SHELL_ACTION_REQUIRED_TITLE_DELAY_MS,
     SHELL_SILENT_WORKING_TITLE_DELAY_MS
 } from '../constants.js';
-import type { StreamingState } from '../types.js';
+import { StreamingState } from '../contexts/UIStateContext.js';
 
 interface ShellInactivityStatusProps {
   activePtyId: number | string | null | undefined;

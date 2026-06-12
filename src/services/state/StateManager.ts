@@ -201,7 +201,7 @@ export const StateManager = {
         const results = await pipeline.exec();
 
         for (let i = 0; i < uuids.length; i++) {
-            const data = results[i] as Record<string, string> | null;
+            const data = results[i] as unknown as Record<string, string> | null;
 
             if (data && Object.keys(data).length > 0) {
                 updates.push({

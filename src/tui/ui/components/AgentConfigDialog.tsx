@@ -12,7 +12,8 @@ import {
     type LoadableSettingScope,
     type LoadedSettings
 } from '../../config/settings.js';
-import type { AgentDefinition, AgentOverride } from '@google/gemini-cli-core';
+import { AgentDefinition } from '../contexts/UIStateContext.js';
+import { AgentOverride } from '../contexts/UIStateContext.js';
 import { getCachedStringWidth } from '../utils/textUtils.js';
 import {
     BaseSettingsDialog,
@@ -203,7 +204,7 @@ export function AgentConfigDialog({
     // Pending override state for the selected scope
     const [pendingOverride, setPendingOverride] = useState<AgentOverride>(() => {
         const scopeSettings = settings.forScope(selectedScope).settings;
-        const existingOverride = scopeSettings.agents?.overrides?.[agentName];
+        const existingOverride = (scopeSettings.agents as any)?.overrides?.[agentName];
         return existingOverride ? structuredClone(existingOverride) : {};
     });
 
@@ -213,7 +214,7 @@ export function AgentConfigDialog({
     // Update pending override when scope changes
     useEffect(() => {
         const scopeSettings = settings.forScope(selectedScope).settings;
-        const existingOverride = scopeSettings.agents?.overrides?.[agentName];
+        const existingOverride = (scopeSettings.agents as any)?.overrides?.[agentName];
         setPendingOverride(
             existingOverride ? structuredClone(existingOverride) : {}
         );

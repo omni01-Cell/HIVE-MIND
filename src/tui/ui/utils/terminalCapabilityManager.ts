@@ -5,16 +5,8 @@
  */
 
 import * as fs from 'node:fs';
-import {
-    debugLogger,
-    enableKittyKeyboardProtocol,
-    disableKittyKeyboardProtocol,
-    enableModifyOtherKeys,
-    disableModifyOtherKeys,
-    enableBracketedPasteMode,
-    disableBracketedPasteMode,
-    disableMouseEvents
-} from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
+import { enableKittyKeyboardProtocol, disableKittyKeyboardProtocol, enableModifyOtherKeys, disableModifyOtherKeys, enableBracketedPasteMode, disableBracketedPasteMode, disableMouseEvents } from '../contexts/UIStateContext.js';
 import { parseColor } from '../themes/color-utils.js';
 
 export type TerminalBackgroundColor = string | undefined;

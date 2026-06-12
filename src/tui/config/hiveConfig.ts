@@ -17,18 +17,57 @@ export interface HiveConfig {
     getSessionId(): string;
     isVoiceModeEnabled(): boolean;
     isSkillsSupportEnabled(): boolean;
-    getGeminiClient(): unknown;
+    getGeminiClient(): any;
     getMessageBus(): unknown;
     getFileService(): unknown;
     getFileFilteringOptions(): unknown;
     getToolRegistry(): unknown;
-    getWorkspaceContext(): unknown;
+    getWorkspaceContext(): any;
     getTargetDir(): string;
     getEnableRecursiveFileSearch(): boolean;
     validatePathAccess(path: string, mode: string): boolean;
     getIdeMode(): boolean;
-    getContentGeneratorConfig(): unknown;
+    isBrowserLaunchSuppressed(): boolean;
+    getContentGeneratorConfig(): any;
+    isModelSteeringEnabled(): boolean;
+    isInteractiveShellEnabled(): boolean;
+    isAutoMemoryEnabled(): boolean;
+    reloadSkills(): Promise<void>;
+    getQuotaRemaining(): number | undefined;
+    getQuotaLimit(): number | undefined;
+    getQuotaResetTime(): string | undefined;
+    isInitialized(): boolean;
+    initialize(): Promise<void>;
+    getHookSystem(): any;
+    refreshAuth(authType?: any): Promise<void>;
+    getUserTier(): string;
+    getUserPaidTier(): any;
+    getMemoryContextManager(): any;
+    updateSystemInstructionIfInitialized(): void;
+    getUserMemory(): any;
+    getGeminiMdFileCount(): number;
+    getDebugMode(): boolean;
+    getUseTerminalBuffer(): boolean;
+    getEnableExtensionReloading(): boolean;
+    getExtensionLoader(): any;
+    setRemoteAdminSettings(settings: any): void;
+    sanitizationConfig: any;
+    sandboxManager: any;
+    getRemoteAdminSettings(): any;
+    getAgentRegistry(): any;
+    setShellExecutionConfig(config: any): void;
+    getQuestion(): string | null;
+    isPlanEnabled(): boolean;
+    getPolicyUpdateConfirmationRequest(): any;
+    getBannerTextNoCapacityIssues(): string;
+    getBannerTextCapacityIssues(): string;
+    getTerminalBackground(): string;
+    injectionService: any;
+    storage: any;
+    getExperiments(): any;
 }
+
+import { Storage } from '../ui/contexts/UIStateContext.js';
 
 const SESSION_ID = `tui-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -73,15 +112,65 @@ export function createHiveConfig(): HiveConfig {
             getTool: () => null
         }),
         getWorkspaceContext: () => ({
-            getDirectories: () => [process.cwd()]
+            getDirectories: () => [process.cwd()],
+            addReadOnlyPath: (_p: string) => { /* noop */ }
         }),
         getTargetDir: () => process.cwd(),
         getEnableRecursiveFileSearch: () => true,
         validatePathAccess: () => true,
         getIdeMode: () => false,
+        isBrowserLaunchSuppressed: () => false,
         getContentGeneratorConfig: () => ({
             authType: 'api_key'
-        })
+        }),
+        isModelSteeringEnabled: () => false,
+        isInteractiveShellEnabled: () => true,
+        isAutoMemoryEnabled: () => false,
+        reloadSkills: () => Promise.resolve(),
+        getQuotaRemaining: () => undefined,
+        getQuotaLimit: () => undefined,
+        getQuotaResetTime: () => undefined,
+        isInitialized: () => true,
+        initialize: () => Promise.resolve(),
+        getHookSystem: () => ({
+            fireSessionEndEvent: () => Promise.resolve()
+        }),
+        refreshAuth: () => Promise.resolve(),
+        getUserTier: () => 'free',
+        getUserPaidTier: () => undefined,
+        getMemoryContextManager: () => ({
+            refresh: () => Promise.resolve()
+        }),
+        updateSystemInstructionIfInitialized: () => {},
+        getUserMemory: () => ({}),
+        getGeminiMdFileCount: () => 0,
+        getDebugMode: () => false,
+        getUseTerminalBuffer: () => false,
+        getEnableExtensionReloading: () => false,
+        getExtensionLoader: () => ({
+            setRequestConsent: () => {},
+            setRequestSetting: () => {},
+            getExtensions: () => []
+        }),
+        setRemoteAdminSettings: () => {},
+        sanitizationConfig: {},
+        sandboxManager: {},
+        getRemoteAdminSettings: () => ({}),
+        getAgentRegistry: () => ({
+            getAgents: () => []
+        }),
+        setShellExecutionConfig: () => {},
+        getQuestion: () => null,
+        isPlanEnabled: () => false,
+        getPolicyUpdateConfirmationRequest: () => null,
+        getBannerTextNoCapacityIssues: () => 'HIVE-MIND TUI',
+        getBannerTextCapacityIssues: () => 'HIVE-MIND TUI',
+        getTerminalBackground: () => '#000000',
+        injectionService: {
+            addInjection: () => {}
+        },
+        storage: new Storage(),
+        getExperiments: () => ({ flags: {} })
     };
 }
 

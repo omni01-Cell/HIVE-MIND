@@ -6,15 +6,15 @@
 
 import React, { useMemo } from 'react';
 import { escapeAnsiCtrlCodes } from '../utils/textUtils.js';
-import type { HistoryItem } from '../types.js';
+import { HistoryItem } from '../contexts/UIStateContext.js';
 import { UserMessage } from './messages/UserMessage.js';
 import { UserShellMessage } from './messages/UserShellMessage.js';
-import { GeminiMessage } from './messages/GeminiMessage.js';
+import { AssistantMessage } from './messages/AssistantMessage.js';
 import { InfoMessage } from './messages/InfoMessage.js';
 import { ErrorMessage } from './messages/ErrorMessage.js';
 import { ToolGroupMessage } from './messages/ToolGroupMessage.js';
 import { ToolGroupDisplay } from './messages/ToolGroupDisplay.js';
-import { GeminiMessageContent } from './messages/GeminiMessageContent.js';
+import { AssistantMessageContent } from './messages/AssistantMessageContent.js';
 import { CompressionMessage } from './messages/CompressionMessage.js';
 import { ExportSessionMessage } from './messages/ExportSessionMessage.js';
 import { WarningMessage } from './messages/WarningMessage.js';
@@ -26,9 +26,9 @@ import { ModelStatsDisplay } from './ModelStatsDisplay.js';
 import { ToolStatsDisplay } from './ToolStatsDisplay.js';
 import { SessionSummaryDisplay } from './SessionSummaryDisplay.js';
 import { Help } from './Help.js';
-import type { SlashCommand } from '../commands/types.js';
-import { ExtensionsList } from './views/ExtensionsList.js';
-import { getMCPServerStatus } from '@google/gemini-cli-core';
+import { SlashCommand } from '../contexts/UIStateContext.js';
+// ExtensionsList removed
+import { getMCPServerStatus } from '../contexts/UIStateContext.js';
 import { ToolsList } from './views/ToolsList.js';
 import { SkillsList } from './views/SkillsList.js';
 import { AgentsStatus } from './views/AgentsStatus.js';
@@ -88,18 +88,18 @@ const renderHistoryItemByType = (
             return <UserMessage text={itemForDisplay.text} width={terminalWidth} />;
         case 'user_shell':
             return <UserShellMessage text={itemForDisplay.text} width={terminalWidth} />;
-        case 'gemini':
+        case 'assistant':
             return (
-                <GeminiMessage
+                <AssistantMessage
                     text={itemForDisplay.text}
                     isPending={isPending}
                     availableTerminalHeight={geminiHeight}
                     terminalWidth={terminalWidth}
                 />
             );
-        case 'gemini_content':
+        case 'assistant_content':
             return (
-                <GeminiMessageContent
+                <AssistantMessageContent
                     text={itemForDisplay.text}
                     isPending={isPending}
                     availableTerminalHeight={geminiHeight}
@@ -207,7 +207,7 @@ const renderHistoryItemByType2 = (
         case 'export_session':
             return <ExportSessionMessage exportSession={itemForDisplay.exportSession} />;
         case 'extensions_list':
-            return <ExtensionsList extensions={itemForDisplay.extensions} />;
+            return <Text color={theme.ui.comment}>Extensions are not supported in HIVE-MIND.</Text>;
         case 'tools_list':
             return (
                 <ToolsList

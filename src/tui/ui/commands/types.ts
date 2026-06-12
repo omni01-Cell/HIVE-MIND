@@ -10,20 +10,15 @@ import type {
     HistoryItem,
     ConfirmationRequest
 } from '../types.js';
-import type {
-    GitService,
-    Logger,
-    CommandActionReturn,
-    AgentDefinition,
-    AgentLoopContext
-} from '@google/gemini-cli-core';
+import type { Logger, AgentDefinition, AgentLoopContext } from '../types.js';
+
+export interface CommandActionReturn<T> {
+  type: 'submit_prompt';
+  content: T;
+}
 import type { LoadedSettings } from '../../config/settings.js';
 import type { UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';
 import type { SessionStatsState } from '../contexts/SessionContext.js';
-import type {
-    ExtensionUpdateAction,
-    ExtensionUpdateStatus
-} from '../state/extensions.js';
 
 // Grouped dependencies for clarity and easier mocking
 export interface CommandContext {
@@ -41,7 +36,7 @@ export interface CommandContext {
     // Ensure that config is never null.
     agentContext: AgentLoopContext | null;
     settings: LoadedSettings;
-    git: GitService | undefined;
+    git: any;
     logger: Logger;
   };
   // UI state and history management
@@ -81,9 +76,6 @@ export interface CommandContext {
       displayName: string,
       definition: AgentDefinition,
     ) => void;
-    extensionsUpdateState: Map<string, ExtensionUpdateStatus>;
-    dispatchExtensionStateUpdate: (action: ExtensionUpdateAction) => void;
-    addConfirmUpdateExtensionRequest: (value: ConfirmationRequest) => void;
     /**
      * Sets a confirmation request to be displayed to the user.
      *
@@ -183,10 +175,10 @@ export enum CommandKind {
   BUILT_IN = 'built-in',
   USER_FILE = 'user-file',
   WORKSPACE_FILE = 'workspace-file',
-  EXTENSION_FILE = 'extension-file',
   MCP_PROMPT = 'mcp-prompt',
   AGENT = 'agent',
   SKILL = 'skill',
+  EXTENSION_FILE = 'extension-file',
 }
 
 // The standardized contract for any command in the system.
@@ -216,12 +208,10 @@ export interface SlashCommand {
    */
   isSafeConcurrent?: boolean;
 
-  // Optional metadata for extension commands
-  extensionName?: string;
-  extensionId?: string;
-
   // Optional metadata for MCP commands
   mcpServerName?: string;
+  extensionName?: string;
+  extensionId?: string;
 
   // The action to run. Optional for parent commands that only group sub-commands.
   action?: (

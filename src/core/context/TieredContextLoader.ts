@@ -17,11 +17,13 @@
 import { container } from '../ServiceContainer.js';
 import { botIdentity } from '../../utils/botIdentity.js';
 import { readFileSync } from 'fs';
+import { readdir, readFile } from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { permissionManager } from '../security/PermissionManager.js';
 import { blueprintManager } from '../blueprint/AgentBlueprint.js';
 import { TOOL_USE_GUIDELINES, ERROR_HANDLING_RULES, FEW_SHOT_EXAMPLES } from '../../constants/systemPromptSections.js';
+import { learningEngine } from '../../services/learning/LearningEngine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -241,7 +243,8 @@ export class TieredContextLoader {
             authority,
             groupBasics,
             chatId,
-            blueprint
+            blueprint,
+            userQuery: (message.text || '') as string
         });
 
         const context = {
@@ -408,6 +411,7 @@ export class TieredContextLoader {
         groupBasics: GroupBasics | null;
         chatId: string;
         blueprint?: unknown;
+        userQuery: string;
     }): Promise<string> {
         const now = new Date();
 
@@ -472,7 +476,18 @@ export class TieredContextLoader {
             economicConstraint += '</economic_constraint>\n';
         }
 
-        return `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}${mindosDrives}${economicConstraint}`;
+        // 7. Load survival and expert skills (progressive disclosure style)
+        const survivalSkillsYaml = await this._loadSurvivalSkills();
+        const survivalSkillsBlock = survivalSkillsYaml ? `\n<survie-skills>\n${survivalSkillsYaml}\n</survie-skills>\n` : '';
+
+        const expertSkill = await learningEngine.routeSkills(data.userQuery, data.chatId);
+        let expertSkillsBlock = '';
+        if (expertSkill) {
+            const commentsStr = expertSkill.comments.map(c => `  <comment>${c}</comment>`).join('\n');
+            expertSkillsBlock = `\n<skills>\n${expertSkill.yamlBlock}\n${commentsStr ? commentsStr + '\n' : ''}</skills>\n`;
+        }
+
+        return `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}${survivalSkillsBlock}${expertSkillsBlock}${mindosDrives}${economicConstraint}`;
     }
 
     /**
@@ -590,6 +605,46 @@ ${steps || 'None yet'}
             },
             mode: 'UNIFIED'
         };
+    }
+
+    /**
+     * Scans skills/survival/<nom_du_skill>/SKILL.md and extracts their YAML frontmatters
+     */
+    async _loadSurvivalSkills(): Promise<string> {
+        const survivalDir = path.join(process.cwd(), 'skills', 'survival');
+        let output = '';
+        try {
+            const entries = await readdir(survivalDir, { withFileTypes: true });
+            const directories = entries.filter(e => e.isDirectory());
+
+            for (const dir of directories) {
+                const skillPath = path.join(survivalDir, dir.name);
+                let skillFileContent = '';
+                let filePath = '';
+
+                try {
+                    filePath = path.join(skillPath, 'SKILL.md');
+                    skillFileContent = await readFile(filePath, 'utf-8');
+                } catch {
+                    try {
+                        filePath = path.join(skillPath, 'skill.md');
+                        skillFileContent = await readFile(filePath, 'utf-8');
+                    } catch {
+                        continue;
+                    }
+                }
+
+                const frontmatterMatch = skillFileContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+                if (frontmatterMatch) {
+                    const rawYaml = frontmatterMatch[1];
+                    const relativePath = path.join('skills', 'survival', dir.name, path.basename(filePath));
+                    output += `---\n${rawYaml.trim()}\npath: "${relativePath}"\n---\n\n`;
+                }
+            }
+        } catch {
+            // Graceful degradation if skills/survival folder does not exist yet
+        }
+        return output.trim();
     }
 
     /**

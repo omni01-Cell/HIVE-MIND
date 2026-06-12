@@ -6,7 +6,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { ShellCompletionProvider, CompletionResult } from './types.js';
+import { ShellCompletionProvider, CompletionResult } from '../../contexts/UIStateContext.js';
 import { escapeShellPath } from '../useShellCompletion.js';
 
 const execFileAsync = promisify(execFile);

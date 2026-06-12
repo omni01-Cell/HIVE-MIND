@@ -5,13 +5,10 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-    type Config,
-    type CodeAssistServer,
-    UserTierId,
-    getCodeAssistServer,
-    debugLogger
-} from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { UserTierId } from '../contexts/UIStateContext.js';
+import { CodeAssistServer, getCodeAssistServer } from '../contexts/UIStateContext.js';
 
 export interface PrivacyState {
   isLoading: boolean;
@@ -20,7 +17,7 @@ export interface PrivacyState {
   dataCollectionOptIn?: boolean;
 }
 
-export const usePrivacySettings = (config: Config) => {
+export const usePrivacySettings = (config: HiveConfig) => {
     const [privacyState, setPrivacyState] = useState<PrivacyState>({
         isLoading: true
     });
@@ -89,7 +86,7 @@ export const usePrivacySettings = (config: Config) => {
     };
 };
 
-function getCodeAssistServerOrFail(config: Config): CodeAssistServer {
+function getCodeAssistServerOrFail(config: HiveConfig): CodeAssistServer {
     const server = getCodeAssistServer(config);
     if (server === undefined) {
         throw new Error('Oauth not being used');

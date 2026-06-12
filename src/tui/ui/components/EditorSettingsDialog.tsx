@@ -17,12 +17,8 @@ import {
     type LoadableSettingScope,
     type LoadedSettings
 } from '../../config/settings.js';
-import {
-    type EditorType,
-    isEditorAvailable,
-    EDITOR_DISPLAY_NAMES,
-    coreEvents
-} from '@google/gemini-cli-core';
+import { coreEvents } from '../../utils/coreEvents.js';
+import { EditorType, isEditorAvailable, EDITOR_DISPLAY_NAMES } from '../contexts/UIStateContext.js';
 import { useKeypress } from '../hooks/useKeypress.js';
 
 interface EditorDialogProps {

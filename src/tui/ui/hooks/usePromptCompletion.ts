@@ -5,13 +5,9 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import {
-    debugLogger,
-    getResponseText,
-    LlmRole,
-    type Config
-} from '@google/gemini-cli-core';
-import type { Content } from '@google/genai';
+import { debugLogger } from '../../utils/errors.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { getResponseText, LlmRole, Content } from '../contexts/UIStateContext.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import { isSlashCommand } from '../utils/commandUtils.js';
 
@@ -29,7 +25,7 @@ export interface PromptCompletion {
 
 export interface UsePromptCompletionOptions {
   buffer: TextBuffer;
-  config?: Config;
+  config?: HiveConfig;
 }
 
 export function usePromptCompletion({

@@ -6,7 +6,7 @@
 
 
 import util from 'node:util';
-import type { ConsoleMessageItem } from '../types.js';
+import { ConsoleMessageItem } from '../contexts/UIStateContext.js';
 
 interface ConsolePatcherParams {
   onNewMessage?: (message: Omit<ConsoleMessageItem, 'id'>) => void;

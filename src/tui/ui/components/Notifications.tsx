@@ -9,18 +9,15 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useAppContext } from '../contexts/AppContext.js';
 import { useUIState } from '../contexts/UIStateContext.js';
 import { theme } from '../semantic-colors.js';
-import { StreamingState } from '../types.js';
+import { StreamingState } from '../contexts/UIStateContext.js';
 import { UpdateNotification } from './UpdateNotification.js';
 import { persistentState } from '../../utils/persistentState.js';
 import { useKeypress } from '../hooks/useKeypress.js';
 import { KeypressPriority } from '../contexts/KeypressContext.js';
 
-import {
-    GEMINI_DIR,
-    Storage,
-    homedir,
-    WarningPriority
-} from '@google/gemini-cli-core';
+import { homedir } from 'os';
+import { WarningPriority } from '../contexts/UIStateContext.js';
+import { GEMINI_DIR, Storage } from '../contexts/UIStateContext.js';
 
 import * as fs from 'node:fs/promises';
 import path from 'node:path';

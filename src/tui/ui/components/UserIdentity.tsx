@@ -7,15 +7,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
-import {
-    type Config,
-    UserAccountManager,
-    AuthType
-} from '@google/gemini-cli-core';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { UserAccountManager, AuthType } from '../contexts/UIStateContext.js';
 import { isUltraTier } from '../../utils/tierUtils.js';
 
 interface UserIdentityProps {
-  config: Config;
+  config: HiveConfig;
 }
 
 export const UserIdentity: React.FC<UserIdentityProps> = ({ config }) => {

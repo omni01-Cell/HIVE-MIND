@@ -4,20 +4,43 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    checkExhaustive,
-    partListUnionToString,
-    SESSION_FILE_PREFIX,
-    CoreToolCallStatus,
-    type Storage,
-    type ConversationRecord,
-    type MessageRecord,
-    loadConversationRecord
-} from '@google/gemini-cli-core';
+import { CoreToolCallStatus } from '../ui/contexts/UIStateContext.js';
+import { checkExhaustive } from './errors.js';
+import { partListUnionToString } from '../ui/utils/formatters.js';
+import { SESSION_FILE_PREFIX, MessageType, HistoryItemWithoutId } from '../ui/contexts/UIStateContext.js';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { stripUnsafeCharacters } from '../ui/utils/textUtils.js';
-import { MessageType, type HistoryItemWithoutId } from '../ui/types.js';
+
+export interface MessageRecord {
+    type: 'user' | 'gemini' | 'info' | 'error' | 'warning';
+    content: any;
+    displayContent?: any;
+    thoughts?: any[];
+    toolCalls?: any[];
+}
+
+export interface ConversationRecord {
+    sessionId: string;
+    messages: MessageRecord[];
+    startTime?: string;
+    lastUpdated?: string;
+    messageCount?: number;
+    summary?: string;
+    kind?: string;
+    hasUserOrAssistantMessage?: boolean;
+    firstUserMessage?: string;
+}
+
+export async function loadConversationRecord(filePath: string): Promise<ConversationRecord | null> {
+    try {
+        const content = await fs.readFile(filePath, 'utf-8');
+        return JSON.parse(content) as ConversationRecord;
+    } catch {
+        return null;
+    }
+}
 
 /**
  * Constant for the resume "latest" identifier.
@@ -414,14 +437,21 @@ export const getSessionFiles = async (
  * Utility class for session discovery and selection.
  */
 export class SessionSelector {
-    constructor(private storage: Storage) {}
+    private chatsDir: string;
+    constructor(projectRootOrChatsDir?: string) {
+        if (projectRootOrChatsDir && (projectRootOrChatsDir.includes('/') || projectRootOrChatsDir.includes('\\'))) {
+            this.chatsDir = projectRootOrChatsDir;
+        } else {
+            const root = projectRootOrChatsDir || process.cwd();
+            this.chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
+        }
+    }
 
     /**
    * Checks if a session with the given ID already exists on disk.
    */
     async sessionExists(id: string): Promise<boolean> {
-        const chatsDir = path.join(this.storage.getProjectTempDir(), 'chats');
-        const files = await fs.readdir(chatsDir).catch(() => []);
+        const files = await fs.readdir(this.chatsDir).catch(() => []);
 
         // The filename format is `session-<TIMESTAMP>-<ID_SLICE(0,8)>.jsonl`
         const shortId = id.slice(0, 8);
@@ -433,7 +463,7 @@ export class SessionSelector {
 
         for (const fileName of candidateFiles) {
             try {
-                const sessionPath = path.join(chatsDir, fileName);
+                const sessionPath = path.join(this.chatsDir, fileName);
                 const sessionData = await loadConversationRecord(sessionPath);
                 if (sessionData && sessionData.sessionId === id) {
                     return true;
@@ -450,8 +480,7 @@ export class SessionSelector {
    * Lists all available sessions for the current project.
    */
     async listSessions(): Promise<SessionInfo[]> {
-        const chatsDir = path.join(this.storage.getProjectTempDir(), 'chats');
-        return getSessionFiles(chatsDir);
+        return getSessionFiles(this.chatsDir);
     }
 
     /**
@@ -494,8 +523,7 @@ export class SessionSelector {
             return sortedSessions[index - 1];
         }
 
-        const chatsDir = path.join(this.storage.getProjectTempDir(), 'chats');
-        throw SessionError.invalidSessionIdentifier(trimmedIdentifier, chatsDir);
+        throw SessionError.invalidSessionIdentifier(trimmedIdentifier, this.chatsDir);
     }
 
     /**
@@ -546,8 +574,7 @@ export class SessionSelector {
     private async selectSession(
         sessionInfo: SessionInfo
     ): Promise<SessionSelectionResult> {
-        const chatsDir = path.join(this.storage.getProjectTempDir(), 'chats');
-        const sessionPath = path.join(chatsDir, sessionInfo.fileName);
+        const sessionPath = path.join(this.chatsDir, sessionInfo.fileName);
 
         try {
             const sessionData = await loadConversationRecord(sessionPath);
@@ -634,7 +661,7 @@ export function convertSessionToHistoryFormats(
                     messageType = MessageType.GEMINI;
                     break;
                 default:
-                    checkExhaustive(msg);
+                    checkExhaustive(msg as never);
                     messageType = MessageType.GEMINI;
                     break;
             }
@@ -661,9 +688,9 @@ export function convertSessionToHistoryFormats(
                     description: tool.description || '',
                     renderOutputAsMarkdown: tool.renderOutputAsMarkdown ?? true,
                     status:
-            tool.status === 'success'
-                ? CoreToolCallStatus.Success
-                : CoreToolCallStatus.Error,
+                        tool.status === 'success'
+                            ? 'completed'
+                            : 'failed',
                     resultDisplay: tool.resultDisplay,
                     confirmationDetails: undefined
                 }))

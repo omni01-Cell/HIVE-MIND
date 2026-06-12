@@ -6,7 +6,7 @@
 
 import type { JSX } from 'react';
 import { Box, Text } from 'ink';
-import type { ExportSessionProps } from '../../types.js';
+import { ExportSessionProps } from '../../contexts/UIStateContext.js';
 import { CliSpinner } from '../CliSpinner.js';
 import { theme } from '../../semantic-colors.js';
 

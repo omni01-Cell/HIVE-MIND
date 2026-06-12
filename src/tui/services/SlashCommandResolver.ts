@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CommandKind, type SlashCommand } from '../ui/commands/types.js';
-import type { CommandConflict } from './types.js';
+import { CommandKind, SlashCommand } from '../ui/contexts/UIStateContext.js';
+import { CommandConflict } from '../ui/contexts/UIStateContext.js';
 
 /**
  * Internal registry to track commands and conflicts during resolution.

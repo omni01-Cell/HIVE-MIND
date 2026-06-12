@@ -5,13 +5,9 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import {
-    AudioRecorder,
-    TranscriptionFactory,
-    debugLogger,
-    type Config,
-    type TranscriptionProvider
-} from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { AudioRecorder, TranscriptionFactory, TranscriptionProvider } from '../contexts/UIStateContext.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import type { MergedSettings } from '../../config/settingsSchema.js';
 import type { Key } from './useKeypress.js';
@@ -19,7 +15,7 @@ import { Command } from '../key/keyMatchers.js';
 
 interface UseVoiceModeProps {
   buffer: TextBuffer;
-  config: Config;
+  config: HiveConfig;
   settings: MergedSettings;
   setQueueErrorMessage: (message: string | null) => void;
   isVoiceModeEnabled: boolean;
@@ -107,7 +103,7 @@ function connectTranscriptionService(
 
 async function startVoiceAsync(
     refs: VoiceServiceRefs,
-    _config: Config,
+    _config: HiveConfig,
     voiceSettings: MergedSettings['experimental']['voice'],
     apiKey: string,
     cleanupIfStopped: () => boolean,

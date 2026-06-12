@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { ShellCompletionProvider, CompletionResult } from './types.js';
+import { ShellCompletionProvider, CompletionResult } from '../../contexts/UIStateContext.js';
 import { gitProvider } from './gitProvider.js';
 import { npmProvider } from './npmProvider.js';
 

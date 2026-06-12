@@ -7,7 +7,7 @@
 import { Box, Text } from 'ink';
 import { useOverflowState } from '../contexts/OverflowContext.js';
 import { useStreamingContext } from '../contexts/StreamingContext.js';
-import { StreamingState } from '../types.js';
+import { StreamingState } from '../contexts/UIStateContext.js';
 import { theme } from '../semantic-colors.js';
 
 interface ShowMoreLinesProps {

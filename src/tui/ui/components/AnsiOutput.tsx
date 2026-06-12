@@ -6,7 +6,7 @@
 
 import type React from 'react';
 import { Box, Text } from 'ink';
-import type { AnsiLine, AnsiOutput, AnsiToken } from '@google/gemini-cli-core';
+import { AnsiLine, AnsiOutput, AnsiToken } from '../contexts/UIStateContext.js';
 
 const DEFAULT_HEIGHT = 24;
 

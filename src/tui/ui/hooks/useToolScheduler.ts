@@ -4,21 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    type Config,
-    type ToolCallRequestInfo,
-    type ToolCall,
-    type CompletedToolCall,
-    MessageBusType,
-    ROOT_SCHEDULER_ID,
-    Scheduler,
-    type EditorType,
-    type ToolCallsUpdateMessage,
-    CoreToolCallStatus,
-    type SubagentActivityItem,
-    type SubagentActivityMessage,
-    AGENT_TOOL_NAME
-} from '@google/gemini-cli-core';
+import type { ToolCallRequestInfo, ToolCall } from '../../../core/types/BotTypes.js';
+import { CoreToolCallStatus } from '../contexts/UIStateContext.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { CompletedToolCall, MessageBusType, ROOT_SCHEDULER_ID, Scheduler, EditorType, ToolCallsUpdateMessage, SubagentActivityItem, SubagentActivityMessage, AGENT_TOOL_NAME } from '../contexts/UIStateContext.js';
 import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 
 // Re-exporting types compatible with hook expectations
@@ -94,7 +83,7 @@ function resolveSubagentName(tc: TrackedToolCall): string {
  */
 export function useToolScheduler(
     onComplete: (tools: CompletedToolCall[]) => Promise<void>,
-    config: Config,
+    config: HiveConfig,
     getPreferredEditor: () => EditorType | undefined
 ): [
   TrackedToolCall[],

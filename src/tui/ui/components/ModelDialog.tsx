@@ -8,25 +8,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { Box, Text } from 'ink';
 import { ModelQuotaDisplay } from './ModelQuotaDisplay.js';
 import { useUIState } from '../contexts/UIStateContext.js';
-import {
-    PREVIEW_GEMINI_MODEL,
-    PREVIEW_GEMINI_3_1_MODEL,
-    PREVIEW_GEMINI_FLASH_MODEL,
-    PREVIEW_GEMINI_FLASH_LITE_MODEL,
-    DEFAULT_GEMINI_MODEL,
-    DEFAULT_GEMINI_FLASH_MODEL,
-    DEFAULT_GEMINI_FLASH_LITE_MODEL,
-    GEMINI_MODEL_ALIAS_AUTO,
-    GEMMA_4_31B_IT_MODEL,
-    GEMMA_4_26B_A4B_IT_MODEL,
-    ModelSlashCommandEvent,
-    logModelSlashCommand,
-    getDisplayString,
-    AuthType,
-    PREVIEW_GEMINI_3_1_CUSTOM_TOOLS_MODEL,
-    isProModel,
-    getAutoModelDescription
-} from '@google/gemini-cli-core';
+import { PREVIEW_GEMINI_MODEL, PREVIEW_GEMINI_3_1_MODEL, PREVIEW_GEMINI_FLASH_MODEL, PREVIEW_GEMINI_FLASH_LITE_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_FLASH_MODEL, DEFAULT_GEMINI_FLASH_LITE_MODEL, GEMINI_MODEL_ALIAS_AUTO, GEMMA_4_31B_IT_MODEL, GEMMA_4_26B_A4B_IT_MODEL, ModelSlashCommandEvent, logModelSlashCommand, getDisplayString, AuthType, PREVIEW_GEMINI_3_1_CUSTOM_TOOLS_MODEL, isProModel, getAutoModelDescription } from '../contexts/UIStateContext.js';
 import { useKeypress } from '../hooks/useKeypress.js';
 import { theme } from '../semantic-colors.js';
 import { DescriptiveRadioButtonSelect } from './shared/DescriptiveRadioButtonSelect.js';

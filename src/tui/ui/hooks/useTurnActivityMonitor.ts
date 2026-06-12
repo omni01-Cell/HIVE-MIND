@@ -5,12 +5,10 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { StreamingState } from '../types.js';
-import {
-    hasRedirection,
-    type CoreToolCallStatus,
-    type ToolCallRequestInfo
-} from '@google/gemini-cli-core';
+import { StreamingState } from '../contexts/UIStateContext.js';
+import type { ToolCallRequestInfo } from '../../../core/types/BotTypes.js';
+import { CoreToolCallStatus } from '../contexts/UIStateContext.js';
+import { hasRedirection } from '../contexts/UIStateContext.js';
 
 export interface MinimalTrackedToolCall {
   status: CoreToolCallStatus;

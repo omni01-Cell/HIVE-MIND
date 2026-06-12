@@ -16,7 +16,7 @@ const config = createHiveConfig();
 async function main() {
     const { waitUntilExit } = render(
         <AppContainer
-            config={config as unknown as import('@google/gemini-cli-core').Config}
+            config={config as unknown as import('./config/hiveConfig.js').HiveConfig}
             startupWarnings={[]}
             version="0.0.1"
             initializationResult={{}}

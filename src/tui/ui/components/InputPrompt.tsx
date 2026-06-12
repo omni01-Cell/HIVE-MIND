@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import clipboardy from 'clipboardy';
 import { Box, Text, useStdout, type DOMElement } from 'ink';
 import { SuggestionsDisplay, MAX_WIDTH } from './SuggestionsDisplay.js';
@@ -41,13 +42,12 @@ import {
 import { useKeypress, type Key } from '../hooks/useKeypress.js';
 import { Command } from '../key/keyMatchers.js';
 import { formatCommand } from '../key/keybindingUtils.js';
-import type { CommandContext, SlashCommand } from '../commands/types.js';
-import {
-    ApprovalMode,
-    coreEvents,
-    debugLogger,
-    type Config
-} from '@google/gemini-cli-core';
+import { CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
+import { debugLogger } from '../../utils/errors.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { coreEvents } from '../../utils/coreEvents.js';
+import { ApprovalMode, MessageType, StreamingState } from '../contexts/UIStateContext.js';
+import { Storage } from '../contexts/UIStateContext.js';
 import { useVoiceMode } from '../hooks/useVoiceMode.js';
 import {
     parseInputForHighlighting,
@@ -75,7 +75,6 @@ import {
     TransientMessageType
 } from '../../utils/events.js';
 import { useSettings } from '../contexts/SettingsContext.js';
-import { StreamingState } from '../types.js';
 import { useMouseClick } from '../hooks/useMouseClick.js';
 import { useMouse, type MouseEvent } from '../contexts/MouseContext.js';
 import { useUIActions } from '../contexts/UIActionsContext.js';
@@ -108,7 +107,7 @@ export type ScrollableItem =
 export interface InputPromptProps {
   onSubmit: (value: string) => void;
   onClearScreen: () => void;
-  config: Config;
+  config: HiveConfig;
   slashCommands: readonly SlashCommand[];
   commandContext: CommandContext;
   placeholder?: string;
@@ -738,7 +737,8 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     ]);
     const [expandedSuggestionIndex, setExpandedSuggestionIndex] =
     useState<number>(-1);
-    const shellHistory = useShellHistory(config.getProjectRoot(), config.storage);
+    const storage = new Storage(config.getProjectRoot());
+    const shellHistory = useShellHistory(config.getProjectRoot(), storage);
     const shellHistoryData = shellHistory.history;
 
     const completion = useCommandCompletion({

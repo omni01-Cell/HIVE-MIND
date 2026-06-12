@@ -64,12 +64,14 @@ export class TransportManager {
         this.activeTransports = activeTransportNames;
 
         const initPromises = this.activeTransports.map(async (name) => {
-            if (name === 'ink-cli' && !this.transports.has('ink-cli')) {
+            const isTui = name === 'ink-cli' || name === 'tui';
+            if (isTui && !this.transports.has(name)) {
                 try {
-                    const { InkCLIAdapter } = await import('./ink/InkCLIAdapter.js');
-                    this.register('ink-cli', InkCLIAdapter);
+                    const { hiveTransport } = await import('../../tui/transport/HiveTransport.js');
+                    this.register(name, hiveTransport);
+                    console.log(`[TransportManager] TUI HIVE-MIND chargé comme transport ${name}`);
                 } catch (e) {
-                    console.error('[TransportManager] Failed to load ink-cli adapter:', e);
+                    console.error(`[TransportManager] Failed to load HIVE-MIND TUI for ${name}:`, e);
                 }
             }
 

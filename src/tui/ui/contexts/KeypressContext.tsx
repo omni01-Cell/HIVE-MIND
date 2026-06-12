@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { debugLogger, type Config } from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
 import { useStdin } from 'ink';
 import { MultiMap } from 'mnemonist';
 
@@ -657,7 +658,7 @@ export function KeypressProvider({
     config
 }: {
   children: React.ReactNode;
-  config?: Config;
+  config?: HiveConfig;
 }) {
     const { settings } = useSettingsStore();
     const debugKeystrokeLogging = settings.merged.general.debugKeystrokeLogging;

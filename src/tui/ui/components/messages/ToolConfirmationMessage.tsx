@@ -8,16 +8,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, ResizeObserver, type DOMElement } from 'ink';
 import { DiffRenderer } from './DiffRenderer.js';
 import { RenderInline } from '../../utils/InlineMarkdownRenderer.js';
-import {
-    type SerializableConfirmationDetails,
-    type Config,
-    type ToolConfirmationPayload,
-    ToolConfirmationOutcome,
-    type EditorType,
-    ApprovalMode,
-    hasRedirection,
-    debugLogger
-} from '@google/gemini-cli-core';
+import { debugLogger } from '../../../utils/errors.js';
+import { HiveConfig } from '../../../config/hiveConfig.js';
+import { ToolConfirmationOutcome, ApprovalMode } from '../../contexts/UIStateContext.js';
+import { SerializableConfirmationDetails, ToolConfirmationPayload, EditorType, hasRedirection } from '../../contexts/UIStateContext.js';
 import { useToolActions } from '../../contexts/ToolActionsContext.js';
 import {
     RadioButtonSelect,
@@ -49,7 +43,7 @@ import { isShellTool } from './ToolShared.js';
 export interface ToolConfirmationMessageProps {
   callId: string;
   confirmationDetails: SerializableConfirmationDetails;
-  config: Config;
+  config: HiveConfig;
   getPreferredEditor: () => EditorType | undefined;
   isFocused?: boolean;
   availableTerminalHeight?: number;
@@ -59,7 +53,7 @@ export interface ToolConfirmationMessageProps {
 
 interface ContentContext {
     toolName: string;
-    config: Config;
+    config: HiveConfig;
     terminalWidth: number;
     bodyHeight: number;
     settings: ReturnType<typeof useSettings>['settings'];
@@ -126,7 +120,7 @@ function buildConfirmationContent(details: SerializableConfirmationDetails, ctx:
 interface OptionsContext {
     isTrustedFolder: boolean;
     allowPermanentApproval: boolean;
-    config: Config;
+    config: HiveConfig;
     isDiffingEnabled: boolean;
 }
 
@@ -242,7 +236,7 @@ function computeConfirmationContent(ctx: {
     allowPermanentApproval: boolean;
     settings: ReturnType<typeof useSettings>;
     activeTheme: ReturnType<typeof themeManager.getActiveTheme>;
-    config: Config;
+    config: HiveConfig;
     toolName: string;
     measuredSecurityWarningsHeight: number;
     availableTerminalHeight: number | undefined;

@@ -7,13 +7,9 @@
 import React, { useEffect, useId } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../../semantic-colors.js';
-import type { IndividualToolCallDisplay } from '../../types.js';
-import {
-    isSubagentProgress,
-    checkExhaustive,
-    type SubagentActivityItem,
-    SubagentState
-} from '@google/gemini-cli-core';
+import { IndividualToolCallDisplay } from '../../contexts/UIStateContext.js';
+import { checkExhaustive } from '../../../utils/errors.js';
+import { isSubagentProgress, SubagentActivityItem, SubagentState } from '../../contexts/UIStateContext.js';
 import {
     SubagentProgressDisplay,
     formatToolArgs

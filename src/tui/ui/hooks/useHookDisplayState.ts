@@ -5,13 +5,9 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import {
-    coreEvents,
-    CoreEvent,
-    type HookStartPayload,
-    type HookEndPayload
-} from '@google/gemini-cli-core';
-import { type ActiveHook } from '../types.js';
+import { coreEvents, CoreEvent } from '../../utils/coreEvents.js';
+import { HookStartPayload, HookEndPayload } from '../contexts/UIStateContext.js';
+import { ActiveHook } from '../contexts/UIStateContext.js';
 import { WARNING_PROMPT_DURATION_MS } from '../constants.js';
 
 export const useHookDisplayState = () => {

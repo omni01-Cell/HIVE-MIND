@@ -4,14 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { StreamingState } from '../types.js';
+import { StreamingState } from '../contexts/UIStateContext.js';
 import { useTimer } from './useTimer.js';
 import { usePhraseCycler } from './usePhraseCycler.js';
 import { useState, useEffect, useRef } from 'react';
-import {
-    getDisplayString,
-    type RetryAttemptPayload
-} from '@google/gemini-cli-core';
+import { RetryAttemptPayload } from '../contexts/UIStateContext.js';
+import { getDisplayString } from '../contexts/UIStateContext.js';
 
 const LOW_VERBOSITY_RETRY_HINT_ATTEMPT_THRESHOLD = 2;
 

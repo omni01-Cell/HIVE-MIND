@@ -5,7 +5,6 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-// @ts-expect-error - ws does not have types installed
 import ws from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -70,7 +69,7 @@ if (projUrl && projUrl.startsWith('http') && projUrl !== 'https://VOTRE_PROJET.s
             persistSession: false
         },
         realtime: {
-            transport: ws
+            transport: ws as any
         }
     });
 }

@@ -6,7 +6,7 @@
 
 import type React from 'react';
 import { Box } from 'ink';
-import type { IndividualToolCallDisplay } from '../../types.js';
+import { IndividualToolCallDisplay } from '../../contexts/UIStateContext.js';
 import { StickyHeader } from '../StickyHeader.js';
 import { ToolResultDisplay } from './ToolResultDisplay.js';
 import {
@@ -21,7 +21,8 @@ import {
     useFocusHint,
     FocusHint
 } from './ToolShared.js';
-import { type Config, CoreToolCallStatus, Kind } from '@google/gemini-cli-core';
+import { CoreToolCallStatus, Kind } from '../../contexts/UIStateContext.js';
+import { HiveConfig } from '../../../config/hiveConfig.js';
 import { ShellInputPrompt } from '../ShellInputPrompt.js';
 import { SUBAGENT_MAX_LINES } from '../../constants.js';
 import { useToolActions } from '../../contexts/ToolActionsContext.js';
@@ -39,7 +40,7 @@ export interface ToolMessageProps extends IndividualToolCallDisplay {
   activeShellPtyId?: number | null;
   embeddedShellFocused?: boolean;
   ptyId?: number;
-  config?: Config;
+  config?: HiveConfig;
 }
 
 export const ToolMessage: React.FC<ToolMessageProps> = ({

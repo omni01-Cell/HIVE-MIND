@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { StreamingState } from '../ui/types.js';
+import { StreamingState } from '../ui/contexts/UIStateContext.js';
 
 export interface TerminalTitleOptions {
   streamingState: StreamingState;

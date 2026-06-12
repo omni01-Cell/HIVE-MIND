@@ -5,18 +5,16 @@
  */
 
 import { useState, useEffect } from 'react';
-import {
-    ApprovalMode,
-    type Config,
-    getAdminErrorMessage
-} from '@google/gemini-cli-core';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { ApprovalMode } from '../contexts/UIStateContext.js';
+import { getAdminErrorMessage } from '../contexts/UIStateContext.js';
 import { useKeypress } from './useKeypress.js';
 import { Command } from '../key/keyMatchers.js';
 import { useKeyMatchers } from './useKeyMatchers.js';
-import { MessageType, type HistoryItemWithoutId } from '../types.js';
+import { MessageType, HistoryItemWithoutId } from '../contexts/UIStateContext.js';
 
 export interface UseApprovalModeIndicatorArgs {
-  config: Config;
+  config: HiveConfig;
   addItem?: (item: HistoryItemWithoutId, timestamp: number) => void;
   onApprovalModeChange?: (mode: ApprovalMode) => void;
   isActive?: boolean;

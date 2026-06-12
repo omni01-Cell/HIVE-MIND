@@ -6,12 +6,10 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, ResizeObserver, type DOMElement } from 'ink';
-import {
-    isUserVisibleHook,
-    type ThoughtSummary
-} from '@google/gemini-cli-core';
+import { ThoughtSummary } from '../utils/formatters.js';
+import { isUserVisibleHook } from '../contexts/UIStateContext.js';
 import stripAnsi from 'strip-ansi';
-import { type ActiveHook } from '../types.js';
+import { ActiveHook } from '../contexts/UIStateContext.js';
 import { useUIState } from '../contexts/UIStateContext.js';
 import { useSettings } from '../contexts/SettingsContext.js';
 import { theme } from '../semantic-colors.js';

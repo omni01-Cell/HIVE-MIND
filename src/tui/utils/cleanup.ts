@@ -9,7 +9,7 @@ import { join } from 'node:path';
 
 const cleanupFunctions: Array<(() => void) | (() => Promise<void>)> = [];
 const syncCleanupFunctions: Array<() => void> = [];
-let configForTelemetry: Config | null = null;
+let activeConfig: any | null = null;
 let isShuttingDown = false;
 
 export function registerCleanup(fn: (() => void) | (() => Promise<void>)) {
@@ -57,16 +57,14 @@ export function runSyncCleanup() {
 }
 
 /**
- * Register the config instance for telemetry shutdown.
- * This must be called early in the application lifecycle.
+ * Register the config instance for application shutdown.
  */
-export function registerTelemetryConfig(config: Config) {
-    configForTelemetry = config;
+export function registerConfig(config: any) {
+    activeConfig = config;
 }
 
 export async function runExitCleanup() {
     // drain stdin to prevent printing garbage on exit
-    // https://github.com/google-gemini/gemini-cli/issues/16801
     await drainStdin();
 
     runSyncCleanup();
@@ -79,28 +77,11 @@ export async function runExitCleanup() {
     }
     cleanupFunctions.length = 0; // Clear the array
 
-    // Close persistent browser sessions before disposing config
-    try {
-        await resetBrowserSession();
-    } catch {
-    // Ignore errors during browser cleanup
-    }
-
-    if (configForTelemetry) {
+    if (activeConfig) {
         try {
-            await configForTelemetry.dispose();
+            await activeConfig.dispose();
         } catch {
             // Ignore errors during disposal
-        }
-    }
-
-    // IMPORTANT: Shutdown telemetry AFTER all other cleanup functions have run
-    // This ensures SessionEnd hooks and other telemetry are properly flushed
-    if (configForTelemetry && isTelemetrySdkInitialized()) {
-        try {
-            await shutdownTelemetry(configForTelemetry);
-        } catch {
-            // Ignore errors during telemetry shutdown
         }
     }
 }
@@ -131,7 +112,7 @@ async function gracefulShutdown(_reason: string) {
     isShuttingDown = true;
 
     await runExitCleanup();
-    process.exit(ExitCodes.SUCCESS);
+    process.exit(0);
 }
 
 export function setupSignalHandlers() {
@@ -177,13 +158,10 @@ export function setupTtyCheck(): () => void {
 }
 
 export async function cleanupCheckpoints() {
-    const storage = new Storage(process.cwd());
-    await storage.initialize();
-    const tempDir = storage.getProjectTempDir();
-    const checkpointsDir = join(tempDir, 'checkpoints');
+    const checkpointsDir = join(process.cwd(), '.hivemind', 'temp', 'checkpoints');
     try {
         await fs.rm(checkpointsDir, { recursive: true, force: true });
     } catch {
-    // Ignore errors if the directory doesn't exist or fails to delete.
+        // Ignore errors
     }
 }

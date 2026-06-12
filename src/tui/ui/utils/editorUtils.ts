@@ -6,19 +6,8 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import type { ReadStream } from 'node:tty';
-import {
-    ALL_EDITORS,
-    CoreEvent,
-    coreEvents,
-    type EditorType,
-    getEditorCommand,
-    getEditorExtraArgs,
-    getEditorWaitFlag,
-    isGuiEditor,
-    isTerminalEditor,
-    isValidEditorType,
-    resolveEditorTypeFromCommand
-} from '@google/gemini-cli-core';
+import { CoreEvent, coreEvents } from '../../utils/coreEvents.js';
+import { ALL_EDITORS, EditorType, getEditorCommand, getEditorExtraArgs, getEditorWaitFlag, isGuiEditor, isTerminalEditor, isValidEditorType, resolveEditorTypeFromCommand } from '../contexts/UIStateContext.js';
 
 /**
  * Command name substrings used to guess whether an unknown $VISUAL/$EDITOR

@@ -4,16 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    ModelSlashCommandEvent,
-    logModelSlashCommand
-} from '@google/gemini-cli-core';
-import {
-    type CommandContext,
-    CommandKind,
-    type SlashCommand
-} from './types.js';
-import { MessageType } from '../types.js';
+import { ModelSlashCommandEvent, logModelSlashCommand } from '../contexts/UIStateContext.js';
+import { CommandContext, CommandKind, SlashCommand } from '../contexts/UIStateContext.js';
+import { MessageType } from '../contexts/UIStateContext.js';
 
 const setModelCommand: SlashCommand = {
     name: 'set',

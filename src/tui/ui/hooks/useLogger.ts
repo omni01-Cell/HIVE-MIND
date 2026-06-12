@@ -5,12 +5,13 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Logger, type Config } from '@google/gemini-cli-core';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { Logger } from '../contexts/UIStateContext.js';
 
 /**
  * Hook to manage the logger instance.
  */
-export const useLogger = (config: Config): Logger | null => {
+export const useLogger = (config: HiveConfig): Logger | null => {
     const [logger, setLogger] = useState<Logger | null>(null);
 
     useEffect(() => {

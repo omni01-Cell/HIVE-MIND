@@ -7,7 +7,7 @@
 import * as fs from 'node:fs/promises';
 import { z } from 'zod';
 import { parse as parseIgnoringComments } from 'comment-json';
-import { isNodeError, Storage } from '@google/gemini-cli-core';
+import { isNodeError, Storage } from '../contexts/UIStateContext.js';
 
 /**
  * Command enum for all available keyboard shortcuts

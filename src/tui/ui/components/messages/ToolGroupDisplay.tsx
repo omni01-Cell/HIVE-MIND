@@ -6,13 +6,9 @@
 
 import type React from 'react';
 import { Box, Text } from 'ink';
-import { CoreToolCallStatus } from '@google/gemini-cli-core';
-import type {
-    HistoryItem,
-    HistoryItemWithoutId,
-    HistoryItemToolDisplayGroup,
-    ToolDisplayItem
-} from '../../types.js';
+import { CoreToolCallStatus } from '../../contexts/UIStateContext.js';
+import { HistoryItem, HistoryItemWithoutId } from '../../contexts/UIStateContext.js';
+import { HistoryItemToolDisplayGroup, ToolDisplayItem } from '../../contexts/UIStateContext.js';
 import { theme } from '../../semantic-colors.js';
 import { ToolStatusIndicator } from './ToolShared.js';
 import { useSettings } from '../../contexts/SettingsContext.js';

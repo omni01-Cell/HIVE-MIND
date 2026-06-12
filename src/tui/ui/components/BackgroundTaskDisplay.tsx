@@ -8,14 +8,9 @@ import { Box, Text } from 'ink';
 import { useEffect, useState, useRef, type RefObject } from 'react';
 import { useUIActions } from '../contexts/UIActionsContext.js';
 import { theme } from '../semantic-colors.js';
-import {
-    ShellExecutionService,
-    shortenPath,
-    tildeifyPath,
-    type AnsiOutput,
-    type AnsiLine,
-    type AnsiToken
-} from '@google/gemini-cli-core';
+import { AnsiOutput, AnsiLine, AnsiToken } from '../contexts/UIStateContext.js';
+import { shortenPath, tildeifyPath } from '../utils/formatters.js';
+import { ShellExecutionService } from '../contexts/UIStateContext.js';
 import { cpLen, cpSlice, getCachedStringWidth } from '../utils/textUtils.js';
 import { type BackgroundTask } from '../hooks/useExecutionLifecycle.js';
 import { Command } from '../key/keyMatchers.js';

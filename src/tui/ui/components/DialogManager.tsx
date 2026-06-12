@@ -5,99 +5,25 @@
  */
 
 import { Box, Text } from 'ink';
-import { IdeIntegrationNudge } from '../IdeIntegrationNudge.js';
 import { LoopDetectionConfirmation } from './LoopDetectionConfirmation.js';
-import { FolderTrustDialog } from './FolderTrustDialog.js';
 import { ConsentPrompt } from './ConsentPrompt.js';
 import { ThemeDialog } from './ThemeDialog.js';
 import { SettingsDialog } from './SettingsDialog.js';
-import { AuthInProgress } from '../auth/AuthInProgress.js';
-import { AuthDialog } from '../auth/AuthDialog.js';
-import { BannedAccountDialog } from '../auth/BannedAccountDialog.js';
-import { ApiAuthDialog } from '../auth/ApiAuthDialog.js';
 import { EditorSettingsDialog } from './EditorSettingsDialog.js';
-import { PrivacyNotice } from '../privacy/PrivacyNotice.js';
-import { ProQuotaDialog } from './ProQuotaDialog.js';
-import { ValidationDialog } from './ValidationDialog.js';
-import { OverageMenuDialog } from './OverageMenuDialog.js';
-import { EmptyWalletDialog } from './EmptyWalletDialog.js';
-import { relaunchApp } from '../../utils/processUtils.js';
 import { SessionBrowser } from './SessionBrowser.js';
-import { PermissionsModifyTrustDialog } from './PermissionsModifyTrustDialog.js';
 import { ModelDialog } from './ModelDialog.js';
 import { VoiceModelDialog } from './VoiceModelDialog.js';
 import { theme } from '../semantic-colors.js';
 import { useUIState } from '../contexts/UIStateContext.js';
-import { useQuotaState } from '../contexts/QuotaContext.js';
 import { useUIActions } from '../contexts/UIActionsContext.js';
 import { useConfig } from '../contexts/ConfigContext.js';
 import { useSettings } from '../contexts/SettingsContext.js';
-import process from 'node:process';
 import { type UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';
-import { AdminSettingsChangedDialog } from './AdminSettingsChangedDialog.js';
-import { IdeTrustChangeDialog } from './IdeTrustChangeDialog.js';
-import { NewAgentsNotification } from './NewAgentsNotification.js';
 import { AgentConfigDialog } from './AgentConfigDialog.js';
-import { PolicyUpdateDialog } from './PolicyUpdateDialog.js';
-import { LoginRestartDialog } from '../auth/LoginRestartDialog.js';
 
 interface DialogManagerProps {
   addItem: UseHistoryManagerReturn['addItem'];
   terminalWidth: number;
-}
-
-function renderQuotaDialogs(
-    quotaState: ReturnType<typeof useQuotaState>,
-    uiActions: ReturnType<typeof useUIActions>,
-    config: ReturnType<typeof useConfig>
-): React.ReactNode | null {
-    if (quotaState.proQuotaRequest) {
-        return (
-            <ProQuotaDialog
-                failedModel={quotaState.proQuotaRequest.failedModel}
-                fallbackModel={quotaState.proQuotaRequest.fallbackModel}
-                message={quotaState.proQuotaRequest.message}
-                isTerminalQuotaError={quotaState.proQuotaRequest.isTerminalQuotaError}
-                isModelNotFoundError={!!quotaState.proQuotaRequest.isModelNotFoundError}
-                authType={quotaState.proQuotaRequest.authType}
-                tierName={config?.getUserTierName()}
-                onChoice={uiActions.handleProQuotaChoice}
-            />
-        );
-    }
-    if (quotaState.validationRequest) {
-        return (
-            <ValidationDialog
-                validationLink={quotaState.validationRequest.validationLink}
-                validationDescription={quotaState.validationRequest.validationDescription}
-                learnMoreUrl={quotaState.validationRequest.learnMoreUrl}
-                onChoice={uiActions.handleValidationChoice}
-            />
-        );
-    }
-    if (quotaState.overageMenuRequest) {
-        return (
-            <OverageMenuDialog
-                failedModel={quotaState.overageMenuRequest.failedModel}
-                fallbackModel={quotaState.overageMenuRequest.fallbackModel}
-                resetTime={quotaState.overageMenuRequest.resetTime}
-                creditBalance={quotaState.overageMenuRequest.creditBalance}
-                onChoice={uiActions.handleOverageMenuChoice}
-            />
-        );
-    }
-    if (quotaState.emptyWalletRequest) {
-        return (
-            <EmptyWalletDialog
-                failedModel={quotaState.emptyWalletRequest.failedModel}
-                fallbackModel={quotaState.emptyWalletRequest.fallbackModel}
-                resetTime={quotaState.emptyWalletRequest.resetTime}
-                onGetCredits={quotaState.emptyWalletRequest.onGetCredits}
-                onChoice={uiActions.handleEmptyWalletChoice}
-            />
-        );
-    }
-    return null;
 }
 
 function renderConsentDialogs(
@@ -183,7 +109,7 @@ function renderSettingsDialogs(
             <Box flexDirection="column">
                 <SettingsDialog
                     onSelect={() => uiActions.closeSettingsDialog()}
-                    onRestartRequest={relaunchApp}
+                    onRestartRequest={() => {}}
                     availableTerminalHeight={terminalHeight - staticExtraHeight}
                 />
             </Box>
@@ -246,80 +172,6 @@ function renderSettingsDialogs(
             />
         );
     }
-    if (uiState.isPermissionsDialogOpen) {
-        return (
-            <PermissionsModifyTrustDialog
-                onExit={uiActions.closePermissionsDialog}
-                addItem={addItem}
-                targetDirectory={uiState.permissionsDialogProps?.targetDirectory}
-            />
-        );
-    }
-    return null;
-}
-
-function renderAuthDialogs(
-    uiState: ReturnType<typeof useUIState>,
-    uiActions: ReturnType<typeof useUIActions>,
-    config: ReturnType<typeof useConfig>,
-    settings: ReturnType<typeof useSettings>
-): React.ReactNode | null {
-    if (uiState.accountSuspensionInfo) {
-        return (
-            <Box flexDirection="column">
-                <BannedAccountDialog
-                    accountSuspensionInfo={uiState.accountSuspensionInfo}
-                    onExit={() => { process.exit(1); }}
-                    onChangeAuth={() => { uiActions.clearAccountSuspension(); }}
-                />
-            </Box>
-        );
-    }
-    if (uiState.isAuthenticating) {
-        return (
-            <AuthInProgress
-                onTimeout={() => { uiActions.onAuthError('Authentication cancelled.'); }}
-            />
-        );
-    }
-    if (uiState.isAwaitingApiKeyInput) {
-        return (
-            <Box flexDirection="column">
-                <ApiAuthDialog
-                    key={uiState.apiKeyDefaultValue}
-                    onSubmit={uiActions.handleApiKeySubmit}
-                    onCancel={uiActions.handleApiKeyCancel}
-                    error={uiState.authError}
-                    defaultValue={uiState.apiKeyDefaultValue}
-                />
-            </Box>
-        );
-    }
-    if (uiState.isAwaitingLoginRestart) {
-        return (
-            <Box flexDirection="column">
-                <LoginRestartDialog
-                    onDismiss={uiActions.dismissLoginRestart}
-                    config={config}
-                    message={uiState.loginRestartMessage}
-                />
-            </Box>
-        );
-    }
-    if (uiState.isAuthDialogOpen) {
-        return (
-            <Box flexDirection="column">
-                <AuthDialog
-                    config={config}
-                    settings={settings}
-                    setAuthState={uiActions.setAuthState}
-                    authError={uiState.authError}
-                    onAuthError={uiActions.onAuthError}
-                    setAuthContext={uiActions.setAuthContext}
-                />
-            </Box>
-        );
-    }
     return null;
 }
 
@@ -332,53 +184,8 @@ export const DialogManager = ({
     const settings = useSettings();
 
     const uiState = useUIState();
-    const quotaState = useQuotaState();
     const uiActions = useUIActions();
 
-    if (uiState.adminSettingsChanged) {
-        return <AdminSettingsChangedDialog />;
-    }
-    if (uiState.showIdeRestartPrompt) {
-        return <IdeTrustChangeDialog reason={uiState.ideTrustRestartReason} />;
-    }
-    if (uiState.newAgents) {
-        return (
-            <NewAgentsNotification
-                agents={uiState.newAgents}
-                onSelect={uiActions.handleNewAgentsSelect}
-            />
-        );
-    }
-
-    const quotaDialog = renderQuotaDialogs(quotaState, uiActions, config);
-    if (quotaDialog) return quotaDialog;
-
-    if (uiState.shouldShowIdePrompt) {
-        return (
-            <IdeIntegrationNudge
-                ide={uiState.currentIDE!}
-                onComplete={uiActions.handleIdePromptComplete}
-            />
-        );
-    }
-    if (uiState.isFolderTrustDialogOpen) {
-        return (
-            <FolderTrustDialog
-                onSelect={uiActions.handleFolderTrustSelect}
-                isRestarting={uiState.isRestarting}
-                discoveryResults={uiState.folderDiscoveryResults}
-            />
-        );
-    }
-    if (uiState.isPolicyUpdateDialogOpen) {
-        return (
-            <PolicyUpdateDialog
-                config={config}
-                request={uiState.policyUpdateConfirmationRequest!}
-                onClose={() => uiActions.setIsPolicyUpdateDialogOpen(false)}
-            />
-        );
-    }
     if (uiState.loopDetectionConfirmationRequest) {
         return (
             <LoopDetectionConfirmation
@@ -392,18 +199,6 @@ export const DialogManager = ({
 
     const settingsDialog = renderSettingsDialogs(uiState, uiActions, settings, config, addItem);
     if (settingsDialog) return settingsDialog;
-
-    if (uiState.showPrivacyNotice) {
-        return (
-            <PrivacyNotice
-                onExit={() => uiActions.exitPrivacyNotice()}
-                config={config}
-            />
-        );
-    }
-
-    const authDialog = renderAuthDialogs(uiState, uiActions, config, settings);
-    if (authDialog) return authDialog;
 
     return null;
 };

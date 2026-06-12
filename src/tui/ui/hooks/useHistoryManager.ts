@@ -5,7 +5,7 @@
  */
 
 import { useState, useRef, useCallback, useMemo } from 'react';
-import type { HistoryItem } from '../types.js';
+import { HistoryItem } from '../contexts/UIStateContext.js';
 import type { ChatRecordingService } from '@google/gemini-cli-core/src/services/chatRecordingService.js';
 
 // Type for the updater function passed to updateHistoryItem
@@ -113,9 +113,9 @@ export function useHistory({
                         });
                         break;
                     case 'user':
-                    case 'gemini':
-                    case 'gemini_content':
-                        // Core conversation recording handled by GeminiChat.
+                    case 'assistant':
+                    case 'assistant_content':
+                        // Core conversation recording handled by the Core.
                         break;
                     default:
                         // Ignore the rest.

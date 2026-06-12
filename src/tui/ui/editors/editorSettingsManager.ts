@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-    allowEditorTypeInSandbox,
-    hasValidEditorCommand,
-    type EditorType,
-    EDITOR_DISPLAY_NAMES
-} from '@google/gemini-cli-core';
+import { allowEditorTypeInSandbox, hasValidEditorCommand, EditorType, EDITOR_DISPLAY_NAMES } from '../contexts/UIStateContext.js';
 
 export interface EditorDisplay {
   name: string;

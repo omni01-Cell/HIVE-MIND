@@ -11,27 +11,23 @@ import {
     useState,
     createElement
 } from 'react';
-import { type PartListUnion } from '@google/genai';
 import process from 'node:process';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 import { useSessionStats } from '../contexts/SessionContext.js';
 import type { LoadedSettings } from '../../config/settings.js';
-import { type CommandContext, type SlashCommand } from '../commands/types.js';
+import { CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
 import { CommandService } from '../../services/CommandService.js';
 import { BuiltinCommandLoader } from '../../services/BuiltinCommandLoader.js';
-import { FileCommandLoader } from '../../services/FileCommandLoader.js';
-import { McpPromptLoader } from '../../services/McpPromptLoader.js';
-import { SkillCommandLoader } from '../../services/SkillCommandLoader.js';
 import { parseSlashCommand } from '../../utils/commands.js';
-import {
-    type ExtensionUpdateAction,
-    type ExtensionUpdateStatus
-} from '../state/extensions.js';
 import {
     LogoutConfirmationDialog,
     LogoutChoice
 } from '../components/LogoutConfirmationDialog.js';
 import { runExitCleanup } from '../../utils/cleanup.js';
+import { coreEvents, CoreEvent } from '../../utils/coreEvents.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { HistoryItem, HistoryItemWithoutId, ConfirmationRequest, AgentDefinition, MessageType, ToolConfirmationOutcome, ToolCallConfirmationDetails, IndividualToolCallDisplay, CoreToolCallStatus } from '../contexts/UIStateContext.js';
+import { IdeClient, Message, SlashCommandResult, SlashCommandProcessorResult, MCPDiscoveryState, SlashCommandStatus, makeSlashCommandEvent, logSlashCommand, addMCPStatusChangeListener, removeMCPStatusChangeListener, GitService, Logger, Storage, ExtensionsStartingEvent, ExtensionsStoppingEvent, ExtensionUpdateAction, ExtensionUpdateStatus, PartListUnion } from '../contexts/UIStateContext.js';
 
 interface SlashCommandProcessorActions {
   openAuthDialog: () => void;
@@ -63,7 +59,7 @@ interface SlashCommandProcessorActions {
 /**
  * Deletes the current session recording if a chat recording service is available.
  */
-async function deleteCurrentSessionRecording(config: Config | null): Promise<void> {
+async function deleteCurrentSessionRecording(config: HiveConfig | null): Promise<void> {
     const chatRecordingService = config
         ?.getGeminiClient()
         ?.getChatRecordingService();
@@ -81,7 +77,7 @@ interface SlashCommandResultContext {
     setPendingItem: React.Dispatch<React.SetStateAction<HistoryItemWithoutId | null>>;
     setSessionShellAllowlist: React.Dispatch<React.SetStateAction<Set<string>>>;
     setConfirmationRequest: React.Dispatch<React.SetStateAction<{ prompt: React.ReactNode; onConfirm: (confirmed: boolean) => void } | null>>;
-    config: Config | null;
+    config: HiveConfig | null;
     handleSlashCommand: (rawQuery: PartListUnion, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory?: boolean) => Promise<SlashCommandProcessorResult | false>;
 }
 
@@ -205,7 +201,7 @@ async function handleConfirmAction(
 
 interface SlashCommandHandlerContext {
     commands: readonly SlashCommand[];
-    config: Config | null;
+    config: HiveConfig | null;
     commandContext: CommandContext;
     addItem: UseHistoryManagerReturn['addItem'];
     addMessage: (message: Message) => void;
@@ -303,7 +299,7 @@ async function executeSlashCommand(
  * Hook to define and process slash commands (e.g., /help, /clear).
  */
 export const useSlashCommandProcessor = (
-    config: Config | null,
+    config: HiveConfig | null,
     settings: LoadedSettings,
     addItem: UseHistoryManagerReturn['addItem'],
     clearItems: UseHistoryManagerReturn['clearItems'],
@@ -456,10 +452,7 @@ export const useSlashCommandProcessor = (
         (async () => {
             const commandService = await CommandService.create(
                 [
-                    new BuiltinCommandLoader(config),
-                    new SkillCommandLoader(config),
-                    new McpPromptLoader(config),
-                    new FileCommandLoader(config)
+                    new BuiltinCommandLoader(config)
                 ],
                 controller.signal
             );

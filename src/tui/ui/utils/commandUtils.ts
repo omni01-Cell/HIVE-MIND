@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { debugLogger } from '@google/gemini-cli-core';
+import { debugLogger } from '../../utils/errors.js';
 import clipboardy from 'clipboardy';
-import type { SlashCommand } from '../commands/types.js';
+import { SlashCommand } from '../contexts/UIStateContext.js';
 import fs from 'node:fs';
 import type { Writable } from 'node:stream';
 import type { Settings } from '../../config/settingsSchema.js';

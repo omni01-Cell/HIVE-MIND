@@ -5,15 +5,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import {
-    writeToStdout,
-    disableMouseEvents,
-    enableMouseEvents,
-    enterAlternateScreen,
-    exitAlternateScreen,
-    enableLineWrapping,
-    disableLineWrapping
-} from '@google/gemini-cli-core';
+import { writeToStdout, disableMouseEvents, enableMouseEvents, enterAlternateScreen, exitAlternateScreen, enableLineWrapping, disableLineWrapping } from '../contexts/UIStateContext.js';
 import process from 'node:process';
 import {
     cleanupTerminalOnExit,

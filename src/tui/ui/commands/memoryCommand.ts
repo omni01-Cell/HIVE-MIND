@@ -5,20 +5,11 @@
  */
 
 import React from 'react';
-import {
-    type Config,
-    listMemoryFiles,
-    refreshMemory,
-    showMemory
-} from '@google/gemini-cli-core';
-import { MessageType } from '../types.js';
-import {
-    CommandKind,
-    type OpenCustomDialogActionReturn,
-    type SlashCommand,
-    type SlashCommandActionReturn
-} from './types.js';
-import { InboxDialog } from '../components/InboxDialog.js';
+import { HiveConfig } from '../../config/hiveConfig.js';
+import { listMemoryFiles, refreshMemory, showMemory } from '../contexts/UIStateContext.js';
+import { MessageType } from '../contexts/UIStateContext.js';
+import { CommandKind, OpenCustomDialogActionReturn, SlashCommand, SlashCommandActionReturn } from '../contexts/UIStateContext.js';
+
 
 const showSubCommand: SlashCommand = {
     name: 'show',
@@ -101,56 +92,11 @@ const listSubCommand: SlashCommand = {
     }
 };
 
-const inboxSubCommand: SlashCommand = {
-    name: 'inbox',
-    description:
-    'Review skills extracted from past sessions and move them to global or project skills',
-    kind: CommandKind.BUILT_IN,
-    autoExecute: true,
-    action: (
-        context
-    ): OpenCustomDialogActionReturn | SlashCommandActionReturn | void => {
-        const config = context.services.agentContext?.config;
-        if (!config) {
-            return {
-                type: 'message',
-                messageType: 'error',
-                content: 'Config not loaded.'
-            };
-        }
-
-        if (!config.isAutoMemoryEnabled()) {
-            return {
-                type: 'message',
-                messageType: 'info',
-                content:
-          'The memory inbox requires Auto Memory. Enable it with: experimental.autoMemory = true in settings.'
-            };
-        }
-
-        return {
-            type: 'custom_dialog',
-            component: React.createElement(InboxDialog, {
-                config,
-                onClose: () => context.ui.removeComponent(),
-                onReloadSkills: async () => {
-                    await config.reloadSkills();
-                    context.ui.reloadCommands();
-                },
-                onReloadMemory: async () => {
-                    await refreshMemory(config);
-                }
-            })
-        };
-    }
-};
-
-export const memoryCommand = (_config: Config | null): SlashCommand => {
+export const memoryCommand = (_config: HiveConfig | null): SlashCommand => {
     const subCommands: SlashCommand[] = [
         showSubCommand,
         reloadSubCommand,
-        listSubCommand,
-        inboxSubCommand
+        listSubCommand
     ];
 
     return {

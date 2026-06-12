@@ -5,11 +5,11 @@
  */
 
 import { Box, Text } from 'ink';
-import type { CompressionProps } from '../../types.js';
+import { CompressionProps } from '../../contexts/UIStateContext.js';
 import { CliSpinner } from '../CliSpinner.js';
 import { theme } from '../../semantic-colors.js';
 import { SCREEN_READER_MODEL_PREFIX } from '../../textConstants.js';
-import { CompressionStatus } from '@google/gemini-cli-core';
+import { CompressionStatus } from '../../contexts/UIStateContext.js';
 
 export interface CompressionDisplayProps {
   compression: CompressionProps;

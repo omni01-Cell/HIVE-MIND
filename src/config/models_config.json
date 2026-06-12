@@ -13,7 +13,24 @@
             "openrouter",
             "nvidia",
             "github",
-            "groq"
+            "groq",
+            "cerebras",
+            "cohere",
+            "cloudflare",
+            "fireworks",
+            "nebius",
+            "novita",
+            "ai21",
+            "upstage",
+            "nlpcloud",
+            "alibaba",
+            "hyperbolic",
+            "sambanova",
+            "scaleway",
+            "inferencenet",
+            "vercel",
+            "opencodezen",
+            "baseten"
         ],
         "mode_proactif": true,
         "embeddings": {
@@ -1270,6 +1287,617 @@
                     "ptc_tier": "S"
                 }
             ]
+        },
+        "cerebras": {
+            "nom_affiche": "Cerebras Cloud",
+            "base_url": "https://api.cerebras.ai/v1",
+            "modeles": [
+                {
+                    "id": "gpt-oss-120b",
+                    "description": "GPT-OSS 120B via Cerebras: Inference ultra-rapide (~3000 tok/s), 131K context. Free tier: 1M tokens/day.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 60000, "rpd": 14400 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "zai-glm-4.7",
+                    "description": "GLM 4.7 (355B) via Cerebras: Preview, reasoning avancé, 203K context.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 60000, "rpd": 14400 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "llama-3.3-70b",
+                    "description": "Llama 3.3 70B via Cerebras: Généraliste rapide.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 60000, "rpd": 14400 },
+                    "ptc_tier": "B"
+                }
+            ]
+        },
+        "cohere": {
+            "nom_affiche": "Cohere",
+            "base_url": "https://api.cohere.com/v2",
+            "modeles": [
+                {
+                    "id": "command-a-plus-05-2026",
+                    "description": "Command A+ (mai 2026): MoE, vision, agentic, reasoning, translation 23 langues. 128K context. Free tier: 1000 calls/month.",
+                    "types": ["chat", "reasoning", "agentic", "coding", "vision"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "command-a-reasoning-08-2025",
+                    "description": "Command A Reasoning: Raisonnement profond optimisé, 256K context.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "command-a-vision-07-2025",
+                    "description": "Command A Vision: Multimodal texte + image, 128K context.",
+                    "types": ["chat", "vision", "reasoning"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "command-a-03-2025",
+                    "description": "Command A: Modèle flagship Cohere, 256K context, tool use.",
+                    "types": ["chat", "reasoning", "agentic", "coding"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "command-r-plus-08-2024",
+                    "description": "Command R+: RAG et citation optimisé, 128K context.",
+                    "types": ["chat", "rag", "reasoning"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "cloudflare": {
+            "nom_affiche": "Cloudflare Workers AI",
+            "base_url": "https://api.cloudflare.com/client/v4/accounts",
+            "modeles": [
+                {
+                    "id": "@cf/moonshotai/kimi-k2.6",
+                    "description": "Kimi K2.6 via Cloudflare: 1T params, 262K context, vision, agentic. Free tier: 10K neurons/day.",
+                    "types": ["chat", "agentic", "coding", "reasoning", "vision"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 10000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "@cf/openai/gpt-oss-120b",
+                    "description": "GPT-OSS 120B via Cloudflare: 120B open-source, 131K context.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 10000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "@cf/nvidia/nemotron-3-120b-a12b",
+                    "description": "Nemotron 3 120B: MoE NVIDIA, multi-agent, reasoning avancé.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 10000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "@cf/zai-org/glm-4.7-flash",
+                    "description": "GLM 4.7 Flash: Multilingue 100+ langues, tool calling, 131K context.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 10000 },
+                    "ptc_tier": "B"
+                },
+                {
+                    "id": "@cf/google/gemma-4-26b-a4b-it",
+                    "description": "Gemma 4 26B MoE: 256K context, vision, thinking mode, function calling.",
+                    "types": ["chat", "reasoning", "vision", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 10000 },
+                    "ptc_tier": "B"
+                }
+            ]
+        },
+        "fireworks": {
+            "nom_affiche": "Fireworks AI",
+            "base_url": "https://api.fireworks.ai/inference/v1",
+            "modeles": [
+                {
+                    "id": "accounts/fireworks/models/qwen3-235b-a22b",
+                    "description": "Qwen 3 235B MoE via Fireworks: Top reasoning, 131K context.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "accounts/fireworks/models/deepseek-v3-0324",
+                    "description": "DeepSeek V3 0324 via Fireworks: MoE 685B, SOTA reasoning.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "accounts/fireworks/models/gpt-oss-120b",
+                    "description": "GPT-OSS 120B via Fireworks: Frontier agentic.",
+                    "types": ["chat", "reasoning", "agentic", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+                    "description": "Llama 3.3 70B via Fireworks: Généraliste rapide.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "B"
+                },
+                {
+                    "id": "accounts/fireworks/models/mistral-large-2411",
+                    "description": "Mistral Large 2411 via Fireworks: Dernière version Mistral.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "nebius": {
+            "nom_affiche": "Nebius AI",
+            "base_url": "https://api.studio.nebius.com/v1",
+            "modeles": [
+                {
+                    "id": "Qwen/Qwen3-235B-A22B",
+                    "description": "Qwen 3 235B MoE via Nebius: Top performance, 131K context.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "deepseek-ai/DeepSeek-V3-0324",
+                    "description": "DeepSeek V3 0324 via Nebius: MoE 685B reasoning.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "meta-llama/Llama-3.3-70B-Instruct",
+                    "description": "Llama 3.3 70B via Nebius.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "B"
+                },
+                {
+                    "id": "deepseek-ai/DeepSeek-R1-0528",
+                    "description": "DeepSeek R1 via Nebius: Reasoning profond.",
+                    "types": ["chat", "reasoning", "math"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "mistralai/Mistral-Large-Instruct-2411",
+                    "description": "Mistral Large 2411 via Nebius.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "novita": {
+            "nom_affiche": "Novita AI",
+            "base_url": "https://api.novita.ai/v3/openai",
+            "modeles": [
+                {
+                    "id": "deepseek/deepseek-v4-pro",
+                    "description": "DeepSeek V4 Pro via Novita: Dernier SOTA reasoning.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "deepseek/deepseek-v4-flash",
+                    "description": "DeepSeek V4 Flash via Novita: Ultra-rapide.",
+                    "types": ["chat", "fast", "coding"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "qwen/qwen3.5-397b-a17b",
+                    "description": "Qwen 3.5 397B MoE via Novita: Dernier SOTA.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "minimaxai/minimax-m2.7",
+                    "description": "MiniMax M2.7 via Novita: Généraliste performant, 192K context.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "meta-llama/llama-3.3-70b-instruct",
+                    "description": "Llama 3.3 70B via Novita: Ultra-rapide.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "B"
+                }
+            ]
+        },
+        "ai21": {
+            "nom_affiche": "AI21 Labs",
+            "base_url": "https://api.ai21.com/studio/v1",
+            "modeles": [
+                {
+                    "id": "jamba-large",
+                    "description": "Jamba Large (398B, 94B active): Hybrid SSM-Transformer, 256K context, enterprise reliability.",
+                    "types": ["chat", "long_context", "reasoning", "agentic"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "jamba-mini",
+                    "description": "Jamba2 Mini (52B total, 12B active): MoE, 256K context, Apache 2.0.",
+                    "types": ["chat", "fast", "long_context"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "upstage": {
+            "nom_affiche": "Upstage (Solar)",
+            "base_url": "https://api.upstage.ai/v1/solar",
+            "modeles": [
+                {
+                    "id": "solar-pro-240910",
+                    "description": "Solar Pro: Modèle flagship Upstage, reasoning avancé.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 10, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "nlpcloud": {
+            "nom_affiche": "NLP Cloud",
+            "base_url": "https://api.nlpcloud.io/v1",
+            "modeles": [
+                {
+                    "id": "meta-llama/llama-3.3-70b-instruct",
+                    "description": "Llama 3.3 70B via NLP Cloud.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 500 },
+                    "ptc_tier": "B"
+                },
+                {
+                    "id": "deepseek/deepseek-v3",
+                    "description": "DeepSeek V3 via NLP Cloud.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 500 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "google/gemini-2.0-flash",
+                    "description": "Gemini 2.0 Flash via NLP Cloud.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 500 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "mistralai/mistral-large-latest",
+                    "description": "Mistral Large via NLP Cloud.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 500 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "nvidia/llama-3.1-nemotron-70b-instruct",
+                    "description": "Nemotron 70B via NLP Cloud.",
+                    "types": ["chat", "reasoning"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 500 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "alibaba": {
+            "nom_affiche": "Alibaba Cloud (Qwen)",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "modeles": [
+                {
+                    "id": "qwen3.7-max",
+                    "description": "Qwen 3.7 Max (juin 2026): Dernier SOTA Alibaba, reasoning avancé. Free: 1M tokens/90j.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "qwen3.7-plus",
+                    "description": "Qwen 3.7 Plus (juin 2026): Vision-language upgrade, agent-level intelligence.",
+                    "types": ["chat", "reasoning", "coding", "vision"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "qwen3.6-plus",
+                    "description": "Qwen 3.6 Plus (avril 2026): Text + vision + video.",
+                    "types": ["chat", "reasoning", "coding", "vision"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "qwen3.5-plus",
+                    "description": "Qwen 3.5 Plus: Équilibre performance/vitesse, tool calling.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "qwen-max",
+                    "description": "Qwen Max: Modèle flagship, 32K context.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                }
+            ]
+        },
+        "hyperbolic": {
+            "nom_affiche": "Hyperbolic",
+            "base_url": "https://api.hyperbolic.xyz/v1",
+            "modeles": [
+                {
+                    "id": "Qwen3-Next-80B-A3B-Thinking",
+                    "description": "Qwen3 Next 80B MoE Thinking via Hyperbolic: Dernier SOTA reasoning.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "gpt-oss-120b",
+                    "description": "GPT-OSS 120B via Hyperbolic: Frontier agentic.",
+                    "types": ["chat", "reasoning", "agentic", "coding"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "deepseek-ai/DeepSeek-R1-0528",
+                    "description": "DeepSeek R1 via Hyperbolic: Reasoning profond.",
+                    "types": ["chat", "reasoning", "math"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "qwen/qwen3-coder-480b-a35b-instruct",
+                    "description": "Qwen3 Coder 480B MoE via Hyperbolic: SOTA coding.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "deepseek-ai/DeepSeek-V3-0324",
+                    "description": "DeepSeek V3 0324 via Hyperbolic: MoE 685B.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 60, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                }
+            ]
+        },
+        "sambanova": {
+            "nom_affiche": "SambaNova Cloud",
+            "base_url": "https://api.sambanova.ai/v1",
+            "modeles": [
+                {
+                    "id": "DeepSeek-V3.2",
+                    "description": "DeepSeek V3.2 via SambaNova: Dernière version, 164K context. Preview.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "DeepSeek-V3.1",
+                    "description": "DeepSeek V3.1 via SambaNova: 128K context. Production.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "gpt-oss-120b",
+                    "description": "GPT-OSS 120B via SambaNova: Frontier agentic, 128K context.",
+                    "types": ["chat", "reasoning", "agentic", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "MiniMax-M2.7",
+                    "description": "MiniMax M2.7 via SambaNova: 192K context, fast lane.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "Meta-Llama-3.3-70B-Instruct",
+                    "description": "Llama 3.3 70B via SambaNova: 128K context, free tier available.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "B"
+                }
+            ]
+        },
+        "scaleway": {
+            "nom_affiche": "Scaleway Generative APIs",
+            "base_url": "https://api.scaleway.com/llm/v1",
+            "modeles": [
+                {
+                    "id": "qwen3.5-397b-a17b",
+                    "description": "Qwen 3.5 397B MoE via Scaleway: Dernier SOTA, 250K context. Free: 1M tokens.",
+                    "types": ["chat", "reasoning", "coding", "agentic", "vision"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "qwen3.6-35b-a3b",
+                    "description": "Qwen 3.6 35B MoE via Scaleway: Agentic tasks, 256K context.",
+                    "types": ["chat", "reasoning", "coding", "vision"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "mistral-medium-3.5-128b",
+                    "description": "Mistral Medium 3.5 128B via Scaleway: Dernier Mistral, 256K context.",
+                    "types": ["chat", "reasoning", "coding", "vision"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "qwen3-235b-a22b-instruct-2507",
+                    "description": "Qwen 3 235B MoE via Scaleway: 250K context.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "gpt-oss-120b",
+                    "description": "GPT-OSS 120B via Scaleway.",
+                    "types": ["chat", "reasoning", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "inferencenet": {
+            "nom_affiche": "Inference.net",
+            "base_url": "https://api.inference.net/v1",
+            "modeles": [
+                {
+                    "id": "deepseek/deepseek-v3",
+                    "description": "DeepSeek V3 via Inference.net.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "meta-llama/llama-3.3-70b-instruct",
+                    "description": "Llama 3.3 70B via Inference.net.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "B"
+                },
+                {
+                    "id": "qwen/qwen3-235b-a22b",
+                    "description": "Qwen 3 235B MoE via Inference.net.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "deepseek/deepseek-r1",
+                    "description": "DeepSeek R1 via Inference.net: Reasoning profond.",
+                    "types": ["chat", "reasoning", "math"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                }
+            ]
+        },
+        "vercel": {
+            "nom_affiche": "Vercel AI Gateway",
+            "base_url": "https://api.vercel.com/v1/ai",
+            "modeles": [
+                {
+                    "id": "openai/gpt-4o",
+                    "description": "GPT-4o via Vercel: Multimodal flagship OpenAI.",
+                    "types": ["chat", "vision", "reasoning"],
+                    "quota": { "rpm": 60, "tpm": 150000, "rpd": 5000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "anthropic/claude-3.5-sonnet",
+                    "description": "Claude 3.5 Sonnet via Vercel: Coding et reasoning.",
+                    "types": ["chat", "coding", "reasoning"],
+                    "quota": { "rpm": 60, "tpm": 150000, "rpd": 5000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "google/gemini-2.0-flash",
+                    "description": "Gemini 2.0 Flash via Vercel: Rapide et performant.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 60, "tpm": 150000, "rpd": 5000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "deepseek/deepseek-v3",
+                    "description": "DeepSeek V3 via Vercel.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 60, "tpm": 150000, "rpd": 5000 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "opencodezen": {
+            "nom_affiche": "OpenCode Zen",
+            "base_url": "https://opencode.ai/zen/v1",
+            "modeles": [
+                {
+                    "id": "deepseek-v4-flash-free",
+                    "description": "DeepSeek V4 Flash Free via OpenCode Zen: Gratuit temporairement.",
+                    "types": ["chat", "fast", "coding"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "mimo-v2.5-free",
+                    "description": "MiMo V2.5 Free via OpenCode Zen: Gratuit temporairement.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "nemotron-3-ultra-free",
+                    "description": "Nemotron 3 Ultra Free via OpenCode Zen: Gratuit temporairement.",
+                    "types": ["chat", "reasoning", "agentic"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "big-pickle",
+                    "description": "Big Pickle: Stealth model, gratuit via OpenCode Zen.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                },
+                {
+                    "id": "minimax-m2.7",
+                    "description": "MiniMax M2.7 via OpenCode Zen: $0.30/M input, $1.20/M output.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 20, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "A"
+                }
+            ]
+        },
+        "baseten": {
+            "nom_affiche": "Baseten",
+            "base_url": "https://app.baseten.co/v1",
+            "modeles": [
+                {
+                    "id": "meta-llama/llama-3.3-70b-instruct",
+                    "description": "Llama 3.3 70B via Baseten.",
+                    "types": ["chat", "coding", "agentic"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "B"
+                },
+                {
+                    "id": "deepseek/deepseek-v3-0324",
+                    "description": "DeepSeek V3 0324 via Baseten.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                },
+                {
+                    "id": "qwen/qwen3-235b-a22b",
+                    "description": "Qwen 3 235B MoE via Baseten.",
+                    "types": ["chat", "reasoning", "coding"],
+                    "quota": { "rpm": 30, "tpm": 100000, "rpd": 1000 },
+                    "ptc_tier": "S"
+                }
+            ]
+        },
+        "modal": {
+            "nom_affiche": "Modal (Serverless GPU)",
+            "description": "Modal: Serverless GPU, models depend on deployed apps.",
+            "modeles": []
         }
     },
     "voice_provider": {

@@ -5,12 +5,7 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
-import {
-    StreamingState,
-    type ConfirmationRequest,
-    type HistoryItemWithoutId,
-    type PermissionConfirmationRequest
-} from '../types.js';
+import { StreamingState, ConfirmationRequest, HistoryItemWithoutId, PermissionConfirmationRequest } from '../contexts/UIStateContext.js';
 import { getPendingAttentionNotification } from '../utils/pendingAttentionNotification.js';
 import {
     buildRunEventNotificationContent,

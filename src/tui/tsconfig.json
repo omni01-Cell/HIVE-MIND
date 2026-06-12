@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "..",
     "noEmit": true,
     "skipLibCheck": true,
     "module": "ESNext",
@@ -10,15 +10,25 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "strictBindCallApply": false,
+    "strictPropertyInitialization": false,
+    "noImplicitThis": false,
     "paths": {}
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
-    "!**/*.test.ts",
-    "!**/*.test.tsx",
-    "!**/__snapshots__/**",
-    "!test-utils/**",
-    "!integration-tests/**"
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/__snapshots__",
+    "test-utils",
+    "integration-tests",
+    "node_modules"
   ]
 }

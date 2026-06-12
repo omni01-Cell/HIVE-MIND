@@ -6,7 +6,7 @@
 
 import * as fsPromises from 'node:fs/promises';
 import path from 'node:path';
-import type { Content } from '@google/genai';
+import { Content } from '../contexts/UIStateContext.js';
 
 /**
  * Serializes chat history to a Markdown string.
