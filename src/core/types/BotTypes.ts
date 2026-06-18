@@ -20,6 +20,7 @@ export interface MessageData {
     raw?: unknown;
     id?: string;
     sourceChannel?: string; // Origin (whatsapp, cli, etc.)
+    systemContext?: string;
 }
 
 export interface BotEvent {

@@ -455,12 +455,15 @@ export class BotCore {
             // Environment Detection Logic
             const appEnv = process.env.APP_ENV || 'local';
 
-            if (appEnv === 'server' || !process.stdin.isTTY) {
+            const tuiExplicitlyRequested = activeTransports.includes('ink-cli');
+            if (!tuiExplicitlyRequested && (appEnv === 'server' || !process.stdin.isTTY)) {
                 console.log(`[Core] 🌐 Mode ${appEnv === 'server' ? 'SERVEUR' : 'NON-TTY'} (Headless). CLI désactivée.`);
                 activeTransports = activeTransports.filter(t => t !== 'cli' && t !== 'ink-cli');
-            } else if (appEnv === 'local' && !activeTransports.includes('ink-cli')) {
+            } else if (!tuiExplicitlyRequested && appEnv === 'local' && !activeTransports.includes('ink-cli')) {
                 console.log('[Core] 💻 Mode LOCAL. Activation de la CLI (Ink).');
                 activeTransports.push('ink-cli');
+            } else if (tuiExplicitlyRequested) {
+                console.log('[Core] 🎯 Transport TUI (ink-cli) explicitement demandé — bypass du check TTY.');
             }
 
             await this.transport.initialize(activeTransports);
@@ -916,7 +919,7 @@ export class BotCore {
                     const hiveCfg = container.get('config');
 
                     // Construire le contexte via le loader unifié V3
-                    const context: any = await tieredContextLoader.load(chatId, message as unknown as { sender: string; sourceChannel?: string; [key: string]: unknown });
+                    const context: any = await tieredContextLoader.load(chatId, message as unknown as { sender: string; sourceChannel?: string; systemContext?: string; [key: string]: unknown });
 
                     const relevantTools = await this._getLiveAudioTools();
 
@@ -1170,7 +1173,7 @@ export class BotCore {
             // ==================================================================================
 
             // 1. Load unified context (L1 Hot Cache — Passport + Scratchpad + ActionHistory + Chat)
-            const fullContext = await tieredContextLoader.load(chatId, message as unknown as { sender: string; sourceChannel?: string; [key: string]: unknown });
+            const fullContext = await tieredContextLoader.load(chatId, message as unknown as { sender: string; sourceChannel?: string; systemContext?: string; [key: string]: unknown });
             const activeBlueprint = (fullContext as any).blueprint || this.currentBlueprint;
 
             // 2. Build LLM history

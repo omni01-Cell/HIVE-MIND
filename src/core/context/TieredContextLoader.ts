@@ -179,7 +179,7 @@ export class TieredContextLoader {
      * @param {Object} message - { sender, text, sourceChannel, ... }
      * @returns {Promise<UnifiedContext>}
      */
-    async load(chatId: string, message: { sender: string; sourceChannel?: string; [key: string]: unknown }): Promise<UnifiedContext> {
+    async load(chatId: string, message: { sender: string; sourceChannel?: string; systemContext?: string; [key: string]: unknown }): Promise<UnifiedContext> {
         const startTime = Date.now();
         const isGroup = chatId?.endsWith('@g.us');
 
@@ -233,7 +233,6 @@ export class TieredContextLoader {
             }
         }
 
-        // ── HYDRATE SYSTEM PROMPT TEMPLATE ──
         const systemPrompt = await this._hydrateTemplate({
             channel: message.sourceChannel || 'whatsapp',
             passport: passport || { name: 'Unknown', lang: 'auto', tz: 'auto', topFacts: [], maple: { facts: [], prefs: [], goals: [] } },
@@ -244,7 +243,8 @@ export class TieredContextLoader {
             groupBasics,
             chatId,
             blueprint,
-            userQuery: (message.text || '') as string
+            userQuery: (message.text || '') as string,
+            systemContext: message.systemContext
         });
 
         const context = {
@@ -412,6 +412,7 @@ export class TieredContextLoader {
         chatId: string;
         blueprint?: unknown;
         userQuery: string;
+        systemContext?: string;
     }): Promise<string> {
         const now = new Date();
 
@@ -487,7 +488,13 @@ export class TieredContextLoader {
             expertSkillsBlock = `\n<skills>\n${expertSkill.yamlBlock}\n${commentsStr ? commentsStr + '\n' : ''}</skills>\n`;
         }
 
-        return `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}${survivalSkillsBlock}${expertSkillsBlock}${mindosDrives}${economicConstraint}`;
+        let promptResult = `${prompt}\n${userModel}\n${harness}\n${socialBlock}\n${executionBlock}${survivalSkillsBlock}${expertSkillsBlock}${mindosDrives}${economicConstraint}`;
+
+        if (data.systemContext && data.systemContext.trim()) {
+            promptResult += `\n<local_instructions>\n${data.systemContext.trim()}\n</local_instructions>\n`;
+        }
+
+        return promptResult;
     }
 
     /**
