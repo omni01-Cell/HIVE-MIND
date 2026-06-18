@@ -315,15 +315,15 @@ export function formatValidationError(
 
     for (const issue of displayedIssues) {
         const pathStr = issue.path.reduce(
-            (acc: string, curr: any) => {
-                const keyStr = typeof curr === 'symbol' ? curr.toString() : String(curr);
+            (acc: string, curr: any): string => {
+                const keyStr = typeof curr === 'symbol' ? String(curr) : String(curr);
                 return typeof curr === 'number'
                     ? `${acc}[${curr}]`
                     : `${acc ? acc + '.' : ''}${keyStr}`;
             },
             ''
         );
-        lines.push(`Error in: ${pathStr || '(root)'}`);
+        lines.push(`Error in: ${String(pathStr) || '(root)'}`);
         lines.push(`    ${issue.message}`);
 
         if (issue.code === 'invalid_type') {

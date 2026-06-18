@@ -9,6 +9,7 @@ import {
     useMemo,
     useEffect,
     useState,
+    useRef,
     createElement
 } from 'react';
 import process from 'node:process';
@@ -78,7 +79,7 @@ interface SlashCommandResultContext {
     setSessionShellAllowlist: React.Dispatch<React.SetStateAction<Set<string>>>;
     setConfirmationRequest: React.Dispatch<React.SetStateAction<{ prompt: React.ReactNode; onConfirm: (confirmed: boolean) => void } | null>>;
     config: HiveConfig | null;
-    handleSlashCommand: (rawQuery: PartListUnion, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory?: boolean) => Promise<SlashCommandProcessorResult | false>;
+    handleSlashCommand: (rawQuery: PartListUnion | string, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory?: boolean) => Promise<SlashCommandProcessorResult | false>;
 }
 
 async function handleCommandResult(
@@ -120,8 +121,9 @@ async function handleCommandResult(
             ctx.setCustomDialog(result.component);
             return { type: 'handled' };
         default: {
-            const unhandled: never = result;
-            throw new Error(`Unhandled slash command result: ${unhandled}`);
+            // SlashCommandResult est typé `any` dans les stubs — le guard `never` est désactivé.
+            const unhandled = result as unknown;
+            throw new Error(`Unhandled slash command result: ${String(unhandled)}`);
         }
     }
 }
@@ -146,8 +148,9 @@ function handleDialogResult(result: Extract<SlashCommandResult, { type: 'dialog'
     }
     const handler = dialogMap[result.dialog];
     if (handler) { handler(); return { type: 'handled' }; }
-    const unhandled: never = result.dialog;
-    throw new Error(`Unhandled dialog type: ${unhandled}`);
+    // SlashCommandResult est typé `any` — le guard `never` est désactivé.
+    const unhandled = result.dialog as unknown;
+    throw new Error(`Unhandled dialog type: ${String(unhandled)}`);
 }
 
 async function handleConfirmShellCommands(
@@ -214,16 +217,20 @@ interface SlashCommandHandlerContext {
 }
 
 async function executeSlashCommand(
-    rawQuery: PartListUnion,
+    rawQuery: PartListUnion | string,
     oneTimeShellAllowlist: Set<string> | undefined,
     overwriteConfirmed: boolean | undefined,
     addToHistory: boolean,
     hctx: SlashCommandHandlerContext,
-    selfRef: { current: ((rawQuery: PartListUnion, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory?: boolean) => Promise<SlashCommandProcessorResult | false>) | null }
+    selfRef: { current: ((rawQuery: PartListUnion | string, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory?: boolean) => Promise<SlashCommandProcessorResult | false>) | null }
 ): Promise<SlashCommandProcessorResult | false> {
-    if (!hctx.commands || typeof rawQuery !== 'string') return false;
+    if (!hctx.commands) return false;
+    const queryString = typeof rawQuery === 'string'
+        ? rawQuery
+        : rawQuery.parts?.map((p) => p.text).join('') || '';
+    if (!queryString) return false;
 
-    const trimmed = rawQuery.trim();
+    const trimmed = queryString.trim();
     if (!trimmed.startsWith('/') && !trimmed.startsWith('?')) return false;
 
     const { commandToExecute, args, canonicalPath: resolvedCommandPath } = parseSlashCommand(trimmed, hctx.commands);
@@ -469,10 +476,10 @@ export const useSlashCommandProcessor = (
         };
     }, [config, reloadTrigger, isConfigInitialized]);
 
-    const selfRef = useRef<((rawQuery: PartListUnion, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory?: boolean) => Promise<SlashCommandProcessorResult | false>) | null>(null);
+    const selfRef = useRef<((rawQuery: PartListUnion | string, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory?: boolean) => Promise<SlashCommandProcessorResult | false>) | null>(null);
 
     const handleSlashCommand = useCallback(
-        (rawQuery: PartListUnion, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory: boolean = true): Promise<SlashCommandProcessorResult | false> => {
+        (rawQuery: PartListUnion | string, oneTimeShellAllowlist?: Set<string>, overwriteConfirmed?: boolean, addToHistory: boolean = true): Promise<SlashCommandProcessorResult | false> => {
             return executeSlashCommand(rawQuery, oneTimeShellAllowlist, overwriteConfirmed, addToHistory,
                 { commands, config, commandContext, addItem, addMessage, setIsProcessing, actions, setCustomDialog, setPendingItem, setSessionShellAllowlist, setConfirmationRequest },
                 selfRef

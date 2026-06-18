@@ -4,7 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ToolVisibilityContext } from '../contexts/UIStateContext.js';
+import {
+    ToolVisibilityContext,
+    IndividualToolCallDisplay,
+    CoreToolCallStatus,
+    HistoryItemToolGroup,
+    HistoryItem,
+    HistoryItemWithoutId
+} from '../contexts/UIStateContext.js';
 
 /**
  * Maps an IndividualToolCallDisplay from the CLI to a ToolVisibilityContext for core logic.
@@ -42,7 +49,8 @@ export function getLastTurnToolCallIds(
     // Collect IDs from history after last user prompt
     history.forEach((item, index) => {
         if (index > lastUserPromptIndex && item.type === 'tool_group') {
-            item.tools.forEach((t) => {
+            const toolGroup = item as unknown as HistoryItemToolGroup;
+            toolGroup.tools?.forEach((t) => {
                 if (t.callId) targetToolCallIds.push(t.callId);
             });
         }
@@ -51,7 +59,8 @@ export function getLastTurnToolCallIds(
     // Collect IDs from pending items
     pendingHistoryItems.forEach((item) => {
         if (item.type === 'tool_group') {
-            item.tools.forEach((t) => {
+            const toolGroup = item as unknown as HistoryItemToolGroup;
+            toolGroup.tools?.forEach((t) => {
                 if (t.callId) targetToolCallIds.push(t.callId);
             });
         }
@@ -65,9 +74,10 @@ export function isToolExecuting(
 ): boolean {
     return pendingHistoryItems.some((item) => {
         if (item && item.type === 'tool_group') {
-            return item.tools.some(
+            const toolGroup = item as unknown as HistoryItemToolGroup;
+            return toolGroup.tools?.some(
                 (tool) => CoreToolCallStatus.Executing === tool.status
-            );
+            ) ?? false;
         }
         return false;
     });
@@ -79,9 +89,9 @@ export function isToolAwaitingConfirmation(
     return pendingHistoryItems
         .filter((item): item is HistoryItemToolGroup => item.type === 'tool_group')
         .some((item) =>
-            item.tools.some(
+            item.tools?.some(
                 (tool) => CoreToolCallStatus.AwaitingApproval === tool.status
-            )
+            ) ?? false
         );
 }
 

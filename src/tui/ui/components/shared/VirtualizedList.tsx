@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React, { forwardRef, memo, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { theme } from '../../semantic-colors.js';
 import { useBatchedScroll } from '../../hooks/useBatchedScroll.js';
 
@@ -733,10 +734,6 @@ function VirtualizedList<T>(
             isStatic, fixedItemHeight, observedNodes, itemsObserver, nodeToKeyRef
         );
     });
-
-    const renderRangeStart =
-    renderStatic || overflowToBackbuffer ? 0 : startIndex;
-    const renderRangeEnd = renderStatic ? data.length - 1 : endIndex;
 
     // Always evaluate shouldBeStatic, width, etc. if we have a known width from the prop.
     // If containerHeight or containerWidth is 0 we defer rendering unless a static render or defined width overrides.

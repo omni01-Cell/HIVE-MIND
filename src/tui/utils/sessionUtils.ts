@@ -14,7 +14,7 @@ import { homedir } from 'node:os';
 import { stripUnsafeCharacters } from '../ui/utils/textUtils.js';
 
 export interface MessageRecord {
-    type: 'user' | 'gemini' | 'info' | 'error' | 'warning';
+    type: 'user' | 'gemini' | 'assistant' | 'info' | 'error' | 'warning';
     content: any;
     displayContent?: any;
     thoughts?: any[];
@@ -33,7 +33,7 @@ export interface ConversationRecord {
     firstUserMessage?: string;
 }
 
-export async function loadConversationRecord(filePath: string): Promise<ConversationRecord | null> {
+export async function loadConversationRecord(filePath: string, _options?: { metadataOnly?: boolean }): Promise<ConversationRecord | null> {
     try {
         const content = await fs.readFile(filePath, 'utf-8');
         return JSON.parse(content) as ConversationRecord;
@@ -658,11 +658,12 @@ export function convertSessionToHistoryFormats(
                     messageType = MessageType.WARNING;
                     break;
                 case 'gemini':
-                    messageType = MessageType.GEMINI;
+                case 'assistant':
+                    messageType = MessageType.ASSISTANT;
                     break;
                 default:
                     checkExhaustive(msg as never);
-                    messageType = MessageType.GEMINI;
+                    messageType = MessageType.ASSISTANT;
                     break;
             }
 

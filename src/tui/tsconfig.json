@@ -21,7 +21,8 @@
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    "../types/tui-globals.d.ts"
   ],
   "exclude": [
     "**/*.test.ts",

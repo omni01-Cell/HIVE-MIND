@@ -5,6 +5,14 @@
  */
 
 import type { Key } from '../hooks/useKeypress.js';
+import {
+    Command,
+    type KeyBindingConfig,
+    defaultKeyBindingConfig,
+    loadCustomKeybindings
+} from './keyBindings.js';
+
+export { Command } from './keyBindings.js';
 
 /**
  * Checks if a key matches any of the bindings for a command
@@ -54,8 +62,6 @@ export const defaultKeyMatchers: KeyMatchers = createKeyMatchers(
     defaultKeyBindingConfig
 );
 
-// Re-export Command for convenience
-export { Command };
 
 /**
  * Loads and creates key matchers including user customizations.

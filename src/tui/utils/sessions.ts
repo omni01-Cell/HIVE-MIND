@@ -16,7 +16,7 @@ export async function listSessions(config: HiveConfig): Promise<void> {
     // Generate summary for most recent session if needed
     await generateSummary(config);
 
-    const sessionSelector = new SessionSelector(config.storage);
+    const sessionSelector = new SessionSelector(config.getProjectRoot());
     const sessions = await sessionSelector.listSessions();
 
     if (sessions.length === 0) {
@@ -50,7 +50,7 @@ export async function deleteSession(
     config: HiveConfig,
     sessionIndex: string
 ): Promise<void> {
-    const sessionSelector = new SessionSelector(config.storage);
+    const sessionSelector = new SessionSelector(config.getProjectRoot());
     const sessions = await sessionSelector.listSessions();
 
     if (sessions.length === 0) {

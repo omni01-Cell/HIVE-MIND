@@ -17,15 +17,16 @@ import { KeypressPriority } from '../contexts/KeypressContext.js';
 
 import { homedir } from 'os';
 import { WarningPriority } from '../contexts/UIStateContext.js';
-import { GEMINI_DIR, Storage } from '../contexts/UIStateContext.js';
+import { HIVE_DIR } from '../../config/settings.js';
 
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 
-const settingsPath = path.join(homedir(), GEMINI_DIR, 'settings.json');
+const settingsPath = path.join(homedir(), HIVE_DIR, 'settings.json');
 
 const screenReaderNudgeFilePath = path.join(
-    Storage.getGlobalTempDir(),
+    tmpdir(),
     'seen_screen_reader_nudge.json'
 );
 

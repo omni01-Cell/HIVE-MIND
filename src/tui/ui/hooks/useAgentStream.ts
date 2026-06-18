@@ -5,9 +5,8 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import type { MessageSenderType } from '../../../core/types/BotTypes.js';
 import { ThoughtSummary, displayContentToString, parseThought } from '../utils/formatters.js';
-import { CoreToolCallStatus, Kind, Part, ApprovalMode, RetryAttemptPayload, StreamingState, MessageType, HistoryItemWithoutId, IndividualToolCallDisplay, LoopDetectionConfirmationRequest } from '../contexts/UIStateContext.js';
+import { CoreToolCallStatus, Kind, Part, ApprovalMode, RetryAttemptPayload, StreamingState, MessageType, HistoryItemWithoutId, IndividualToolCallDisplay, LoopDetectionConfirmationRequest, MessageSenderType } from '../contexts/UIStateContext.js';
 import { geminiPartsToContentParts, AgentEvent, AgentProtocol, Logger } from '../contexts/UIStateContext.js';
 import { getErrorMessage, debugLogger } from '../../utils/errors.js';
 import { findLastSafeSplitPoint } from '../utils/markdownUtilities.js';
@@ -150,7 +149,7 @@ function handleAgentEvent(
             break;
         default:
             debugLogger.error('Unknown agent event type:', event);
-            event satisfies never;
+            const _exhaustive: never = event as never;
             break;
     }
 }

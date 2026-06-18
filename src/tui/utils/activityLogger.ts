@@ -314,7 +314,7 @@ function wrapHttpRequest(
 export class ActivityLogger extends EventEmitter {
     private static instance: ActivityLogger;
     private isInterceptionEnabled = false;
-    private requestStartTimes = new Map<string, number>();
+    public requestStartTimes = new Map<string, number>();
     private networkLoggingEnabled = false;
 
     private networkBufferMap = new Map<
@@ -386,7 +386,7 @@ export class ActivityLogger extends EventEmitter {
         this.consoleBuffer = [];
     }
 
-    private stringifyHeaders(headers: unknown): Record<string, string> {
+    public stringifyHeaders(headers: unknown): Record<string, string> {
         const result: Record<string, string> = {};
         if (!headers) return result;
 
@@ -445,7 +445,7 @@ export class ActivityLogger extends EventEmitter {
         this.safeEmitNetwork(payload);
     }
 
-    private safeEmitNetwork(payload: NetworkLog | PartialNetworkLog) {
+    public safeEmitNetwork(payload: NetworkLog | PartialNetworkLog) {
         const sanitized = this.sanitizeNetworkLog(payload);
         const id = sanitized.id;
 

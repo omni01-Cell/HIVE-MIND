@@ -7,6 +7,21 @@ import { botIdentity } from './botIdentity.js';
 import cliProgress from 'cli-progress';
 
 /**
+ * En mode TUI (ink-cli), Ink contrôle stdout pour dessiner son interface.
+ * Tout `console.log` du core ou des plugins vient écraser l'écran Ink → corruption d'affichage.
+ * On redirige alors console.log/warn/info vers un buffer au lieu de stdout.
+ * Ces logs restent accessibles via HIVE_DEBUG=1 pour diagnostic.
+ */
+function isTuiMode(): boolean {
+    const transports = (process.env.ACTIVE_TRANSPORTS || '').split(',').map(s => s.trim());
+    return transports.includes('ink-cli') || transports.includes('tui');
+}
+
+function isDebugMode(): boolean {
+    return process.env.HIVE_DEBUG === '1' || process.env.DEBUG === 'true';
+}
+
+/**
  * Thème de couleurs pour la console
  */
 const THEME = {
@@ -87,6 +102,10 @@ export class StartupDisplay {
         return process.env.APP_ENV === 'test' || process.env.NODE_ENV === 'test';
     }
 
+    private get isTuiSuppressed(): boolean {
+        return isTuiMode() && !isDebugMode() && !this.isTest;
+    }
+
     private originalConsole = {
         log: console.log,
         warn: console.warn,
@@ -135,6 +154,12 @@ export class StartupDisplay {
             this.originalConsole.log(`\n🧠 Initialisation de ${botIdentity.fullName} (Mode Test non-interactif)...\n`);
             return;
         }
+        if (this.isTuiSuppressed) {
+            // En mode TUI, on évite tout ce qui écrirait sur stdout : pas de logo, pas
+            // de barre de progression, pas de redéfinition de console. Ink contrôle déjà
+            // stdout pour dessiner l'interface.
+            return;
+        }
         this.suppressLogs();
         if (!this.isDebug) {
             this.originalConsole.log('\x1bc');
@@ -165,6 +190,12 @@ export class StartupDisplay {
             this.originalConsole.log(`  [Chargement] ${module.icon} ${module.name}...`);
             return;
         }
+        if (this.isTuiSuppressed) {
+            // En TUI, on garde la progression en mémoire pour usage futur (panel de
+            // démarrage dans l'UI Ink) mais on n'écrit rien.
+            this.currentStep = Math.max(this.currentStep, this.modules.indexOf(module));
+            return;
+        }
         if (this.progressBar) {
             const label = `${module.icon} ${module.name}...`;
             this.progressBar.update(this.currentStep, { module: label });
@@ -180,6 +211,9 @@ export class StartupDisplay {
 
             if (this.isTest) {
                 this.originalConsole.log(`  [Succès] ✓ ${statusText}`);
+                return;
+            }
+            if (this.isTuiSuppressed) {
                 return;
             }
             if (this.progressBar) {
@@ -199,6 +233,9 @@ export class StartupDisplay {
                 this.originalConsole.log(`  [Erreur] ✗ ${module.icon} ${module.name}: ${errorMsg}`);
                 return;
             }
+            if (this.isTuiSuppressed) {
+                return;
+            }
             if (this.progressBar) {
                 this.progressBar.update(this.currentStep, { module: `\x1b[31m✗\x1b[0m ${module.icon} ${module.name}` });
             }
@@ -211,6 +248,10 @@ export class StartupDisplay {
             this.originalConsole.log(`\n  ✓ Démarrage de ${botIdentity.fullName} terminé en ${elapsed}s!\n`);
             return elapsed;
         }
+        if (this.isTuiSuppressed) {
+            // On garde en mémoire la progression pour usage TUI éventuel mais on ne touche pas à stdout.
+            return elapsed;
+        }
         if (this.progressBar) {
             this.progressBar.update(this.totalSteps, { module: `${THEME.SUCCESS}✓ Démarrage terminé!${THEME.RESET}` });
             this.progressBar.stop();
@@ -221,6 +262,7 @@ export class StartupDisplay {
     }
 
     private printModuleResults(): void {
+        if (this.isTuiSuppressed) return;
         for (const module of this.modules) {
             const result = this.results.get(module.id);
             if (!result) continue;
@@ -236,6 +278,7 @@ export class StartupDisplay {
     }
 
     private printSummaryFrame(botName: string, elapsed: string): void {
+        if (this.isTuiSuppressed) return;
         const border = this.errors.length === 0 ? THEME.SUCCESS : THEME.SECONDARY;
         console.log(`${border}╔════════════════════════════════════════════╗${THEME.RESET}`);
         if (this.errors.length === 0) {
@@ -248,6 +291,7 @@ export class StartupDisplay {
     }
 
     private printErrorDetails(): void {
+        if (this.isTuiSuppressed) return;
         if (this.errors.length > 0) {
             console.log(`\n${THEME.ERROR}Détails des erreurs:${THEME.RESET}`);
             for (const err of this.errors) {

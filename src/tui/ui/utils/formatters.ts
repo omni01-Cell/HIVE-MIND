@@ -86,3 +86,40 @@ export function escapeShellArg(arg: string, shellType: string = 'bash'): string 
 export function getShellConfiguration(): { shell: string } {
     return { shell: process.platform === 'win32' ? 'powershell' : 'bash' };
 }
+
+export function formatDuration(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
+}
+
+export function formatResetTime(resetTime: string, _mode?: string): string {
+    const date = new Date(resetTime);
+    if (isNaN(date.getTime())) return resetTime;
+    const now = Date.now();
+    const diff = date.getTime() - now;
+    if (diff <= 0) return 'now';
+    return formatDuration(diff);
+}
+
+export function formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+export function formatTimeAgo(timestamp: number | string): string {
+    const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp);
+    const now = Date.now();
+    const diff = now - date.getTime();
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return `${Math.floor(diff / 86400000)}d ago`;
+}

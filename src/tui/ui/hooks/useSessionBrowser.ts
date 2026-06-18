@@ -5,12 +5,20 @@
  */
 
 import { useState, useCallback } from 'react';
-import { HistoryItemWithoutId } from '../contexts/UIStateContext.js';
+import {
+    HistoryItemWithoutId,
+    type HistoryTurn,
+    uiTelemetryService,
+    convertSessionToClientHistory
+} from '../contexts/UIStateContext.js';
 import path from 'node:path';
+import { coreEvents } from '../../utils/coreEvents.js';
 import {
     convertSessionToHistoryFormats,
-    type SessionInfo
+    type SessionInfo,
+    loadConversationRecord
 } from '../../utils/sessionUtils.js';
+import type { HiveConfig } from '../../config/hiveConfig.js';
 
 export { convertSessionToHistoryFormats };
 

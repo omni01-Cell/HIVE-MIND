@@ -11,7 +11,7 @@ import type {
 } from '../../config/settings.js';
 import { MessageType } from '../contexts/UIStateContext.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
-
+import { coreEvents } from '../../utils/coreEvents.js';
 import { SettingPaths } from '../../config/settingPaths.js';
 
 interface UseEditorSettingsReturn {

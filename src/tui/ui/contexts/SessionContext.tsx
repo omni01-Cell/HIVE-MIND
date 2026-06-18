@@ -5,6 +5,9 @@
  */
 
 
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { uiTelemetryService, type ModelMetrics, type RoleMetrics, type ToolCallStats, type SessionMetrics } from './UIStateContext.js';
+
 export enum ToolCallDecision {
   ACCEPT = 'accept',
   REJECT = 'reject',

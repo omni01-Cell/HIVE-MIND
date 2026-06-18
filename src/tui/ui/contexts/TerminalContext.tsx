@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 import { useStdin, useStdout } from 'ink';
 import { TerminalCapabilityManager } from '../utils/terminalCapabilityManager.js';
 

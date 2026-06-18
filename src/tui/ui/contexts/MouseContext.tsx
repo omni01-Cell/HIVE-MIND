@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { useStdin } from 'ink';
 import { ESC } from '../utils/input.js';
 import { debugLogger } from '../../utils/errors.js';

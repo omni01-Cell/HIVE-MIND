@@ -555,7 +555,7 @@ function buildSemanticColors(
             active: coalesce(uiActive, c.AccentBlue),
             dark: c.DarkGray,
             focus: coalesce(uiFocus, c.AccentGreen),
-            gradient: coalesce(uiGradient, c.GradientColors)
+            gradient: uiGradient ?? c.GradientColors
         },
         status: {
             error: coalesce(statusError, c.AccentRed),

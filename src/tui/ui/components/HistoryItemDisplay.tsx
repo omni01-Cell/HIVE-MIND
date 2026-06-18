@@ -47,7 +47,7 @@ interface HistoryItemDisplayProps {
   terminalWidth: number;
   isPending: boolean;
   commands?: readonly SlashCommand[];
-  availableTerminalHeightGemini?: number;
+  availableTerminalHeightHive?: number;
   isExpandable?: boolean;
   isFirstThinking?: boolean;
   isFirstAfterThinking?: boolean;
@@ -65,14 +65,14 @@ const renderHistoryItemByType = (
     isPending: boolean,
     terminalWidth: number,
     availableTerminalHeight: number | undefined,
-    availableTerminalHeightGemini: number | undefined,
+    availableTerminalHeightHive: number | undefined,
     commands: readonly SlashCommand[] | undefined,
     isExpandable: boolean | undefined,
     isFirstThinking: boolean,
     inlineThinkingMode: string,
     isToolGroupBoundary: boolean
 ): React.ReactNode => {
-    const geminiHeight = availableTerminalHeightGemini ?? availableTerminalHeight;
+    const hiveHeight = availableTerminalHeightHive ?? availableTerminalHeight;
     switch (itemForDisplay.type) {
         case 'thinking':
             return inlineThinkingMode !== 'off' ? (
@@ -93,7 +93,7 @@ const renderHistoryItemByType = (
                 <AssistantMessage
                     text={itemForDisplay.text}
                     isPending={isPending}
-                    availableTerminalHeight={geminiHeight}
+                    availableTerminalHeight={hiveHeight}
                     terminalWidth={terminalWidth}
                 />
             );
@@ -102,7 +102,7 @@ const renderHistoryItemByType = (
                 <AssistantMessageContent
                     text={itemForDisplay.text}
                     isPending={isPending}
-                    availableTerminalHeight={geminiHeight}
+                    availableTerminalHeight={hiveHeight}
                     terminalWidth={terminalWidth}
                 />
             );
@@ -242,7 +242,7 @@ export const HistoryItemDisplay: React.FC<HistoryItemDisplayProps> = ({
     terminalWidth,
     isPending,
     commands,
-    availableTerminalHeightGemini,
+    availableTerminalHeightHive,
     isExpandable,
     isFirstThinking = false,
     isFirstAfterThinking = false,
@@ -266,7 +266,7 @@ export const HistoryItemDisplay: React.FC<HistoryItemDisplayProps> = ({
         >
             {renderHistoryItemByType(
                 itemForDisplay, isPending, terminalWidth,
-                availableTerminalHeight, availableTerminalHeightGemini,
+                availableTerminalHeight, availableTerminalHeightHive,
                 commands, isExpandable, isFirstThinking,
                 inlineThinkingMode, isToolGroupBoundary
             )}

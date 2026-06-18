@@ -10,7 +10,7 @@ import { AppHeader } from './AppHeader.js';
 import { HistoryItemDisplay } from './HistoryItemDisplay.js';
 import { QuittingDisplay } from './QuittingDisplay.js';
 import { useAppContext } from '../contexts/AppContext.js';
-import { MAX_GEMINI_MESSAGE_LINES } from '../constants.js';
+import { MAX_HIVE_MESSAGE_LINES } from '../constants.js';
 import { useConfirmingTool } from '../hooks/useConfirmingTool.js';
 import { ToolStatusIndicator, ToolInfo } from './messages/ToolShared.js';
 import { theme } from '../semantic-colors.js';
@@ -39,7 +39,7 @@ export const AlternateBufferQuittingDisplay = () => {
                 <HistoryItemDisplay
                     terminalWidth={uiState.mainAreaWidth}
                     availableTerminalHeight={undefined}
-                    availableTerminalHeightGemini={MAX_GEMINI_MESSAGE_LINES}
+                    availableTerminalHeightHive={MAX_HIVE_MESSAGE_LINES}
                     key={h.id}
                     item={h}
                     isPending={false}

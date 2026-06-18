@@ -18,7 +18,7 @@ import {
 } from './shared/VirtualizedList.js';
 import { ScrollableList } from './shared/ScrollableList.js';
 import { useMemo, memo, useCallback, useEffect, useRef } from 'react';
-import { MAX_GEMINI_MESSAGE_LINES } from '../constants.js';
+import { MAX_HIVE_MESSAGE_LINES } from '../constants.js';
 import { useConfirmingTool } from '../hooks/useConfirmingTool.js';
 import { ToolConfirmationQueue } from './ToolConfirmationQueue.js';
 import { appEvents, AppEvent } from '../../utils/events.js';
@@ -192,7 +192,7 @@ export const MainContent = () => {
                                 ? staticAreaMaxItemHeight
                                 : undefined
                         }
-                        availableTerminalHeightGemini={MAX_GEMINI_MESSAGE_LINES}
+                        availableTerminalHeightHive={MAX_HIVE_MESSAGE_LINES}
                         key={item.id}
                         item={item}
                         isPending={false}

@@ -6,6 +6,8 @@
 
 import fs from 'node:fs/promises';
 import * as Diff from 'diff';
+import { coreEvents, CoreEvent } from '../../utils/coreEvents.js';
+import { debugLogger } from '../../utils/errors.js';
 
 export interface FileChangeDetail {
   fileName: string;

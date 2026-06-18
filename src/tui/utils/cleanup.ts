@@ -41,7 +41,6 @@ export function removeSyncCleanup(fn: () => void) {
 export function resetCleanupForTesting() {
     cleanupFunctions.length = 0;
     syncCleanupFunctions.length = 0;
-    configForTelemetry = null;
     isShuttingDown = false;
 }
 

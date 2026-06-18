@@ -25,6 +25,17 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SemanticColors } from './semantic-tokens.js';
 import {
+    type Theme,
+    type ThemeType,
+    type ColorsTheme,
+    type CustomTheme,
+    createCustomTheme,
+    validateCustomTheme,
+    getThemeTypeFromBackgroundColor,
+    interpolateColor,
+    resolveColor
+} from './theme.js';
+import {
     DEFAULT_BACKGROUND_OPACITY,
     DEFAULT_INPUT_BACKGROUND_OPACITY,
     DEFAULT_SELECTION_OPACITY,

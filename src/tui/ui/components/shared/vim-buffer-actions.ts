@@ -6,6 +6,22 @@
 
 import { cpLen, cpSlice, toCodePoints } from '../../utils/textUtils.js';
 import { assumeExhaustive } from '../../contexts/UIStateContext.js';
+import {
+    type TextBufferAction,
+    type TextBufferState,
+    findNextWordAcrossLines,
+    findWordEndInLine,
+    findNextBigWordAcrossLines,
+    findBigWordEndInLine,
+    findPrevWordAcrossLines,
+    findPrevBigWordAcrossLines,
+    isCombiningMark,
+    getLineRangeOffsets,
+    getPositionFromOffsets,
+    replaceRangeInternal,
+    pushUndo,
+    detachExpandedPaste
+} from './text-buffer.js';
 
 export type VimAction = Extract<
   TextBufferAction,
@@ -74,32 +90,41 @@ export type VimAction = Extract<
 >;
 
 /**
- * Find the Nth occurrence of `char` in `codePoints`, starting at `start` and
- * stepping by `direction` (+1 forward, -1 backward). Returns the index or -1.
+ * Find the Nth occurrence of `char` in `codePoints`, starting from `cursorCol`.
+ * `forward` controls the search direction. `till` offsets the result by 1
+ * (Vim `t`/`T` commands stop one position before the target).
+ * Returns the target column index, or `null` if not found.
+ *
+ * Invariant: returned value is always a valid column index in [0, codePoints.length).
  */
 function findCharInLine(
     codePoints: string[],
     char: string,
     count: number,
-    start: number,
-    direction: 1 | -1
-): number {
-    let found = -1;
+    forward: boolean,
+    till: boolean,
+    cursorCol: number
+): number | null {
+    const direction = forward ? 1 : -1;
+    const start = cursorCol + direction; // skip the character under the cursor
     let hits = 0;
+
     for (
         let i = start;
-        direction === 1 ? i < codePoints.length : i >= 0;
+        forward ? i < codePoints.length : i >= 0;
         i += direction
     ) {
         if (codePoints[i] === char) {
             hits++;
             if (hits >= count) {
-                found = i;
-                break;
+                // Apply `till` offset: stop one position before the target.
+                const result = till ? i - direction : i;
+                if (result < 0 || result >= codePoints.length) return null;
+                return result;
             }
         }
     }
-    return found;
+    return null;
 }
 
 /**
@@ -814,9 +839,17 @@ function handleYankToEndOfLine(
     return state;
 }
 
-type VimHandler = (ctx: VimHandlerContext, action: VimAction) => TextBufferState;
+// Helper to narrow a VimAction to a specific subtype by its discriminant.
+// This resolves TS2339 errors from accessing a.payload in a Record<VimAction['type'], Handler>.
+type ExtractVimAction<T extends VimAction['type']> = Extract<VimAction, { type: T }>;
+type TypedVimHandler<T extends VimAction['type']> = (ctx: VimHandlerContext, action: ExtractVimAction<T>) => TextBufferState;
 
-function buildHandlers(): Record<VimAction['type'], VimHandler> {
+// Builds a type-safe handler map. Each handler is typed to its specific action variant,
+// then cast to the opaque VimHandler type for map storage.
+type VimHandlerMap = { [T in VimAction['type']]: TypedVimHandler<T> };
+type VimHandler = TypedVimHandler<VimAction['type']>;
+
+function buildHandlers(): VimHandlerMap {
     return {
         'vim_delete_word_forward': (ctx, a) => handleDeleteChangeWordForward(ctx, a.type, a.payload.count) ?? ctx.state,
         'vim_change_word_forward': (ctx, a) => handleDeleteChangeWordForward(ctx, a.type, a.payload.count) ?? ctx.state,
@@ -920,19 +953,16 @@ function buildHandlers(): Record<VimAction['type'], VimHandler> {
     };
 }
 
-const vimHandlers: ReturnType<typeof buildHandlers> = buildHandlers();
+const vimHandlers = buildHandlers() as Record<VimAction['type'], VimHandler>;
 
 export function handleVimAction(
     state: TextBufferState,
     action: VimAction
 ): TextBufferState {
     const handler = vimHandlers[action.type];
-    if (handler) {
-        return handler(
-            { state, lines: state.lines, cursorRow: state.cursorRow, cursorCol: state.cursorCol },
-            action
-        );
-    }
-    assumeExhaustive(action);
-    return state;
+    // VimHandlerMap is exhaustive over VimAction['type'], so handler is always defined.
+    return handler(
+        { state, lines: state.lines, cursorRow: state.cursorRow, cursorCol: state.cursorCol },
+        action
+    );
 }

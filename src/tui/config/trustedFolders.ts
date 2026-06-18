@@ -9,11 +9,6 @@ import type { Settings } from './settings.js';
 export interface HeadlessModeOptions {
     isHeadless?: boolean;
 }
-
-export interface LoadedTrustedFolders {
-    folders: string[];
-}
-
 export enum TrustLevel {
     TRUST_FOLDER = 'trust_folder',
     TRUST_PARENT = 'trust_parent',
@@ -50,7 +45,9 @@ export interface TrustResult {
     reason?: string;
 }
 
-export type { LoadedTrustedFolders };
+export interface LoadedTrustedFolders {
+    folders: TrustRule[];
+}
 
 /** Is folder trust feature enabled per the current applied settings */
 export function isFolderTrustEnabled(settings: Settings): boolean {

@@ -58,3 +58,5 @@ analyze_graph.py
 docs/
 scratch/
 src/scratch/
+llm_as_validator/
+llm_as_juge/

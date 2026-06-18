@@ -6,7 +6,6 @@
 
 import { Box, Text } from 'ink';
 import { LoopDetectionConfirmation } from './LoopDetectionConfirmation.js';
-import { ConsentPrompt } from './ConsentPrompt.js';
 import { ThemeDialog } from './ThemeDialog.js';
 import { SettingsDialog } from './SettingsDialog.js';
 import { EditorSettingsDialog } from './EditorSettingsDialog.js';
@@ -28,47 +27,42 @@ interface DialogManagerProps {
 
 function renderConsentDialogs(
     uiState: ReturnType<typeof useUIState>,
-    terminalWidth: number
+    _terminalWidth: number
 ): React.ReactNode | null {
     if (uiState.permissionConfirmationRequest) {
         const files = uiState.permissionConfirmationRequest.files;
         const filesList = files.map((f) => `- ${f}`).join('\n');
         return (
-            <ConsentPrompt
-                prompt={`The following files are outside your workspace:\n\n${filesList}\n\nDo you want to allow this read?`}
-                onConfirm={(allowed) => {
-                    uiState.permissionConfirmationRequest?.onComplete({ allowed });
-                }}
-                terminalWidth={terminalWidth}
-            />
+            <Box flexDirection="column" padding={1} borderStyle="single" borderColor="yellow">
+                <Text color="yellow">Warning: The following files are outside your workspace:</Text>
+                <Text>{filesList}</Text>
+                <Text color="cyan">Press Y to allow / N to deny.</Text>
+            </Box>
         );
     }
     if (uiState.commandConfirmationRequest) {
         return (
-            <ConsentPrompt
-                prompt={uiState.commandConfirmationRequest.prompt}
-                onConfirm={uiState.commandConfirmationRequest.onConfirm}
-                terminalWidth={terminalWidth}
-            />
+            <Box flexDirection="column" padding={1} borderStyle="single" borderColor="yellow">
+                <Text>{uiState.commandConfirmationRequest.prompt}</Text>
+                <Text color="cyan">Press Y to allow / N to deny.</Text>
+            </Box>
         );
     }
     if (uiState.authConsentRequest) {
         return (
-            <ConsentPrompt
-                prompt={uiState.authConsentRequest.prompt}
-                onConfirm={uiState.authConsentRequest.onConfirm}
-                terminalWidth={terminalWidth}
-            />
+            <Box flexDirection="column" padding={1} borderStyle="single" borderColor="yellow">
+                <Text>{uiState.authConsentRequest.prompt}</Text>
+                <Text color="cyan">Press Y to allow / N to deny.</Text>
+            </Box>
         );
     }
     if (uiState.confirmUpdateExtensionRequests.length > 0) {
         const request = uiState.confirmUpdateExtensionRequests[0];
         return (
-            <ConsentPrompt
-                prompt={request.prompt}
-                onConfirm={request.onConfirm}
-                terminalWidth={terminalWidth}
-            />
+            <Box flexDirection="column" padding={1} borderStyle="single" borderColor="yellow">
+                <Text>{request.prompt}</Text>
+                <Text color="cyan">Press Y to allow / N to deny.</Text>
+            </Box>
         );
     }
     return null;

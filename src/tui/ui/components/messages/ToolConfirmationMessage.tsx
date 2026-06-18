@@ -56,8 +56,8 @@ interface ContentContext {
     config: HiveConfig;
     terminalWidth: number;
     bodyHeight: number;
-    settings: ReturnType<typeof useSettings>['settings'];
-    activeTheme: ReturnType<typeof useTheme>['activeTheme'];
+    settings: ReturnType<typeof useSettings>;
+    activeTheme: ReturnType<typeof themeManager.getActiveTheme>;
     handleConfirm: (outcome: ToolConfirmationOutcome, details?: Record<string, unknown>) => void;
     hasMcpToolDetails: boolean;
     isMcpToolDetailsExpanded: boolean;
@@ -231,7 +231,7 @@ function computeConfirmationContent(ctx: {
     hasMcpToolDetails: boolean;
     mcpToolDetailsText: string | null;
     expandDetailsHintKey: string;
-    getPreferredEditor: () => string;
+    getPreferredEditor: () => EditorType | undefined;
     isTrustedFolder: boolean;
     allowPermanentApproval: boolean;
     settings: ReturnType<typeof useSettings>;

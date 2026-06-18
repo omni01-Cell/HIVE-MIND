@@ -12,7 +12,7 @@ import { Command } from '../key/keyMatchers.js';
 import { formatCommand } from '../key/keybindingUtils.js';
 
 interface ContextSummaryDisplayProps {
-  geminiMdFileCount: number;
+  hiveMdFileCount: number;
   contextFileNames: string[];
   mcpServers?: Record<string, MCPServerConfig>;
   blockedMcpServers?: Array<{ name: string; extensionName: string }>;
@@ -22,7 +22,7 @@ interface ContextSummaryDisplayProps {
 }
 
 export const ContextSummaryDisplay: React.FC<ContextSummaryDisplayProps> = ({
-    geminiMdFileCount,
+    hiveMdFileCount,
     contextFileNames,
     mcpServers,
     blockedMcpServers,
@@ -35,7 +35,7 @@ export const ContextSummaryDisplay: React.FC<ContextSummaryDisplayProps> = ({
     const openFileCount = ideContext?.workspaceState?.openFiles?.length ?? 0;
 
     if (
-        geminiMdFileCount === 0 &&
+        hiveMdFileCount === 0 &&
     mcpServerCount === 0 &&
     blockedMcpServerCount === 0 &&
     openFileCount === 0 &&
@@ -54,14 +54,14 @@ export const ContextSummaryDisplay: React.FC<ContextSummaryDisplayProps> = ({
         } (${formatCommand(Command.SHOW_IDE_CONTEXT_DETAIL)} to view)`;
     })();
 
-    const geminiMdText = (() => {
-        if (geminiMdFileCount === 0) {
+    const hiveMdText = (() => {
+        if (hiveMdFileCount === 0) {
             return '';
         }
         const allNamesTheSame = new Set(contextFileNames).size < 2;
         const name = allNamesTheSame ? contextFileNames[0] : 'context';
-        return `${geminiMdFileCount} ${name} file${
-            geminiMdFileCount > 1 ? 's' : ''
+        return `${hiveMdFileCount} ${name} file${
+            hiveMdFileCount > 1 ? 's' : ''
         }`;
     })();
 
@@ -105,7 +105,7 @@ export const ContextSummaryDisplay: React.FC<ContextSummaryDisplayProps> = ({
 
     const summaryParts = [
         openFilesText,
-        geminiMdText,
+        hiveMdText,
         mcpText,
         skillText,
         backgroundText

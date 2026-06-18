@@ -289,6 +289,15 @@ export interface TelemetrySettings {
     enabled?: boolean;
 }
 
+export interface SessionRetentionSettings {
+    enabled?: boolean;
+    maxAge?: string;
+    maxCount?: number;
+    minRetention?: string;
+    mode?: 'default' | 'keep' | 'forget';
+    days?: number;
+}
+
 export interface GeneralSettings {
     preferredEditor?: string;
     debugKeystrokeLogging?: boolean;
@@ -298,6 +307,7 @@ export interface GeneralSettings {
 
 export interface UiSettings {
     theme?: string;
+    inlineThinkingMode?: string;
     hideBanner?: boolean;
     hideTips?: boolean;
     hideFooter?: boolean;
@@ -361,6 +371,8 @@ export interface ExperimentalSettings {
     useOSC52Paste?: boolean;
     voice?: {
         activationMode?: string;
+        backend?: string;
+        stopGracePeriodMs?: number;
     };
 }
 

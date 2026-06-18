@@ -7,13 +7,17 @@
  */
 import 'dotenv/config';
 import React from 'react';
+
 import { render } from 'ink';
 import { AppContainer } from './ui/AppContainer.js';
 import { createHiveConfig } from './config/hiveConfig.js';
+import { hiveCoreConnection } from './core/connection.js';
 
 const config = createHiveConfig();
 
 async function main() {
+    await hiveCoreConnection.connect();
+
     const { waitUntilExit } = render(
         <AppContainer
             config={config as unknown as import('./config/hiveConfig.js').HiveConfig}

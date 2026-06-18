@@ -8,11 +8,11 @@ export const SHELL_COMMAND_NAME = 'Shell Command';
 
 export const SHELL_NAME = 'Shell';
 
-// Limit Gemini messages to a very high number of lines to mitigate performance
-// issues in the worst case if we somehow get an enormous response from Gemini.
+// Limit HIVE-MIND messages to a very high number of lines to mitigate performance
+// issues in the worst case if we somehow get an enormous response.
 // This threshold is arbitrary but should be high enough to never impact normal
 // usage.
-export const MAX_GEMINI_MESSAGE_LINES = 65536;
+export const MAX_HIVE_MESSAGE_LINES = 65536;
 
 export const SHELL_FOCUS_HINT_DELAY_MS = 5000;
 
@@ -41,7 +41,7 @@ export const DEFAULT_SELECTION_OPACITY = 0.2;
 export const DEFAULT_BORDER_OPACITY = 0.4;
 
 export const KEYBOARD_SHORTCUTS_URL =
-  'https://geminicli.com/docs/cli/keyboard-shortcuts/';
+  'https://github.com/leandre755/HIVE-MIND';
 export const LRU_BUFFER_PERF_CACHE_LIMIT = 20000;
 
 // Max lines to show for active shell output when not focused
@@ -61,7 +61,7 @@ export const DEFAULT_COMPRESSION_THRESHOLD = 0.5;
 
 /** Documentation URL for skills setup and configuration */
 export const SKILLS_DOCS_URL =
-  'https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/skills.md';
+  'https://github.com/leandre755/HIVE-MIND';
 
 /** Max lines to show for a compact tool subview (e.g. diff) */
 export const COMPACT_TOOL_SUBVIEW_MAX_LINES = 15;

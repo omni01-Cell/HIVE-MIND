@@ -221,11 +221,6 @@ function addFooterItemColumns(
         case 'context-used':
             addFn(id, header, () => <ContextUsageDisplay promptTokenCount={promptTokenCount} model={model} terminalWidth={terminalWidth} />, 10);
             break;
-        case 'quota':
-            if (quotaStats?.remaining !== undefined && quotaStats.limit) {
-                addFn(id, header, () => <QuotaDisplay remaining={quotaStats.remaining} limit={quotaStats.limit} forceShow={true} lowercase={true} />, 9);
-            }
-            break;
         case 'memory-usage':
             addFn(id, header, () => <MemoryUsageDisplay color={itemColor} isActive={!copyModeEnabled} />, 10);
             break;

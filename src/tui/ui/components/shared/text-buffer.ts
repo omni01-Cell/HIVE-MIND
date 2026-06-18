@@ -1686,7 +1686,7 @@ export type TextBufferAction =
   | { type: 'vim_delete_line'; payload: { count: number } }
   | { type: 'vim_change_line'; payload: { count: number } }
   | { type: 'vim_delete_to_end_of_line'; payload: { count: number } }
-  | { type: 'vim_delete_to_start_of_line' }
+  | { type: 'vim_delete_to_start_of_line'; payload?: { count: number } }
   | { type: 'vim_change_to_end_of_line'; payload: { count: number } }
   | {
       type: 'vim_change_movement';
@@ -1704,22 +1704,22 @@ export type TextBufferAction =
   | { type: 'vim_move_big_word_backward'; payload: { count: number } }
   | { type: 'vim_move_big_word_end'; payload: { count: number } }
   | { type: 'vim_delete_char'; payload: { count: number } }
-  | { type: 'vim_insert_at_cursor' }
-  | { type: 'vim_append_at_cursor' }
-  | { type: 'vim_open_line_below' }
-  | { type: 'vim_open_line_above' }
-  | { type: 'vim_append_at_line_end' }
-  | { type: 'vim_insert_at_line_start' }
-  | { type: 'vim_move_to_line_start' }
-  | { type: 'vim_move_to_line_end' }
-  | { type: 'vim_move_to_first_nonwhitespace' }
-  | { type: 'vim_move_to_first_line' }
-  | { type: 'vim_move_to_last_line' }
+  | { type: 'vim_insert_at_cursor'; payload?: { count: number } }
+  | { type: 'vim_append_at_cursor'; payload?: { count: number } }
+  | { type: 'vim_open_line_below'; payload?: { count: number } }
+  | { type: 'vim_open_line_above'; payload?: { count: number } }
+  | { type: 'vim_append_at_line_end'; payload?: { count: number } }
+  | { type: 'vim_insert_at_line_start'; payload?: { count: number } }
+  | { type: 'vim_move_to_line_start'; payload?: { count: number } }
+  | { type: 'vim_move_to_line_end'; payload?: { count: number } }
+  | { type: 'vim_move_to_first_nonwhitespace'; payload?: { count: number } }
+  | { type: 'vim_move_to_first_line'; payload?: { count: number } }
+  | { type: 'vim_move_to_last_line'; payload?: { count: number } }
   | { type: 'vim_move_to_line'; payload: { lineNumber: number } }
-  | { type: 'vim_escape_insert_mode' }
-  | { type: 'vim_delete_to_first_nonwhitespace' }
-  | { type: 'vim_change_to_start_of_line' }
-  | { type: 'vim_change_to_first_nonwhitespace' }
+  | { type: 'vim_escape_insert_mode'; payload?: { count: number } }
+  | { type: 'vim_delete_to_first_nonwhitespace'; payload?: { count: number } }
+  | { type: 'vim_change_to_start_of_line'; payload?: { count: number } }
+  | { type: 'vim_change_to_first_nonwhitespace'; payload?: { count: number } }
   | { type: 'vim_delete_to_first_line'; payload: { count: number } }
   | { type: 'vim_delete_to_last_line'; payload: { count: number } }
   | { type: 'vim_delete_char_before'; payload: { count: number } }

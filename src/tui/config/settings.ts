@@ -14,11 +14,15 @@ import { homedir } from 'os';
 import { CoreEvent, coreEvents } from '../utils/coreEvents.js';
 import { AuthType } from '../ui/contexts/UIStateContext.js';
 
+const storage = {
+    isWorkspaceHomeDir: () => false
+};
+
 export class FatalConfigError extends Error {
     exitCode = 1;
 }
 
-export const GEMINI_DIR = '.hivemind';
+export const HIVE_DIR = '.hive-mind';
 
 export function getFsErrorMessage(err: any): string {
     if (!err) return 'Unknown FS error';
@@ -591,11 +595,11 @@ function findEnvFile(
 ): string | null {
     let currentDir = path.resolve(startDir);
     while (true) {
-    // prefer gemini-specific .env under GEMINI_DIR
+    // prefer project-specific .env under HIVE_DIR
         if (isTrusted) {
-            const geminiEnvPath = path.join(currentDir, GEMINI_DIR, '.env');
-            if (fs.existsSync(geminiEnvPath)) {
-                return geminiEnvPath;
+            const hiveEnvPath = path.join(currentDir, HIVE_DIR, '.env');
+            if (fs.existsSync(hiveEnvPath)) {
+                return hiveEnvPath;
             }
         }
         const envPath = path.join(currentDir, '.env');
@@ -606,11 +610,11 @@ function findEnvFile(
         }
         const parentDir = path.dirname(currentDir);
         if (parentDir === currentDir || !parentDir) {
-            // check .env under home as fallback, again preferring gemini-specific .env
+            // check .env under home as fallback, again preferring project-specific .env
             if (isTrusted) {
-                const homeGeminiEnvPath = path.join(homedir(), GEMINI_DIR, '.env');
-                if (fs.existsSync(homeGeminiEnvPath)) {
-                    return homeGeminiEnvPath;
+                const homeHiveEnvPath = path.join(homedir(), HIVE_DIR, '.env');
+                if (fs.existsSync(homeHiveEnvPath)) {
+                    return homeHiveEnvPath;
                 }
             }
             const homeEnvPath = path.join(homedir(), '.env');
@@ -727,7 +731,7 @@ export function loadEnvironment(
 
             const excludedVars =
         settings?.advanced?.excludedEnvVars || DEFAULT_EXCLUDED_ENV_VARS;
-            const isProjectEnvFile = !envFilePath.includes(GEMINI_DIR);
+            const isProjectEnvFile = !envFilePath.includes(HIVE_DIR);
 
             for (const key in parsedEnv) {
                 if (!Object.hasOwn(parsedEnv, key)) continue;

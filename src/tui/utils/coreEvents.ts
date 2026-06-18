@@ -27,12 +27,20 @@ export enum CoreEvent {
 }
 
 class TuiEventEmitter extends EventEmitter {
-    emitFeedback(type: string, message: string, details?: any): void {
+    emitFeedback(type: string, message: string, details?: unknown): void {
         this.emit('feedback', { type, message, details });
     }
 
     emitSettingsChanged(): void {
         this.emit(CoreEvent.SettingsChanged);
+    }
+
+    emitSlashCommandConflicts(conflicts: any[]): void {
+        this.emit('slash_command_conflicts', conflicts);
+    }
+
+    drainBacklogs(): void {
+        // No-op for now.
     }
 }
 

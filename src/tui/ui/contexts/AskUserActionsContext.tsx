@@ -5,7 +5,14 @@
  */
 
 import React, { createContext, useContext, useMemo } from 'react';
-import type { Question } from '../../../core/types/BotTypes.js';
+import { createContext, useContext, useState, useCallback } from 'react';
+
+interface Question {
+    text: string;
+    options?: string[];
+}
+
+export { type Question };
 
 export interface AskUserState {
   questions: Question[];

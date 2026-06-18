@@ -94,7 +94,7 @@ export function getEffectiveDefaultValue(
     if (key === 'model.compressionThreshold' && config) {
         const experiments = config.getExperiments();
         const experimentValue =
-      experiments?.flags[ExperimentFlags.CONTEXT_COMPRESSION_THRESHOLD]
+      (experiments?.flags[ExperimentFlags.CONTEXT_COMPRESSION_THRESHOLD] as any)
           ?.floatValue;
         if (experimentValue !== undefined && experimentValue !== 0) {
             return experimentValue;

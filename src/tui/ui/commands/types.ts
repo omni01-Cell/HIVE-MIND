@@ -8,9 +8,10 @@ import type { ReactNode } from 'react';
 import type {
     HistoryItemWithoutId,
     HistoryItem,
-    ConfirmationRequest
-} from '../types.js';
-import type { Logger, AgentDefinition, AgentLoopContext } from '../types.js';
+    ConfirmationRequest,
+    Logger,
+    AgentDefinition
+} from '../contexts/UIStateContext.js';
 
 export interface CommandActionReturn<T> {
   type: 'submit_prompt';

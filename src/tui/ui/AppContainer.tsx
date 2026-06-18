@@ -24,7 +24,33 @@ import {
 } from 'ink';
 import { App } from './App.js';
 import { AppContext } from './contexts/AppContext.js';
-import { UIStateContext, type UIState, HistoryItem, ConfirmationRequest, PermissionConfirmationRequest, StreamingState, IdeInfo, IdeContext, ApprovalMode, AgentDefinition } from './contexts/UIStateContext.js';
+import {
+    UIStateContext,
+    type UIState,
+    HistoryItem,
+    HistoryItemInfo,
+    ConfirmationRequest,
+    PermissionConfirmationRequest,
+    StreamingState,
+    IdeInfo,
+    IdeContext,
+    ApprovalMode,
+    AgentDefinition,
+    SlashCommand,
+    AuthState,
+    QuotaStats,
+    UserTierId,
+    GeminiUserTier,
+    UserFeedbackPayload,
+    MessageType,
+    StartupWarning,
+    HookSystemMessagePayload,
+    TuiEventEmitter,
+    NewAgentsChoice,
+    Part,
+    IdeClient,
+    PartListUnion
+} from './contexts/UIStateContext.js';
 import { QuotaContext } from './contexts/QuotaContext.js';
 import {
     UIActionsContext,
@@ -38,7 +64,7 @@ import { ScrollProvider } from './contexts/ScrollProvider.js';
 import { getErrorMessage, debugLogger } from '../utils/errors.js';
 import { HiveConfig } from '../config/hiveConfig.js';
 import { coreEvents, CoreEvent } from '../utils/coreEvents.js';
-import { AuthType } from '../../config/hiveSettingsSchema.js';
+import { AuthType } from '../config/hiveSettingsSchema.js';
 // validateAuthMethod supprimé — non nécessaire pour HIVE-MIND
 import process from 'node:process';
 import { useHistory } from './hooks/useHistoryManager.js';
@@ -87,83 +113,9 @@ type UpdateObject = any;
 const setUpdateHandler = (..._args: any[]) => {};
 const relaunchApp = () => {};
 
-export const MessageType = {
-    TEXT: 'text',
-    ERROR: 'error',
-    SYSTEM: 'system',
-    INFO: 'info',
-    WARNING: 'warning',
-    COMPRESSION: 'compression',
-    ABOUT: 'about',
-    HINT: 'hint',
-    USER: 'user',
-    ASSISTANT: 'assistant'
-} as any;
 
-export type HistoryItemInfo = any;
 
-export enum AuthState {
-    Authenticated = 'authenticated',
-    Unauthenticated = 'unauthenticated',
-    Updating = 'updating',
-    AwaitingLoginRestart = 'awaiting_login_restart',
-    AwaitingApiKeyInput = 'awaiting_api_key_input'
-}
-
-export interface QuotaStats {
-    used?: number;
-    remaining?: number;
-    limit?: number;
-    resetTime?: any;
-}
-
-export interface StartupWarning {
-    id: string;
-    message: string;
-    severity: 'warning' | 'info';
-}
-
-export type UserTierId = 'free' | 'pro' | 'enterprise';
-
-export interface GeminiUserTier {
-    id: UserTierId;
-    name: string;
-}
-
-export interface UserFeedbackPayload {
-    itemId: string;
-    feedback: 'thumbs_up' | 'thumbs_down';
-}
-
-export interface HookSystemMessagePayload {
-    type: string;
-    message: string;
-}
-
-export enum NewAgentsChoice {
-    ACKNOWLEDGE = 'acknowledge',
-    DISMISS = 'dismiss'
-}
-
-export class IdeClient {
-    id = 'tui-mock-ide';
-    name = 'TUI Mock IDE';
-    static async getInstance(): Promise<IdeClient> {
-        return new IdeClient();
-    }
-    isInitialized(): boolean {
-        return true;
-    }
-    getEditorContext(): any {
-        return {};
-    }
-    getCurrentIde(): any {
-        return null;
-    }
-    getDetectedIdeDisplayName(): string {
-        return 'TUI Mock IDE';
-    }
-}
+// IdeClient est importé de UIStateContext.js
 
 export const ideContextStore = {
     subscribe: (callback: (state: any) => void) => {
@@ -173,27 +125,28 @@ export const ideContextStore = {
     get: () => ({ editors: [], trustLevel: 'trusted' })
 };
 
-export const getAllGeminiMdFilenames = () => [];
+export const getAllHiveMdFilenames = () => [];
 export const clearCachedCredentialFile = () => {};
 export type ResumedSessionData = any;
-export const recordExitFail = () => {};
+export const recordExitFail = (..._args: any[]) => {};
 export const ShellExecutionService = {
     kill: (_pid: number) => {}
 };
 export const saveApiKey = (_key: string) => {};
 export const isValidEditorType = (_editor: string) => true;
-export const flattenMemory = () => [];
+export const flattenMemory = (_memory?: unknown) => [];
 export type MemoryChangedPayload = any;
 export const writeToStdout = (data: string) => process.stdout.write(data);
 export const disableMouseEvents = () => {};
 export const enterAlternateScreen = () => {};
 export const enableMouseEvents = () => {};
 export const disableLineWrapping = () => {};
-export const shouldEnterAlternateScreen = () => false;
+export const shouldEnterAlternateScreen = (_isAlt?: boolean, _screenReader?: boolean) => false;
 export const startupProfiler = {
     start: () => {},
     stop: () => {},
-    mark: () => {}
+    mark: () => {},
+    flush: (_config?: any) => {}
 };
 
 export enum SessionStartSource {
@@ -218,14 +171,17 @@ export type AgentsDiscoveredPayload = any;
 export class ChangeAuthRequestedError extends Error {}
 export class ProjectIdRequiredError extends Error {}
 
-export const buildUserSteeringHintPrompt = () => '';
-export const logBillingEvent = () => {};
+export const buildUserSteeringHintPrompt = (_hint?: unknown) => '';
+export const logBillingEvent = (..._args: any[]) => {};
 
-export class ApiKeyUpdatedEvent {}
+export class ApiKeyUpdatedEvent {
+    constructor(..._args: any[]) {}
+}
 export const LegacyAgentProtocol = { V1: 'v1', V2: 'v2' } as any;
 export enum InjectionSource { USER = 'user', SYSTEM = 'system' }
 
 import { useAgentStream } from './hooks/useAgentStream.js';
+import { hiveCoreConnection } from '../core/connection.js';
 import { type BackgroundTask } from './hooks/useExecutionLifecycle.js';
 import { useVim } from './hooks/vim.js';
 import { type LoadableSettingScope, SettingScope } from '../config/settings.js';
@@ -233,7 +189,6 @@ import { type InitializationResult } from '../core/initializer.js';
 import { startAutoMemoryIfEnabled } from '../utils/autoMemory.js';
 import { useFocus } from './hooks/useFocus.js';
 import { useKeypress, type Key } from './hooks/useKeypress.js';
-import { SlashCommand } from './commands/types.js';
 import { KeypressPriority } from './contexts/KeypressContext.js';
 import { Command } from './key/keyMatchers.js';
 import { useLoadingIndicator } from './hooks/useLoadingIndicator.js';
@@ -345,7 +300,7 @@ interface GlobalKeypressContext {
     handleCtrlCPress: () => void;
     handleCtrlDPress: () => void;
     handleSuspend: () => void;
-    handleSlashCommand: (cmd: string) => void;
+    handleSlashCommand: (cmd: PartListUnion | string) => void;
     cancelOngoingRequest?: () => void;
     backgroundCurrentExecution?: () => void;
     toggleBackgroundTasks: () => void;
@@ -592,7 +547,7 @@ interface SubmitContext {
     config: HiveConfig;
     submittedValue: string;
     slashCommands: readonly SlashCommand[] | null | undefined;
-    handleSlashCommand: (cmd: string) => void;
+    handleSlashCommand: (cmd: PartListUnion | string) => void;
     handleHintSubmit: (hint: string) => void;
     submitQuery: (query: any, options?: any, _prompt_id?: string) => void | Promise<void>;
     addInput: (input: string) => void;
@@ -1041,7 +996,7 @@ export const AppContainer = (props: AppContainerProps) => {
 
     const getPreferredEditor = useCallback(() => {
         const val = settings.merged.general.preferredEditor;
-        return isValidEditorType(val) ? val : undefined;
+        return isValidEditorType(val) ? { id: val } as EditorType : undefined;
     }, [settings.merged.general.preferredEditor]);
 
     const buffer = useTextBuffer({
@@ -1463,7 +1418,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             await config.getMemoryContextManager()?.refresh();
             config.updateSystemInstructionIfInitialized();
             const flattenedMemory = flattenMemory(config.getUserMemory());
-            const fileCount = config.getGeminiMdFileCount();
+            const fileCount = config.getHiveMdFileCount();
 
             historyManager.addItem(
                 {
@@ -1544,7 +1499,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
         return hint;
     }, []);
 
-    const streamAgent = undefined;
+    const streamAgent = hiveCoreConnection;
 
     const agentStreamResult = useAgentStream({
         agent: streamAgent,
@@ -1641,7 +1596,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
         () =>
             pendingHistoryItems.some(
                 (item) =>
-                    item.type === MessageType.COMPRESSION && item.compression.isPending
+                    item.type === MessageType.COMPRESSION && (item.compression as any)?.isPending
             ),
         [pendingHistoryItems]
     );
@@ -1886,7 +1841,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             ? Array.isArray(fromSettings)
                 ? fromSettings
                 : [fromSettings]
-            : getAllGeminiMdFilenames();
+            : getAllHiveMdFilenames();
     }, [settings.merged.context.fileName]);
     // Initial prompt handling
     const initialPrompt = useMemo(() => config.getQuestion(), [config]);
@@ -1984,7 +1939,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
     const isRestarting = false;
 
     const policyUpdateConfirmationRequest =
-    config.getPolicyUpdateConfirmationRequest();
+    config.getPolicyUpdateConfirmationRequest() as any;
     const [isPolicyUpdateDialogOpen, setIsPolicyUpdateDialogOpen] = useState(
         !!policyUpdateConfirmationRequest
     );
@@ -2296,7 +2251,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             type: MessageType.INFO,
             text: payload.message,
             source: payload.hookName
-        } as HistoryItemInfo,
+        } as any,
         Date.now()
             );
         };
@@ -2413,7 +2368,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
         showTips: showStatusTips,
         showWit: showStatusWit,
         customWittyPhrases: settings.merged.ui.customWittyPhrases,
-        errorVerbosity: settings.merged.ui.errorVerbosity,
+        errorVerbosity: settings.merged.ui.errorVerbosity as 'low' | 'full',
         maxLength
     });
 
@@ -2494,12 +2449,12 @@ Logging in with Google... Restarting Gemini CLI to continue.
         [pendingHistoryItems]
     );
 
-    const [geminiMdFileCount, setGeminiMdFileCount] = useState<number>(
-        config.getGeminiMdFileCount()
+    const [hiveMdFileCount, setHiveMdFileCount] = useState<number>(
+        config.getHiveMdFileCount()
     );
     useEffect(() => {
         const handleMemoryChanged = (result: MemoryChangedPayload) => {
-            setGeminiMdFileCount(result.fileCount);
+            setHiveMdFileCount(result.fileCount);
         };
         coreEvents.on(CoreEvent.MemoryChanged, handleMemoryChanged);
         return () => {
@@ -2612,7 +2567,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             confirmUpdateExtensionRequests,
             loopDetectionConfirmationRequest,
             permissionConfirmationRequest,
-            geminiMdFileCount,
+            hiveMdFileCount,
             streamingState,
             initError,
             pendingAssistantHistoryItems: pendingAssistantHistoryItems,
@@ -2725,7 +2680,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             confirmUpdateExtensionRequests,
             loopDetectionConfirmationRequest,
             permissionConfirmationRequest,
-            geminiMdFileCount,
+            hiveMdFileCount,
             streamingState,
             initError,
             pendingAssistantHistoryItems,
@@ -2915,7 +2870,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             setVoiceModeEnabled: (value: boolean) => {
                 setVoiceModeEnabled(value);
             }
-        }),
+        }) as any,
         [
             handleThemeSelect,
             closeThemeDialog,

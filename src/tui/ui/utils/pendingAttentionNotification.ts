@@ -61,7 +61,7 @@ export function getPendingAttentionNotification(
     }
 
     if (commandConfirmationRequest) {
-        const promptKey = keyFromReactNode(commandConfirmationRequest.prompt);
+        const promptKey = keyFromReactNode(commandConfirmationRequest.prompt as ReactNode);
         return {
             key: `command_confirmation:${promptKey}`,
             event: {
@@ -73,7 +73,7 @@ export function getPendingAttentionNotification(
     }
 
     if (authConsentRequest) {
-        const promptKey = keyFromReactNode(authConsentRequest.prompt);
+        const promptKey = keyFromReactNode(authConsentRequest.prompt as ReactNode);
         return {
             key: `auth_consent:${promptKey}`,
             event: {

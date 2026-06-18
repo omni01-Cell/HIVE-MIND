@@ -28,15 +28,35 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant. Documents de réfé
 - [2026-06-11] [TUI-ANALYSIS] Analyse complète de la TUI (82k lignes, 250 fichiers) et du core HIVE-MIND (5k lignes, 14 fichiers). La TUI est un fork Gemini CLI non connecté au vrai core. Le stub `@tui/core` (1035 lignes) est utilisé par 100+ fichiers. La couche transport (`src/tui/transport/`, 1045 lignes) existe mais n'est jamais branchée.
 - [2026-06-11] [TUI-STRICT-ANY] Détection d'erreurs implicites 'any' suite à la réactivation de `noImplicitAny: true`. Décidé d'explorer et d'appliquer des types stricts ou de déclarer les modules non-typés (`semver`, `ansi-regex`).
 - [2026-06-11] [TUI-R1] Passing `settings` as a parameter to `useIdeTrustListener` to resolve the SettingsProvider mounting context order.
+- [2026-06-15] [TUI-DIAGNOSTIC] Diagnostic de l'état actuel de `src/tui` : le stub `@tui/core` a bien été supprimé, mais la refactorisation s'est arrêtée là. `src/tui/ui/contexts/UIStateContext.tsx` est devenu le point de rupture central (imports auto-référencés, types exportés manquants, concepts Gemini encore présents). `AppContainer.tsx` reste un god component de 3014 lignes avec 100+ références Gemini. `useAgentStream` est appelé avec `agent: undefined`. `HiveTransport.ts` est un shell qui n'importe jamais le vrai core. Décision : arrêter les patchs par dessus et reprendre par une approche incrémentale : (1) consolider UIStateContext, (2) créer le vrai pont core dans `src/tui/core/connection.ts`, (3) connecter `useAgentStream`, (4) nettoyer AppContainer, (5) remplacer les références Gemini.
+- [2026-06-15] [TUI-TRANSPORT-BYPASS] Le core (`src/core/index.ts:458`) filtrait `ink-cli` du tableau `activeTransports` quand `process.stdin.isTTY === false`. Bug : en mode `npx tsx` ou tout contexte non-TTY, le tableau devenait `[]` et `TransportManager.onMessage(callback)` n'enregistrait aucun callback, faisant de `submitUserMessage()` un no-op silencieux. Fix : si `ACTIVE_TRANSPORTS` contient explicitement `ink-cli`, ne jamais le filtrer, quelle que soit la valeur de `isTTY` ou `APP_ENV`.
+- [2026-06-18] [TUI-NATIVE-END] Remplacement du minuteur de silence de 1,5s dans connection.ts par une détection native de fin de traitement du Core (écoute de l'événement de présence 'paused' émis par le Core).
+- [2026-06-18] [TUI-QUEUING] Consolidation de la file d'attente (useMessageQueue.ts) pour garder la zone de saisie non-bloquante et empiler proprement les requêtes utilisateur formulées pendant la réflexion de l'agent.
+- [2026-06-18] [TUI-SLASH-CMDS] Décision d'ajouter des commandes slash administratives avancées (/index tools, /redis stats, /quota) pour remplacer et compléter les outils en ligne de commande.
+- [2026-06-18] [TUI-TYPE-SAFETY] Reconstruction de la classe `Storage` et correction des interfaces `SessionRetentionSettings`, `ToolVisibilityContext`, `HistoryItemToolGroup` et `RoleMetrics` pour éradiquer systématiquement les erreurs de typage fondamentales dans la TUI.
+- [2026-06-18] [TUI-IMPORTS] Correction des imports de types et fonctions manquants dans `useSessionBrowser.ts` et correction des signatures/méthodes de `convertSessionToClientHistory` et `uiTelemetryService`.
+- [2026-06-18] [TUI-IDE] Décision d'ajuster le plan d'adaptation de la TUI pour conserver et réarchitecturer le module d'intégration IDE (IdeClient et IdeIntegrationNudge) via une communication WebSocket locale légère avec l'extension compagne.
+- [2026-06-18] [TUI-SKILLS] Intégration de la commande /skills pour lister les expert skills détectés localement par le LearningEngine.
+- [2026-06-18] [TUI-SERVICES] Visualisation en temps réel des services actifs (MAPLE, VIGIL) par indicateurs textuels et événements sur le pont de transport.
+- [2026-06-18] [TUI-SESSIONS] Gestion de session hybride locale/DB via la commande /session (list, resume, delete, rename).
+- [2026-06-18] [TUI-EMBEDDING-SEARCH] Recherche par embeddings via la commande /search s'appuyant sur le service MediaSearch local.
+- [2026-06-18] [TUI-HITL] Routage local des confirmations HITL directement dans le terminal (ink-cli) via le PermissionManager.
+- [2026-06-18] [TUI-MODERATION] Bypass de la modération de groupe (FilterProcessor) car le chat TUI est direct/local.
+- [2026-06-18] [TUI-PLAN-EXPANSION] Décision d'étendre le plan d'adaptation de la TUI à 22 sessions ultra-détaillées pour maximiser la clarté et la modularité des étapes d'implémentation.
+- [2026-06-18] [TUI-CONTEXT-WIDGET] Décidé d'intégrer dans la session 17 de la TUI un indicateur dynamique de consommation de la fenêtre de contexte en pourcentage.
+- [2026-06-18] [TUI-CONTEXT-80-PERCENT] Décidé d'utiliser un seuil dynamique de 80% de la fenêtre de contexte du modèle pour déclencher la compression, géré par ContextWindowService.
 
 ## Current status
-- ✅ Done: Analyse exhaustive TUI ↔ Core (document `.GCC/tui-adaptation-analysis.md`)
-- ✅ Done: Suppression définitive de `src/tui/ui/types.ts`.
-- 🔄 In progress: Redirection des imports brisés qui référençaient `src/tui/ui/types.ts` (comme dans `src/tui/ui/commands/types.ts` vers `UIStateContext.tsx`).
-- 🔄 In progress: Diagnostic de compilation avec `npx tsc -p src/tui/tsconfig.json --noEmit`.
+- ✅ Done: `UIStateContext.tsx` — `SerializableConfirmationDetails` convertie en union discriminée, stubs de `uiTelemetryService` (clear, hydrate) corrigés, signature `convertSessionToClientHistory` assouplie.
+- ✅ Done: Résolution des imports manquants dans `useSessionBrowser.ts` (HiveConfig, HistoryTurn, etc.).
+- ✅ Done: `theme.ts` — gradient `string[]` corrigé (remplacement `coalesce()` par `??`).
+- ✅ Done: `theme-manager.ts` — `type?: 'light'|'dark'|'ansi'|'custom'` ajouté à `CustomTheme`.
+- ✅ Done: `ToolConfirmationMessage.tsx` — `ContentContext.settings` et `activeTheme` corrigés, `getPreferredEditor` typé `EditorType|undefined`.
+- 🔄 In progress: TSC global en cours de résolution (erreurs en baisse).
+- ⏳ Pending: `HistoryItemDisplay.tsx` (38 err), `slashCommandProcessor.ts` (36), `atCommandProcessor.ts` (25), `SubagentGroupDisplay.tsx` (23), `useToolScheduler.ts` (20).
 
 ## Next action
-Résoudre les erreurs d'imports dans `src/tui/ui/commands/types.ts` en important `HistoryItem`, `HistoryItemWithoutId` et `ConfirmationRequest` depuis `../contexts/UIStateContext.js`, et les types d'agents/loggers du core, puis corriger les erreurs TS restantes rapportées par tsc.
+Résoudre les erreurs TypeScript dans `HistoryItemDisplay.tsx` et `slashCommandProcessor.ts`.
 
 ## Abandoned branches
 - [2026-06-05] feature-tui (branche supprimée) → Recréation de l'UI dans `src/tui/` basée sur Gemini CLI

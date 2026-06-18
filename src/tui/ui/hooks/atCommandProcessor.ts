@@ -1,16 +1,97 @@
-/**
- * @license
- * Copyright 2025 Google LLC
- * SPDX-License-Identifier: Apache-2.0
- */
-
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Buffer } from 'node:buffer';
 import { HiveConfig } from '../../config/hiveConfig.js';
 import { IndividualToolCallDisplay } from '../contexts/UIStateContext.js';
-import { HistoryItemToolGroup, PartListUnion, PartUnion } from '../contexts/UIStateContext.js';
+import { HistoryItemToolGroup, PartListUnion, PartUnion, CoreToolCallStatus } from '../contexts/UIStateContext.js';
 import { REFERENCE_CONTENT_START, REFERENCE_CONTENT_END } from '../contexts/UIStateContext.js';
+import { debugLogger, getErrorMessage } from '../../utils/errors.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
+
+// ─── Utilitaires de chemin non disponibles dans la couche TUI ────────────────
+/** Résout un chemin vers son chemin canonique réel (symlinks résolus). */
+function resolveToRealPath(p: string): string {
+    try { return fs.realpathSync(p); } catch { return path.resolve(p); }
+}
+
+/** Teste l'existence asynchrone d'un chemin (fichier ou répertoire). */
+async function fileExists(p: string): Promise<boolean> {
+    return fs.promises.access(p).then(() => true, () => false);
+}
+
+/** Alias local pour unescapeLiteralAt — nommé unescapePath dans l'original Gemini. */
+const unescapePath = unescapeLiteralAt;
+
+type ResolvedPathResult =
+    | { status: 'resolved'; resolved: { absolutePath: string; relativePath: string; stats: fs.Stats } }
+    | { status: 'not_found' }
+    | { status: 'unauthorized' };
+
+/** Résout un chemin @ vers son chemin absolu dans le workspace. */
+async function resolveAtCommandPath(
+    pathName: string,
+    config: HiveConfig,
+    onDebugMessage: (msg: string) => void
+): Promise<ResolvedPathResult> {
+    const targetDir = config.getTargetDir();
+    const candidate = path.isAbsolute(pathName)
+        ? pathName
+        : path.resolve(targetDir, pathName);
+    try {
+        const realPath = resolveToRealPath(candidate);
+        if (!config.validatePathAccess(realPath, 'read')) {
+            onDebugMessage(`Path ${pathName} access denied.`);
+            return { status: 'unauthorized' };
+        }
+        const stats = fs.statSync(realPath);
+        const relativePath = path.relative(targetDir, realPath);
+        return { status: 'resolved', resolved: { absolutePath: realPath, relativePath, stats } };
+    } catch {
+        onDebugMessage(`Path ${pathName} not found.`);
+        return { status: 'not_found' };
+    }
+}
+
+// ─── Stubs pour outils de lecture de fichiers (couche HIVE-MIND) ────────────
+interface ToolInvocationResult {
+    returnDisplay?: string;
+    llmContent?: unknown;
+}
+
+interface AnyToolInvocation {
+    getDescription(): string;
+    execute(opts: { abortSignal: AbortSignal }): Promise<ToolInvocationResult>;
+}
+
+/** Stub de ReadManyFilesTool — à remplacer par l'implémentation HIVE-MIND réelle. */
+class ReadManyFilesTool {
+    readonly displayName = 'read_many_files';
+    constructor(_config: HiveConfig, _messageBus: unknown) {}
+
+    build(args: { include: string[]; file_filtering_options?: unknown }): AnyToolInvocation {
+        const paths = args.include;
+        return {
+            getDescription: () => `Read ${paths.length} file(s)`,
+            execute: async ({ abortSignal }: { abortSignal: AbortSignal }) => {
+                const contents: string[] = [];
+                for (const p of paths) {
+                    if (abortSignal.aborted) break;
+                    try {
+                        const content = await fs.promises.readFile(p, 'utf-8');
+                        contents.push(`--- ${p} ---\n\n${content}\n\n`);
+                    } catch (err) {
+                        debugLogger.warn(`ReadManyFilesTool: could not read ${p}: ${getErrorMessage(err)}`);
+                    }
+                }
+                return {
+                    returnDisplay: `Read ${contents.length}/${paths.length} file(s)`,
+                    llmContent: contents
+                };
+            }
+        };
+    }
+}
+
 
 const REF_CONTENT_HEADER = `\n${REFERENCE_CONTENT_START}`;
 const REF_CONTENT_FOOTER = `\n${REFERENCE_CONTENT_END}`;
