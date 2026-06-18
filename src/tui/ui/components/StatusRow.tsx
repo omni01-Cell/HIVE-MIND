@@ -6,12 +6,14 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, ResizeObserver, type DOMElement } from 'ink';
+import { useMouseClick } from '../hooks/useMouseClick.js';
+import { hiveCoreConnection, type ActiveServiceInfo } from '../../core/connection.js';
+
 import { ThoughtSummary } from '../utils/formatters.js';
-import { isUserVisibleHook } from '../contexts/UIStateContext.js';
+import { isUserVisibleHook, type ActiveHook, useUIState } from '../contexts/UIStateContext.js';
 import stripAnsi from 'strip-ansi';
-import { ActiveHook } from '../contexts/UIStateContext.js';
-import { useUIState } from '../contexts/UIStateContext.js';
 import { useSettings } from '../contexts/SettingsContext.js';
+
 import { theme } from '../semantic-colors.js';
 import { GENERIC_WORKING_LABEL } from '../textConstants.js';
 import { INTERACTIVE_SHELL_WAITING_PHRASE } from '../hooks/usePhraseCycler.js';
@@ -204,6 +206,26 @@ const TipNode: React.FC<{
     );
 };
 
+const ServiceIndicator: React.FC<{
+    service: ActiveServiceInfo;
+    onSelect: (service: ActiveServiceInfo) => void;
+}> = ({ service, onSelect }) => {
+    const ref = useRef<DOMElement | null>(null);
+    useMouseClick(ref, () => {
+        onSelect(service);
+    });
+
+    const displayLabel = service.service === 'MAPLE' ? 'learning...' : (service.service === 'VIGIL' ? 'VIGIL...' : `${service.service}...`);
+
+    return (
+        <Box ref={ref} marginLeft={1}>
+            <Text color={theme.text.accent} bold>
+                *{displayLabel}*
+            </Text>
+        </Box>
+    );
+};
+
 const StatusRowRow1: React.FC<{
     showUiDetails: boolean;
     showRow1Minimal: boolean;
@@ -218,10 +240,14 @@ const StatusRowRow1: React.FC<{
     currentWittyPhrase: string | undefined;
     shortcutsHelpVisible: boolean;
     onTipRefChange: (node: DOMElement | null) => void;
+    activeServices: ActiveServiceInfo[];
+    selectedService: ActiveServiceInfo | null;
+    onServiceSelect: (service: ActiveServiceInfo) => void;
 }> = ({
     showUiDetails, showRow1Minimal, showRow2Minimal, isInteractiveShellWaiting,
     isNarrow, showTipLine, tipContentStr, modeContentObj, statusNode,
-    currentTip, currentWittyPhrase, shortcutsHelpVisible, onTipRefChange
+    currentTip, currentWittyPhrase, shortcutsHelpVisible, onTipRefChange,
+    activeServices, selectedService, onServiceSelect
 }) => (
     <Box
         width="100%"
@@ -230,13 +256,23 @@ const StatusRowRow1: React.FC<{
         justifyContent="space-between"
         minHeight={LAYOUT.STATUS_MIN_HEIGHT}
     >
-        <Box flexDirection="row" flexGrow={1} flexShrink={1}>
+        <Box flexDirection="row" flexGrow={1} flexShrink={1} alignItems="center">
             {!showUiDetails && showRow1Minimal ? (
-                <Box flexDirection="row" columnGap={1}>
+                <Box flexDirection="row" columnGap={1} alignItems="center">
                     {statusNode}
                     {!showUiDetails && showRow2Minimal && modeContentObj && (
                         <Box>
                             <Text color={modeContentObj.color}>● {modeContentObj.text}</Text>
+                        </Box>
+                    )}
+                    {activeServices.map((service) => (
+                        <ServiceIndicator key={service.service} service={service} onSelect={onServiceSelect} />
+                    ))}
+                    {selectedService && (
+                        <Box marginLeft={1}>
+                            <Text color={theme.text.secondary}>
+                                ({selectedService.service}: {selectedService.action} - {Math.round((Date.now() - selectedService.timestamp) / 1000)}s)
+                            </Text>
                         </Box>
                     )}
                 </Box>
@@ -253,6 +289,16 @@ const StatusRowRow1: React.FC<{
                     marginLeft={LAYOUT.INDICATOR_LEFT_MARGIN}
                 >
                     {statusNode}
+                    {activeServices.map((service) => (
+                        <ServiceIndicator key={service.service} service={service} onSelect={onServiceSelect} />
+                    ))}
+                    {selectedService && (
+                        <Box marginLeft={1}>
+                            <Text color={theme.text.secondary}>
+                                ({selectedService.service}: {selectedService.action} - {Math.round((Date.now() - selectedService.timestamp) / 1000)}s)
+                            </Text>
+                        </Box>
+                    )}
                 </Box>
             )}
         </Box>
@@ -275,6 +321,7 @@ const StatusRowRow1: React.FC<{
         </Box>
     </Box>
 );
+
 
 const StatusRowRow2: React.FC<{
     showUiDetails: boolean;
@@ -365,6 +412,29 @@ export const StatusRow: React.FC<StatusRowProps> = ({
     const [statusWidth, setStatusWidth] = useState(0);
     const [tipWidth, setTipWidth] = useState(0);
     const tipObserverRef = useRef<ResizeObserver | null>(null);
+    const [activeServices, setActiveServices] = useState<ActiveServiceInfo[]>([]);
+    const [selectedService, setSelectedService] = useState<ActiveServiceInfo | null>(null);
+
+    useEffect(() => {
+        setActiveServices(hiveCoreConnection.getActiveServices());
+
+        const unsubscribe = hiveCoreConnection.subscribe((event) => {
+            if (event.type === 'custom') {
+                if (event.name === 'service_start' || event.name === 'service_end') {
+                    const current = hiveCoreConnection.getActiveServices();
+                    setActiveServices(current);
+                    if (event.name === 'service_end') {
+                        setSelectedService((prev) => prev?.service === event.message ? null : prev);
+                    }
+                }
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const handleServiceSelect = useCallback((service: ActiveServiceInfo) => {
+        setSelectedService((prev) => prev?.service === service.service ? null : service);
+    }, []);
 
     useEffect(() => () => { tipObserverRef.current?.disconnect(); }, []);
 
@@ -394,7 +464,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
 
     const willCollideTip = statusWidth + tipWidth + LAYOUT.COLLISION_GAP > terminalWidth;
     const showTipLine = Boolean(!hasPendingActionRequired && tipContentStr && !willCollideTip && !isNarrow);
-    const showRow1Minimal = showLoadingIndicator || uiState.activeHooks.length > 0 || showTipLine;
+    const showRow1Minimal = showLoadingIndicator || uiState.activeHooks.length > 0 || showTipLine || activeServices.length > 0;
     const showRow2Minimal = (Boolean(modeContentObj) && !hideUiDetailsForSuggestions) || showMinimalContext;
     const showRow1 = showUiDetails || showRow1Minimal;
     const showRow2 = showUiDetails || showRow2Minimal;
@@ -438,6 +508,9 @@ export const StatusRow: React.FC<StatusRowProps> = ({
                     currentWittyPhrase={uiState.currentWittyPhrase}
                     shortcutsHelpVisible={uiState.shortcutsHelpVisible}
                     onTipRefChange={onTipRefChange}
+                    activeServices={activeServices}
+                    selectedService={selectedService}
+                    onServiceSelect={handleServiceSelect}
                 />
             )}
             {showRow1 && showRow2 && (showUiDetails || (showRow1Minimal && showRow2Minimal)) && (
