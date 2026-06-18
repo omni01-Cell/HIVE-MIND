@@ -263,6 +263,12 @@ export class RuntimeSentinel {
         context: SentinelContext,
         recentActions: RecentAction[]
     ): Promise<{ allowed: boolean; reason: string | null; risk_level: string; intervention_prompt: string | null }> {
+        eventBus.publish(BotEvents.SERVICE_START, {
+            service: 'VIGIL',
+            action: `evaluating tool ${toolName}`,
+            timestamp: Date.now()
+        });
+
         try {
             let securityBoundaries = 'Apply system instructions with absolute priority.';
             if (existsSync(SYSTEM_PROMPT_PATH)) {
@@ -402,6 +408,11 @@ Example 2: Unsafe request
                     intervention_prompt: null
                 };
             }
+        } finally {
+            eventBus.publish(BotEvents.SERVICE_END, {
+                service: 'VIGIL',
+                timestamp: Date.now()
+            });
         }
     }
 }

@@ -5,6 +5,7 @@ import { providerRouter } from '../../providers/index.js';
 import { factsMemory } from '../memory.js';
 import { workingMemory } from '../workingMemory.js';
 import { tryParseJson } from '../../utils/ResponseFormatEnforcer.js';
+import { eventBus, BotEvents } from '../../core/events.js';
 
 interface ExtractedInsight {
     readonly type: string;
@@ -49,6 +50,12 @@ export const learningEngine = {
         // 1. Lire la mémoire de travail (les derniers messages)
         const context = await workingMemory.getContext(chatId, 20);
         if (context.length < 4) return; // Pas assez de matière
+
+        eventBus.publish(BotEvents.SERVICE_START, {
+            service: 'MAPLE',
+            action: `extracting insights for ${chatId}`,
+            timestamp: Date.now()
+        });
 
         const transcript = context.map((m: { role: string; content: string }) => `${m.role}: ${m.content}`).join('\n');
 
@@ -102,6 +109,11 @@ Few-shot examples:
             }
         } catch (error: unknown) {
             console.error('[MAPLE] Erreur extraction:', extractErrorMessage(error));
+        } finally {
+            eventBus.publish(BotEvents.SERVICE_END, {
+                service: 'MAPLE',
+                timestamp: Date.now()
+            });
         }
     },
 

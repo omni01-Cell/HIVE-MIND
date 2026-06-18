@@ -59,11 +59,12 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant. Documents de réfé
 - ✅ Done: Session 6 — Intégration de la File d'Attente de Messages Non-Bloquante.
 - ✅ Done: Session 7 — Routage Local HITL (Human-in-the-Loop).
 - ✅ Done: Session 8 — Intégration des Composants de Confirmation de Sécurité (connexion des boîtes de dialogue et composants de confirmation à l'infrastructure locale du PermissionManager).
-- 🔄 In progress: Session 9 — Émission d'Événements d'Activité de Services (Core).
-- ⏳ Pending: Sessions 10 à 22 du plan d'adaptation de la TUI.
+- ✅ Done: Session 9 — Émission d'Événements d'Activité de Services (Core) (intégration des déclencheurs d'activité dans VIGIL et MAPLE).
+- 🔄 In progress: Session 10 — Rendu Interactif des Services Actifs dans la TUI.
+- ⏳ Pending: Sessions 11 à 22 du plan d'adaptation de la TUI.
 
 ## Next action
-Session 9 — Émission d'Événements d'Activité de Services (Core).
+Session 10 — Rendu Interactif des Services Actifs dans la TUI.
 
 ## Abandoned branches
 - [2026-06-05] feature-tui (branche supprimée) → Recréation de l'UI dans `src/tui/` basée sur Gemini CLI

@@ -96,6 +96,10 @@ export const BotEvents = {
     // Déclencheurs proactifs
     PROACTIVE_TRIGGER: 'proactive:trigger',
 
+    // Services
+    SERVICE_START: 'service:start',
+    SERVICE_END: 'service:end',
+
     // Système (Kill Switch, erreurs critiques)
     SYSTEM_ERROR: 'system:error'
 };
