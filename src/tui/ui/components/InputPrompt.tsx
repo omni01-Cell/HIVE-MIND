@@ -42,12 +42,17 @@ import {
 import { useKeypress, type Key } from '../hooks/useKeypress.js';
 import { Command } from '../key/keyMatchers.js';
 import { formatCommand } from '../key/keybindingUtils.js';
-import { CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
+import {
+    CommandContext,
+    SlashCommand,
+    ApprovalMode,
+    StreamingState,
+    Storage,
+    useUIState
+} from '../contexts/UIStateContext.js';
 import { debugLogger } from '../../utils/errors.js';
 import { HiveConfig } from '../../config/hiveConfig.js';
 import { coreEvents } from '../../utils/coreEvents.js';
-import { ApprovalMode, MessageType, StreamingState } from '../contexts/UIStateContext.js';
-import { Storage } from '../contexts/UIStateContext.js';
 import { useVoiceMode } from '../hooks/useVoiceMode.js';
 import {
     parseInputForHighlighting,
@@ -67,7 +72,6 @@ import { parseSlashCommand } from '../../utils/commands.js';
 import * as path from 'node:path';
 import { SCREEN_READER_USER_PREFIX } from '../textConstants.js';
 import { useShellFocusState } from '../contexts/ShellFocusContext.js';
-import { useUIState } from '../contexts/UIStateContext.js';
 import { useInputState } from '../contexts/InputContext.js';
 import {
     appEvents,
@@ -630,6 +634,195 @@ function handleSubmitKey(
     return true;
 }
 
+function handleEditorAndShellKeys(
+    ctx: InputHandlerContext,
+    key: Key,
+    clipPaste: () => void
+): boolean | undefined {
+    if (ctx.keyMatchers[Command.OPEN_EXTERNAL_EDITOR](key)) {
+        ctx.buffer.openInExternalEditor();
+        return true;
+    }
+    if (ctx.keyMatchers[Command.DEPRECATED_OPEN_EXTERNAL_EDITOR](key)) {
+        const cmdKey = formatCommand(Command.OPEN_EXTERNAL_EDITOR);
+        appEvents.emit(AppEvent.TransientMessage, {
+            message: `Use ${cmdKey} to open the external editor.`,
+            type: TransientMessageType.Hint
+        });
+        return true;
+    }
+    if (ctx.keyMatchers[Command.PASTE_CLIPBOARD](key)) {
+        clipPaste();
+        return true;
+    }
+    if (ctx.keyMatchers[Command.TOGGLE_BACKGROUND_SHELL](key)) {
+        return false;
+    }
+    if (ctx.keyMatchers[Command.FOCUS_SHELL_INPUT](key)) {
+        if (ctx.activePtyId || (ctx.backgroundTasks.size > 0 && ctx.backgroundTaskHeight > 0)) {
+            ctx.setEmbeddedShellFocused(true);
+            return true;
+        }
+        return false;
+    }
+    return undefined;
+}
+
+function handleNavigationKeys(ctx: InputHandlerContext, key: Key): boolean {
+    if (ctx.keyMatchers[Command.HOME](key)) { ctx.buffer.move('home'); return true; }
+    if (ctx.keyMatchers[Command.END](key)) { ctx.buffer.move('end'); return true; }
+    if (ctx.keyMatchers[Command.KILL_LINE_RIGHT](key)) { ctx.buffer.killLineRight(); return true; }
+    if (ctx.keyMatchers[Command.KILL_LINE_LEFT](key)) { ctx.buffer.killLineLeft(); return true; }
+    if (ctx.keyMatchers[Command.DELETE_WORD_BACKWARD](key)) { ctx.buffer.deleteWordLeft(); return true; }
+    return false;
+}
+
+function handleInputKeyDispatch(
+    ctx: InputHandlerContext,
+    key: Key,
+    expandedSuggestionIdxSetter: (v: number) => void,
+    navSuggestionsRef: React.MutableRefObject<boolean>,
+    unsafePasteTime: number | null,
+    historyUp: boolean,
+    historyDown: boolean,
+    loadQueuedFn: () => boolean,
+    hist: ReturnType<typeof useInputHistory>,
+    shellHist: ReturnType<typeof useShellHistory>,
+    clipPaste: () => void
+): boolean {
+    if (handleSearchNavigation(ctx, key, expandedSuggestionIdxSetter)) {
+        return true;
+    }
+
+    if (
+        ctx.completion.isPerfectMatch &&
+        ctx.keyMatchers[Command.SUBMIT](key) &&
+        unsafePasteTime === null &&
+        (!(ctx.completion.showSuggestions && ctx.isShellSuggestionsVisible) ||
+          (ctx.completion.activeSuggestionIndex <= 0 && !navSuggestionsRef.current))
+    ) {
+        ctx.handleSubmit(ctx.buffer.text);
+        return true;
+    }
+
+    if (ctx.keyMatchers[Command.NEWLINE](key)) {
+        ctx.buffer.newline();
+        return true;
+    }
+
+    if (handleSuggestionNavigation(ctx, key, expandedSuggestionIdxSetter, navSuggestionsRef)) {
+        return true;
+    }
+
+    if (key.name === 'tab' && !key.shift &&
+    !(ctx.completion.showSuggestions && ctx.isShellSuggestionsVisible) &&
+    ctx.completion.promptCompletion.text) {
+        ctx.completion.promptCompletion.accept();
+        return true;
+    }
+
+    if (handleHistoryNavigation(ctx, key, historyUp, historyDown, loadQueuedFn, hist, shellHist, cpLen)) {
+        return true;
+    }
+
+    if (ctx.keyMatchers[Command.SUBMIT](key)) {
+        if (handleSubmitKey(ctx, unsafePasteTime)) return true;
+        return true;
+    }
+
+    if (handleNavigationKeys(ctx, key)) return true;
+
+    const editorResult = handleEditorAndShellKeys(ctx, key, clipPaste);
+    if (editorResult !== undefined) return editorResult;
+
+    const handled = ctx.buffer.handleInput(key);
+    if (handled) {
+        if (ctx.keyMatchers[Command.CLEAR_INPUT](key)) {
+            ctx.resetCompletionState();
+        }
+        if (ctx.completion.promptCompletion.text && key.sequence &&
+        key.sequence.length === 1 && !key.alt && !key.ctrl && !key.cmd) {
+            ctx.completion.promptCompletion.clear();
+            expandedSuggestionIdxSetter(-1);
+        }
+    }
+    return handled;
+}
+
+interface KeyClassification {
+    isHistoryUp: boolean;
+    isHistoryDown: boolean;
+    isHistoryNav: boolean;
+    isCursorMovement: boolean;
+    isSuggestionsNav: boolean;
+    isQueueMessageKey: boolean;
+    isPlainTab: boolean;
+    hasTabCompletionInteraction: boolean;
+    isGenerating: boolean;
+}
+
+function isHistoryNavKey(
+    key: Key,
+    km: ReturnType<typeof useKeyMatchers>,
+    buf: TextBuffer,
+    shellActive: boolean,
+    direction: 'up' | 'down'
+): boolean {
+    if (shellActive) return false;
+    const navKey = direction === 'up' ? Command.HISTORY_UP : Command.HISTORY_DOWN;
+    const navDir = direction === 'up' ? Command.NAVIGATION_UP : Command.NAVIGATION_DOWN;
+    if (km[navKey](key)) return true;
+    if (!km[navDir](key)) return false;
+    if (buf.allVisualLines.length === 1) return true;
+    if (direction === 'up') return buf.visualCursor[0] === 0 && buf.visualScrollRow === 0;
+    return buf.visualCursor[0] === buf.allVisualLines.length - 1;
+}
+
+function classifyKey(
+    key: Key,
+    km: ReturnType<typeof useKeyMatchers>,
+    buf: TextBuffer,
+    shellActive: boolean,
+    showSuggestions: boolean,
+    comp: ReturnType<typeof useCommandCompletion>,
+    shellSugVisible: boolean,
+    revSearchActive: boolean,
+    cmdSearchActive: boolean,
+    streamState: StreamingState
+): KeyClassification {
+    const isHistoryUp = isHistoryNavKey(key, km, buf, shellActive, 'up');
+    const isHistoryDown = isHistoryNavKey(key, km, buf, shellActive, 'down');
+    const isCursorMovement =
+    km[Command.MOVE_LEFT](key) || km[Command.MOVE_RIGHT](key) ||
+    km[Command.MOVE_UP](key) || km[Command.MOVE_DOWN](key) ||
+    km[Command.MOVE_WORD_LEFT](key) || km[Command.MOVE_WORD_RIGHT](key) ||
+    km[Command.HOME](key) || km[Command.END](key);
+    const isSuggestionsNav =
+    showSuggestions &&
+    (km[Command.COMPLETION_UP](key) || km[Command.COMPLETION_DOWN](key) ||
+      km[Command.EXPAND_SUGGESTION](key) || km[Command.COLLAPSE_SUGGESTION](key) ||
+      km[Command.ACCEPT_SUGGESTION](key));
+    const isGenerating =
+    streamState === StreamingState.Responding ||
+    streamState === StreamingState.WaitingForConfirmation;
+
+    return {
+        isHistoryUp,
+        isHistoryDown,
+        isHistoryNav: isHistoryUp || isHistoryDown,
+        isCursorMovement,
+        isSuggestionsNav,
+        isGenerating,
+        isQueueMessageKey: km[Command.QUEUE_MESSAGE](key),
+        isPlainTab: key.name === 'tab' && !key.shift && !key.alt && !key.ctrl && !key.cmd,
+        hasTabCompletionInteraction:
+        (comp.showSuggestions && shellSugVisible) ||
+        Boolean(comp.promptCompletion.text) ||
+        revSearchActive ||
+        cmdSearchActive
+    };
+}
+
 // eslint-disable-next-line max-lines-per-function
 export const InputPrompt: React.FC<InputPromptProps> = ({
     onSubmit,
@@ -1178,203 +1371,21 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
         return false;
     }
 
-    function handleEditorAndShellKeys(
-        ctx: InputHandlerContext,
-        key: Key,
-        clipPaste: () => void
-    ): boolean | undefined {
-        if (ctx.keyMatchers[Command.OPEN_EXTERNAL_EDITOR](key)) {
-            ctx.buffer.openInExternalEditor();
-            return true;
-        }
-        if (ctx.keyMatchers[Command.DEPRECATED_OPEN_EXTERNAL_EDITOR](key)) {
-            const cmdKey = formatCommand(Command.OPEN_EXTERNAL_EDITOR);
-            appEvents.emit(AppEvent.TransientMessage, {
-                message: `Use ${cmdKey} to open the external editor.`,
-                type: TransientMessageType.Hint
-            });
-            return true;
-        }
-        if (ctx.keyMatchers[Command.PASTE_CLIPBOARD](key)) {
-            clipPaste();
-            return true;
-        }
-        if (ctx.keyMatchers[Command.TOGGLE_BACKGROUND_SHELL](key)) {
-            return false;
-        }
-        if (ctx.keyMatchers[Command.FOCUS_SHELL_INPUT](key)) {
-            if (ctx.activePtyId || (ctx.backgroundTasks.size > 0 && ctx.backgroundTaskHeight > 0)) {
-                ctx.setEmbeddedShellFocused(true);
-                return true;
-            }
-            return false;
-        }
-        return undefined;
-    }
-
-    function handleNavigationKeys(ctx: InputHandlerContext, key: Key): boolean {
-        if (ctx.keyMatchers[Command.HOME](key)) { ctx.buffer.move('home'); return true; }
-        if (ctx.keyMatchers[Command.END](key)) { ctx.buffer.move('end'); return true; }
-        if (ctx.keyMatchers[Command.KILL_LINE_RIGHT](key)) { ctx.buffer.killLineRight(); return true; }
-        if (ctx.keyMatchers[Command.KILL_LINE_LEFT](key)) { ctx.buffer.killLineLeft(); return true; }
-        if (ctx.keyMatchers[Command.DELETE_WORD_BACKWARD](key)) { ctx.buffer.deleteWordLeft(); return true; }
-        return false;
-    }
-
-    function handleInputKeyDispatch(
-        ctx: InputHandlerContext,
-        key: Key,
-        expandedSuggestionIdxSetter: (v: number) => void,
-        navSuggestionsRef: React.MutableRefObject<boolean>,
-        unsafePasteTime: number | null,
-        historyUp: boolean,
-        historyDown: boolean,
-        loadQueuedFn: () => boolean,
-        hist: ReturnType<typeof useInputHistory>,
-        shellHist: ReturnType<typeof useShellHistory>,
-        clipPaste: () => void
-    ): boolean {
-        if (handleSearchNavigation(ctx, key, expandedSuggestionIdxSetter)) {
-            return true;
-        }
-
-        if (
-            ctx.completion.isPerfectMatch &&
-    ctx.keyMatchers[Command.SUBMIT](key) &&
-    unsafePasteTime === null &&
-    (!(ctx.completion.showSuggestions && ctx.isShellSuggestionsVisible) ||
-      (ctx.completion.activeSuggestionIndex <= 0 && !navSuggestionsRef.current))
-        ) {
-            ctx.handleSubmit(ctx.buffer.text);
-            return true;
-        }
-
-        if (ctx.keyMatchers[Command.NEWLINE](key)) {
-            ctx.buffer.newline();
-            return true;
-        }
-
-        if (handleSuggestionNavigation(ctx, key, expandedSuggestionIdxSetter, navSuggestionsRef)) {
-            return true;
-        }
-
-        if (key.name === 'tab' && !key.shift &&
-        !(ctx.completion.showSuggestions && ctx.isShellSuggestionsVisible) &&
-        ctx.completion.promptCompletion.text) {
-            ctx.completion.promptCompletion.accept();
-            return true;
-        }
-
-        if (handleHistoryNavigation(ctx, key, historyUp, historyDown, loadQueuedFn, hist, shellHist, cpLen)) {
-            return true;
-        }
-
-        if (ctx.keyMatchers[Command.SUBMIT](key)) {
-            if (handleSubmitKey(ctx, unsafePasteTime)) return true;
-            return true;
-        }
-
-        if (handleNavigationKeys(ctx, key)) return true;
-
-        const editorResult = handleEditorAndShellKeys(ctx, key, clipPaste);
-        if (editorResult !== undefined) return editorResult;
-
-        const handled = ctx.buffer.handleInput(key);
-        if (handled) {
-            if (ctx.keyMatchers[Command.CLEAR_INPUT](key)) {
-                ctx.resetCompletionState();
-            }
-            if (ctx.completion.promptCompletion.text && key.sequence &&
-            key.sequence.length === 1 && !key.alt && !key.ctrl && !key.cmd) {
-                ctx.completion.promptCompletion.clear();
-                expandedSuggestionIdxSetter(-1);
-            }
-        }
-        return handled;
-    }
-
-    interface KeyClassification {
-    isHistoryUp: boolean;
-    isHistoryDown: boolean;
-    isHistoryNav: boolean;
-    isCursorMovement: boolean;
-    isSuggestionsNav: boolean;
-    isQueueMessageKey: boolean;
-    isPlainTab: boolean;
-    hasTabCompletionInteraction: boolean;
-    isGenerating: boolean;
-}
-
-    function isHistoryNavKey(
-        key: Key,
-        km: ReturnType<typeof useKeyMatchers>,
-        buf: TextBuffer,
-        shellActive: boolean,
-        direction: 'up' | 'down'
-    ): boolean {
-        if (shellActive) return false;
-        const navKey = direction === 'up' ? Command.HISTORY_UP : Command.HISTORY_DOWN;
-        const navDir = direction === 'up' ? Command.NAVIGATION_UP : Command.NAVIGATION_DOWN;
-        if (km[navKey](key)) return true;
-        if (!km[navDir](key)) return false;
-        if (buf.allVisualLines.length === 1) return true;
-        if (direction === 'up') return buf.visualCursor[0] === 0 && buf.visualScrollRow === 0;
-        return buf.visualCursor[0] === buf.allVisualLines.length - 1;
-    }
-
-    function classifyKey(
-        key: Key,
-        km: ReturnType<typeof useKeyMatchers>,
-        buf: TextBuffer,
-        shellActive: boolean,
-        showSuggestions: boolean,
-        comp: ReturnType<typeof useCommandCompletion>,
-        shellSugVisible: boolean,
-        revSearchActive: boolean,
-        cmdSearchActive: boolean,
-        streamState: StreamingState
-    ): KeyClassification {
-        const isHistoryUp = isHistoryNavKey(key, km, buf, shellActive, 'up');
-        const isHistoryDown = isHistoryNavKey(key, km, buf, shellActive, 'down');
-        const isCursorMovement =
-        km[Command.MOVE_LEFT](key) || km[Command.MOVE_RIGHT](key) ||
-        km[Command.MOVE_UP](key) || km[Command.MOVE_DOWN](key) ||
-        km[Command.MOVE_WORD_LEFT](key) || km[Command.MOVE_WORD_RIGHT](key) ||
-        km[Command.HOME](key) || km[Command.END](key);
-        const isSuggestionsNav =
-        showSuggestions &&
-        (km[Command.COMPLETION_UP](key) || km[Command.COMPLETION_DOWN](key) ||
-          km[Command.EXPAND_SUGGESTION](key) || km[Command.COLLAPSE_SUGGESTION](key) ||
-          km[Command.ACCEPT_SUGGESTION](key));
-        const isGenerating =
-        streamState === StreamingState.Responding ||
-        streamState === StreamingState.WaitingForConfirmation;
-
-        return {
-            isHistoryUp,
-            isHistoryDown,
-            isHistoryNav: isHistoryUp || isHistoryDown,
-            isCursorMovement,
-            isSuggestionsNav,
-            isGenerating,
-            isQueueMessageKey: km[Command.QUEUE_MESSAGE](key),
-            isPlainTab: key.name === 'tab' && !key.shift && !key.alt && !key.ctrl && !key.cmd,
-            hasTabCompletionInteraction:
-            (comp.showSuggestions && shellSugVisible) ||
-            Boolean(comp.promptCompletion.text) ||
-            revSearchActive ||
-            cmdSearchActive
-        };
-    }
-
     const handleInput = useCallback(
         (key: Key) => {
             if (handleVoiceInput(key)) return true;
 
             const kc = classifyKey(
-                key, keyMatchers, buffer, shellModeActive, shouldShowSuggestions,
-                completion, isShellSuggestionsVisible, reverseSearchActive,
-                commandSearchActive, streamingState
+                key,
+                keyMatchers,
+                buffer,
+                shellModeActive,
+                shouldShowSuggestions,
+                completion,
+                isShellSuggestionsVisible,
+                reverseSearchActive,
+                commandSearchActive,
+                streamingState
             );
 
             if (!kc.isSuggestionsNav) {
@@ -1398,24 +1409,62 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
             }
 
             const ctx: InputHandlerContext = {
-                buffer, completion, reverseSearchCompletion, commandSearchCompletion,
-                shellModeActive, setShellModeActive, setSuppressCompletion,
-                setForceShowShellSuggestions, forceShowShellSuggestions,
-                shouldShowSuggestions, isShellSuggestionsVisible,
-                reverseSearchActive, setReverseSearchActive, setTextBeforeReverseSearch,
-                commandSearchActive, setCommandSearchActive, setCursorPosition,
-                cursorPosition, textBeforeReverseSearch, setExpandedSuggestionIndex,
-                resetCompletionState, resetReverseSearchCompletionState,
-                handleSubmit, recentUnsafePasteTime, setRecentUnsafePasteTime,
-                setQueueErrorMessage, onQueueMessage, resetPlainTabPress,
-                registerPlainTabPress, toggleCleanUiDetailsVisible,
-                isGenerating: kc.isGenerating, keyMatchers, isHelpDismissKey, setShortcutsHelpVisible,
-                shortcutsHelpVisible, vimEnabled, vimMode, vimHandleInput,
-                resetEscapeState, handleEscPress, handleVoiceInput,
-                tryLoadQueuedMessages, setBannerVisible, onClearScreen,
-                activePtyId, setEmbeddedShellFocused, backgroundTasks,
-                backgroundTaskHeight, shellHistory, inputHistory, settings,
-                pasteTimeoutRef, kittyProtocol, focus, resetTurnBaseline, streamingState
+                buffer,
+                completion,
+                reverseSearchCompletion,
+                commandSearchCompletion,
+                shellModeActive,
+                setShellModeActive,
+                setSuppressCompletion,
+                setForceShowShellSuggestions,
+                forceShowShellSuggestions,
+                shouldShowSuggestions,
+                isShellSuggestionsVisible,
+                reverseSearchActive,
+                setReverseSearchActive,
+                setTextBeforeReverseSearch,
+                commandSearchActive,
+                setCommandSearchActive,
+                setCursorPosition,
+                cursorPosition,
+                textBeforeReverseSearch,
+                setExpandedSuggestionIndex,
+                resetCompletionState,
+                resetReverseSearchCompletionState,
+                handleSubmit,
+                recentUnsafePasteTime,
+                setRecentUnsafePasteTime,
+                setQueueErrorMessage,
+                onQueueMessage,
+                resetPlainTabPress,
+                registerPlainTabPress,
+                toggleCleanUiDetailsVisible,
+                isGenerating: kc.isGenerating,
+                keyMatchers,
+                isHelpDismissKey,
+                setShortcutsHelpVisible,
+                shortcutsHelpVisible,
+                vimEnabled,
+                vimMode,
+                vimHandleInput,
+                resetEscapeState,
+                handleEscPress,
+                handleVoiceInput,
+                tryLoadQueuedMessages,
+                setBannerVisible,
+                onClearScreen,
+                activePtyId,
+                setEmbeddedShellFocused,
+                backgroundTasks,
+                backgroundTaskHeight,
+                shellHistory,
+                inputHistory,
+                settings,
+                pasteTimeoutRef,
+                kittyProtocol,
+                focus,
+                resetTurnBaseline,
+                streamingState
             };
 
             if (handleQueueMessageKey(ctx, key, kc.isQueueMessageKey, kc.hasTabCompletionInteraction)) {
@@ -1434,9 +1483,21 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
                 return true;
             }
 
-            if (handleInputKeyDispatch(ctx, key, setExpandedSuggestionIndex, hasUserNavigatedSuggestions,
-                recentUnsafePasteTime, kc.isHistoryUp, kc.isHistoryDown, tryLoadQueuedMessages,
-                inputHistory, shellHistory, handleClipboardPaste)) {
+            if (
+                handleInputKeyDispatch(
+                    ctx,
+                    key,
+                    setExpandedSuggestionIndex,
+                    hasUserNavigatedSuggestions,
+                    recentUnsafePasteTime,
+                    kc.isHistoryUp,
+                    kc.isHistoryDown,
+                    tryLoadQueuedMessages,
+                    inputHistory,
+                    shellHistory,
+                    handleClipboardPaste
+                )
+            ) {
                 return true;
             }
 

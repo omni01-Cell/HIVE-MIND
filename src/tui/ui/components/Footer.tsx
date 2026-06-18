@@ -15,7 +15,6 @@ import process from 'node:process';
 import os from 'node:os';
 import { MemoryUsageDisplay } from './MemoryUsageDisplay.js';
 import { ContextUsageDisplay } from './ContextUsageDisplay.js';
-import { QuotaDisplay } from './QuotaDisplay.js';
 import { DebugProfiler } from './DebugProfiler.js';
 import { useUIState } from '../contexts/UIStateContext.js';
 import { useQuotaState } from '../contexts/QuotaContext.js';

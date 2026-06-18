@@ -14,10 +14,9 @@ import {
     ToolStatusIndicator,
     ToolInfo
 } from './messages/ToolShared.js';
-import { useUIState } from '../contexts/UIStateContext.js';
+import { useUIState, SerializableConfirmationDetails } from '../contexts/UIStateContext.js';
 import type { ConfirmingToolState } from '../hooks/useConfirmingTool.js';
 import { StickyHeader } from './StickyHeader.js';
-import { SerializableConfirmationDetails } from '../contexts/UIStateContext.js';
 import { useUIActions } from '../contexts/UIActionsContext.js';
 
 function getConfirmationHeader(
@@ -41,6 +40,7 @@ function getConfirmationLabel(
 ): string {
     if (details?.type === 'ask_user') return 'Questions';
     if (details?.type === 'exit_plan_mode') return 'Implementation';
+    if (toolName === 'security_confirmation') return 'Security';
     if (isShellTool(toolName)) return 'Shell';
     return toolName;
 }

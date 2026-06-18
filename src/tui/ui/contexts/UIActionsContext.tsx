@@ -7,12 +7,10 @@
 import { createContext, useContext } from 'react';
 import { type Key } from '../hooks/useKeypress.js';
 import { type IdeIntegrationNudgeResult } from '../IdeIntegrationNudge.js';
-import { type FolderTrustChoice } from '../components/FolderTrustDialog.js';
 import { AgentDefinition, NewAgentsChoice } from './UIStateContext.js';
 import { AuthType, EditorType } from './UIStateContext.js';
 import { type LoadableSettingScope } from '../../config/settings.js';
 import { AuthState } from './UIStateContext.js';
-import { type PermissionsDialogProps } from '../components/PermissionsModifyTrustDialog.js';
 import type { SessionInfo } from '../../utils/sessionUtils.js';
 import type { OverageMenuIntent, EmptyWalletIntent } from './UIStateContext.js';
 
@@ -45,12 +43,12 @@ export interface UIActions {
     definition: AgentDefinition,
   ) => void;
   closeAgentConfigDialog: () => void;
-  openPermissionsDialog: (props?: PermissionsDialogProps) => void;
+  openPermissionsDialog: (props?: any) => void;
   closePermissionsDialog: () => void;
   setShellModeActive: (value: boolean) => void;
   vimHandleInput: (key: Key) => boolean;
   handleIdePromptComplete: (result: IdeIntegrationNudgeResult) => void;
-  handleFolderTrustSelect: (choice: FolderTrustChoice) => void;
+  handleFolderTrustSelect: (choice: 'trust' | 'deny' | string) => void;
   setIsPolicyUpdateDialogOpen: (value: boolean) => void;
   setConstrainHeight: (value: boolean) => void;
   onEscapePromptChange: (show: boolean) => void;

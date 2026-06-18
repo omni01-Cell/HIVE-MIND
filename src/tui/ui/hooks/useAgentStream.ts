@@ -6,8 +6,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { ThoughtSummary, displayContentToString, parseThought } from '../utils/formatters.js';
-import { CoreToolCallStatus, Kind, Part, ApprovalMode, RetryAttemptPayload, StreamingState, MessageType, HistoryItemWithoutId, IndividualToolCallDisplay, LoopDetectionConfirmationRequest, MessageSenderType } from '../contexts/UIStateContext.js';
-import { geminiPartsToContentParts, AgentEvent, AgentProtocol, Logger } from '../contexts/UIStateContext.js';
+import { CoreToolCallStatus, Kind, Part, ApprovalMode, RetryAttemptPayload, StreamingState, MessageType, HistoryItemWithoutId, IndividualToolCallDisplay, LoopDetectionConfirmationRequest, MessageSenderType, geminiPartsToContentParts, AgentEvent, AgentProtocol, Logger } from '../contexts/UIStateContext.js';
 import { getErrorMessage, debugLogger } from '../../utils/errors.js';
 import { findLastSafeSplitPoint } from '../utils/markdownUtilities.js';
 import { getToolGroupBorderAppearance } from '../utils/borderStyles.js';
@@ -54,7 +53,7 @@ function handleAgentEvent(
             setStreamingState(StreamingState.Idle);
             flushPendingText();
             break;
-        case 'message':
+        case 'message': {
             if (event.role === 'agent') {
                 for (const part of event.content) {
                     if (part.type === 'text') {
@@ -75,20 +74,22 @@ function handleAgentEvent(
                 }
             }
             break;
+        }
         case 'tool_request': {
             flushPendingText();
             const legacyState = event._meta?.legacyState;
+            const isAwaitingApproval = legacyState?.status === 'awaiting_approval' || !!event.confirmationDetails;
             const newCall: IndividualToolCallDisplay = {
                 callId: event.requestId,
                 name: legacyState?.displayName ?? event.name,
                 originalRequestName: event.name,
                 description: legacyState?.description ?? '',
                 display: event.display,
-                status: CoreToolCallStatus.Scheduled,
+                status: isAwaitingApproval ? CoreToolCallStatus.AwaitingApproval : CoreToolCallStatus.Scheduled,
                 isClientInitiated: false,
                 renderOutputAsMarkdown: legacyState?.isOutputMarkdown ?? false,
                 kind: legacyState?.kind ?? Kind.Other,
-                confirmationDetails: undefined,
+                confirmationDetails: event.confirmationDetails,
                 resultDisplay: undefined
             };
             setTrackedTools((prev) => [...prev, newCall]);

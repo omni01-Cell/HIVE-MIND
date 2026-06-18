@@ -13,19 +13,16 @@ import { hiveConfig } from '../config/hiveConfig.js';
 import type {
     AgentProtocol,
     AgentEvent,
-    AgentContentPart
+    AgentContentPart,
+    ToolConfirmationOutcome,
+    ToolConfirmationPayload,
+    ToolCallConfirmationDetails
 } from '../ui/contexts/UIStateContext.js';
 import type { MessageData } from '../../core/types/BotTypes.js';
 
 const TUI_CHAT_ID = 'tui-local';
 const TUI_SENDER = 'owner@local';
 const TUI_SENDER_NAME = 'TUI Admin';
-
-/**
- * Durée d'inactivité de messages agent après laquelle on émet `agent_end`.
- * Pourquoi : le core ne notifie jamais explicitement la fin d'une réponse.
- */
-const AGENT_RESPONSE_IDLE_MS = 1500;
 
 /**
  * Garde globale anti-écrasement : si le core ne réagit pas du tout en 60s,
@@ -121,8 +118,9 @@ function enableTuiLogRedirect(): () => void {
 export class HiveCoreConnection implements AgentProtocol {
     private listeners = new Set<(event: AgentEvent) => void>();
     private messageListener: (message: MessageData) => void;
+    private presenceListener: (event: { chatId: string; presence: string }) => void;
+    private confirmationRequestListener: (event: { id: string; type: string; data: Record<string, unknown> & { questions?: unknown[] }; description: string }) => void;
     private initialized = false;
-    private responseIdleTimer: NodeJS.Timeout | null = null;
     private hardTimeoutTimer: NodeJS.Timeout | null = null;
     private expectingResponse = false;
     private logRestore: (() => void) | null = null;
@@ -135,7 +133,70 @@ export class HiveCoreConnection implements AgentProtocol {
                 role: 'agent',
                 content: [{ type: 'text', text: message.text }]
             });
-            this.scheduleAgentEnd();
+        };
+
+        this.presenceListener = (event: { chatId: string; presence: string }) => {
+            if (event.chatId !== TUI_CHAT_ID) return;
+            if (event.presence === 'composing' || event.presence === 'recording') {
+                if (!this.expectingResponse) {
+                    this.expectingResponse = true;
+                    this.emit({ type: 'agent_start' });
+                }
+            } else if (event.presence === 'paused' || event.presence === 'available') {
+                if (this.expectingResponse) {
+                    this.expectingResponse = false;
+                    this.emit({ type: 'agent_end' });
+                    this.clearHardTimeout();
+                }
+            }
+        };
+
+        this.confirmationRequestListener = (event: { id: string; type: string; data: Record<string, unknown> & { questions?: unknown[] }; description: string }) => {
+            const resolvedType = event.type === 'ask_user' ? 'ask_user' : (event.type === 'permission_request' ? 'info' : 'exec');
+            const confirmationDetails = {
+                type: resolvedType,
+                id: event.id,
+                title: 'Security Confirmation',
+                command: event.description,
+                prompt: event.description,
+                rootCommand: event.description,
+                rootCommands: [event.description],
+                commands: [event.description],
+                questions: event.type === 'ask_user' ? (event.data.questions as unknown as Record<string, unknown>[]) : undefined,
+                onConfirm: async (outcome: ToolConfirmationOutcome, payload?: ToolConfirmationPayload) => {
+                    const approved = outcome !== ToolConfirmationOutcome.Cancel;
+                    const feedback = payload?.feedback || (payload?.answers ? JSON.stringify(payload.answers) : undefined);
+                    hiveTransport.submitConfirmationResponse(event.id, approved, feedback);
+
+                    this.emit({
+                        type: 'tool_response',
+                        requestId: event.id,
+                        name: 'security_confirmation',
+                        isError: !approved,
+                        display: {
+                            result: approved ? 'Approved' : `Rejected: ${feedback || 'No feedback'}`
+                        }
+                    });
+                }
+            };
+
+            this.emit({
+                type: 'tool_request',
+                requestId: event.id,
+                name: 'security_confirmation',
+                display: {
+                    title: 'Security Confirmation',
+                    format: 'notice'
+                },
+                _meta: {
+                    legacyState: {
+                        displayName: 'Security Confirmation',
+                        description: event.description,
+                        status: 'awaiting_approval'
+                    }
+                },
+                confirmationDetails: confirmationDetails as unknown as ToolCallConfirmationDetails
+            });
         };
     }
 
@@ -158,8 +219,10 @@ export class HiveCoreConnection implements AgentProtocol {
 
         await botCore.init();
 
-        // Écouter les messages sortants du core pour les traduire en AgentEvents.
+        // Écouter les messages et présences sortants du core pour les traduire en AgentEvents.
         hiveTransport.on('message', this.messageListener);
+        hiveTransport.on('presence', this.presenceListener);
+        hiveTransport.on('confirmation_request', this.confirmationRequestListener);
 
         this.initialized = true;
     }
@@ -170,7 +233,8 @@ export class HiveCoreConnection implements AgentProtocol {
     async disconnect(): Promise<void> {
         if (!this.initialized) return;
         hiveTransport.off('message', this.messageListener);
-        this.clearIdleTimer();
+        hiveTransport.off('presence', this.presenceListener);
+        hiveTransport.off('confirmation_request', this.confirmationRequestListener);
         this.clearHardTimeout();
         if (this.logRestore) {
             this.logRestore();
@@ -188,7 +252,6 @@ export class HiveCoreConnection implements AgentProtocol {
             throw new Error('Cannot send an empty message to the core.');
         }
 
-        this.clearIdleTimer();
         this.expectingResponse = true;
         this.emit({ type: 'agent_start' });
 
@@ -202,7 +265,12 @@ export class HiveCoreConnection implements AgentProtocol {
         });
 
         this.clearHardTimeout();
-        this.hardTimeoutTimer = setTimeout(() => this.scheduleAgentEnd(), AGENT_RESPONSE_HARD_TIMEOUT_MS);
+        this.hardTimeoutTimer = setTimeout(() => {
+            if (this.expectingResponse) {
+                this.expectingResponse = false;
+                this.emit({ type: 'agent_end' });
+            }
+        }, AGENT_RESPONSE_HARD_TIMEOUT_MS);
 
         return { streamId: `tui-${Date.now()}` };
     }
@@ -221,33 +289,10 @@ export class HiveCoreConnection implements AgentProtocol {
      * Annule la requête en cours.
      */
     async abort(): Promise<void> {
-        this.clearIdleTimer();
         this.clearHardTimeout();
         this.expectingResponse = false;
         this.emit({ type: 'agent_end' });
         return Promise.resolve();
-    }
-
-    /**
-     * Déclenche un agent_end après AGENT_RESPONSE_IDLE_MS sans message agent.
-     */
-    private scheduleAgentEnd(): void {
-        if (!this.expectingResponse) return;
-        this.clearIdleTimer();
-        this.responseIdleTimer = setTimeout(() => {
-            if (this.expectingResponse) {
-                this.expectingResponse = false;
-                this.emit({ type: 'agent_end' });
-            }
-            this.responseIdleTimer = null;
-        }, AGENT_RESPONSE_IDLE_MS);
-    }
-
-    private clearIdleTimer(): void {
-        if (this.responseIdleTimer) {
-            clearTimeout(this.responseIdleTimer);
-            this.responseIdleTimer = null;
-        }
     }
 
     private clearHardTimeout(): void {

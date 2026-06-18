@@ -396,6 +396,8 @@ export const StatusRow: React.FC<StatusRowProps> = ({
     const showTipLine = Boolean(!hasPendingActionRequired && tipContentStr && !willCollideTip && !isNarrow);
     const showRow1Minimal = showLoadingIndicator || uiState.activeHooks.length > 0 || showTipLine;
     const showRow2Minimal = (Boolean(modeContentObj) && !hideUiDetailsForSuggestions) || showMinimalContext;
+    const showRow1 = showUiDetails || showRow1Minimal;
+    const showRow2 = showUiDetails || showRow2Minimal;
 
     const onStatusResize = useCallback((width: number) => {
         if (width > 0) setStatusWidth(width);

@@ -20,10 +20,6 @@ import { CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
 import { CommandService } from '../../services/CommandService.js';
 import { BuiltinCommandLoader } from '../../services/BuiltinCommandLoader.js';
 import { parseSlashCommand } from '../../utils/commands.js';
-import {
-    LogoutConfirmationDialog,
-    LogoutChoice
-} from '../components/LogoutConfirmationDialog.js';
 import { runExitCleanup } from '../../utils/cleanup.js';
 import { coreEvents, CoreEvent } from '../../utils/coreEvents.js';
 import { HiveConfig } from '../../config/hiveConfig.js';
@@ -93,12 +89,9 @@ async function handleCommandResult(
             ctx.addItem({ type: result.messageType === 'error' ? MessageType.ERROR : MessageType.INFO, text: result.content }, Date.now());
             return { type: 'handled' };
         case 'logout':
-            ctx.setCustomDialog(createElement(LogoutConfirmationDialog, {
-                onSelect: async (choice: LogoutChoice) => {
-                    ctx.setCustomDialog(null);
-                    if (choice === LogoutChoice.LOGIN) { ctx.actions.openAuthDialog(); } else { await runExitCleanup(); process.exit(0); }
-                }
-            }));
+            ctx.addItem({ type: MessageType.INFO, text: 'Logging out and exiting...' }, Date.now());
+            await runExitCleanup();
+            process.exit(0);
             return { type: 'handled' };
         case 'dialog':
             return handleDialogResult(result, ctx);

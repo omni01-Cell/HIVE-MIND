@@ -1,8 +1,8 @@
-import React, { useState, useReducer, useEffect, useCallback, useMemo, useRef, useContext } from 'react';
+import React, { useReducer, useEffect, useCallback, useMemo, useRef, useContext } from 'react';
 import { Box, Text, type DOMElement } from 'ink';
 import { useMouseClick } from '../hooks/useMouseClick.js';
 import { theme } from '../semantic-colors.js';
-import { Question } from '../contexts/UIStateContext.js';
+import { Question, UIStateContext } from '../contexts/UIStateContext.js';
 import { checkExhaustive } from '../../utils/errors.js';
 import { BaseSelectionList } from './shared/BaseSelectionList.js';
 import type { SelectionListItem } from '../hooks/useSelectionList.js';
@@ -21,7 +21,6 @@ import { DialogFooter } from './shared/DialogFooter.js';
 import { MarkdownDisplay } from '../utils/MarkdownDisplay.js';
 import { RenderInline } from '../utils/InlineMarkdownRenderer.js';
 import { MaxSizedBox } from './shared/MaxSizedBox.js';
-import { UIStateContext } from '../contexts/UIStateContext.js';
 import { useAlternateBuffer } from '../hooks/useAlternateBuffer.js';
 import { useKeyMatchers } from '../hooks/useKeyMatchers.js';
 

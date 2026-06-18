@@ -45,18 +45,25 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant. Documents de réfé
 - [2026-06-18] [TUI-PLAN-EXPANSION] Décision d'étendre le plan d'adaptation de la TUI à 22 sessions ultra-détaillées pour maximiser la clarté et la modularité des étapes d'implémentation.
 - [2026-06-18] [TUI-CONTEXT-WIDGET] Décidé d'intégrer dans la session 17 de la TUI un indicateur dynamique de consommation de la fenêtre de contexte en pourcentage.
 - [2026-06-18] [TUI-CONTEXT-80-PERCENT] Décidé d'utiliser un seuil dynamique de 80% de la fenêtre de contexte du modèle pour déclencher la compression, géré par ContextWindowService.
+- [2026-06-18] [TUI-HITL-ROUTING] Correction de la syntaxe de handleInput et implémentation du routage des confirmations de sécurité HITL locales (ink-cli) dans le PermissionManager.
+- [2026-06-18] [TUI-CONFIRMATION-QUEUE] Intégration de la file d'attente de confirmation dans connection.ts de la TUI avec typage strict pour la liaison interactive (Session 7 complétée).
+- [2026-06-18] [TUI-PERMISSION-MAPPING] Décision de mapper le type d'événement de confirmation 'permission_request' sur le type 'info' dans connection.ts pour un rendu textuel clair des permissions de sécurité locales.
 
 ## Current status
-- ✅ Done: `UIStateContext.tsx` — `SerializableConfirmationDetails` convertie en union discriminée, stubs de `uiTelemetryService` (clear, hydrate) corrigés, signature `convertSessionToClientHistory` assouplie.
-- ✅ Done: Résolution des imports manquants dans `useSessionBrowser.ts` (HiveConfig, HistoryTurn, etc.).
-- ✅ Done: `theme.ts` — gradient `string[]` corrigé (remplacement `coalesce()` par `??`).
-- ✅ Done: `theme-manager.ts` — `type?: 'light'|'dark'|'ansi'|'custom'` ajouté à `CustomTheme`.
-- ✅ Done: `ToolConfirmationMessage.tsx` — `ContentContext.settings` et `activeTheme` corrigés, `getPreferredEditor` typé `EditorType|undefined`.
-- 🔄 In progress: TSC global en cours de résolution (erreurs en baisse).
-- ⏳ Pending: `HistoryItemDisplay.tsx` (38 err), `slashCommandProcessor.ts` (36), `atCommandProcessor.ts` (25), `SubagentGroupDisplay.tsx` (23), `useToolScheduler.ts` (20).
+- ✅ Done: Session 1 — Purge du Code Mort et des Modules Google Inutiles (ConsentPrompt, LogoutConfirmationDialog, ModelQuotaDisplay, QuotaDisplay retirés et imports nettoyés dans slashCommandProcessor.ts, Footer.tsx et ModelDialog.tsx).
+- ✅ Done: Session 2 — Désactivation des Dialogues de Sécurité Gemini (FolderTrustDialog et PermissionsModifyTrustDialog supprimés, imports et signatures nettoyés dans UIActionsContext.tsx).
+- ✅ Done: Session 3 — Assainissement des Imports et Nettoyage de useAgentStream.ts (résolution de la déclaration lexicale dans le case 'message' de handleAgentEvent, fusion des imports dupliqués UIStateContext dans useAgentStream.ts, shellReducer.ts et useApprovalModeIndicator.ts).
+- ✅ Done: Session 4 — Stabilisation du composant StatusRow et Correction de Rendu de Base (définition des variables showRow1 et showRow2 basées sur showUiDetails et les états minimaux de lignes pour corriger les ReferenceError).
+- ✅ Done: Résolution définitive de l'accès Node/NPM/NPX global lié à NVM via des liens symboliques.
+- ✅ Done: Session 5 — Raccordement du Transport de Base (Natification des Signaux de Fin).
+- ✅ Done: Session 6 — Intégration de la File d'Attente de Messages Non-Bloquante.
+- ✅ Done: Session 7 — Routage Local HITL (Human-in-the-Loop).
+- ✅ Done: Session 8 — Intégration des Composants de Confirmation de Sécurité (connexion des boîtes de dialogue et composants de confirmation à l'infrastructure locale du PermissionManager).
+- 🔄 In progress: Session 9 — Émission d'Événements d'Activité de Services (Core).
+- ⏳ Pending: Sessions 10 à 22 du plan d'adaptation de la TUI.
 
 ## Next action
-Résoudre les erreurs TypeScript dans `HistoryItemDisplay.tsx` et `slashCommandProcessor.ts`.
+Session 9 — Émission d'Événements d'Activité de Services (Core).
 
 ## Abandoned branches
 - [2026-06-05] feature-tui (branche supprimée) → Recréation de l'UI dans `src/tui/` basée sur Gemini CLI

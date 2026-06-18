@@ -253,6 +253,7 @@ export interface AgentEvent {
     display?: ToolCallDisplay;
     message?: string;
     _meta?: AgentEventMeta;
+    confirmationDetails?: ToolCallConfirmationDetails;
 }
 
 export interface AgentContentPart {
@@ -754,7 +755,14 @@ export function spawnAsync(_command: string, _args: string[]): Promise<{ stdout:
     return Promise.resolve({ stdout: '', stderr: '' });
 }
 
-export function belongsInConfirmationQueue(_item: HistoryItemWithoutId): boolean {
+export function belongsInConfirmationQueue(item: any): boolean {
+    if (!item) return false;
+    if (item.status === 'awaiting_approval' || item.status === CoreToolCallStatus.AwaitingApproval) {
+        return true;
+    }
+    if (item.tools && item.tools.some((t: any) => t.status === 'awaiting_approval' || t.status === CoreToolCallStatus.AwaitingApproval)) {
+        return true;
+    }
     return false;
 }
 

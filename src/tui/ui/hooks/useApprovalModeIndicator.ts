@@ -6,12 +6,10 @@
 
 import { useState, useEffect } from 'react';
 import { HiveConfig } from '../../config/hiveConfig.js';
-import { ApprovalMode } from '../contexts/UIStateContext.js';
-import { getAdminErrorMessage } from '../contexts/UIStateContext.js';
+import { ApprovalMode, getAdminErrorMessage, MessageType, HistoryItemWithoutId } from '../contexts/UIStateContext.js';
 import { useKeypress } from './useKeypress.js';
 import { Command } from '../key/keyMatchers.js';
 import { useKeyMatchers } from './useKeyMatchers.js';
-import { MessageType, HistoryItemWithoutId } from '../contexts/UIStateContext.js';
 
 export interface UseApprovalModeIndicatorArgs {
   config: HiveConfig;
