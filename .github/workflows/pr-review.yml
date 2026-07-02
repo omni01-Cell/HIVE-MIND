@@ -52,6 +52,7 @@ jobs:
 
       - name: Jules PR Reviewer
         uses: sanjay3290/jules-pr-reviewer@v1
+        continue-on-error: true
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
