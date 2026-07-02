@@ -115,31 +115,36 @@ export class MemoryDecaySystem {
             let archivedCount = 0;
             let keptCount = 0;
             const memoriesToArchive: MemoryRecord[] = [];
+            const updatePromises: PromiseLike<unknown>[] = [];
 
             for (const memory of memories as MemoryRecord[]) {
                 const { score, keep, ageHours } = await this.scoreMemory(memory);
 
                 if (!keep) {
-                    await supabase
+                    const p = supabase
                         .from('memories')
                         .update({
                             archived_at: new Date().toISOString(),
                             decay_score: score
                         })
                         .eq('id', memory.id);
+                    updatePromises.push(p);
 
                     archivedCount++;
                     memoriesToArchive.push(memory);
                     console.log(`[MemoryDecay] ⚰️ Archived: ID ${memory.id} (age=${ageHours}h, score=${score.toFixed(2)})`);
                 } else {
-                    await supabase
+                    const p = supabase
                         .from('memories')
                         .update({ decay_score: score })
                         .eq('id', memory.id);
+                    updatePromises.push(p);
 
                     keptCount++;
                 }
             }
+
+            await Promise.all(updatePromises);
 
             console.log(`[MemoryDecay] ✅ ${chatId}: ${archivedCount} archived, ${keptCount} kept (${memories.length} total)`);
 
