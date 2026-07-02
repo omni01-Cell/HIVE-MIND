@@ -6,7 +6,7 @@
  */
 
 import { statSync } from 'fs';
-import { basename } from 'path';
+import { basename, join } from 'path';
 import {
     MultimodalEmbeddingService,
     detectModality,
@@ -123,7 +123,6 @@ export class MediaIndexer {
 
         const results: IndexingResult[] = [];
         for (const file of files) {
-            const { join } = await import('path');
             const result = await this.indexFile(contextId, join(dirPath, file));
             results.push(result);
         }
