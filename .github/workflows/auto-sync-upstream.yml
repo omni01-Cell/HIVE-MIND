@@ -5,6 +5,10 @@ on:
     - cron: '0 * * * *' # S'exécute toutes les heures
   workflow_dispatch: # Permet le déclenchement manuel
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   sync-from-upstream:
     runs-on: ubuntu-latest
@@ -14,7 +18,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.UPSTREAM_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fetch upstream changes
         run: |
@@ -31,7 +35,7 @@ jobs:
       - name: Create Sync Branch and PR
         if: steps.check.outputs.behind > 0
         env:
-          GH_TOKEN: ${{ secrets.UPSTREAM_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SYNC_BRANCH="sync-upstream-$(date +%Y%m%d-%H%M%S)"
           
