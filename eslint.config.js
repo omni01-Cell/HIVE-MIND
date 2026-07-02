@@ -21,7 +21,11 @@ export default tseslint.config(
             '**/temp/**',
             '**/*.min.js',
             'dist/**',
-            'coverage/**'
+            'coverage/**',
+            'graphify-out/**',
+            'Sandbox1/**',
+            'TEST_RESULT/**',
+            'scratch/**'
         ]
     },
     {

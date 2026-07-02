@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# 1. Vérification de compilation TypeScript globale
+echo "Vérification TypeScript en cours..."
+npx tsc --noEmit
+
+# 2. Vérification ESLint incrémentale sur les fichiers modifiés et suivis
+echo "Vérification Linter (ESLint) sur les fichiers modifiés..."
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$')
+
+if [ -n "$STAGED_FILES" ]; then
+    echo "Fichiers détectés :"
+    echo "$STAGED_FILES"
+    echo "$STAGED_FILES" | xargs npx eslint
+else
+    echo "Aucun fichier JS/TS modifié à valider."
+fi
