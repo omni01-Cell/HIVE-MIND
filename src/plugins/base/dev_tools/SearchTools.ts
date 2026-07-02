@@ -88,36 +88,54 @@ async function handleGrepSearch(args: SearchToolArgs, checkReadAccess: (p: strin
 
     const absolutePath = path.resolve(process.cwd(), search_path);
 
-    let cmd = '';
-    let cmdArgs: string[] = [];
+    let stdout = '';
+    let rgFound = false;
     try {
         await execAsync('which rg');
-        cmd = 'rg';
-        cmdArgs = ['--no-heading', '--line-number', '-F', query, absolutePath];
-        console.log('[SearchTools] 🚀 Using Ripgrep (rg)');
+        rgFound = true;
     } catch {
-        cmd = 'grep';
-        cmdArgs = ['-rn', '-F'];
-        for (const d of BANNED_DIRS) {
-            cmdArgs.push(`--exclude-dir=${d}`);
-        }
-        cmdArgs.push(query, absolutePath);
-        console.log('[SearchTools] 🐌 Falling back to standard grep');
+        // rg not found, default to grep
     }
 
     try {
-        const { stdout } = await execFileAsync(cmd, cmdArgs);
-        const lines = stdout.split('\n');
-        if (lines.length > 100) {
-            return { success: true, message: lines.slice(0, 100).join('\n') + '\n\n... [TRUNCATED at 100 results] ...' };
+        if (rgFound) {
+            console.log('[SearchTools] 🚀 Using Ripgrep (rg)');
+            const result = await execFileAsync('rg', [
+                '--no-heading',
+                '--line-number',
+                '-F',
+                '-e',
+                query,
+                '--',
+                absolutePath
+            ]);
+            stdout = result.stdout;
+        } else {
+            console.log('[SearchTools] 🐌 Falling back to standard grep');
+            const excludeArgs = BANNED_DIRS.map(d => `--exclude-dir=${d}`);
+            const result = await execFileAsync('grep', [
+                '-rn',
+                '-F',
+                ...excludeArgs,
+                '-e',
+                query,
+                '--',
+                absolutePath
+            ]);
+            stdout = result.stdout;
         }
-        return { success: true, message: stdout || 'No results.' };
     } catch (e: unknown) {
         const errCode = (e as { code?: number }).code;
         const errMsg = extractErrorMessage(e);
         if (errCode === 1) return { success: true, message: 'No results found.' };
         return { success: false, message: `Grep error: ${errMsg}` };
     }
+
+    const lines = stdout.split('\n');
+    if (lines.length > 100) {
+        return { success: true, message: lines.slice(0, 100).join('\n') + '\n\n... [TRUNCATED at 100 results] ...' };
+    }
+    return { success: true, message: stdout || 'No results.' };
 }
 
 async function handleReadFile(args: SearchToolArgs, checkReadAccess: (p: string) => Promise<{ granted: boolean }>): Promise<{ success: boolean; message: string }> {
