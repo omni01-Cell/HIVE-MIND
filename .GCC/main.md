@@ -1,6 +1,7 @@
 # Current Project Context
 
 ## 🏆 Major Milestones (Archived Epics)
+
 - **[2026-07-02] Gitignore Refinement** : Retrait de `.agent/` et de `AGENTS.md` du fichier `.gitignore` afin de permettre l'inclusion et le suivi de ces fichiers dans Git.
 - **[2026-07-02] Epic Auto-Review and Auto-Merge** : Installation de Husky locale avec validations incrémentales (seuls les fichiers modifiés sont passés au Linter ESLint) et création du workflow pr-review.yml (CI/CD) intégrant la revue automatique Jules et l'auto-merge GitHub.
 - **[2026-07-02] GitHub Actions Synchronization** : Configuration et automatisation de la synchronisation bidirectionnelle par Pull Request entre le fork (leandre755/HIVE-MIND) et le parent (omni01-Cell/HIVE-MIND), incluant le déploiement automatique du token en tant que secret `UPSTREAM_PAT` sur le fork.
@@ -21,9 +22,11 @@
 - **Epic SOTA Browser Agent Integration** : Installation agent-browser + Chrome for Testing, BrowserService (CLI wrapper), BrowserTools plugin (13 outils browser_*), Intégration PTC, System Prompt browser instructions, Sécurité & Guardrails (NVM path, type safety, sendMedia fix).
 
 ## 🎯 Objective
+
 Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 
 ## 🧠 Decisions Made
+
 - [2026-06-11] [TUI-ANALYSIS] Analyse complète de la TUI (82k lignes, 250 fichiers) et du core HIVE-MIND (5k lignes, 14 fichiers). La TUI est un fork Gemini CLI non connecté au vrai core. Le stub `@tui/core` (1035 lignes) est utilisé par 100+ fichiers. La couche transport (`src/tui/transport/`, 1045 lignes) existe mais n'est jamais branchée.
 - [2026-06-11] [TUI-STRICT-ANY] Détection d'erreurs implicites 'any' suite à la réactivation de `noImplicitAny: true`. Décidé d'explorer et d'appliquer des types stricts ou de déclarer les modules non-typés (`semver`, `ansi-regex`).
 - [2026-06-11] [TUI-R1] Passing `settings` as a parameter to `useIdeTrustListener` to resolve the SettingsProvider mounting context order.
@@ -54,8 +57,8 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - [2026-07-02] [GITHUB-SYNC-DIFF] Ajout d'une vérification par `git diff --quiet` dans la synchronisation automatique pour éviter de créer des Pull Requests vides et prévenir les plantages de l'API GraphQL de GitHub.
 - [2026-07-02] [GITHUB-SYNC-STATIC-BRANCH] Adoption d'une branche de synchronisation statique (`sync-upstream-main`) mise à jour par force-push, éliminant l'accumulation de branches obsolètes sur le fork.
 
-
 ## 🌿 Active Branches / Plans
+
 - `tui-refactoring` : Refonte et adaptation de la TUI au core HIVE-MIND [plan_tui_refactoring.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_tui_refactoring.md)
 - `agent-test-battery` : Plan de test d'automatisation de l'agent [plan_agent_test_battery.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_agent_test_battery.md)
 - `claude-code-sota` : Plan de refactorisation SOTA (streaming, caches, compaction) [plan_claude_code_sota.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_claude_code_sota.md)
@@ -63,6 +66,7 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - `test-activity` : Suivi général des tests [test.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/test.md) et backlog [test_afaire.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/test_afaire.md)
 
 ## 📈 Current Status
+
 - ✅ Done: Session 1 — Purge du Code Mort et des Modules Google Inutiles (ConsentPrompt, LogoutConfirmationDialog, ModelQuotaDisplay, QuotaDisplay retirés et imports nettoyés dans slashCommandProcessor.ts, Footer.tsx et ModelDialog.tsx).
 - ✅ Done: Session 2 — Désactivation des Dialogues de Sécurité Gemini (FolderTrustDialog et PermissionsModifyTrustDialog supprimés, imports et signatures nettoyés dans UIActionsContext.tsx).
 - ✅ Done: Session 3 — Assainissement des Imports et Nettoyage de useAgentStream.ts (résolution de la déclaration lexicale dans le case 'message' de handleAgentEvent, fusion des imports dupliqués UIStateContext dans useAgentStream.ts, shellReducer.ts et useApprovalModeIndicator.ts).
@@ -79,4 +83,5 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - ⏳ Pending: Sessions 13 à 22 du plan d'adaptation de la TUI.
 
 ## 👉 Next Session Direction
+
 Poursuivre le plan de refactorisation de la TUI avec la Session 12 (Commande `/search` par Embeddings Sémantiques).
