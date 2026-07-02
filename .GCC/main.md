@@ -50,6 +50,9 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - [2026-06-18] [TUI-SERVICES-RENDERING] Branchement et rendu visuel interactif des services actifs (MAPLE, VIGIL) dans la StatusRow avec gestion du clic de souris via useMouseClick pour afficher les détails opérationnels en direct.
 - [2026-06-18] [TUI-SKILLS-COMMAND] Intégration de la commande slash `/skills` pour lister et indexer de manière interactive tous les expert skills disponibles dans le répertoire `/skills/`.
 - [2026-07-02] [GITHUB-SYNC] Conception et configuration des workflows GitHub Actions pour la synchronisation bidirectionnelle entre le dépôt parent (omni01-Cell/HIVE-MIND) et le fork (leandre755/HIVE-MIND) avec utilisation d'un PAT pour passer la barrière de sécurité des droits d'écriture inter-dépôts.
+- [2026-07-02] [GITHUB-SYNC-ISOLATION] Décision d'isoler le dossier `.github/` en créant des branches épurées `pr-clean-*` pour les Pull Requests amont, et de restaurer de force le dossier `.github/` local (`git checkout main -- .github/`) lors de l'intégration des mises à jour amont pour protéger la configuration du fork.
+- [2026-07-02] [GITHUB-SYNC-DIFF] Ajout d'une vérification par `git diff --quiet` dans la synchronisation automatique pour éviter de créer des Pull Requests vides et prévenir les plantages de l'API GraphQL de GitHub.
+- [2026-07-02] [GITHUB-SYNC-STATIC-BRANCH] Adoption d'une branche de synchronisation statique (`sync-upstream-main`) mise à jour par force-push, éliminant l'accumulation de branches obsolètes sur le fork.
 
 
 ## 🌿 Active Branches / Plans
