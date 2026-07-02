@@ -28,7 +28,6 @@ Thumbs.db
 .idea/
 *.swp
 .GCC/
-.agent/
 downloads/
 hm_storage/tmp_download/
 .GCC/main.md
@@ -52,7 +51,6 @@ e2e_battery_report.md
 storage_hm/benchmark_test/
 storage_hm/portfolio_site/
 storage_hm/screenshots/*.png
-AGENTS.md
 analysis_results.txt
 analyze_graph.py
 docs/

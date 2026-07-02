@@ -6,7 +6,7 @@ npx tsc --noEmit
 
 # 2. Vérification ESLint incrémentale sur les fichiers modifiés et suivis
 echo "Vérification Linter (ESLint) sur les fichiers modifiés..."
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$')
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx)$' || true)
 
 if [ -n "$STAGED_FILES" ]; then
     echo "Fichiers détectés :"
