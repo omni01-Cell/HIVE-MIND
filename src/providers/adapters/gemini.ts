@@ -156,9 +156,6 @@ export default {
             throw new Error('Pas de réponse Gemini');
         }
 
-        // DEBUG: Inspecter la réponse brute pour comprendre pourquoi "content" serait vide
-        // console.log('[Gemini] Candidate Raw:', JSON.stringify(candidate, null, 2));
-
         // Extraire le contenu (Extraction multi-parts)
         const parts = candidate.content?.parts || [];
 
