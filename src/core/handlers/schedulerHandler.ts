@@ -265,10 +265,10 @@ export class SchedulerHandler {
                 const uniqueChatIds = [...new Set(heavyChats.map((m: { chat_id: string }) => m.chat_id))];
                 console.log(`[Scheduler] ${uniqueChatIds.length} chat(s) à nettoyer`);
 
-                for (const chatId of uniqueChatIds) {
-                    const memory = container.get('memory');
-                    await memory.cleanup(chatId, 100);
-                }
+                const memory = container.get('memory');
+                await Promise.all(
+                    uniqueChatIds.map(chatId => memory.cleanup(chatId, 100))
+                );
             }
             console.log('[Scheduler] ✅ Nettoyage mémoire terminé');
         } catch (error: any) {
