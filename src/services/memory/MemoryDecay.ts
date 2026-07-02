@@ -115,7 +115,7 @@ export class MemoryDecaySystem {
             let archivedCount = 0;
             let keptCount = 0;
             const memoriesToArchive: MemoryRecord[] = [];
-            const updatePromises: PromiseLike<any>[] = [];
+            const updatePromises: PromiseLike<unknown>[] = [];
 
             for (const memory of memories as MemoryRecord[]) {
                 const { score, keep, ageHours } = await this.scoreMemory(memory);
