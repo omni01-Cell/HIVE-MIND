@@ -36,15 +36,6 @@ jobs:
           # Créer ou réinitialiser la branche de PR propre
           git checkout -B "$PR_BRANCH"
 
-          # Réinitialiser le dossier .github/ à l'état de l'upstream
-          if git rev-parse --verify upstream/main:.github >/dev/null 2>&1; then
-            git checkout upstream/main -- .github/
-          else
-            git rm -rf .github/ || rm -rf .github/
-          fi
-
-          # Valider le nettoyage
-          git commit -am "chore: reset workflows to upstream state for PR compatibility" || echo "Pas de changements de workflows à valider."
 
           # Pousser la branche propre
           git push origin "$PR_BRANCH" --force
