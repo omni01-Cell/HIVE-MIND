@@ -1,6 +1,7 @@
 # Current Project Context
 
 ## 🏆 Major Milestones (Archived Epics)
+- **[2026-07-02] Gitignore Refinement** : Retrait de `.agent/` et de `AGENTS.md` du fichier `.gitignore` afin de permettre l'inclusion et le suivi de ces fichiers dans Git.
 - **[2026-07-02] Epic Auto-Review and Auto-Merge** : Installation de Husky locale avec validations incrémentales (seuls les fichiers modifiés sont passés au Linter ESLint) et création du workflow pr-review.yml (CI/CD) intégrant la revue automatique Jules et l'auto-merge GitHub.
 - **[2026-07-02] GitHub Actions Synchronization** : Configuration et automatisation de la synchronisation bidirectionnelle par Pull Request entre le fork (leandre755/HIVE-MIND) et le parent (omni01-Cell/HIVE-MIND), incluant le déploiement automatique du token en tant que secret `UPSTREAM_PAT` sur le fork.
 - **[2026-06-11] Epic TUI Refactoring & Fixes** : Résolution de l'erreur d'exécution `useSettings` (Provider lifecycle) dans la TUI (`src/tui/`), élimination de toutes les erreurs de type strict TypeScript et de linter ESLint dans les fichiers cibles de la TUI, validée par audit forensique et test de boot E2E.
