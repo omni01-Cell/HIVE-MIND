@@ -10,6 +10,7 @@ import { openSync, writeSync, closeSync } from 'node:fs';
 import { botCore } from '../../core/index.js';
 import { hiveTransport } from '../transport/HiveTransport.js';
 import { hiveConfig } from '../config/hiveConfig.js';
+import { eventBus, BotEvents } from '../../core/events.js';
 import type {
     AgentProtocol,
     AgentEvent,
@@ -19,6 +20,7 @@ import type {
     ToolCallConfirmationDetails
 } from '../ui/contexts/UIStateContext.js';
 import type { MessageData } from '../../core/types/BotTypes.js';
+
 
 const TUI_CHAT_ID = 'tui-local';
 const TUI_SENDER = 'owner@local';
@@ -115,17 +117,57 @@ function enableTuiLogRedirect(): () => void {
     };
 }
 
+interface ServiceEvent {
+    service: string;
+    action?: string;
+    timestamp?: number;
+}
+
 export class HiveCoreConnection implements AgentProtocol {
     private listeners = new Set<(event: AgentEvent) => void>();
     private messageListener: (message: MessageData) => void;
     private presenceListener: (event: { chatId: string; presence: string }) => void;
     private confirmationRequestListener: (event: { id: string; type: string; data: Record<string, unknown> & { questions?: unknown[] }; description: string }) => void;
+    private serviceStartListener: (event: ServiceEvent) => void;
+    private serviceEndListener: (event: ServiceEvent) => void;
     private initialized = false;
     private hardTimeoutTimer: NodeJS.Timeout | null = null;
     private expectingResponse = false;
     private logRestore: (() => void) | null = null;
+    private activeServices = new Map<string, { service: string; action: string; timestamp: number }>();
+
+    public getActiveServices(): Array<{ service: string; action: string; timestamp: number }> {
+        return Array.from(this.activeServices.values());
+    }
 
     constructor() {
+        this.serviceStartListener = (event: ServiceEvent) => {
+            if (event && event.service) {
+                this.activeServices.set(event.service, {
+                    service: event.service,
+                    action: event.action || 'thinking',
+                    timestamp: event.timestamp || Date.now()
+                });
+                this.emit({
+                    type: 'custom',
+                    name: 'service_start',
+                    message: event.service
+                });
+            }
+        };
+
+        this.serviceEndListener = (event: ServiceEvent) => {
+            if (event && event.service) {
+                this.activeServices.delete(event.service);
+                this.emit({
+                    type: 'custom',
+                    name: 'service_end',
+                    message: event.service
+                });
+            }
+        };
+
+
         this.messageListener = (message: MessageData) => {
             if (!message.text || message.text.trim().length === 0) return;
             this.emit({
@@ -224,6 +266,10 @@ export class HiveCoreConnection implements AgentProtocol {
         hiveTransport.on('presence', this.presenceListener);
         hiveTransport.on('confirmation_request', this.confirmationRequestListener);
 
+        // Écouter le eventBus du Core pour les services actifs
+        eventBus.on(BotEvents.SERVICE_START, this.serviceStartListener);
+        eventBus.on(BotEvents.SERVICE_END, this.serviceEndListener);
+
         this.initialized = true;
     }
 
@@ -235,6 +281,10 @@ export class HiveCoreConnection implements AgentProtocol {
         hiveTransport.off('message', this.messageListener);
         hiveTransport.off('presence', this.presenceListener);
         hiveTransport.off('confirmation_request', this.confirmationRequestListener);
+
+        eventBus.off(BotEvents.SERVICE_START, this.serviceStartListener);
+        eventBus.off(BotEvents.SERVICE_END, this.serviceEndListener);
+
         this.clearHardTimeout();
         if (this.logRestore) {
             this.logRestore();
@@ -242,6 +292,7 @@ export class HiveCoreConnection implements AgentProtocol {
         }
         this.initialized = false;
     }
+
 
     /**
      * Envoie un message utilisateur au core.

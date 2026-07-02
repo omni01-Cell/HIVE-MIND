@@ -261,10 +261,17 @@ export const hiveGroupsCommand: SlashCommand = {
             if (groupService) {
                 // Récupérer les groupes depuis la base
                 const { supabase } = await import('../../../services/supabase.js');
-                const { data: groups } = await (supabase as any)
+                const { data: groups } = await (supabase as unknown as {
+                    from: (table: string) => {
+                        select: (fields: string) => {
+                            limit: (n: number) => Promise<{ data: Array<{ name: string; platform: string }> | null }>
+                        }
+                    }
+                })
                     .from('groups')
                     .select('id, name, platform')
                     .limit(10);
+
 
                 if (groups && groups.length > 0) {
                     groupsText += groups.map((g: { name: string; platform: string }) =>
@@ -429,6 +436,47 @@ export const hiveVoiceCommand: SlashCommand = {
 };
 
 /**
+ * Commande /skills — Liste les expert skills détectés localement
+ */
+export const hiveSkillsCommand: SlashCommand = {
+    name: 'skills',
+    altNames: ['expert-skills', 'competences'],
+    description: 'Affiche la liste de tous les expert skills disponibles et détectés',
+    kind: CommandKind.BUILT_IN,
+    action: async (context: CommandContext) => {
+        const { addItem } = context.ui;
+
+        try {
+            const { learningEngine } = await import('../../../services/learning/LearningEngine.js');
+            const skills = await learningEngine.getAllExpertSkills();
+
+            let skillsText = '💡 *Expert Skills Détectés*\n\n';
+            skillsText += `**Nombre de skills:** ${skills.length}\n\n`;
+
+            if (skills.length > 0) {
+                skillsText += skills.map((s) =>
+                    `• **${s.name}** : ${s.description}\n  _Chemin:_ \`${s.path}\``
+                ).join('\n\n');
+            } else {
+                skillsText += 'Aucun expert skill détecté dans le répertoire `/skills/`.';
+            }
+
+            addItem({
+                type: 'info',
+                text: skillsText
+            }, Date.now());
+
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            addItem({
+                type: 'error',
+                text: `❌ Erreur lors de la récupération des expert skills: ${message}`
+            }, Date.now());
+        }
+    }
+};
+
+/**
  * Exporte toutes les commandes HIVE-MIND
  */
 export const hiveCommands: SlashCommand[] = [
@@ -439,5 +487,7 @@ export const hiveCommands: SlashCommand[] = [
     hiveGroupsCommand,
     hiveCronCommand,
     hiveSecurityCommand,
-    hiveVoiceCommand
+    hiveVoiceCommand,
+    hiveSkillsCommand
 ];
+
