@@ -39,8 +39,10 @@ jobs:
           # Réinitialiser le dossier .github/ à l'état de l'upstream
           if git rev-parse --verify upstream/main:.github >/dev/null 2>&1; then
             git checkout upstream/main -- .github/
+            git checkout HEAD -- .github/workflows/ || true
           else
             git rm -rf .github/ || rm -rf .github/
+            git checkout HEAD -- .github/workflows/ || true
           fi
 
           # Valider le nettoyage
