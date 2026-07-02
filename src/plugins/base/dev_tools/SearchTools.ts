@@ -93,7 +93,9 @@ async function handleGrepSearch(args: SearchToolArgs, checkReadAccess: (p: strin
     try {
         await execAsync('which rg');
         rgFound = true;
-    } catch {}
+    } catch {
+        // rg not found, default to grep
+    }
 
     try {
         if (rgFound) {
