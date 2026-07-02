@@ -18,7 +18,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.UPSTREAM_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Fetch upstream changes
         run: |
@@ -35,7 +35,7 @@ jobs:
       - name: Create Sync Branch and PR
         if: steps.check.outputs.behind > 0
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.UPSTREAM_PAT || secrets.GITHUB_TOKEN }}
         run: |
           SYNC_BRANCH="sync-upstream-main"
           
