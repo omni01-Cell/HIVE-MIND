@@ -37,14 +37,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SYNC_BRANCH="sync-upstream-$(date +%Y%m%d-%H%M%S)"
+          SYNC_BRANCH="sync-upstream-main"
           
           # Configurer l'identité git
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
           # Créer une branche de synchronisation à partir de notre main locale (qui contient nos workflows)
-          git checkout -b "$SYNC_BRANCH" main
+          git checkout -B "$SYNC_BRANCH" main
           
           # Fusionner les modifications de l'upstream (ceci va importer son code)
           git merge upstream/main -m "Merge upstream changes" --allow-unrelated-histories || echo "Des conflits potentiels ont été rencontrés lors de la fusion."
@@ -59,10 +59,18 @@ jobs:
           # Pousser la branche de synchronisation sur le fork
           git push origin "$SYNC_BRANCH" --force
           
-          # Ouvrir la PR locale sur le fork (de SYNC_BRANCH vers main)
-          gh pr create \
-            --title "Synchronisation Upstream: $(date +%Y-%m-%d)" \
-            --body "Cette Pull Request intègre automatiquement les nouveaux commits du dépôt parent ($BEHIND commit(s) de retard) tout en préservant le dossier .github/ local du fork." \
-            --base main \
-            --head "$SYNC_BRANCH"
+          # Vérifier si une PR existe déjà pour cette branche propre
+          PR_EXISTS=$(gh pr list --head "$SYNC_BRANCH" --json number --jq '.[0].number')
+
+          if [ -z "$PR_EXISTS" ]; then
+            echo "Création d'une nouvelle Pull Request de synchronisation..."
+            gh pr create \
+              --title "Synchronisation Upstream" \
+              --body "Cette Pull Request intègre automatiquement les nouveaux commits du dépôt parent ($BEHIND commit(s) de retard) tout en préservant le dossier .github/ local du fork." \
+              --base main \
+              --head "$SYNC_BRANCH"
+          else
+            echo "La Pull Request de synchronisation #$PR_EXISTS existe déjà. Elle a été mise à jour automatiquement."
+          fi
+
 
