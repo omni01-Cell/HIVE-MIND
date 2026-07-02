@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { permissionManager } from '../../../core/security/PermissionManager.js';
 import { fileState } from './FileState.js';
@@ -8,6 +8,7 @@ import { hashLines } from '../../../services/anchor/index.js';
 import { readFileInRange } from '../../../utils/readFileInRange.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const MAX_FILES_TO_LIST = 1000;
 const MAX_READ_LINES = 800;
 const BANNED_DIRS = ['node_modules', '.git', '.next', 'dist', 'build'];
@@ -87,19 +88,25 @@ async function handleGrepSearch(args: SearchToolArgs, checkReadAccess: (p: strin
 
     const absolutePath = path.resolve(process.cwd(), search_path);
 
-    let command = '';
+    let cmd = '';
+    let cmdArgs: string[] = [];
     try {
         await execAsync('which rg');
-        command = `rg --no-heading --line-number -F "${query.replace(/"/g, '\\"')}" "${absolutePath}"`;
+        cmd = 'rg';
+        cmdArgs = ['--no-heading', '--line-number', '-F', query, absolutePath];
         console.log('[SearchTools] 🚀 Using Ripgrep (rg)');
     } catch {
-        const excludeDirs = BANNED_DIRS.map(d => `--exclude-dir=${d}`).join(' ');
-        command = `grep -rn -F ${excludeDirs} "${query.replace(/"/g, '\\"')}" "${absolutePath}"`;
+        cmd = 'grep';
+        cmdArgs = ['-rn', '-F'];
+        for (const d of BANNED_DIRS) {
+            cmdArgs.push(`--exclude-dir=${d}`);
+        }
+        cmdArgs.push(query, absolutePath);
         console.log('[SearchTools] 🐌 Falling back to standard grep');
     }
 
     try {
-        const { stdout } = await execAsync(command);
+        const { stdout } = await execFileAsync(cmd, cmdArgs);
         const lines = stdout.split('\n');
         if (lines.length > 100) {
             return { success: true, message: lines.slice(0, 100).join('\n') + '\n\n... [TRUNCATED at 100 results] ...' };
