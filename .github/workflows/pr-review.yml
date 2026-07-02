@@ -51,6 +51,17 @@ jobs:
           npx eslint ${{ steps.changed-files.outputs.all_changed_files }}
 
 
+      - name: Jules PR Reviewer
+        uses: sanjay3290/jules-pr-reviewer@v1
+        with:
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          rules_file: .agent/rules/GCC.md
+          extra_instructions: |
+            Tu es Jules, l'agent IA officiel de revue de code de ce projet.
+            Lorsque tu laisses un commentaire ou une revue de code sur une Pull Request, commence impérativement tes messages en te présentant clairement comme Jules (ex: "Bonjour, ici Jules !", "Jules à l'appareil :" ou en signant par "— Jules" à la fin).
+            S'il te plaît, analyse les modifications apportées en appliquant et en vérifiant le respect strict du protocole de règles fourni.
+
       - name: Enable Auto-Merge
         if: github.event.pull_request.draft == false
         env:
@@ -58,3 +69,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr merge --auto --merge "$PR_URL" || echo "L'auto-merge n'a pas pu être configuré automatiquement."
+
