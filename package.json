@@ -85,7 +85,7 @@
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.17.2",
     "pino": "^8.17.0",
-    "playwright": "latest",
+    "playwright": "^1.47.2",
     "prompts": "^2.4.2",
     "proper-lockfile": "^4.1.2",
     "qrcode-terminal": "^0.12.0",
