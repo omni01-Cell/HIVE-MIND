@@ -2,6 +2,7 @@
 
 ## 🏆 Major Milestones (Archived Epics)
 
+- **[2026-07-03] Session 17 - Context Window Indicator & Dynamic Compaction** : Implémentation du ContextWindowService, de la compaction d'historique basée sur un seuil dynamique de 80% des tokens du modèle actif, et de l'affichage de la consommation sous la forme [Context: X/Y (Z%)] (avec coloration dynamique de niveau de saturation) dans StatusRow.tsx et ModelStatsDisplay.tsx de la TUI.
 - **[2026-07-03] PR Recovery & Integration** : Restauration et intégration sélective des Pull Requests fermées indûment par Jules (PR #11 pour l'indicateur de présence TUI, PR #10 pour les tests unitaires d'audioConverter, et PR #8 pour la correction d'injection de commande dans ASTTools.expandDirectory).
 - **[2026-07-03] Jules TUI PR Integration & Decoupling** : Résolution des conflits et fusion définitive de la PR de Jules (liaison de session dynamique) sur le fork et le dépôt parent, après un découplage architectural de `HiveTransport` pour éliminer la cascade de compilation TS des fichiers TUI non-refactorisés.
 - **[2026-07-03] Jules Rules and Workflow Lock** : Éradication complète des boucles de Pull Requests automatiques par le nettoyage final et la suppression de toutes les branches obsolètes sur le fork `leandre755/HIVE-MIND`, la fermeture de toutes les PRs en boucle sur `omni01-Cell/HIVE-MIND`, la mise à jour de `guide_auto_review_merge.md` et le déploiement général du fichier `JULES.md` à la racine.
@@ -99,8 +100,9 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - ✅ Done: Session 14 — Conservation et Réadaptation du Module IDE (Réimplémentation de l'IdeClient branché par WebSocket sur le service local HIVE-MIND et restauration de l'invite interactive IdeIntegrationNudge).
 - ✅ Done: Session 15 — Nettoyage et Adaptation des Dialogues de Modèles (Réécriture de ModelDialog.tsx et VoiceModelDialog.tsx pour gérer les familles/modèles multi-providers de HIVE-MIND et la voix Minimax Persona/Gemini/gTTS/Groq/Gemini Live).
 - ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase (synchronisation asynchrone des sessions TUI sous context_id dynamique).
-- ⏳ Pending: Sessions 17 à 22 du plan d'adaptation de la TUI.
+- ✅ Done: Session 17 — Indicateur dynamique de contexte TUI et compaction à 80% (ContextWindowService, jauge dynamique colorée).
+- ⏳ Pending: Sessions 18 à 22 du plan d'adaptation de la TUI.
 
 ## 👉 Next Session Direction
 
-Poursuivre le plan de refactorisation de la TUI avec la Session 17 (Intégration de l'indicateur dynamique de contexte).
+Poursuivre le plan de refactorisation de la TUI avec la Session 18 (Purge des Mentions Google LLC & Textes Gemini).

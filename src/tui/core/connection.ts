@@ -130,6 +130,7 @@ export class HiveCoreConnection implements AgentProtocol {
     private confirmationRequestListener: (event: { id: string; type: string; data: Record<string, unknown> & { questions?: unknown[] }; description: string }) => void;
     private serviceStartListener: (event: ServiceEvent) => void;
     private serviceEndListener: (event: ServiceEvent) => void;
+    private customEventListener: (event: any) => void;
     private initialized = false;
     private hardTimeoutTimer: NodeJS.Timeout | null = null;
     private expectingResponse = false;
@@ -167,6 +168,15 @@ export class HiveCoreConnection implements AgentProtocol {
             }
         };
 
+        this.customEventListener = (event: any) => {
+            if (event && event.name === 'context_usage_update') {
+                this.emit({
+                    type: 'custom',
+                    name: 'context_usage_update',
+                    message: event.message
+                });
+            }
+        };
 
         this.messageListener = (message: MessageData) => {
             if (!message.text || message.text.trim().length === 0) return;
@@ -269,6 +279,7 @@ export class HiveCoreConnection implements AgentProtocol {
         // Écouter le eventBus du Core pour les services actifs
         eventBus.on(BotEvents.SERVICE_START, this.serviceStartListener);
         eventBus.on(BotEvents.SERVICE_END, this.serviceEndListener);
+        eventBus.on(BotEvents.CUSTOM, this.customEventListener);
 
         this.initialized = true;
     }
@@ -284,6 +295,7 @@ export class HiveCoreConnection implements AgentProtocol {
 
         eventBus.off(BotEvents.SERVICE_START, this.serviceStartListener);
         eventBus.off(BotEvents.SERVICE_END, this.serviceEndListener);
+        eventBus.off(BotEvents.CUSTOM, this.customEventListener);
 
         this.clearHardTimeout();
         if (this.logRestore) {

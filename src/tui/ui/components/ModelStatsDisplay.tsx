@@ -19,8 +19,7 @@ import {
 } from '../contexts/SessionContext.js';
 import { Table, type Column } from './Table.js';
 import { useSettings } from '../contexts/SettingsContext.js';
-import { getDisplayString, isAutoModel, LlmRole } from '../contexts/UIStateContext.js';
-import { QuotaStats } from '../contexts/UIStateContext.js';
+import { getDisplayString, isAutoModel, LlmRole, tokenLimit, QuotaStats } from '../contexts/UIStateContext.js';
 import { QuotaStatsInfo } from './QuotaStatsInfo.js';
 
 interface StatRowData {
@@ -50,11 +49,11 @@ const buildStatsRows = (
 ): StatRowData[] => {
     const createRow = (
         metric: string,
-        getValue: (metrics: ModelMetrics) => string | React.ReactNode,
+        getValue: (metrics: ModelMetrics, modelName: string) => string | React.ReactNode,
         options: { isSection?: boolean; isSubtle?: boolean } = {}
     ): StatRowData => {
         const row: StatRowData = { metric, isSection: options.isSection, isSubtle: options.isSubtle };
-        activeModels.forEach(([name, metrics]) => { row[name] = getValue(metrics); });
+        activeModels.forEach(([name, metrics]) => { row[name] = getValue(metrics, name); });
         return row;
     };
     const rows: StatRowData[] = [];
@@ -82,6 +81,15 @@ const buildStatsRows = (
         rows.push(createRow('Tool', (m) => <Text color={theme.text.primary}>{m.tokens.tool.toLocaleString()}</Text>, { isSubtle: true }));
     }
     rows.push(createRow('Output', (m) => <Text color={theme.text.primary}>{m.tokens.candidates.toLocaleString()}</Text>, { isSubtle: true }));
+    rows.push(createRow('Context Limit', (_m, name) => {
+        const limit = tokenLimit(name);
+        return <Text color={theme.text.secondary}>{limit.toLocaleString()}</Text>;
+    }, { isSubtle: true }));
+    rows.push(createRow('Context Usage', (m, name) => {
+        const limit = tokenLimit(name);
+        const usagePercent = limit > 0 ? (m.tokens.input / limit) * 100 : 0;
+        return <Text color={usagePercent >= 80 ? theme.status.error : (usagePercent >= 60 ? theme.status.warning : theme.text.primary)}>{usagePercent.toFixed(1)}%</Text>;
+    }, { isSubtle: true }));
     if (allRoles.length > 0) {
         rows.push({ metric: '' });
         rows.push({ metric: 'Roles', isSection: true });
