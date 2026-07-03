@@ -4,202 +4,82 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useMemo, useState } from 'react';
 import { Box, Text } from 'ink';
-import { useUIState } from '../contexts/UIStateContext.js';
-import { PREVIEW_GEMINI_MODEL, PREVIEW_GEMINI_3_1_MODEL, PREVIEW_GEMINI_FLASH_MODEL, PREVIEW_GEMINI_FLASH_LITE_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_GEMINI_FLASH_MODEL, DEFAULT_GEMINI_FLASH_LITE_MODEL, GEMINI_MODEL_ALIAS_AUTO, GEMMA_4_31B_IT_MODEL, GEMMA_4_26B_A4B_IT_MODEL, ModelSlashCommandEvent, logModelSlashCommand, getDisplayString, AuthType, PREVIEW_GEMINI_3_1_CUSTOM_TOOLS_MODEL, isProModel, getAutoModelDescription } from '../contexts/UIStateContext.js';
+import { ModelSlashCommandEvent, logModelSlashCommand } from '../contexts/UIStateContext.js';
 import { useKeypress } from '../hooks/useKeypress.js';
 import { theme } from '../semantic-colors.js';
 import { DescriptiveRadioButtonSelect } from './shared/DescriptiveRadioButtonSelect.js';
 import { ConfigContext } from '../contexts/ConfigContext.js';
 import { useSettings } from '../contexts/SettingsContext.js';
+import { SettingScope } from '../../config/settings.js';
+import { providerRouter } from '../../../providers/index.js';
 
 interface ModelDialogProps {
   onClose: () => void;
 }
 
-const buildMainOptions = (
-    config: ReturnType<typeof useContext> extends infer T ? T : never,
-    useGemini31: boolean,
-    useGemini3_5Flash: boolean,
-    useCustomToolModel: boolean,
-    shouldShowPreviewModels: boolean,
-    hasAccessToProModel: boolean,
-    manualModelSelected: string
-): Array<{ value: string; title: string; description?: string; key: string }> => {
-    const cfg = config as unknown as {
-        getExperimentalDynamicModelConfiguration?: () => boolean;
-        getModelConfigService?: () => {
-            getAvailableModelOptions: (opts: Record<string, boolean>) => Array<{
-                tier: string; modelId: string; name: string; description?: string;
-            }>;
-        };
-    };
-    if (cfg?.getExperimentalDynamicModelConfiguration?.() === true && cfg.getModelConfigService) {
-        const allOptions = cfg.getModelConfigService().getAvailableModelOptions({
-            useGemini3_1: useGemini31,
-            useGemini3_5Flash,
-            useCustomTools: useCustomToolModel,
-            hasAccessToPreview: shouldShowPreviewModels,
-            hasAccessToProModel
-        });
-        const list = allOptions
-            .filter((o) => o.tier === 'auto')
-            .map((o) => ({ value: o.modelId, title: o.name, description: o.description, key: o.modelId }));
-        list.push({
-            value: 'Manual',
-            title: manualModelSelected
-                ? `Manual (${getDisplayString(manualModelSelected, cfg as never)})`
-                : 'Manual',
-            description: 'Manually select a model',
-            key: 'Manual'
-        });
-        return list;
-    }
-    return [
-        {
-            value: GEMINI_MODEL_ALIAS_AUTO,
-            title: getDisplayString(GEMINI_MODEL_ALIAS_AUTO),
-            description: getAutoModelDescription(shouldShowPreviewModels, useGemini31, useGemini3_5Flash),
-            key: GEMINI_MODEL_ALIAS_AUTO
-        },
-        {
-            value: 'Manual',
-            title: manualModelSelected ? `Manual (${getDisplayString(manualModelSelected)})` : 'Manual',
-            description: 'Manually select a model',
-            key: 'Manual'
-        }
-    ];
-};
-
-const buildManualOptions = (
-    config: ReturnType<typeof useContext> extends infer T ? T : never,
-    useGemini31: boolean,
-    useGemini3_5Flash: boolean,
-    useCustomToolModel: boolean,
-    shouldShowPreviewModels: boolean,
-    hasAccessToProModel: boolean
-): Array<{ value: string; title: string; key: string }> => {
-    const cfg = config as unknown as {
-        getExperimentalDynamicModelConfiguration?: () => boolean;
-        getModelConfigService?: () => {
-            getAvailableModelOptions: (opts: Record<string, boolean>) => Array<{
-                tier: string; modelId: string; name: string;
-            }>;
-        };
-        getExperimentalGemma?: () => boolean;
-    };
-    if (cfg?.getExperimentalDynamicModelConfiguration?.() === true && cfg.getModelConfigService) {
-        const allOptions = cfg.getModelConfigService().getAvailableModelOptions({
-            useGemini3_1: useGemini31,
-            useGemini3_5Flash,
-            useCustomTools: useCustomToolModel,
-            hasAccessToPreview: shouldShowPreviewModels,
-            hasAccessToProModel
-        });
-        return allOptions
-            .filter((o) => o.tier !== 'auto')
-            .map((o) => ({ value: o.modelId, title: o.name, key: o.modelId }));
-    }
-    const showGemmaModels = cfg?.getExperimentalGemma?.() ?? false;
-    const options: Array<{ value: string; title: string; key: string }> = [
-        { value: DEFAULT_GEMINI_MODEL, title: getDisplayString(DEFAULT_GEMINI_MODEL), key: DEFAULT_GEMINI_MODEL },
-        { value: DEFAULT_GEMINI_FLASH_LITE_MODEL, title: getDisplayString(DEFAULT_GEMINI_FLASH_LITE_MODEL), key: DEFAULT_GEMINI_FLASH_LITE_MODEL },
-        { value: DEFAULT_GEMINI_FLASH_MODEL, title: getDisplayString(DEFAULT_GEMINI_FLASH_MODEL), key: DEFAULT_GEMINI_FLASH_MODEL }
-    ];
-    if (showGemmaModels) {
-        options.push(
-            { value: GEMMA_4_31B_IT_MODEL, title: getDisplayString(GEMMA_4_31B_IT_MODEL), key: GEMMA_4_31B_IT_MODEL },
-            { value: GEMMA_4_26B_A4B_IT_MODEL, title: getDisplayString(GEMMA_4_26B_A4B_IT_MODEL), key: GEMMA_4_26B_A4B_IT_MODEL }
-        );
-    }
-    if (shouldShowPreviewModels) {
-        const previewProModel = useGemini31 ? PREVIEW_GEMINI_3_1_MODEL : PREVIEW_GEMINI_MODEL;
-        const previewProValue = useCustomToolModel ? PREVIEW_GEMINI_3_1_CUSTOM_TOOLS_MODEL : previewProModel;
-        const previewOptions: Array<{ value: string; title: string; key: string }> = [
-            { value: previewProValue, title: getDisplayString(previewProModel), key: previewProModel },
-            { value: PREVIEW_GEMINI_FLASH_MODEL, title: getDisplayString(PREVIEW_GEMINI_FLASH_MODEL), key: PREVIEW_GEMINI_FLASH_MODEL }
-        ];
-        if (PREVIEW_GEMINI_FLASH_LITE_MODEL !== 'none') {
-            previewOptions.push({ value: PREVIEW_GEMINI_FLASH_LITE_MODEL, title: getDisplayString(PREVIEW_GEMINI_FLASH_LITE_MODEL), key: PREVIEW_GEMINI_FLASH_LITE_MODEL });
-        }
-        options.unshift(...previewOptions);
-    }
-    if (!hasAccessToProModel) {
-        return options.filter((option) => !isProModel(option.value));
-    }
-    return options;
-};
-
 export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
     const config = useContext(ConfigContext);
     const settings = useSettings();
-    const { terminalWidth } = useUIState();
-    const [hasAccessToProModel, setHasAccessToProModel] = useState<boolean>(
-        () => !(config?.getProModelNoAccessSync() ?? false)
-    );
-    const [view, setView] = useState<'main' | 'manual'>(() =>
-        config?.getProModelNoAccessSync() ? 'manual' : 'main'
-    );
+    const [view, setView] = useState<'family' | 'model'>('family');
+    const [selectedFamily, setSelectedFamily] = useState<string>('');
     const [persistMode, setPersistMode] = useState(false);
 
-    useEffect(() => {
-        async function checkAccess() {
-            if (!config) return;
-            const noAccess = await config.getProModelNoAccess();
-            setHasAccessToProModel(!noAccess);
-            if (noAccess) {
-                setView('manual');
-            }
-        }
-        void checkAccess();
-    }, [config]);
-
     // Determine the Preferred Model (read once when the dialog opens).
-    const preferredModel = config?.getModel() || GEMINI_MODEL_ALIAS_AUTO;
+    const preferredModel = config?.getModel() || 'gemini-2.0-flash';
 
-    const shouldShowPreviewModels = config?.getHasAccessToPreviewModel() ?? false;
-    const useGemini31 = config?.getGemini31LaunchedSync?.() ?? false;
-    const useGemini3_5Flash = config?.hasGemini35FlashGAAccess?.() ?? false;
-    const selectedAuthType = settings.merged.security.auth.selectedType;
-    const useCustomToolModel =
-    useGemini31 && selectedAuthType === AuthType.USE_GEMINI;
+    const families = useMemo(() => {
+        return providerRouter.listFamilies();
+    }, []);
 
-    const manualModelSelected = useMemo(() => {
-        if (
-            config?.getExperimentalDynamicModelConfiguration?.() === true &&
-      config.getModelConfigService
-        ) {
-            const def = config
-                .getModelConfigService()
-                .getModelDefinition(preferredModel);
-            // Only treat as manual selection if it's a visible, non-auto model.
-            return def && def.tier !== 'auto' && def.isVisible === true
-                ? preferredModel
-                : '';
+    const options = useMemo(() => {
+        if (view === 'family') {
+            return families.map(f => ({
+                value: f.id,
+                title: f.name || f.id,
+                description: `${f.models.length} modèles disponibles ${f.hasApiKey ? '✅' : '❌ (Pas de clé)'}`,
+                key: f.id
+            }));
+        } else {
+            const familyObj = families.find(f => f.id === selectedFamily);
+            const models = familyObj?.models || [];
+            const list = models.map(m => ({
+                value: m,
+                title: m,
+                description: `Sélectionner le modèle ${m}`,
+                key: m
+            }));
+            list.unshift({
+                value: 'back',
+                title: '⬅️ Retour aux familles',
+                description: 'Revenir à la liste des providers d\'IA',
+                key: 'back'
+            });
+            return list;
         }
+    }, [view, selectedFamily, families]);
 
-        const manualModels = [
-            DEFAULT_GEMINI_MODEL,
-            DEFAULT_GEMINI_FLASH_MODEL,
-            DEFAULT_GEMINI_FLASH_LITE_MODEL,
-            PREVIEW_GEMINI_MODEL,
-            PREVIEW_GEMINI_3_1_MODEL,
-            PREVIEW_GEMINI_3_1_CUSTOM_TOOLS_MODEL,
-            PREVIEW_GEMINI_FLASH_LITE_MODEL,
-            PREVIEW_GEMINI_FLASH_MODEL
-        ].filter((m) => m !== 'none');
-        if (manualModels.includes(preferredModel)) {
-            return preferredModel;
+    // Calculate the initial index based on the preferred model.
+    const initialIndex = useMemo(() => {
+        if (view === 'family') {
+            const parsed = providerRouter.parseModelString(preferredModel);
+            if (parsed) {
+                const idx = options.findIndex(o => o.value === parsed.family);
+                return idx !== -1 ? idx : 0;
+            }
+            return 0;
+        } else {
+            const idx = options.findIndex(o => o.value === preferredModel);
+            return idx !== -1 ? idx : 0;
         }
-        return '';
-    }, [preferredModel, config]);
+    }, [preferredModel, options, view]);
 
     useKeypress(
         (key) => {
             if (key.name === 'escape') {
-                if (view === 'manual' && hasAccessToProModel) {
-                    setView('main');
+                if (view === 'model') {
+                    setView('family');
                 } else {
                     onClose();
                 }
@@ -213,57 +93,31 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
         },
         { isActive: true }
     );
-    const mainOptions = useMemo(
-        () => buildMainOptions(config, useGemini31, useGemini3_5Flash, useCustomToolModel, shouldShowPreviewModels, hasAccessToProModel, manualModelSelected),
-        [config, shouldShowPreviewModels, manualModelSelected, useGemini31, useGemini3_5Flash, useCustomToolModel, hasAccessToProModel]
-    );
-
-    const manualOptions = useMemo(
-        () => buildManualOptions(config, useGemini31, useGemini3_5Flash, useCustomToolModel, shouldShowPreviewModels, hasAccessToProModel),
-        [shouldShowPreviewModels, useGemini31, useGemini3_5Flash, useCustomToolModel, hasAccessToProModel, config]
-    );
-
-    const options = useMemo(() => {
-        const rawOptions = view === 'main' ? mainOptions : manualOptions;
-        const seen = new Set<string>();
-        return rawOptions.filter((option) => {
-            if (seen.has(option.value)) {
-                return false;
-            }
-            seen.add(option.value);
-            return true;
-        });
-    }, [view, mainOptions, manualOptions]);
-
-    // Calculate the initial index based on the preferred model.
-    const initialIndex = useMemo(() => {
-        const idx = options.findIndex((option) => option.value === preferredModel);
-        if (idx !== -1) {
-            return idx;
-        }
-        if (view === 'main') {
-            const manualIdx = options.findIndex((o) => o.value === 'Manual');
-            return manualIdx !== -1 ? manualIdx : 0;
-        }
-        return 0;
-    }, [preferredModel, options, view]);
 
     // Handle selection internally (Autonomous Dialog).
     const handleSelect = useCallback(
-        (model: string) => {
-            if (model === 'Manual') {
-                setView('manual');
-                return;
-            }
+        (val: string) => {
+            if (view === 'family') {
+                setSelectedFamily(val);
+                setView('model');
+            } else {
+                if (val === 'back') {
+                    setView('family');
+                    return;
+                }
 
-            if (config) {
-                config.setModel(model, persistMode ? false : true);
-                const event = new ModelSlashCommandEvent(model);
-                logModelSlashCommand(config, event);
+                if (config) {
+                    config.setModel(val, persistMode ? false : true);
+                    if (persistMode) {
+                        settings.setValue(SettingScope.User, 'defaultModel', val);
+                    }
+                    const event = new ModelSlashCommandEvent(val);
+                    logModelSlashCommand(config, event);
+                }
+                onClose();
             }
-            onClose();
         },
-        [config, onClose, persistMode]
+        [view, config, onClose, persistMode, settings]
     );
 
     return (
@@ -274,7 +128,9 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
             padding={1}
             width="100%"
         >
-            <Text bold>Select Model</Text>
+            <Text bold>
+                {view === 'family' ? 'Sélectionner un Provider d\'IA' : `Sélectionner un Modèle (${selectedFamily})`}
+            </Text>
 
             <Box marginTop={1}>
                 <DescriptiveRadioButtonSelect
@@ -287,21 +143,16 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
             <Box marginTop={1} flexDirection="column">
                 <Box>
                     <Text bold color={theme.text.primary}>
-            Remember model for future sessions:{' '}
+                        Mémoriser le modèle pour les prochaines sessions :{' '}
                     </Text>
                     <Text color={theme.status.success}>
                         {persistMode ? 'true' : 'false'}
                     </Text>
-                    <Text color={theme.text.secondary}> (Press Tab to toggle)</Text>
+                    <Text color={theme.text.secondary}> (Appuyer sur Tab pour basculer)</Text>
                 </Box>
             </Box>
-            <Box flexDirection="column">
-                <Text color={theme.text.secondary}>
-                    {'> To use a specific Gemini model on startup, use the --model flag.'}
-                </Text>
-            </Box>
             <Box marginTop={1} flexDirection="column">
-                <Text color={theme.text.secondary}>(Press Esc to close)</Text>
+                <Text color={theme.text.secondary}>(Echap pour revenir ou fermer)</Text>
             </Box>
         </Box>
     );

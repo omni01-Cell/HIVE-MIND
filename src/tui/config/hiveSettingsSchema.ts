@@ -20,7 +20,7 @@ export interface SettingDefinition {
     items?: SettingCollectionDefinition;
     additionalProperties?: SettingCollectionDefinition;
     mergeStrategy?: MergeStrategy;
-    default?: any;
+    default?: unknown;
     category?: string;
     showInDialog?: boolean;
     requiresRestart?: boolean;
@@ -35,7 +35,7 @@ export interface SettingCollectionDefinition {
     mergeStrategy?: MergeStrategy;
 }
 
-export const SETTINGS_SCHEMA_DEFINITIONS: Record<string, any> = {
+export const SETTINGS_SCHEMA_DEFINITIONS: Record<string, unknown> = {
     TelemetrySettings: {
         type: 'object',
         properties: {
@@ -262,10 +262,20 @@ const hiveSchema: Record<string, SettingDefinition> = {
                 type: 'object',
                 description: 'Voice mode configuration',
                 properties: {
-                    activationMode: { type: 'string', description: 'Voice activation mode (push-to-talk, etc.)', default: 'push-to-talk' }
+                    activationMode: { type: 'string', description: 'Voice activation mode (push-to-talk, etc.)', default: 'push-to-talk' },
+                    backend: { type: 'string', description: 'Voice backend to use (gemini-live, whisper, etc.)', default: 'gemini-live' },
+                    ttsProvider: { type: 'string', description: 'TTS Provider (minimax, gemini, gtts)', default: 'minimax' },
+                    sttProvider: { type: 'string', description: 'STT Provider (groq, gemini-live)', default: 'groq' },
+                    geminiVoice: { type: 'string', description: 'Gemini Voice to use', default: 'Aoede' },
+                    stopGracePeriodMs: { type: 'number', description: 'Grace period before stopping transcription', default: 500 }
                 },
                 default: {
-                    activationMode: 'push-to-talk'
+                    activationMode: 'push-to-talk',
+                    backend: 'gemini-live',
+                    ttsProvider: 'minimax',
+                    sttProvider: 'groq',
+                    geminiVoice: 'Aoede',
+                    stopGracePeriodMs: 500
                 }
             }
         },
@@ -273,7 +283,12 @@ const hiveSchema: Record<string, SettingDefinition> = {
             worktrees: false,
             useOSC52Paste: false,
             voice: {
-                activationMode: 'push-to-talk'
+                activationMode: 'push-to-talk',
+                backend: 'gemini-live',
+                ttsProvider: 'minimax',
+                sttProvider: 'groq',
+                geminiVoice: 'Aoede',
+                stopGracePeriodMs: 500
             }
         }
     }
@@ -373,6 +388,9 @@ export interface ExperimentalSettings {
         activationMode?: string;
         backend?: string;
         stopGracePeriodMs?: number;
+        ttsProvider?: string;
+        sttProvider?: string;
+        geminiVoice?: string;
     };
 }
 
@@ -397,7 +415,7 @@ export interface MergedSettings {
     model: Required<ModelSettings>;
     experimental: Required<ExperimentalSettings>;
     ide: Required<IdeSettings>;
-    admin: any;
+    admin: unknown;
     mcp?: {
         excluded?: string[];
         allowed?: string[];
@@ -409,6 +427,7 @@ export interface MergedSettings {
     agents?: Record<string, unknown>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface Settings extends Partial<MergedSettings> {}
 
 export type MergeStrategy = 'replace' | 'concat' | 'union' | 'shallow_merge';
@@ -416,7 +435,7 @@ export const MergeStrategy = {
     REPLACE: 'replace' as MergeStrategy,
     CONCAT: 'concat' as MergeStrategy,
     UNION: 'union' as MergeStrategy,
-    SHALLOW_MERGE: 'shallow_merge' as MergeStrategy,
+    SHALLOW_MERGE: 'shallow_merge' as MergeStrategy
 };
 
 export type MemoryImportFormat = 'json' | 'text';

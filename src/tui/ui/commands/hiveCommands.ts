@@ -11,7 +11,7 @@
  * - Safety (Sentinel VIGIL)
  */
 
-import { SlashCommand, CommandKind, CommandContext } from '../contexts/UIStateContext.js';
+import { SlashCommand, CommandKind, CommandContext, HistoryItem, SlashCommandActionReturn } from '../contexts/UIStateContext.js';
 
 /**
  * Commande /status — État du bot HIVE-MIND
@@ -477,6 +477,256 @@ export const hiveSkillsCommand: SlashCommand = {
 };
 
 /**
+ * Commande /search — Recherche sémantique par Embeddings
+ */
+export const hiveSearchCommand: SlashCommand = {
+    name: 'search',
+    altNames: ['recherche', 'find'],
+    description: 'Recherche des fichiers ou médias dans le workspace par similarité sémantique',
+    kind: CommandKind.BUILT_IN,
+    takesArgs: true,
+    action: async (context: CommandContext, args: string) => {
+        const { addItem } = context.ui || {};
+        if (!addItem) return;
+
+        const query = args?.trim();
+        if (!query) {
+            addItem({
+                type: 'error',
+                text: '❌ Veuillez spécifier un terme de recherche. Exemple : `/search initialisation de la base`'
+            }, Date.now());
+            return;
+        }
+
+        try {
+            const { botCore } = await import('../../../core/index.js');
+            const mediaSearch = await botCore.getMediaSearch();
+
+            if (!mediaSearch) {
+                addItem({
+                    type: 'warning',
+                    text: '⚠️ Le service de recherche par embeddings n\'est pas disponible. Vérifiez que la clé GEMINI_API_KEY ou GOOGLE_API_KEY est bien configurée.'
+                }, Date.now());
+                return;
+            }
+
+            addItem({
+                type: 'info',
+                text: `🔍 Recherche sémantique pour : "${query}"...`
+            }, Date.now());
+
+            const results = await mediaSearch.searchByText('tui-local', query, 5, 0.3);
+
+            if (!results || results.length === 0) {
+                addItem({
+                    type: 'info',
+                    text: `🔍 Aucun résultat trouvé pour "${query}".`
+                }, Date.now());
+                return;
+            }
+
+            let resultsText = `🔍 *Résultats de recherche pour "${query}"*\n\n`;
+            results.forEach((res, idx) => {
+                const scorePercent = (res.similarity * 100).toFixed(1);
+                resultsText += `${idx + 1}. **${res.fileName || res.filePath}** (Score: ${scorePercent}%)\n`;
+                if (res.contentSummary) {
+                    resultsText += `   _Résumé :_ ${res.contentSummary}\n`;
+                }
+                resultsText += `   _Chemin :_ \`${res.filePath}\`\n`;
+                resultsText += `   _Modalité :_ ${res.modality} (${res.mimeType})\n\n`;
+            });
+
+            addItem({
+                type: 'info',
+                text: resultsText
+            }, Date.now());
+
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            addItem({
+                type: 'error',
+                text: `❌ Erreur lors de la recherche sémantique: ${message}`
+            }, Date.now());
+        }
+    }
+};
+
+
+/**
+ * Commande /session — Gestionnaire de Sessions Hybride
+ */
+export const hiveSessionCommand: SlashCommand = {
+    name: 'session',
+    altNames: ['sess'],
+    description: 'Gère les sessions de code (list, resume, delete, rename)',
+    kind: CommandKind.BUILT_IN,
+    takesArgs: true,
+    action: async (context: CommandContext, args: string) => {
+        const { addItem } = context.ui || {};
+        if (!addItem) return;
+
+        const parts = (args || '').trim().split(/\s+/);
+        const subCommand = parts[0]?.toLowerCase();
+
+        if (!subCommand || !['list', 'resume', 'delete', 'rename'].includes(subCommand)) {
+            addItem({
+                type: 'error',
+                text: '❌ Usage: /session list | resume <id/index> | delete <id/index> | rename <id/index> <nouveau nom>'
+            }, Date.now());
+            return;
+        }
+
+        try {
+            const fs = await import('node:fs/promises');
+            const path = await import('node:path');
+            const { SessionSelector, loadConversationRecord, convertSessionToHistoryFormats, formatRelativeTime } = await import('../../utils/sessionUtils.js');
+            const { uiTelemetryService } = await import('../contexts/UIStateContext.js');
+            const config = context.services?.agentContext;
+
+            if (!config) {
+                addItem({
+                    type: 'error',
+                    text: '❌ Configuration de l\'agent non disponible dans le contexte.'
+                }, Date.now());
+                return;
+            }
+
+            const chatsDir = path.join(config.storage.getProjectTempDir(), 'chats');
+            const selector = new SessionSelector(chatsDir);
+
+            if (subCommand === 'list') {
+                const sessions = await selector.listSessions();
+                if (sessions.length === 0) {
+                    addItem({
+                        type: 'info',
+                        text: '📂 Aucune session précédente trouvée pour ce projet.'
+                    }, Date.now());
+                    return;
+                }
+
+                // Trier par startTime comme listSessions de sessions.ts
+                const sortedSessions = sessions.sort(
+                    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+                );
+
+                let text = `📂 *Sessions disponibles (${sortedSessions.length}) :*\n\n`;
+                sortedSessions.forEach((s) => {
+                    const activeStr = s.isCurrentSession ? ' 🟢 *(active)*' : '';
+                    const time = formatRelativeTime(s.lastUpdated);
+                    text += `${s.index}. **${s.displayName}** (${s.messageCount} messages, ${time})${activeStr}\n   _ID:_ \`${s.id}\`\n\n`;
+                });
+
+                addItem({
+                    type: 'info',
+                    text
+                }, Date.now());
+                return;
+            }
+
+            const idOrIndex = parts[1];
+            if (!idOrIndex) {
+                addItem({
+                    type: 'error',
+                    text: `❌ Veuillez spécifier un identifiant ou un index pour la commande /session ${subCommand}`
+                }, Date.now());
+                return;
+            }
+
+            if (subCommand === 'resume') {
+                const sessionInfo = await selector.findSession(idOrIndex);
+                const filePath = path.join(chatsDir, sessionInfo.fileName);
+                const conversation = await loadConversationRecord(filePath);
+                if (!conversation) {
+                    addItem({
+                        type: 'error',
+                        text: `❌ Impossible de charger la session depuis ${filePath}`
+                    }, Date.now());
+                    return;
+                }
+
+                config.setSessionId(conversation.sessionId);
+                uiTelemetryService.hydrate(conversation);
+
+                const historyData = convertSessionToHistoryFormats(conversation.messages);
+                const historyItems = historyData.uiHistory.map((item, idx) => ({
+                    ...item,
+                    id: idx
+                })) as unknown as HistoryItem[];
+
+                addItem({
+                    type: 'info',
+                    text: `🔄 Session ${sessionInfo.index} reprise : "${sessionInfo.displayName}"`
+                }, Date.now());
+
+                return {
+                    type: 'load_history',
+                    clientHistory: [],
+                    history: historyItems
+                } as unknown as SlashCommandActionReturn;
+            }
+
+            if (subCommand === 'delete') {
+                const sessionInfo = await selector.findSession(idOrIndex);
+                if (sessionInfo.isCurrentSession) {
+                    addItem({
+                        type: 'error',
+                        text: '❌ Impossible de supprimer la session active.'
+                    }, Date.now());
+                    return;
+                }
+
+                const filePath = path.join(chatsDir, sessionInfo.fileName);
+                await fs.unlink(filePath);
+
+                addItem({
+                    type: 'info',
+                    text: `🗑️ Session ${sessionInfo.index} supprimée avec succès.`
+                }, Date.now());
+                return;
+            }
+
+            if (subCommand === 'rename') {
+                const newName = parts.slice(2).join(' ').trim();
+                if (!newName) {
+                    addItem({
+                        type: 'error',
+                        text: '❌ Veuillez spécifier un nouveau nom. Exemple : `/session rename 2 Nouveau Nom`'
+                    }, Date.now());
+                    return;
+                }
+
+                const sessionInfo = await selector.findSession(idOrIndex);
+                const filePath = path.join(chatsDir, sessionInfo.fileName);
+                const conversation = await loadConversationRecord(filePath);
+                if (!conversation) {
+                    addItem({
+                        type: 'error',
+                        text: '❌ Impossible de charger la session pour la renommer.'
+                    }, Date.now());
+                    return;
+                }
+
+                conversation.summary = newName;
+                await fs.writeFile(filePath, JSON.stringify(conversation, null, 2), 'utf-8');
+
+                addItem({
+                    type: 'info',
+                    text: `✏️ Session ${sessionInfo.index} renommée en : "${newName}".`
+                }, Date.now());
+                return;
+            }
+
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            addItem({
+                type: 'error',
+                text: `❌ Erreur lors de la gestion de session: ${message}`
+            }, Date.now());
+        }
+    }
+};
+
+/**
  * Exporte toutes les commandes HIVE-MIND
  */
 export const hiveCommands: SlashCommand[] = [
@@ -488,6 +738,9 @@ export const hiveCommands: SlashCommand[] = [
     hiveCronCommand,
     hiveSecurityCommand,
     hiveVoiceCommand,
-    hiveSkillsCommand
+    hiveSkillsCommand,
+    hiveSearchCommand,
+    hiveSessionCommand
 ];
+
 

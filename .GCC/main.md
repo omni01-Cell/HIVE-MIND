@@ -56,10 +56,12 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - [2026-07-02] [GITHUB-SYNC-ISOLATION] Décision d'isoler le dossier `.github/` en créant des branches épurées `pr-clean-*` pour les Pull Requests amont, et de restaurer de force le dossier `.github/` local (`git checkout main -- .github/`) lors de l'intégration des mises à jour amont pour protéger la configuration du fork.
 - [2026-07-02] [GITHUB-SYNC-DIFF] Ajout d'une vérification par `git diff --quiet` dans la synchronisation automatique pour éviter de créer des Pull Requests vides et prévenir les plantages de l'API GraphQL de GitHub.
 - [2026-07-02] [GITHUB-SYNC-STATIC-BRANCH] Adoption d'une branche de synchronisation statique (`sync-upstream-main`) mise à jour par force-push, éliminant l'accumulation de branches obsolètes sur le fork.
+- [2026-07-03] [TUI-MODELS-DYNAMIC] Refactorisation des dialogues de modèles (ModelDialog et VoiceModelDialog) pour les lier dynamiquement à l'infrastructure multi-providers de HIVE-MIND. Ajout de properties de surcharge ('forcedFamily', 'forcedModel') sur le Router central et intégration de nouveaux paramètres de voix (TTS Minimax/Gemini/gTTS, STT Groq/Gemini-Live) dans le schéma de configuration.
 
 ## 🌿 Active Branches / Plans
 
 - `tui-refactoring` : Refonte et adaptation de la TUI au core HIVE-MIND [plan_tui_refactoring.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_tui_refactoring.md)
+- `ide-integration` : Réadaptation du module IDE [plan_ide_integration.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_ide_integration.md)
 - `agent-test-battery` : Plan de test d'automatisation de l'agent [plan_agent_test_battery.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_agent_test_battery.md)
 - `claude-code-sota` : Plan de refactorisation SOTA (streaming, caches, compaction) [plan_claude_code_sota.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_claude_code_sota.md)
 - `investigation-harnais` : Analyse et investigation du harnais de sécurité [plan_investigation_harnais.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_investigation_harnais.md)
@@ -79,9 +81,12 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - ✅ Done: Session 9 — Émission d'Événements d'Activité de Services (Core) (intégration des déclencheurs d'activité dans VIGIL et MAPLE).
 - ✅ Done: Session 10 — Rendu Interactif des Services Actifs dans la TUI.
 - ✅ Done: Session 11 — Commande `/skills` et Indexation d'Outils.
-- 🔄 In progress: Session 12 — Commande `/search` par Embeddings Sémantiques.
-- ⏳ Pending: Sessions 13 à 22 du plan d'adaptation de la TUI.
+- ✅ Done: Session 12 — Commande `/search` par Embeddings Sémantiques.
+- ✅ Done: Session 13 — Commande `/session` (Gestionnaire de Sessions Hybride).
+- ✅ Done: Session 14 — Conservation et Réadaptation du Module IDE (Réimplémentation de l'IdeClient branché par WebSocket sur le service local HIVE-MIND et restauration de l'invite interactive IdeIntegrationNudge).
+- ✅ Done: Session 15 — Nettoyage et Adaptation des Dialogues de Modèles (Réécriture de ModelDialog.tsx et VoiceModelDialog.tsx pour gérer les familles/modèles multi-providers de HIVE-MIND et la voix Minimax Persona/Gemini/gTTS/Groq/Gemini Live).
+- ⏳ Pending: Sessions 16 à 22 du plan d'adaptation de la TUI.
 
 ## 👉 Next Session Direction
 
-Poursuivre le plan de refactorisation de la TUI avec la Session 12 (Commande `/search` par Embeddings Sémantiques).
+Poursuivre le plan de refactorisation de la TUI avec la Session 16 (Branchement du Navigateur d'Historique sur Supabase).

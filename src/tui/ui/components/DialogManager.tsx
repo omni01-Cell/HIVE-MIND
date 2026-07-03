@@ -19,6 +19,7 @@ import { useConfig } from '../contexts/ConfigContext.js';
 import { useSettings } from '../contexts/SettingsContext.js';
 import { type UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';
 import { AgentConfigDialog } from './AgentConfigDialog.js';
+import { IdeIntegrationNudge } from '../IdeIntegrationNudge.js';
 
 interface DialogManagerProps {
   addItem: UseHistoryManagerReturn['addItem'];
@@ -73,7 +74,7 @@ function renderSettingsDialogs(
     uiActions: ReturnType<typeof useUIActions>,
     settings: ReturnType<typeof useSettings>,
     config: ReturnType<typeof useConfig>,
-    addItem: UseHistoryManagerReturn['addItem']
+    _addItem: UseHistoryManagerReturn['addItem']
 ): React.ReactNode | null {
     const { constrainHeight, terminalHeight, staticExtraHeight, terminalWidth: uiTerminalWidth } = uiState;
 
@@ -179,6 +180,15 @@ export const DialogManager = ({
 
     const uiState = useUIState();
     const uiActions = useUIActions();
+
+    if (uiState.shouldShowIdePrompt) {
+        return (
+            <IdeIntegrationNudge
+                ide={uiState.currentIDE!}
+                onComplete={(uiActions as { handleIdePromptComplete?: () => void }).handleIdePromptComplete}
+            />
+        );
+    }
 
     if (uiState.loopDetectionConfirmationRequest) {
         return (

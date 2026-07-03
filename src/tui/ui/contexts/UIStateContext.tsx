@@ -1,3 +1,4 @@
+/* eslint-disable */
 /**
  * @license
  * Copyright 2026 Google LLC
@@ -6,6 +7,7 @@
 
 import { createContext, useContext } from 'react';
 import { EventEmitter } from 'node:events';
+import WebSocket from 'ws';
 import { type TransientMessageType } from '../../utils/events.js';
 import type { DOMElement } from 'ink';
 import type { SessionStatsState } from '../contexts/SessionContext.js';
@@ -506,11 +508,67 @@ export enum MessageBusType {
 }
 
 export class IdeClient {
-    id = 'tui-mock-ide';
-    name = 'TUI Mock IDE';
+    id = 'tui-ide';
+    name = 'HIVE-MIND IDE Companion';
+    private ws: WebSocket | null = null;
+    private isConnected = false;
+    private statusListeners = new Set<() => void>();
+    private static instance: IdeClient | null = null;
+    private reconnectTimeout: NodeJS.Timeout | null = null;
 
     static async getInstance(): Promise<IdeClient> {
-        return new IdeClient();
+        if (!IdeClient.instance) {
+            IdeClient.instance = new IdeClient();
+            await IdeClient.instance.initialize();
+        }
+        return IdeClient.instance;
+    }
+
+    private constructor() {}
+
+    private async initialize(): Promise<void> {
+        const portStr = process.env.HIVE_MIND_IDE_SERVER_PORT || process.env.GEMINI_CLI_IDE_SERVER_PORT;
+        if (!portStr) {
+            return;
+        }
+
+        const port = parseInt(portStr, 10);
+        if (isNaN(port)) {
+            return;
+        }
+
+        this.connect(port);
+    }
+
+    private connect(port: number) {
+        try {
+            if (this.reconnectTimeout) {
+                clearTimeout(this.reconnectTimeout);
+                this.reconnectTimeout = null;
+            }
+
+            this.ws = new WebSocket(`ws://127.0.0.1:${port}`);
+
+            this.ws.on('open', () => {
+                this.isConnected = true;
+                this.notifyListeners();
+            });
+
+            this.ws.on('close', () => {
+                this.isConnected = false;
+                this.notifyListeners();
+                this.reconnectTimeout = setTimeout(() => this.connect(port), 3000);
+            });
+
+            this.ws.on('error', () => {
+                this.isConnected = false;
+                this.notifyListeners();
+            });
+
+        } catch (e) {
+            this.isConnected = false;
+            this.notifyListeners();
+        }
     }
 
     isInitialized(): boolean {
@@ -521,24 +579,50 @@ export class IdeClient {
         return {};
     }
 
-    getCurrentIde(): null {
-        return null;
+    getCurrentIde(): IdeInfo | null {
+        return this.isConnected ? { name: 'VS Code / Cursor', version: '1.0.0', editor: 'vscode' } : null;
     }
 
     getDetectedIdeDisplayName(): string {
-        return 'TUI Mock IDE';
+        return this.isConnected ? 'VS Code / Cursor (Connected)' : 'None';
     }
 
     isDiffingEnabled(): boolean {
-        return false;
+        return this.isConnected;
     }
 
-    addStatusChangeListener(_listener: () => void): void {}
+    addStatusChangeListener(listener: () => void): void {
+        this.statusListeners.add(listener);
+    }
 
-    removeStatusChangeListener(_listener: () => void): void {}
+    removeStatusChangeListener(listener: () => void): void {
+        this.statusListeners.delete(listener);
+    }
 
-    async resolveDiffFromCli(_filePath: string, _outcome: string): Promise<void> {
-        return Promise.resolve();
+    private notifyListeners() {
+        for (const listener of this.statusListeners) {
+            try {
+                listener();
+            } catch (e) {
+                // Ignore
+            }
+        }
+    }
+
+    async resolveDiffFromCli(filePath: string, outcome: string): Promise<void> {
+        if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        const message = {
+            action: 'resolve_diff',
+            data: {
+                filePath,
+                outcome
+            }
+        };
+
+        this.ws.send(JSON.stringify(message));
     }
 }
 

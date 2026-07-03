@@ -12,8 +12,7 @@ import {
     type LoadableSettingScope,
     type LoadedSettings
 } from '../../config/settings.js';
-import { AgentDefinition } from '../contexts/UIStateContext.js';
-import { AgentOverride } from '../contexts/UIStateContext.js';
+import { AgentDefinition, AgentOverride } from '../contexts/UIStateContext.js';
 import { getCachedStringWidth } from '../utils/textUtils.js';
 import {
     BaseSettingsDialog,
@@ -48,7 +47,7 @@ const AGENT_CONFIG_FIELDS: AgentConfigField[] = [
     {
         key: 'model',
         label: 'Model',
-        description: "Model to use (e.g., 'gemini-2.0-flash' or 'inherit')",
+        description: "Model to use (e.g., 'gemini-2.5-flash', 'claude-3-5-sonnet', or 'inherit')",
         type: 'string',
         path: ['modelConfig', 'model'],
         defaultValue: 'inherit'
@@ -204,7 +203,8 @@ export function AgentConfigDialog({
     // Pending override state for the selected scope
     const [pendingOverride, setPendingOverride] = useState<AgentOverride>(() => {
         const scopeSettings = settings.forScope(selectedScope).settings;
-        const existingOverride = (scopeSettings.agents as any)?.overrides?.[agentName];
+        const agentsConfig = scopeSettings.agents as Record<string, Record<string, unknown>> | undefined;
+        const existingOverride = agentsConfig?.overrides?.[agentName] as AgentOverride | undefined;
         return existingOverride ? structuredClone(existingOverride) : {};
     });
 
@@ -214,7 +214,8 @@ export function AgentConfigDialog({
     // Update pending override when scope changes
     useEffect(() => {
         const scopeSettings = settings.forScope(selectedScope).settings;
-        const existingOverride = (scopeSettings.agents as any)?.overrides?.[agentName];
+        const agentsConfig = scopeSettings.agents as Record<string, Record<string, unknown>> | undefined;
+        const existingOverride = agentsConfig?.overrides?.[agentName] as AgentOverride | undefined;
         setPendingOverride(
             existingOverride ? structuredClone(existingOverride) : {}
         );

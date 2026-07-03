@@ -81,6 +81,33 @@ async function getMediaIndexer(): Promise<import('../services/media/MediaIndexer
     }
 }
 
+// ── Media Search (Gemini Embedding 2 — lazy init) ─────────────────────
+let _mediaSearch: import('../services/media/MediaSearch.js').MediaSearch | null = null;
+let _mediaSearchLoading = false;
+
+export async function getMediaSearch(): Promise<import('../services/media/MediaSearch.js').MediaSearch | null> {
+    if (_mediaSearch) return _mediaSearch;
+    if (_mediaSearchLoading) return null;
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
+    if (!geminiKey) return null;
+    _mediaSearchLoading = true;
+    try {
+        const { MultimodalEmbeddingService } = await import('../services/ai/MultimodalEmbeddingService.js');
+        const { MediaSearch } = await import('../services/media/MediaSearch.js');
+        const svc = new MultimodalEmbeddingService({ geminiKey });
+        svc.init();
+        _mediaSearch = new MediaSearch(svc);
+        console.log('[Core] 🔍 MediaSearch initialisé');
+        return _mediaSearch;
+    } catch (e: unknown) {
+        console.warn('[Core] MediaSearch non disponible:', e instanceof Error ? e.message : e);
+        return null;
+    } finally {
+        _mediaSearchLoading = false;
+    }
+}
+
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let persona: { name: string; traits?: string[]; interests?: string[]; role?: string };
@@ -150,6 +177,9 @@ export class BotCore {
     }
 
     // Getters pour accès facile aux services via container
+    async getMediaSearch() {
+        return getMediaSearch();
+    }
     get db() { return container.get('supabase'); }
     get workingMemory() { return container.get('workingMemory'); }
     get consciousness() { return container.get('consciousness'); }

@@ -5,15 +5,13 @@
  * Pas d'OAuth, pas d'extensions, pas de MCP — juste le pont vers le core.
  */
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { Storage, GeminiUserTier } from '../ui/contexts/UIStateContext.js';
 import { findHiveMdFilesSync, countHiveMdFilesSync, buildHiveMdContext } from '../utils/hiveMd.js';
 
 export interface MessageBus {
-    subscribe(type: string, handler: (payload: any) => void): void;
-    unsubscribe(type: string, handler: (payload: any) => void): void;
-    publish(event: { type: string; [key: string]: any }): void;
+    subscribe(type: string, handler: (payload: unknown) => void): void;
+    unsubscribe(type: string, handler: (payload: unknown) => void): void;
+    publish(event: { type: string; [key: string]: unknown }): void;
 }
 
 export interface WorkspaceContext {
@@ -22,8 +20,8 @@ export interface WorkspaceContext {
 }
 
 export interface HookSystem {
-    fireSessionStartEvent(source: string): Promise<any> | any;
-    fireSessionEndEvent(reason: string): Promise<any> | any;
+    fireSessionStartEvent(source: string): Promise<unknown> | unknown;
+    fireSessionEndEvent(reason: string): Promise<unknown> | unknown;
 }
 
 export interface MemoryContextManager {
@@ -72,13 +70,13 @@ export interface FileFilteringOptions {
 }
 
 export interface ToolRegistry {
-    getTool(name: string): any;
+    getTool(name: string): unknown;
 }
 
 export interface ExtensionLoader {
-    setRequestConsent(consent: any): void;
-    setRequestSetting(setting: any): void;
-    getExtensions(): any[];
+    setRequestConsent(consent: unknown): void;
+    setRequestSetting(setting: unknown): void;
+    getExtensions(): unknown[];
 }
 
 export interface Experiments {
@@ -88,6 +86,8 @@ export interface Experiments {
 export interface HiveConfig {
     getApiKey(): string;
     getModel(): string;
+    setModel(model: string, tempOnly?: boolean): void;
+    refreshUserQuota(): Promise<void>;
     get(key: string): unknown;
     getAll(): Record<string, unknown>;
     getUseAlternateBuffer(): boolean;
@@ -95,6 +95,7 @@ export interface HiveConfig {
     getApprovalMode(): string;
     getProjectRoot(): string;
     getSessionId(): string;
+    setSessionId(id: string): void;
     isVoiceModeEnabled(): boolean;
     isSkillsSupportEnabled(): boolean;
     getGeminiClient(): GeminiClient | null;
@@ -151,14 +152,32 @@ export interface HiveConfig {
 }
 
 
-const SESSION_ID = `tui-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+let currentSessionId = `tui-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 // hive.md helper functions are imported from utils/hiveMd.js
 
 export function createHiveConfig(): HiveConfig {
+    let currentModel = process.env.HIVE_MODEL || 'gemini-2.0-flash';
     return {
         getApiKey: () => process.env.GOOGLE_AI_KEY || '',
-        getModel: () => process.env.HIVE_MODEL || 'gemini-2.0-flash',
+        getModel: () => currentModel,
+        setModel: (model: string, _tempOnly?: boolean) => {
+            currentModel = model;
+            // Also update the core smart router
+            import('../../providers/index.js').then(({ providerRouter }) => {
+                const parsed = providerRouter.parseModelString(model);
+                if (parsed) {
+                    providerRouter.forcedFamily = parsed.family;
+                    providerRouter.forcedModel = parsed.model;
+                } else {
+                    providerRouter.forcedFamily = undefined;
+                    providerRouter.forcedModel = model;
+                }
+            }).catch(err => {
+                console.error('[HiveConfig] Failed to update providerRouter:', err);
+            });
+        },
+        refreshUserQuota: async () => {},
         get: (key: string) => {
             const map: Record<string, unknown> = {
                 useAlternateBuffer: false,
@@ -173,7 +192,8 @@ export function createHiveConfig(): HiveConfig {
         getScreenReader: () => false,
         getApprovalMode: () => 'default',
         getProjectRoot: () => process.cwd(),
-        getSessionId: () => SESSION_ID,
+        getSessionId: () => currentSessionId,
+        setSessionId: (id: string) => { currentSessionId = id; },
         isVoiceModeEnabled: () => false,
         isSkillsSupportEnabled: () => false,
         getGeminiClient: () => null,

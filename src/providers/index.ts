@@ -103,6 +103,8 @@ class ProviderRouter {
     adapters: Map<string, { chat: (messages: unknown[], options: Record<string, unknown>) => Promise<unknown>; embed?: (text: string | string[], options: Record<string, unknown>) => Promise<unknown> }>;
     currentFamily: string;
     usageStats: Map<string, number>;
+    forcedFamily?: string;
+    forcedModel?: string;
     circuitStats: Map<string, { failureCount: number, cooldownUntil: number }>;
     /** Failure score par modèle (non-quota) : plus haut = relégué en fin de rotation */
     modelFailureScore: Map<string, { score: number, lastFailureAt: number }>;
@@ -397,8 +399,15 @@ class ProviderRouter {
      * Level 2: Availability (QuotaManager — Zero-429)
      * Level 3: Category Resolution (caller-provided or default AGENTIC — NO LLM call)
      */
-    async chat(messages: unknown[], options: ChatOptions = {}): Promise<ChatResponse> {
+    async chat(messages: unknown[], rawOptions: ChatOptions = {}): Promise<ChatResponse> {
         console.log(`[Router Debug] chat called. messages type: ${typeof messages}, isArray: ${Array.isArray(messages)}`);
+        const options = { ...rawOptions };
+        if (this.forcedFamily) {
+            options.family = this.forcedFamily;
+        }
+        if (this.forcedModel) {
+            options.model = this.forcedModel;
+        }
         // 1. Initialisation
         const { container } = await import('../core/ServiceContainer.js');
         let quotaManager: {
