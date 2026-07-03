@@ -130,7 +130,7 @@ export class HiveCoreConnection implements AgentProtocol {
     private confirmationRequestListener: (event: { id: string; type: string; data: Record<string, unknown> & { questions?: unknown[] }; description: string }) => void;
     private serviceStartListener: (event: ServiceEvent) => void;
     private serviceEndListener: (event: ServiceEvent) => void;
-    private customEventListener: (event: any) => void;
+    private customEventListener: (event: { name: string; message: string; timestamp?: number }) => void;
     private initialized = false;
     private hardTimeoutTimer: NodeJS.Timeout | null = null;
     private expectingResponse = false;
@@ -168,7 +168,7 @@ export class HiveCoreConnection implements AgentProtocol {
             }
         };
 
-        this.customEventListener = (event: any) => {
+        this.customEventListener = (event: { name: string; message: string; timestamp?: number }) => {
             if (event && event.name === 'context_usage_update') {
                 this.emit({
                     type: 'custom',
