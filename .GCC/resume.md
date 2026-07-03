@@ -22,3 +22,7 @@
 1. **Target File**: [.GCC/main.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/main.md)
 2. **Immediate Action**: Poursuivre le plan général de refactorisation de la TUI en démarrant la **Session 17** (Intégration de l'indicateur dynamique de la fenêtre de contexte).
 3. **Precautions**: Veiller à conserver l'architecture découplée entre le Core/Transport et la TUI React/Config pour éviter de déclencher à nouveau les cascades de type-check sur la TUI.
+4. **Co-Authorship**: Ajouter le pied de commit suivant à chaque commit généré par l'agent :
+   ```
+   Co-authored-by: Google Antigravity <242056456+google-antigravity@users.noreply.github.com>
+   ```
