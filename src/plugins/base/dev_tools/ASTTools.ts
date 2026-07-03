@@ -13,7 +13,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { permissionManager } from '../../../core/security/PermissionManager.js';
 import {
@@ -24,7 +24,7 @@ import {
 } from '../../../services/ast/index.js';
 import { hashLines } from '../../../services/anchor/index.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // --- Type helpers ---
 
@@ -88,11 +88,17 @@ async function resolveFilePaths(searchPaths: string[]): Promise<string[]> {
 
 async function expandDirectory(dirPath: string, filePaths: string[]): Promise<void> {
     try {
-        const { stdout } = await execAsync(
-            `find "${dirPath}" -maxdepth 3 -type f \\( ${Object.keys(LANGUAGE_MAP).map(e => `-name "*.${e}"`).join(' -o ')} \\) | head -100`,
-            { timeout: 5000 }
-        );
-        filePaths.push(...stdout.split('\n').filter(Boolean));
+        const findArgs = [dirPath, '-maxdepth', '3', '-type', 'f', '('];
+        const extensions = Object.keys(LANGUAGE_MAP);
+        extensions.forEach((ext, index) => {
+            if (index > 0) findArgs.push('-o');
+            findArgs.push('-name', `*.${ext}`);
+        });
+        findArgs.push(')');
+
+        const { stdout } = await execFileAsync('find', findArgs, { timeout: 5000 });
+        const results = stdout.split('\n').filter(Boolean);
+        filePaths.push(...results.slice(0, 100));
     } catch {
         const entries = fs.readdirSync(dirPath);
         for (const entry of entries) {
