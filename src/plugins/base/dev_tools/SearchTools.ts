@@ -225,8 +225,11 @@ export default {
     ],
 
     async execute(args: SearchToolArgs, _context: SearchToolContext, toolName: string) {
-        const checkReadAccess = async (_targetPath: string): Promise<{ granted: boolean }> => {
-            return { granted: true };
+        const checkReadAccess = async (targetPath: string): Promise<{ granted: boolean }> => {
+            const absolutePath = path.resolve(process.cwd(), targetPath);
+            const sandboxDir = permissionManager.sandboxDir;
+            const isGranted = absolutePath === sandboxDir || absolutePath.startsWith(sandboxDir + path.sep);
+            return { granted: isGranted };
         };
 
         try {
