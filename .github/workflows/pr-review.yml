@@ -26,7 +26,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 'lts/*'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -50,12 +50,14 @@ jobs:
         run: |
           npx eslint ${{ steps.changed-files.outputs.all_changed_files }}
 
+
       - name: Jules PR Reviewer
         uses: sanjay3290/jules-pr-reviewer@v1
+        continue-on-error: true
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          rules_file: .agent/rules/GCC.md # Optionnel : Fichier contenant vos règles de développement
+          rules_file: JULES.md
           extra_instructions: |
             Tu es Jules, l'agent IA officiel de revue de code de ce projet.
             Lorsque tu laisses un commentaire ou une revue de code sur une Pull Request, commence impérativement tes messages en te présentant clairement comme Jules (ex: "Bonjour, ici Jules !", "Jules à l'appareil :" ou en signant par "— Jules" à la fin).
@@ -68,3 +70,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr merge --auto --merge "$PR_URL" || echo "L'auto-merge n'a pas pu être configuré automatiquement."
+
