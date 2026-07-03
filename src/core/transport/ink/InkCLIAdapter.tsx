@@ -7,17 +7,24 @@ export const InkCLIAdapter = {
     messageCallback: null as any,
     groupEventCallback: null as any,
     messages: [] as any[],
+    isTyping: false as boolean,
 
     // Hook exposé par le composant React pour mettre à jour l'état interne
     updateMessages: null as ((messages: any[]) => void) | null,
+    updateIsTyping: null as ((isTyping: boolean) => void) | null,
 
     /**
      * Helper pour ajouter un message à l'interface
      */
     addMessage: (msg: any) => {
         InkCLIAdapter.messages = [...InkCLIAdapter.messages, msg];
+        InkCLIAdapter.isTyping = false;
+
         if (InkCLIAdapter.updateMessages) {
             InkCLIAdapter.updateMessages(InkCLIAdapter.messages);
+        }
+        if (InkCLIAdapter.updateIsTyping) {
+            InkCLIAdapter.updateIsTyping(false);
         }
     },
 
@@ -30,12 +37,15 @@ export const InkCLIAdapter = {
 
         const Container = () => {
             const [messages, setMessages] = React.useState<any[]>(InkCLIAdapter.messages);
+            const [isTyping, setIsTyping] = React.useState<boolean>(InkCLIAdapter.isTyping);
 
             // On expose le setter
             React.useEffect(() => {
                 InkCLIAdapter.updateMessages = setMessages;
+                InkCLIAdapter.updateIsTyping = setIsTyping;
                 return () => {
                     InkCLIAdapter.updateMessages = null;
+                    InkCLIAdapter.updateIsTyping = null;
                 };
             }, []);
 
@@ -62,7 +72,7 @@ export const InkCLIAdapter = {
                 }
             };
 
-            return <App messages={messages} onMessage={handleMessage} />;
+            return <App messages={messages} onMessage={handleMessage} isTyping={isTyping} />;
         };
 
         console.clear();
@@ -151,7 +161,10 @@ export const InkCLIAdapter = {
      * Met à jour la présence (typing, online, etc.)
      */
     setPresence: async (chatId: string, presence: string) => {
-        // TODO: On pourrait afficher un "Agent is typing..." dans l'UI via un state "isTyping"
+        InkCLIAdapter.isTyping = (presence === 'composing' || presence === 'recording');
+        if (InkCLIAdapter.updateIsTyping) {
+            InkCLIAdapter.updateIsTyping(InkCLIAdapter.isTyping);
+        }
     },
 
     /**
