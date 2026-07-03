@@ -58,6 +58,7 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - [2026-07-02] [GITHUB-SYNC-DIFF] Ajout d'une vérification par `git diff --quiet` dans la synchronisation automatique pour éviter de créer des Pull Requests vides et prévenir les plantages de l'API GraphQL de GitHub.
 - [2026-07-02] [GITHUB-SYNC-STATIC-BRANCH] Adoption d'une branche de synchronisation statique (`sync-upstream-main`) mise à jour par force-push, éliminant l'accumulation de branches obsolètes sur le fork.
 - [2026-07-03] [TUI-MODELS-DYNAMIC] Refactorisation des dialogues de modèles (ModelDialog et VoiceModelDialog) pour les lier dynamiquement à l'infrastructure multi-providers de HIVE-MIND. Ajout de properties de surcharge ('forcedFamily', 'forcedModel') sur le Router central et intégration de nouveaux paramètres de voix (TTS Minimax/Gemini/gTTS, STT Groq/Gemini-Live) dans le schéma de configuration.
+- [2026-07-03] [JULES-PR-INTEGRITY] Ajout d'une règle dans JULES.md (section 5) et dans l'instruction de revue du workflow pr-review.yml pour exiger que Jules vérifie si les modifications de code réelles de la PR correspondent aux revendications textuelles de son titre, de sa description et du fichier .GCC/resume.md.
 
 ## 🌿 Active Branches / Plans
 

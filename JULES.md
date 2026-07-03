@@ -17,3 +17,6 @@ Ce document définit les standards de développement et de sécurité applicable
 ## 4. Sécurité et Commandes
 - **Injection de Commandes** : L'exécution de commandes externes via des processus enfants doit se faire par passage d'arguments sous forme de tableau (`execFile`) et non par concaténation de chaînes de caractères brutes (`exec`), afin de prévenir les injections.
 - **Sécurisation par défaut** : En cas d'erreur lors d'un contrôle d'autorisation ou de sécurité, la fonction doit lever une exception ou retourner une réponse restrictive (fail-closed).
+
+## 5. Cohérence et Intégrité des Contributions
+- **Liaison du Code et des Revendications** : Les modifications de fichiers doivent correspondre exactement aux fonctionnalités décrites dans le titre de la Pull Request, sa description et le fichier de suivi `.GCC/resume.md`. Une contribution affirmant implémenter ou modifier du code applicatif, mais qui ne contient en réalité que des modifications de documentation, de métadonnées ou de simples scripts de test sans le code métier associé, doit être rejetée avec demande de correction.
