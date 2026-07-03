@@ -4,13 +4,15 @@ on:
   push:
     branches-ignore:
       - main
+      - 'pr-clean-*'
+      - 'sync-upstream-*'
 
 jobs:
   create-pr-upstream:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
           token: ${{ secrets.UPSTREAM_PAT || secrets.GITHUB_TOKEN }}
@@ -36,18 +38,9 @@ jobs:
           # Créer ou réinitialiser la branche de PR propre
           git checkout -B "$PR_BRANCH"
 
-          # Réinitialiser le dossier .github/ à l'état de l'upstream
-          if git rev-parse --verify upstream/main:.github >/dev/null 2>&1; then
-            git checkout upstream/main -- .github/
-          else
-            git rm -rf .github/ || rm -rf .github/
-          fi
-
-          # Valider le nettoyage
-          git commit -am "chore: reset workflows to upstream state for PR compatibility" || echo "Pas de changements de workflows à valider."
 
           # Pousser la branche propre
-          git push origin "$PR_BRANCH" --force
+          git push origin "$PR_BRANCH" --force || echo "Push failed, ignoring..."
 
           # Vérifier si une PR existe déjà pour cette branche propre
           PR_EXISTS=$(gh pr list --repo "$UPSTREAM_REPO" --head "$FORK_OWNER:$PR_BRANCH" --json number --jq '.[0].number')
@@ -59,7 +52,7 @@ jobs:
               --head "$FORK_OWNER:$PR_BRANCH" \
               --base main \
               --title "Auto PR: $BRANCH_NAME" \
-              --body "Cette Pull Request a été générée automatiquement et expurgée des configurations locales du dossier .github/."
+              --body "Cette Pull Request a été générée automatiquement et expurgée des configurations locales du dossier .github/." || echo "PR creation failed"
           else
             echo "La Pull Request #$PR_EXISTS existe déjà."
           fi
