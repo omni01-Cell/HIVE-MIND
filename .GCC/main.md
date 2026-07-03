@@ -2,6 +2,7 @@
 
 ## 🏆 Major Milestones (Archived Epics)
 
+- **[2026-07-03] Jules Rules and Workflow Lock** : Éradication complète des boucles de Pull Requests automatiques par le nettoyage final et la suppression de toutes les branches obsolètes sur le fork `leandre755/HIVE-MIND`, la fermeture de toutes les PRs en boucle sur `omni01-Cell/HIVE-MIND`, la mise à jour de `guide_auto_review_merge.md` et le déploiement général du fichier `JULES.md` à la racine.
 - **[2026-07-02] Gitignore Refinement** : Retrait de `.agent/` et de `AGENTS.md` du fichier `.gitignore` afin de permettre l'inclusion et le suivi de ces fichiers dans Git.
 - **[2026-07-02] Epic Auto-Review and Auto-Merge** : Installation de Husky locale avec validations incrémentales (seuls les fichiers modifiés sont passés au Linter ESLint) et création du workflow pr-review.yml (CI/CD) intégrant la revue automatique Jules et l'auto-merge GitHub.
 - **[2026-07-02] GitHub Actions Synchronization** : Configuration et automatisation de la synchronisation bidirectionnelle par Pull Request entre le fork (leandre755/HIVE-MIND) et le parent (omni01-Cell/HIVE-MIND), incluant le déploiement automatique du token en tant que secret `UPSTREAM_PAT` sur le fork.
