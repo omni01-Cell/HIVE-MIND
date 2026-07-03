@@ -118,7 +118,7 @@ jobs:
         with:
           jules_api_key: ${{ secrets.JULES_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          rules_file: .agent/rules/GCC.md # Optionnel : Fichier contenant vos règles de développement
+          rules_file: JULES.md # Optionnel : Fichier contenant vos règles de développement
           extra_instructions: |
             Tu es Jules, l'agent IA officiel de revue de code de ce projet.
             Lorsque tu laisses un commentaire ou une revue de code sur une Pull Request, commence impérativement tes messages en te présentant clairement comme Jules (ex: "Bonjour, ici Jules !", "Jules à l'appareil :" ou en signant par "— Jules" à la fin).

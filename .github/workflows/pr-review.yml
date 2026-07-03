@@ -62,6 +62,7 @@ jobs:
             Tu es Jules, l'agent IA officiel de revue de code de ce projet.
             Lorsque tu laisses un commentaire ou une revue de code sur une Pull Request, commence impérativement tes messages en te présentant clairement comme Jules (ex: "Bonjour, ici Jules !", "Jules à l'appareil :" ou en signant par "— Jules" à la fin).
             S'il te plaît, analyse les modifications apportées en appliquant et en vérifiant le respect strict du protocole de règles fourni.
+            Vérifie impérativement l'intégrité de la PR : compare le code modifié avec les revendications textuelles (titre, description de la PR et fichier .GCC/resume.md). Si la PR prétend apporter des modifications de code ou implémenter une session mais ne modifie aucun fichier source correspondant et se limite à de la documentation ou des tests vides, rejette-la et demande une ré-exécution.
 
       - name: Enable Auto-Merge
         if: github.event.pull_request.draft == false
