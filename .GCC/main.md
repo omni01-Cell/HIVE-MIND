@@ -2,6 +2,7 @@
 
 ## 🏆 Major Milestones (Archived Epics)
 
+- **[2026-07-03] Jules TUI PR Integration & Decoupling** : Résolution des conflits et fusion définitive de la PR de Jules (liaison de session dynamique) sur le fork et le dépôt parent, après un découplage architectural de `HiveTransport` pour éliminer la cascade de compilation TS des fichiers TUI non-refactorisés.
 - **[2026-07-03] Jules Rules and Workflow Lock** : Éradication complète des boucles de Pull Requests automatiques par le nettoyage final et la suppression de toutes les branches obsolètes sur le fork `leandre755/HIVE-MIND`, la fermeture de toutes les PRs en boucle sur `omni01-Cell/HIVE-MIND`, la mise à jour de `guide_auto_review_merge.md` et le déploiement général du fichier `JULES.md` à la racine.
 - **[2026-07-02] Gitignore Refinement** : Retrait de `.agent/` et de `AGENTS.md` du fichier `.gitignore` afin de permettre l'inclusion et le suivi de ces fichiers dans Git.
 - **[2026-07-02] Epic Auto-Review and Auto-Merge** : Installation de Husky locale avec validations incrémentales (seuls les fichiers modifiés sont passés au Linter ESLint) et création du workflow pr-review.yml (CI/CD) intégrant la revue automatique Jules et l'auto-merge GitHub.
@@ -28,6 +29,10 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 
 ## 🧠 Decisions Made
 
+- [2026-07-03] [TUI-TRANSPORT-DECOUPLING] Decoupled HiveTransport from hiveConfig. Décidé de rompre la dépendance directe de HiveTransport envers hiveConfig pour éviter que l'importation de HiveTransport par le core ne force TypeScript à compiler l'intégralité de l'application TUI (contenant 45 erreurs TS héritées de fichiers React non-refactorisés). L'ID de session est désormais propagé de manière asymétrique via setSessionId() sur le transport lors de l'initialisation et des changements.
+- [2026-07-03] [TUI-MODELS-DYNAMIC] Refactorisation des dialogues de modèles (ModelDialog et VoiceModelDialog) pour les lier dynamiquement à l'infrastructure multi-providers de HIVE-MIND. Ajout de properties de surcharge ('forcedFamily', 'forcedModel') sur le Router central et intégration de nouveaux paramètres de voix (TTS Minimax/Gemini/gTTS, STT Groq/Gemini-Live) dans le schéma de configuration.
+- [2026-07-03] [JULES-PR-INTEGRITY] Ajout d'une règle dans JULES.md (section 5) et dans l'instruction de revue du workflow pr-review.yml pour exiger que Jules vérifie si les modifications de code réelles de la PR correspondent aux revendications textuelles de son titre, de sa description et du fichier .GCC/resume.md.
+- [2026-07-03] [GCC-AUTO-MERGE] Création de .gitattributes configurant le pilote de fusion 'union' pour .GCC/resume.md et .GCC/main.md, permettant à Git et à GitHub de résoudre automatiquement les conflits sur les fichiers de suivi de contexte.
 - [2026-06-11] [TUI-ANALYSIS] Analyse complète de la TUI (82k lignes, 250 fichiers) et du core HIVE-MIND (5k lignes, 14 fichiers). La TUI est un fork Gemini CLI non connecté au vrai core. Le stub `@tui/core` (1035 lignes) est utilisé par 100+ fichiers. La couche transport (`src/tui/transport/`, 1045 lignes) existe mais n'est jamais branchée.
 - [2026-06-11] [TUI-STRICT-ANY] Détection d'erreurs implicites 'any' suite à la réactivation de `noImplicitAny: true`. Décidé d'explorer et d'appliquer des types stricts ou de déclarer les modules non-typés (`semver`, `ansi-regex`).
 - [2026-06-11] [TUI-R1] Passing `settings` as a parameter to `useIdeTrustListener` to resolve the SettingsProvider mounting context order.
