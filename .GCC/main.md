@@ -2,6 +2,7 @@
 
 ## 🏆 Major Milestones (Archived Epics)
 
+- **[2026-07-03] PR Recovery & Integration** : Restauration et intégration sélective des Pull Requests fermées indûment par Jules (PR #11 pour l'indicateur de présence TUI, PR #10 pour les tests unitaires d'audioConverter, et PR #8 pour la correction d'injection de commande dans ASTTools.expandDirectory).
 - **[2026-07-03] Jules TUI PR Integration & Decoupling** : Résolution des conflits et fusion définitive de la PR de Jules (liaison de session dynamique) sur le fork et le dépôt parent, après un découplage architectural de `HiveTransport` pour éliminer la cascade de compilation TS des fichiers TUI non-refactorisés.
 - **[2026-07-03] Jules Rules and Workflow Lock** : Éradication complète des boucles de Pull Requests automatiques par le nettoyage final et la suppression de toutes les branches obsolètes sur le fork `leandre755/HIVE-MIND`, la fermeture de toutes les PRs en boucle sur `omni01-Cell/HIVE-MIND`, la mise à jour de `guide_auto_review_merge.md` et le déploiement général du fichier `JULES.md` à la racine.
 - **[2026-07-02] Gitignore Refinement** : Retrait de `.agent/` et de `AGENTS.md` du fichier `.gitignore` afin de permettre l'inclusion et le suivi de ces fichiers dans Git.
@@ -29,6 +30,8 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 
 ## 🧠 Decisions Made
 
+- [2026-07-03] [PR-8-INTEGRATION] Intégration de la PR #8. Analyse et application manuelle de la correction d'injection de commande dans la fonction expandDirectory d'ASTTools en utilisant execFileAsync au lieu d'execAsync.
+- [2026-07-03] [PR-INTEGRITY-RECOVERY] Récupération sélective des PRs fermées de force par Jules. Pour préserver la sécurité de la branche main et éviter les conflits obsolètes de workflows, les changements fonctionnels légitimes (indicateurs de présence et tests unitaires) ont été isolés et appliqués directement sur main.
 - [2026-07-03] [COMMIT-CO-AUTH] Co-authored-by commit message footers. Décidé d'ajouter systématiquement le pied de commit "Co-authored-by: Google Antigravity <242056456+google-antigravity@users.noreply.github.com>" à tous les futurs commits Git générés par l'assistant IA, pour assurer une attribution correcte sur GitHub.
 - [2026-07-03] [TUI-TRANSPORT-DECOUPLING] Decoupled HiveTransport from hiveConfig. Décidé de rompre la dépendance directe de HiveTransport envers hiveConfig pour éviter que l'importation de HiveTransport par le core ne force TypeScript à compiler l'intégralité de l'application TUI (contenant 45 erreurs TS héritées de fichiers React non-refactorisés). L'ID de session est désormais propagé de manière asymétrique via setSessionId() sur le transport lors de l'initialisation et des changements.
 - [2026-07-03] [TUI-MODELS-DYNAMIC] Refactorisation des dialogues de modèles (ModelDialog et VoiceModelDialog) pour les lier dynamiquement à l'infrastructure multi-providers de HIVE-MIND. Ajout de properties de surcharge ('forcedFamily', 'forcedModel') sur le Router central et intégration de nouveaux paramètres de voix (TTS Minimax/Gemini/gTTS, STT Groq/Gemini-Live) dans le schéma de configuration.
@@ -66,6 +69,7 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - [2026-07-03] [TUI-MODELS-DYNAMIC] Refactorisation des dialogues de modèles (ModelDialog et VoiceModelDialog) pour les lier dynamiquement à l'infrastructure multi-providers de HIVE-MIND. Ajout de properties de surcharge ('forcedFamily', 'forcedModel') sur le Router central et intégration de nouveaux paramètres de voix (TTS Minimax/Gemini/gTTS, STT Groq/Gemini-Live) dans le schéma de configuration.
 - [2026-07-03] [JULES-PR-INTEGRITY] Ajout d'une règle dans JULES.md (section 5) et dans l'instruction de revue du workflow pr-review.yml pour exiger que Jules vérifie si les modifications de code réelles de la PR correspondent aux revendications textuelles de son titre, de sa description et du fichier .GCC/resume.md.
 - [2026-07-03] [GCC-AUTO-MERGE] Création de .gitattributes configurant le pilote de fusion 'union' pour .GCC/resume.md et .GCC/main.md, permettant à Git et à GitHub de résoudre automatiquement les conflits sur les fichiers de suivi de contexte.
+- [2026-07-03] [SYSTEM-KEYBOARD-CONFIG] Configuration clavier personnalisée pour l'utilisateur sur KDE Wayland. Création du layout XKB utilisateur custom_fr sous ~/.config/xkb/symbols/custom_fr (mappage de AltGr+; vers < et AltGr+: vers >) et activation persistante dans ~/.config/kxkbrc.
 
 ## 🌿 Active Branches / Plans
 
