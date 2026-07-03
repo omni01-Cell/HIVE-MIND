@@ -7,7 +7,6 @@
 
 import { EventEmitter } from 'events';
 import type { MessageData, BotEvent } from '../../core/types/BotTypes.js';
-import { hiveConfig } from '../config/hiveConfig.js';
 
 type MessageCallback = (message: MessageData) => void;
 type GroupEventCallback = (event: BotEvent) => void;
@@ -18,9 +17,20 @@ class HiveTransportImpl extends EventEmitter {
     private groupEventCallbacks: GroupEventCallback[] = [];
     private isInitialized = false;
     private pendingConfirmations: Map<string, { resolve: (res: { approved: boolean; feedback?: string }) => void }> = new Map();
+    private sessionId = '';
 
     constructor() {
         super();
+    }
+
+    /** Set the TUI session ID from the configuration */
+    setSessionId(id: string): void {
+        this.sessionId = id;
+    }
+
+    /** Retrieve the TUI session ID */
+    getSessionId(): string {
+        return this.sessionId || 'tui-local';
     }
 
     /**
@@ -48,7 +58,7 @@ class HiveTransportImpl extends EventEmitter {
      */
     async sendText(chatId: string, text: string, options: Record<string, unknown> = {}): Promise<unknown> {
         const message: MessageData = {
-            chatId: chatId || hiveConfig.getSessionId(),
+            chatId: chatId || this.getSessionId(),
             sender: 'assistant',
             text,
             isGroup: false,
@@ -134,7 +144,11 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie une réponse structurée (Universal Response)
      */
-    async sendUniversalResponse(chatId: string, response: any, options: Record<string, unknown> = {}): Promise<unknown> {
+    async sendUniversalResponse(
+        chatId: string,
+        response: { markdown?: string; plainText?: string; visual?: unknown },
+        options: Record<string, unknown> = {}
+    ): Promise<unknown> {
         const text = response.markdown || response.plainText || '';
         if (text) {
             await this.sendText(chatId, text, options);
@@ -165,7 +179,7 @@ class HiveTransportImpl extends EventEmitter {
      */
     submitUserMessage(text: string, options: Record<string, unknown> = {}): void {
         const msg: MessageData = {
-            chatId: hiveConfig.getSessionId(),
+            chatId: this.getSessionId(),
             sender: 'owner@local',
             senderName: 'TUI Admin',
             text,
@@ -187,7 +201,7 @@ class HiveTransportImpl extends EventEmitter {
      * Retourne l'identifiant du chat local
      */
     getChatId(): string {
-        return hiveConfig.getSessionId();
+        return this.getSessionId();
     }
 
     /**

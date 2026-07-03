@@ -7,6 +7,7 @@
 
 import { Storage, GeminiUserTier } from '../ui/contexts/UIStateContext.js';
 import { findHiveMdFilesSync, countHiveMdFilesSync, buildHiveMdContext } from '../utils/hiveMd.js';
+import { hiveTransport } from '../transport/HiveTransport.js';
 import * as fsPromises from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -197,7 +198,10 @@ export function createHiveConfig(): HiveConfig {
         getApprovalMode: () => 'default',
         getProjectRoot: () => process.cwd(),
         getSessionId: () => currentSessionId,
-        setSessionId: (id: string) => { currentSessionId = id; },
+        setSessionId: (id: string) => {
+            currentSessionId = id;
+            hiveTransport.setSessionId(id);
+        },
         isVoiceModeEnabled: () => false,
         isSkillsSupportEnabled: () => false,
         getGeminiClient: () => ({
@@ -341,3 +345,4 @@ export function createHiveConfig(): HiveConfig {
 }
 
 export const hiveConfig = createHiveConfig();
+hiveTransport.setSessionId(hiveConfig.getSessionId());
