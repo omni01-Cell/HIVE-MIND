@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
 // Mock fs BEFORE importing the target module
 jest.unstable_mockModule('fs', () => ({
