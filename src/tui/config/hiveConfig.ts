@@ -7,6 +7,10 @@
 
 import { Storage, GeminiUserTier } from '../ui/contexts/UIStateContext.js';
 import { findHiveMdFilesSync, countHiveMdFilesSync, buildHiveMdContext } from '../utils/hiveMd.js';
+import * as fsPromises from 'node:fs/promises';
+import { homedir } from 'node:os';
+import path from 'node:path';
+import { coreEvents } from '../utils/coreEvents.js';
 
 export interface MessageBus {
     subscribe(type: string, handler: (payload: unknown) => void): void;
@@ -196,7 +200,49 @@ export function createHiveConfig(): HiveConfig {
         setSessionId: (id: string) => { currentSessionId = id; },
         isVoiceModeEnabled: () => false,
         isSkillsSupportEnabled: () => false,
-        getGeminiClient: () => null,
+        getGeminiClient: () => ({
+            isInitialized: () => true,
+            getChatRecordingService: () => ({
+                deleteCurrentSessionAsync: async () => {},
+                recordMessage: (msg: unknown) => {
+                    const msgObj = msg as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+                    const role = msgObj?.type === 'user' ? 'user' : 'assistant';
+                    const text = msgObj?.content || msgObj?.text || '';
+                    if (!text) return;
+
+                    const chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
+                    const filePath = path.join(chatsDir, `hive_session_${currentSessionId}.jsonl`);
+
+                    const record = JSON.stringify({
+                        type: msgObj?.type || 'assistant',
+                        content: text,
+                        role
+                    }) + '\n';
+
+                    fsPromises.mkdir(chatsDir, { recursive: true })
+                        .then(() => fsPromises.appendFile(filePath, record))
+                        .catch(err => {
+                            coreEvents.emitFeedback('error', 'Local sync failed', err);
+
+                        });
+
+                    import('../../services/memory.js')
+                        .then(({ semanticMemory }) => {
+                            if (semanticMemory && semanticMemory.store) {
+                                semanticMemory.store(currentSessionId, String(text), role)
+                                    .catch((err: unknown) => {
+                                        coreEvents.emitFeedback('error', 'Supabase sync failed', err);
+
+                                    });
+                            }
+                        })
+                        .catch((err: unknown) => {
+                            coreEvents.emitFeedback('error', 'Memory module import failed', err);
+
+                        });
+                }
+            })
+        }),
         getMessageBus: () => ({
             subscribe: () => { /* noop */ },
             unsubscribe: () => { /* noop */ },

@@ -22,7 +22,7 @@ import type {
 import type { MessageData } from '../../core/types/BotTypes.js';
 
 
-const TUI_CHAT_ID = 'tui-local';
+const getTuiChatId = () => hiveConfig.getSessionId();
 const TUI_SENDER = 'owner@local';
 const TUI_SENDER_NAME = 'TUI Admin';
 
@@ -178,7 +178,7 @@ export class HiveCoreConnection implements AgentProtocol {
         };
 
         this.presenceListener = (event: { chatId: string; presence: string }) => {
-            if (event.chatId !== TUI_CHAT_ID) return;
+            if (event.chatId !== getTuiChatId()) return;
             if (event.presence === 'composing' || event.presence === 'recording') {
                 if (!this.expectingResponse) {
                     this.expectingResponse = true;
@@ -307,7 +307,7 @@ export class HiveCoreConnection implements AgentProtocol {
         this.emit({ type: 'agent_start' });
 
         hiveTransport.submitUserMessage(text, {
-            chatId: TUI_CHAT_ID,
+            chatId: getTuiChatId(),
             sender: TUI_SENDER,
             senderName: TUI_SENDER_NAME,
             authorityLevel: 'DIVIN (SuperUser)',

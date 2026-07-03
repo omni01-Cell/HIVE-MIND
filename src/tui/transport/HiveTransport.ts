@@ -7,17 +7,17 @@
 
 import { EventEmitter } from 'events';
 import type { MessageData, BotEvent } from '../../core/types/BotTypes.js';
+import { hiveConfig } from '../config/hiveConfig.js';
 
 type MessageCallback = (message: MessageData) => void;
 type GroupEventCallback = (event: BotEvent) => void;
 
-const TUI_CHAT_ID = 'tui-local';
 
 class HiveTransportImpl extends EventEmitter {
     private messageCallbacks: MessageCallback[] = [];
     private groupEventCallbacks: GroupEventCallback[] = [];
     private isInitialized = false;
-    private pendingConfirmations: Map<string, { resolve: (res: any) => void }> = new Map();
+    private pendingConfirmations: Map<string, { resolve: (res: { approved: boolean; feedback?: string }) => void }> = new Map();
 
     constructor() {
         super();
@@ -46,9 +46,9 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie un message texte du core vers le TUI
      */
-    async sendText(chatId: string, text: string, options: Record<string, unknown> = {}): Promise<any> {
+    async sendText(chatId: string, text: string, options: Record<string, unknown> = {}): Promise<unknown> {
         const message: MessageData = {
-            chatId: chatId || TUI_CHAT_ID,
+            chatId: chatId || hiveConfig.getSessionId(),
             sender: 'assistant',
             text,
             isGroup: false,
@@ -63,7 +63,7 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie un média (image, vidéo, audio, document) du core vers le TUI
      */
-    async sendMedia(chatId: string, media: any, options: Record<string, unknown> = {}): Promise<any> {
+    async sendMedia(chatId: string, media: unknown, options: Record<string, unknown> = {}): Promise<unknown> {
         const type = options.type || 'document';
         const filename = options.filename || 'media';
         const caption = options.caption || '';
@@ -75,7 +75,7 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie une note vocale du core vers le TUI
      */
-    async sendVoiceNote(chatId: string, audio: any, options: Record<string, unknown> = {}): Promise<any> {
+    async sendVoiceNote(chatId: string, audio: unknown, options: Record<string, unknown> = {}): Promise<unknown> {
         this.emit('voice', { chatId, audio, options });
         return { success: true };
     }
@@ -83,7 +83,7 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie un fichier du core vers le TUI
      */
-    async sendFile(chatId: string, filePath: string, fileName: string, caption: string = ''): Promise<any> {
+    async sendFile(chatId: string, filePath: string, fileName: string, caption: string = ''): Promise<unknown> {
         this.emit('file', { chatId, filePath, fileName, caption });
         return { success: true };
     }
@@ -91,7 +91,7 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie un sticker du core vers le TUI
      */
-    async sendSticker(chatId: string, stickerBuffer: Buffer): Promise<any> {
+    async sendSticker(chatId: string, stickerBuffer: Buffer): Promise<unknown> {
         this.emit('sticker', { chatId, stickerBuffer });
         return { success: true };
     }
@@ -134,7 +134,7 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie une réponse structurée (Universal Response)
      */
-    async sendUniversalResponse(chatId: string, response: any, options: Record<string, unknown> = {}): Promise<any> {
+    async sendUniversalResponse(chatId: string, response: any, options: Record<string, unknown> = {}): Promise<unknown> {
         const text = response.markdown || response.plainText || '';
         if (text) {
             await this.sendText(chatId, text, options);
@@ -155,7 +155,7 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie une réaction
      */
-    async sendReaction(chatId: string, key: any, emoji: string): Promise<boolean> {
+    async sendReaction(chatId: string, key: unknown, emoji: string): Promise<boolean> {
         this.emit('reaction', { chatId, key, emoji });
         return true;
     }
@@ -165,7 +165,7 @@ class HiveTransportImpl extends EventEmitter {
      */
     submitUserMessage(text: string, options: Record<string, unknown> = {}): void {
         const msg: MessageData = {
-            chatId: TUI_CHAT_ID,
+            chatId: hiveConfig.getSessionId(),
             sender: 'owner@local',
             senderName: 'TUI Admin',
             text,
@@ -187,7 +187,7 @@ class HiveTransportImpl extends EventEmitter {
      * Retourne l'identifiant du chat local
      */
     getChatId(): string {
-        return TUI_CHAT_ID;
+        return hiveConfig.getSessionId();
     }
 
     /**
@@ -207,7 +207,7 @@ class HiveTransportImpl extends EventEmitter {
     /**
      * Envoie une requête de confirmation HITL vers le TUI
      */
-    async requestConfirmation(type: string, data: any, description: string): Promise<{ approved: boolean; feedback?: string }> {
+    async requestConfirmation(type: string, data: unknown, description: string): Promise<{ approved: boolean; feedback?: string }> {
         const id = `conf-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         return new Promise((resolve) => {
             this.pendingConfirmations.set(id, { resolve });
