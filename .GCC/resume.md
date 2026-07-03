@@ -1,27 +1,23 @@
 # Session Handoff
 
 ## ⚡ Accomplishments This Session
-- **Fusion et Intégration de 3 Pull Requests Automatiques (Jules)** :
-  - **PR #2 (`⚡ perf: Optimize memory cleanup...`)** : Passage en `Promise.all` concourant.
-  - **PR #3 (`🧹 [Code Health] Remove commented-out Gemini...`)** : Nettoyage du code mort.
-  - **PR #5 (`🔒 Fix Command Injection in grep_search`)** : Résolution d'une faille critique d'injection de commande.
-- **Résolution du Faux Positif Anti-Prompt Injection de Jules** :
-  - **Création de [JULES.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/JULES.md)** : Rédaction des standards de codage (limite de 200 lignes par fonction, pas de catch silencieux, `Promise.all` concourant, isolation avec `execFileAsync`) sous forme de règles déclaratives et impersonnelles pour éviter que la sécurité de Jules n'assimile ces instructions à une injection de prompt (Prompt Injection). Placé à la racine du projet.
-  - **Mise à jour de [.github/workflows/pr-review.yml](file:///home/omni/Code/HIVE-MIND-RAILWAY/.github/workflows/pr-review.yml)** : Redirection de la variable `rules_file` vers `JULES.md`.
-- **Nettoyage complet des branches distantes** : Suppression de plus de 70 branches temporaires orphelines (comme `pr-clean-*` ou `security-fix-*`) sur votre fork `leandre755/HIVE-MIND` pour restaurer la propreté du dépôt.
+- **Refactoring Session 16 (TUI Session Sync)**:
+  - Implémentation du service d'enregistrement des sessions locales (`ChatRecordingService`) dans `hiveConfig.ts`.
+  - Historique TUI écrit localement et sauvegardé/synchronisé asynchrone sur Supabase `memories` sous un `context_id` dynamique.
+  - Gestion des rejets de promesse explicite sans utiliser de "fire-and-forget" silencieux via l'outil `coreEvents.emitFeedback`.
+  - Modification de `connection.ts` et `HiveTransport.ts` pour transmettre `hiveConfig.getSessionId()` comme `chatId` au core à la place de l'ID statique `tui-local`.
 
 ## 🛠️ Codebase Health & Compile Status
 - **Modified Files**:
-  - [.GCC/resume.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/resume.md)
-  - [.github/workflows/pr-review.yml](file:///home/omni/Code/HIVE-MIND-RAILWAY/.github/workflows/pr-review.yml)
-  - [JULES.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/JULES.md)
-  - [src/plugins/base/dev_tools/SearchTools.ts](file:///home/omni/Code/HIVE-MIND-RAILWAY/src/plugins/base/dev_tools/SearchTools.ts)
-- **Verification Command Run**: `npm run build`
-- **Status Output**: compilation réussie avec 0 erreur et 0 warning.
+  - `src/tui/config/hiveConfig.ts`
+  - `src/tui/core/connection.ts`
+  - `src/tui/transport/HiveTransport.ts`
+- **Verification Command Run**: `npm run build && npm run lint && npm run test:unit`
+- **Status Output**: Compilation réussie (tsc --noEmit), linter validé sans erreur d'any, et tests unitaires / intégration passés.
 
 ## 🚧 Unfinished Work & Friction Points
-- Aucun. Les branches et les PRs de validation sont désormais propres et sécurisées contre les blocages de prompt-injection.
+- Aucun pour la Session 16. La refonte est stable et fonctionnelle.
 
 ## 👉 Directives for the Next Agent
-1. **Target File**: [.GCC/main.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/main.md) et la TUI (`src/tui/`).
-2. **Immediate Action**: Reprendre les travaux de refactorisation de la TUI en passant à la Session 12 (implémentation de la commande `/search` par Embeddings Sémantiques) selon le plan d'exécution défini dans [plan_tui_refactoring.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_tui_refactoring.md).
+1. **Target File**: `.GCC/main.md` et `src/tui/`.
+2. **Immediate Action**: Marquer la Session 16 comme "Done" dans le fichier `.GCC/main.md` et poursuivre vers les Sessions 17 à 22 du plan d'adaptation de la TUI.
