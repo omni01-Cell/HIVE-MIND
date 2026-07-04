@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,7 +23,7 @@ export const StatusDisplay: React.FC<StatusDisplayProps> = ({
     const settings = useSettings();
     const config = useConfig();
 
-    if (process.env['GEMINI_SYSTEM_MD']) {
+    if (process.env['HIVE_SYSTEM_MD'] || process.env['GEMINI_SYSTEM_MD']) {
         return <Text color={theme.status.error}>|⌐■_■|</Text>;
     }
 

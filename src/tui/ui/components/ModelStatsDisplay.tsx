@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -232,8 +232,8 @@ export const ModelStatsDisplay: React.FC<ModelStatsDisplayProps> = ({
                     <Text color={theme.text.primary}>
                         {selectedAuthType.startsWith('oauth')
                             ? userEmail
-                                ? `Signed in with Google (${userEmail})`
-                                : 'Signed in with Google'
+                                ? `Signed in (${userEmail})`
+                                : 'Signed in'
                             : selectedAuthType}
                     </Text>
                 </Box>

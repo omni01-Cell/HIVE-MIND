@@ -21,11 +21,13 @@ export interface FileStats {
 export interface FileDiscoveryOptions {
   respectGitIgnore?: boolean;
   respectGeminiIgnore?: boolean;
+  respectHiveIgnore?: boolean;
 }
 
 export interface FileFilteringOptions {
   respectGitIgnore?: boolean;
   respectGeminiIgnore?: boolean;
+  respectHiveIgnore?: boolean;
   enableFileWatcher?: boolean;
   maxFileCount?: number;
   searchTimeout?: number;
@@ -38,7 +40,7 @@ export interface FileFilteringOptions {
 export class HiveFileService {
     private targetDir: string;
     private gitIgnoredFiles: Set<string> = new Set();
-    private geminiIgnoredFiles: Set<string> = new Set();
+    private hiveIgnoredFiles: Set<string> = new Set();
 
     constructor(targetDir: string = process.cwd()) {
         this.targetDir = targetDir;
@@ -58,11 +60,15 @@ export class HiveFileService {
         }
 
         try {
-            const geminiignorePath = path.join(this.targetDir, '.geminiignore');
-            const geminiignoreContent = await fs.readFile(geminiignorePath, 'utf-8').catch(() => '');
-            this.geminiIgnoredFiles = this.parseIgnoreFile(geminiignoreContent);
+            const hiveignorePath = path.join(this.targetDir, '.hiveignore');
+            let hiveignoreContent = await fs.readFile(hiveignorePath, 'utf-8').catch(() => null);
+            if (hiveignoreContent === null) {
+                const geminiignorePath = path.join(this.targetDir, '.geminiignore');
+                hiveignoreContent = await fs.readFile(geminiignorePath, 'utf-8').catch(() => '');
+            }
+            this.hiveIgnoredFiles = this.parseIgnoreFile(hiveignoreContent);
         } catch {
-            // Pas de .geminiignore, c'est ok
+            // Pas de fichier d'ignore, c'est ok
         }
     }
 
@@ -90,7 +96,7 @@ export class HiveFileService {
         filePath: string,
         options: FileDiscoveryOptions = {}
     ): boolean {
-        const { respectGitIgnore = true, respectGeminiIgnore = true } = options;
+        const { respectGitIgnore = true, respectGeminiIgnore = true, respectHiveIgnore = true } = options;
 
         if (respectGitIgnore) {
             for (const pattern of this.gitIgnoredFiles) {
@@ -100,8 +106,8 @@ export class HiveFileService {
             }
         }
 
-        if (respectGeminiIgnore) {
-            for (const pattern of this.geminiIgnoredFiles) {
+        if (respectHiveIgnore || respectGeminiIgnore) {
+            for (const pattern of this.hiveIgnoredFiles) {
                 if (this.matchesPattern(filePath, pattern)) {
                     return true;
                 }

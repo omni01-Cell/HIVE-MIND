@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,7 +21,7 @@ export const Tips: React.FC<TipsProps> = ({ config }) => {
             <Text color={theme.text.primary}>Tips for getting started:</Text>
             {hiveMdFileCount === 0 && (
                 <Text color={theme.text.primary}>
-          1. Create <Text bold>GEMINI.md</Text> files to customize your
+          1. Create <Text bold>hive.md</Text> files to customize your
           interactions
                 </Text>
             )}

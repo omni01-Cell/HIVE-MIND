@@ -1,12 +1,12 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import React, { useMemo } from 'react';
 import { escapeAnsiCtrlCodes } from '../utils/textUtils.js';
-import { HistoryItem } from '../contexts/UIStateContext.js';
+import { HistoryItem, SlashCommand, getMCPServerStatus } from '../contexts/UIStateContext.js';
 import { UserMessage } from './messages/UserMessage.js';
 import { UserShellMessage } from './messages/UserShellMessage.js';
 import { AssistantMessage } from './messages/AssistantMessage.js';
@@ -26,9 +26,6 @@ import { ModelStatsDisplay } from './ModelStatsDisplay.js';
 import { ToolStatsDisplay } from './ToolStatsDisplay.js';
 import { SessionSummaryDisplay } from './SessionSummaryDisplay.js';
 import { Help } from './Help.js';
-import { SlashCommand } from '../contexts/UIStateContext.js';
-// ExtensionsList removed
-import { getMCPServerStatus } from '../contexts/UIStateContext.js';
 import { ToolsList } from './views/ToolsList.js';
 import { SkillsList } from './views/SkillsList.js';
 import { AgentsStatus } from './views/AgentsStatus.js';

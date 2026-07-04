@@ -2,6 +2,7 @@
 
 ## 🏆 Major Milestones (Archived Epics)
 
+- **[2026-07-03] Modernisation et Adaptation Complète de la TUI HIVE-MIND (Sessions 1 à 22)** : Remplacement des composants obsolètes de Gemini, couplage asynchrone non-bloquant de la file d'attente, routage interactif HITL local, affichage cliquable des services d'arrière-plan, intégration IDE par WebSocket local, navigation d'historique connectée à Supabase, compaction d'historique sur jauge dynamique de contexte à 80% (ContextWindowService), intégration du logo ASCII et déploiement de la charte graphique néon HIVE-MIND (violet, fuchsia, cyan) avec zéro erreur de compilation et zéro erreur de linter.
 - **[2026-07-03] Session 17 - Context Window Indicator & Dynamic Compaction** : Implémentation du ContextWindowService, de la compaction d'historique basée sur un seuil dynamique de 80% des tokens du modèle actif, et de l'affichage de la consommation sous la forme [Context: X/Y (Z%)] (avec coloration dynamique de niveau de saturation) dans StatusRow.tsx et ModelStatsDisplay.tsx de la TUI.
 - **[2026-07-03] PR Recovery & Integration** : Restauration et intégration sélective des Pull Requests fermées indûment par Jules (PR #11 pour l'indicateur de présence TUI, PR #10 pour les tests unitaires d'audioConverter, et PR #8 pour la correction d'injection de commande dans ASTTools.expandDirectory).
 - **[2026-07-03] Jules TUI PR Integration & Decoupling** : Résolution des conflits et fusion définitive de la PR de Jules (liaison de session dynamique) sur le fork et le dépôt parent, après un découplage architectural de `HiveTransport` pour éliminer la cascade de compilation TS des fichiers TUI non-refactorisés.
@@ -74,8 +75,6 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 
 ## 🌿 Active Branches / Plans
 
-- `tui-refactoring` : Refonte et adaptation de la TUI au core HIVE-MIND [plan_tui_refactoring.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_tui_refactoring.md)
-- `ide-integration` : Réadaptation du module IDE [plan_ide_integration.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_ide_integration.md)
 - `agent-test-battery` : Plan de test d'automatisation de l'agent [plan_agent_test_battery.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_agent_test_battery.md)
 - `claude-code-sota` : Plan de refactorisation SOTA (streaming, caches, compaction) [plan_claude_code_sota.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_claude_code_sota.md)
 - `investigation-harnais` : Analyse et investigation du harnais de sécurité [plan_investigation_harnais.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_investigation_harnais.md)
@@ -83,26 +82,30 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 
 ## 📈 Current Status
 
-- ✅ Done: Session 1 — Purge du Code Mort et des Modules Google Inutiles (ConsentPrompt, LogoutConfirmationDialog, ModelQuotaDisplay, QuotaDisplay retirés et imports nettoyés dans slashCommandProcessor.ts, Footer.tsx et ModelDialog.tsx).
-- ✅ Done: Session 2 — Désactivation des Dialogues de Sécurité Gemini (FolderTrustDialog et PermissionsModifyTrustDialog supprimés, imports et signatures nettoyés dans UIActionsContext.tsx).
-- ✅ Done: Session 3 — Assainissement des Imports et Nettoyage de useAgentStream.ts (résolution de la déclaration lexicale dans le case 'message' de handleAgentEvent, fusion des imports dupliqués UIStateContext dans useAgentStream.ts, shellReducer.ts et useApprovalModeIndicator.ts).
-- ✅ Done: Session 4 — Stabilisation du composant StatusRow et Correction de Rendu de Base (définition des variables showRow1 et showRow2 basées sur showUiDetails et les états minimaux de lignes pour corriger les ReferenceError).
-- ✅ Done: Résolution définitive de l'accès Node/NPM/NPX global lié à NVM via des liens symboliques.
+- ✅ Done: Modernisation et Adaptation Complète de la TUI HIVE-MIND (Sessions 1 à 22 complétées et validées).
+- ✅ Done: Session 1 — Purge du Code Mort et des Modules Google Inutiles.
+- ✅ Done: Session 2 — Désactivation des Dialogues de Sécurité Gemini.
+- ✅ Done: Session 3 — Assainissement des Imports et Nettoyage de useAgentStream.ts.
+- ✅ Done: Session 4 — Stabilisation du composant StatusRow et Correction de Rendu de Base.
 - ✅ Done: Session 5 — Raccordement du Transport de Base (Natification des Signaux de Fin).
 - ✅ Done: Session 6 — Intégration de la File d'Attente de Messages Non-Bloquante.
 - ✅ Done: Session 7 — Routage Local HITL (Human-in-the-Loop).
-- ✅ Done: Session 8 — Intégration des Composants de Confirmation de Sécurité (connexion des boîtes de dialogue et composants de confirmation à l'infrastructure locale du PermissionManager).
-- ✅ Done: Session 9 — Émission d'Événements d'Activité de Services (Core) (intégration des déclencheurs d'activité dans VIGIL et MAPLE).
+- ✅ Done: Session 8 — Intégration des Composants de Confirmation de Sécurité.
+- ✅ Done: Session 9 — Émission d'Événements d'Activité de Services (Core).
 - ✅ Done: Session 10 — Rendu Interactif des Services Actifs dans la TUI.
 - ✅ Done: Session 11 — Commande `/skills` et Indexation d'Outils.
 - ✅ Done: Session 12 — Commande `/search` par Embeddings Sémantiques.
 - ✅ Done: Session 13 — Commande `/session` (Gestionnaire de Sessions Hybride).
-- ✅ Done: Session 14 — Conservation et Réadaptation du Module IDE (Réimplémentation de l'IdeClient branché par WebSocket sur le service local HIVE-MIND et restauration de l'invite interactive IdeIntegrationNudge).
-- ✅ Done: Session 15 — Nettoyage et Adaptation des Dialogues de Modèles (Réécriture de ModelDialog.tsx et VoiceModelDialog.tsx pour gérer les familles/modèles multi-providers de HIVE-MIND et la voix Minimax Persona/Gemini/gTTS/Groq/Gemini Live).
-- ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase (synchronisation asynchrone des sessions TUI sous context_id dynamique).
-- ✅ Done: Session 17 — Indicateur dynamique de contexte TUI et compaction à 80% (ContextWindowService, jauge dynamique colorée).
-- ⏳ Pending: Sessions 18 à 22 du plan d'adaptation de la TUI.
+- ✅ Done: Session 14 — Conservation et Réadaptation du Module IDE.
+- ✅ Done: Session 15 — Nettoyage et Adaptation des Dialogues de Modèles.
+- ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase.
+- ✅ Done: Session 17 — Indicateur dynamique de contexte TUI et compaction à 80%.
+- ✅ Done: Session 18 — Purge des Mentions Google LLC & Textes Gemini dans AboutBox, Help, ShortcutsHelp, Footer, Header.
+- ✅ Done: Session 19 — Intégration du Logo ASCII HIVE-MIND dans AsciiArt.ts.
+- ✅ Done: Session 20 — Déploiement de la Charte Graphique et des Couleurs HIVE-MIND (néon violet/cyan/fuchsia dans colors, semantic-colors, themes).
+- ✅ Done: Session 21 — Résolution Strict-Type et Éradication ESLint Restante dans HistoryItemDisplay, slashCommandProcessor, atCommandProcessor, AskUserDialog, DetailedMessagesDisplay.
+- ✅ Done: Session 22 — Certification Finale (TSC & ESLint à 0 erreur, tous les 399 tests Jest au vert).
 
 ## 👉 Next Session Direction
 
-Poursuivre le plan de refactorisation de la TUI avec la Session 18 (Purge des Mentions Google LLC & Textes Gemini).
+Démarrer le plan de test d'automatisation de l'agent (agent-test-battery) ou explorer de nouvelles fonctionnalités d'intelligence.

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,8 +23,7 @@ import {
 } from '../utils/displayUtils.js';
 import { computeSessionStats } from '../utils/computeStats.js';
 import { useSettings } from '../contexts/SettingsContext.js';
-import { QuotaStats } from '../contexts/UIStateContext.js';
-import { LlmRole, getDisplayString } from '../contexts/UIStateContext.js';
+import { QuotaStats, LlmRole, getDisplayString } from '../contexts/UIStateContext.js';
 
 // A more flexible and powerful StatRow component
 interface StatRowProps {
@@ -309,8 +308,8 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({
                         <Text color={theme.text.primary}>
                             {selectedAuthType.startsWith('oauth')
                                 ? userEmail
-                                    ? `Signed in with Google (${userEmail})`
-                                    : 'Signed in with Google'
+                                    ? `Signed in (${userEmail})`
+                                    : 'Signed in'
                                 : selectedAuthType}
                         </Text>
                     </StatRow>
@@ -321,7 +320,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({
                     </StatRow>
                 )}
                 {showUserIdentity && creditBalance != null && creditBalance >= 0 && (
-                    <StatRow title="Google AI Credits:">
+                    <StatRow title="AI Credits:">
                         <Text
                             color={
                                 creditBalance > 0 ? theme.text.primary : theme.text.secondary

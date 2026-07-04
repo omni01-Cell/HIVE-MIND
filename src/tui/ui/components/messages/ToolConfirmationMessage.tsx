@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,8 +10,7 @@ import { DiffRenderer } from './DiffRenderer.js';
 import { RenderInline } from '../../utils/InlineMarkdownRenderer.js';
 import { debugLogger } from '../../../utils/errors.js';
 import { HiveConfig } from '../../../config/hiveConfig.js';
-import { ToolConfirmationOutcome, ApprovalMode } from '../../contexts/UIStateContext.js';
-import { SerializableConfirmationDetails, ToolConfirmationPayload, EditorType, hasRedirection } from '../../contexts/UIStateContext.js';
+import { ToolConfirmationOutcome, ApprovalMode, SerializableConfirmationDetails, ToolConfirmationPayload, EditorType, hasRedirection } from '../../contexts/UIStateContext.js';
 import { useToolActions } from '../../contexts/ToolActionsContext.js';
 import {
     RadioButtonSelect,
@@ -494,7 +493,7 @@ export const ToolConfirmationMessage: React.FC<
                     <Text color={titleColor} wrap="truncate">
                         {item.label}{' '}
                         <Text color={theme.text.secondary}>
-              ~/.gemini/policies/auto-saved.toml
+              ~/.hive-mind/policies/auto-saved.toml
                         </Text>
                     </Text>
                 );

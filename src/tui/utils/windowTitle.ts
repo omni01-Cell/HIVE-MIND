@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,7 +44,7 @@ export function computeTerminalTitle({
     let displayContext = process.env['CLI_TITLE'] || folderName;
 
     if (!useDynamicTitle) {
-        const base = 'Gemini CLI ';
+        const base = 'HIVE-MIND TUI ';
         // Max context length is 80 - base.length - 2 (for brackets)
         const maxContextLen = MAX_LEN - base.length - 2;
         displayContext = truncate(displayContext, maxContextLen);

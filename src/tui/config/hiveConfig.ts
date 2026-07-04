@@ -54,7 +54,7 @@ export interface GeminiClient {
 
 export interface FileService {
     /** Vérifie si le chemin doit être ignoré selon les options données. */
-    shouldIgnoreFile(path: string, options?: { respectGitIgnore?: boolean; respectGeminiIgnore?: boolean }): boolean;
+    shouldIgnoreFile(path: string, options?: { respectGitIgnore?: boolean; respectGeminiIgnore?: boolean; respectHiveIgnore?: boolean }): boolean;
 }
 
 export interface ResourceRegistry {
@@ -69,6 +69,7 @@ export interface McpClientManager {
 export interface FileFilteringOptions {
     respectGitIgnore: boolean;
     respectGeminiIgnore: boolean;
+    respectHiveIgnore?: boolean;
     enableFileWatcher: boolean;
     maxFileCount: number;
     searchTimeout: number;
@@ -283,6 +284,7 @@ export function createHiveConfig(): HiveConfig {
         getFileFilteringOptions: () => ({
             respectGitIgnore: true,
             respectGeminiIgnore: true,
+            respectHiveIgnore: true,
             enableFileWatcher: false,
             maxFileCount: 1000,
             searchTimeout: 5000
