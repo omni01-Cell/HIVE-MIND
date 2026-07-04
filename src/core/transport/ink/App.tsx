@@ -13,9 +13,10 @@ interface Message {
 interface AppProps {
     onMessage: (text: string) => void;
     messages: Message[];
+    isTyping?: boolean;
 }
 
-export const App: React.FC<AppProps> = ({ onMessage, messages }) => {
+export const App: React.FC<AppProps> = ({ onMessage, messages, isTyping }) => {
     const [input, setInput] = useState('');
 
     const handleSubmit = () => {
@@ -39,6 +40,12 @@ export const App: React.FC<AppProps> = ({ onMessage, messages }) => {
                     </Box>
                 ))}
             </Box>
+
+            {isTyping && (
+                <Box marginBottom={1}>
+                    <Text color="gray" italic>HIVE-MIND is typing...</Text>
+                </Box>
+            )}
 
             <Box>
                 <Text color="cyan" bold>

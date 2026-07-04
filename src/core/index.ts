@@ -1464,6 +1464,22 @@ RULES:
                 // Sauvegarder la famille utilisée au premier tour
                 if (!usedFamily) usedFamily = response.usedFamily;
 
+                // Mettre à jour le service de fenêtre de contexte avec le modèle actif
+                if (response.usedModel) {
+                    try {
+                        const contextWindow = container.get('contextWindow');
+                        contextWindow.setActiveModel(response.usedModel);
+                        const currentUsage = contextWindow.getUsage(chatId, history);
+                        eventBus.publish(BotEvents.CUSTOM, {
+                            name: 'context_usage_update',
+                            message: JSON.stringify(currentUsage),
+                            timestamp: Date.now()
+                        });
+                    } catch (e: any) {
+                        console.error('[ContextWindow] Error updating context window stats:', e.message);
+                    }
+                }
+
                 // [FALLBACK] Détecter les "hallucinations" de tool calls textuels (ex: Kimi qui écrit du code)
                 if ((!response.toolCalls || response.toolCalls.length === 0) && response.content) {
                     const extractedCalls = extractToolCallsFromText(response.content, true);
@@ -2276,12 +2292,28 @@ I need to write a file using write_to_file.
      * @returns L'historique compressé ou l'original si sous le seuil
      */
     async _compactHistory(history: any[], chatId: string): Promise<any[]> {
-        const TOTAL_CHAR_LIMIT = 25000;
-        const currentSize = JSON.stringify(history).length;
+        let isThresholdReached = false;
+        let usagePercent = 0;
+        let consumedTokens = 0;
+        let tokenLimitVal = 128000;
 
-        if (currentSize < TOTAL_CHAR_LIMIT) return history;
+        try {
+            const contextWindow = container.get('contextWindow');
+            const usage = contextWindow.getUsage(chatId, history);
+            isThresholdReached = usage.percentage >= 0.8;
+            usagePercent = Math.round(usage.percentage * 100);
+            consumedTokens = usage.consumed;
+            tokenLimitVal = usage.limit;
+        } catch (e: any) {
+            const TOTAL_CHAR_LIMIT = 25000;
+            const currentSize = JSON.stringify(history).length;
+            isThresholdReached = currentSize >= TOTAL_CHAR_LIMIT;
+            usagePercent = Math.round((currentSize / TOTAL_CHAR_LIMIT) * 100);
+        }
 
-        console.log(`[ContextManager] ⚠️ Saturation (${currentSize} chars). Déclenchement du Garbage Collector IA...`);
+        if (!isThresholdReached) return history;
+
+        console.log(`[ContextManager] ⚠️ Saturation (${usagePercent}%, ${consumedTokens}/${tokenLimitVal} tokens). Déclenchement du Garbage Collector IA...`);
 
         // Isoler le System Prompt (index 0) et les 2 derniers échanges
         const systemPrompt = history[0];
@@ -2352,7 +2384,7 @@ ${textToCompress}`
             });
 
             const summary = response.content;
-            console.log(`[ContextManager] ✅ Historique compressé (${currentSize} → résumé)`);
+            console.log(`[ContextManager] ✅ Historique compressé (${consumedTokens} tokens → résumé)`);
 
             // WHY: On injecte le résumé dans le system prompt (pas dans l'historique)
             // pour ne pas fabriquer de faux échanges que le LLM pourrait citer.

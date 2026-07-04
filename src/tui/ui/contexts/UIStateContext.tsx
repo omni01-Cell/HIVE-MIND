@@ -8,6 +8,7 @@
 import { createContext, useContext } from 'react';
 import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
+import { container } from '../../../core/ServiceContainer.js';
 import { type TransientMessageType } from '../../utils/events.js';
 import type { DOMElement } from 'ink';
 import type { SessionStatsState } from '../contexts/SessionContext.js';
@@ -833,7 +834,37 @@ export interface WorkspaceContext {
     addDirectories?: (dirs: string[]) => void;
 }
 
-export const tokenLimit = (_model?: string): number => 128000;
+export const tokenLimit = (model?: string): number => {
+    try {
+        if (container.has('contextWindow')) {
+            return container.get('contextWindow').getLimit(model);
+        }
+    } catch {
+        // ignore
+    }
+    const limits: Record<string, number> = {
+        'gemini-3.5-flash': 1048576,
+        'gemini-3.1-pro-preview': 2097152,
+        'gemini-3-pro-preview': 2097152,
+        'gemini-3-flash-preview': 1048576,
+        'gemini-2.5-flash': 1048576,
+        'gemini-2.5-flash-lite': 1048576,
+        'gemini-3.1-flash-lite-preview': 1048576,
+        'gemini-3.1-flash-live-preview': 1048576,
+        'gemma-4-31b-it': 131072,
+        'gpt-5.2': 131072,
+        'gpt-5-mini': 131072,
+        'mistral-large-latest': 131072,
+        'codestral-latest': 32768,
+        'mistral-small-latest': 32768,
+        'open-mistral-nemo': 131072,
+        'kimi-for-coding': 262144,
+        'llama-3.3-70b-versatile': 131072,
+        'llama-3.1-8b-instant': 131072
+    };
+    const key = model || 'gemini-3.5-flash';
+    return limits[key] || 128000;
+};
 
 export function spawnAsync(_command: string, _args: string[]): Promise<{ stdout: string; stderr: string }> {
     return Promise.resolve({ stdout: '', stderr: '' });
