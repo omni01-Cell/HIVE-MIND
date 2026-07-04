@@ -156,6 +156,20 @@ export interface HiveConfig {
     getExperiments(): Experiments;
 }
 
+function withTimeout<T>(promise: PromiseLike<T> | Promise<T> | T, ms: number, errMsg = 'Operation timed out'): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(errMsg)), ms);
+        Promise.resolve(promise)
+            .then(val => {
+                clearTimeout(timer);
+                resolve(val);
+            })
+            .catch(err => {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
+}
 
 let currentSessionId = `tui-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -214,8 +228,10 @@ export function createHiveConfig(): HiveConfig {
                     const text = msgObj?.content || msgObj?.text || '';
                     if (!text) return;
 
+                    // Sanitize session ID to prevent Path Traversal
+                    const safeSessionId = path.basename(currentSessionId);
                     const chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
-                    const filePath = path.join(chatsDir, `hive_session_${currentSessionId}.jsonl`);
+                    const filePath = path.join(chatsDir, `hive_session_${safeSessionId}.jsonl`);
 
                     const record = JSON.stringify({
                         type: msgObj?.type || 'assistant',
@@ -223,26 +239,35 @@ export function createHiveConfig(): HiveConfig {
                         role
                     }) + '\n';
 
-                    fsPromises.mkdir(chatsDir, { recursive: true })
-                        .then(() => fsPromises.appendFile(filePath, record))
+                    // Implement timeout mechanism for disk write operation
+                    const diskTimeoutMs = 5000;
+                    withTimeout(
+                        fsPromises.mkdir(chatsDir, { recursive: true })
+                            .then(() => fsPromises.appendFile(filePath, record)),
+                        diskTimeoutMs,
+                        'Local sync write timed out'
+                    )
                         .catch(err => {
                             coreEvents.emitFeedback('error', 'Local sync failed', err);
-
                         });
 
+                    // Implement timeout mechanism for Supabase network store operation
+                    const networkTimeoutMs = 10000;
                     import('../../services/memory.js')
                         .then(({ semanticMemory }) => {
                             if (semanticMemory && semanticMemory.store) {
-                                semanticMemory.store(currentSessionId, String(text), role)
+                                withTimeout(
+                                    Promise.resolve(semanticMemory.store(currentSessionId, String(text), role)),
+                                    networkTimeoutMs,
+                                    'Supabase sync timed out'
+                                )
                                     .catch((err: unknown) => {
                                         coreEvents.emitFeedback('error', 'Supabase sync failed', err);
-
                                     });
                             }
                         })
                         .catch((err: unknown) => {
                             coreEvents.emitFeedback('error', 'Memory module import failed', err);
-
                         });
                 }
             })
