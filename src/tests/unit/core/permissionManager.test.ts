@@ -1,7 +1,11 @@
 // tests/unit/core/permissionManager.test.ts
 // MOD 5 + MOD 7 — HITL Dual-Logic Permission System
 import { describe, it, beforeEach, jest, expect } from '@jest/globals';
+import { createRequire } from 'module';
 import type { PermissionManager as PermissionManagerType } from '../../../core/security/PermissionManager.js';
+
+const require = createRequire(import.meta.url);
+const fsCjs = require('fs');
 
 // Use unstable_mockModule for ESM native mocking
 jest.unstable_mockModule('../../../core/transport/TransportManager.js', () => ({
@@ -24,6 +28,24 @@ jest.unstable_mockModule('ink', () => ({
 jest.unstable_mockModule('../../../core/transport/ink/InkCLIAdapter.js', () => ({
     InkCLIAdapter: {}
 }));
+
+jest.unstable_mockModule('fs', () => {
+    const actualFs = jest.requireActual('fs') as any;
+    const realpathSyncMock = jest.fn((p: any, options?: any) => {
+        if (typeof p === 'string' && p.endsWith('symlink_outside')) {
+            return '/etc';
+        }
+        return actualFs.realpathSync(p, options);
+    });
+    return {
+        ...actualFs,
+        realpathSync: realpathSyncMock,
+        default: {
+            ...actualFs,
+            realpathSync: realpathSyncMock
+        }
+    };
+});
 
 // Dynamic import AFTER mock registration
 const PMModule = await import('../../../core/security/PermissionManager.js');
@@ -67,6 +89,17 @@ describe('PermissionManager (MOD 5 + MOD 7)', () => {
 
             // Assert
             expect(result).toBe(true);
+        });
+
+        it('blocks symlink escapes pointing outside sandbox', () => {
+            // Arrange
+            const fakeSymlink = `${pm.sandboxDir}/symlink_outside`;
+            
+            // Act
+            const result = pm.isInSandbox(fakeSymlink);
+            
+            // Assert
+            expect(result).toBe(false);
         });
     });
 
