@@ -59,3 +59,4 @@ src/scratch/
 llm_as_validator/
 llm_as_juge/
 tui-connection.json.agents/
+tui-connection.json
