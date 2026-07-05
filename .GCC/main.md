@@ -2,6 +2,7 @@
 
 ## 🏆 Major Milestones (Archived Epics)
 
+- **[2026-07-05] Durcissement et Refactorisation de Sécurité (Milestone 3)** : Suppression définitive de toutes les fuites de clés d'API (Kimi, Moonshot, Nvidia), asynchronisation complète des E/S fichiers (writeFileSync -> promises.writeFile) dans le core et les adaptateurs de voix, correction des règles eslint react-hooks, éradication de toutes les erreurs de linter (0 erreur, 0 warning sur tout le dossier src), validé à 100% par type-checking et les 400 tests Jest.
 - **[2026-07-03] Modernisation et Adaptation Complète de la TUI HIVE-MIND (Sessions 1 à 22)** : Remplacement des composants obsolètes de Gemini, couplage asynchrone non-bloquant de la file d'attente, routage interactif HITL local, affichage cliquable des services d'arrière-plan, intégration IDE par WebSocket local, navigation d'historique connectée à Supabase, compaction d'historique sur jauge dynamique de contexte à 80% (ContextWindowService), intégration du logo ASCII et déploiement de la charte graphique néon HIVE-MIND (violet, fuchsia, cyan) avec zéro erreur de compilation et zéro erreur de linter.
 - **[2026-07-03] Session 17 - Context Window Indicator & Dynamic Compaction** : Implémentation du ContextWindowService, de la compaction d'historique basée sur un seuil dynamique de 80% des tokens du modèle actif, et de l'affichage de la consommation sous la forme [Context: X/Y (Z%)] (avec coloration dynamique de niveau de saturation) dans StatusRow.tsx et ModelStatsDisplay.tsx de la TUI.
 - **[2026-07-03] PR Recovery & Integration** : Restauration et intégration sélective des Pull Requests fermées indûment par Jules (PR #11 pour l'indicateur de présence TUI, PR #10 pour les tests unitaires d'audioConverter, et PR #8 pour la correction d'injection de commande dans ASTTools.expandDirectory).
@@ -73,9 +74,12 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - [2026-07-03] [JULES-PR-INTEGRITY] Ajout d'une règle dans JULES.md (section 5) et dans l'instruction de revue du workflow pr-review.yml pour exiger que Jules vérifie si les modifications de code réelles de la PR correspondent aux revendications textuelles de son titre, de sa description et du fichier .GCC/resume.md.
 - [2026-07-03] [GCC-AUTO-MERGE] Création de .gitattributes configurant le pilote de fusion 'union' pour .GCC/resume.md et .GCC/main.md, permettant à Git et à GitHub de résoudre automatiquement les conflits sur les fichiers de suivi de contexte.
 - [2026-07-03] [SYSTEM-KEYBOARD-CONFIG] Configuration clavier personnalisée pour l'utilisateur sur KDE Wayland. Création du layout XKB utilisateur custom_fr sous ~/.config/xkb/symbols/custom_fr (mappage de AltGr+; vers < et AltGr+: vers >) et activation persistante dans ~/.config/kxkbrc.
+- [2026-07-05] [TUI-CLIENT-SERVER] Migration de la TUI vers une architecture Client-Serveur lâche via un serveur WebSocket local sécurisé par token dynamique dans tui-connection.json pour isoler le cycle de vie du Core et préserver le thread de rendu Ink.
+- [2026-07-05] [MIGRATION-NODE-LTS-VERIFY] Finalisation de la migration des dépendances clés. Mise à jour de package.json (engines Node >=22.0.0), installation propre et retrait d'undici, vérification réussie de compilation (tsc --noEmit, build) et validation à 100% de la suite de 399 tests Jest.
 
 ## 🌿 Active Branches / Plans
 
+- `tui_modif` : Migration Client-Serveur et reconnexion automatique [implementation_plan.md](file:///home/omni/.gemini/antigravity-ide/brain/5d88e15e-5ae9-40db-b65b-5bd699396c4c/implementation_plan.md)
 - `agent-test-battery` : Plan de test d'automatisation de l'agent [plan_agent_test_battery.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_agent_test_battery.md)
 - `claude-code-sota` : Plan de refactorisation SOTA (streaming, caches, compaction) [plan_claude_code_sota.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_claude_code_sota.md)
 - `investigation-harnais` : Analyse et investigation du harnais de sécurité [plan_investigation_harnais.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_investigation_harnais.md)
@@ -106,7 +110,12 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - ✅ Done: Session 20 — Déploiement de la Charte Graphique et des Couleurs HIVE-MIND (néon violet/cyan/fuchsia dans colors, semantic-colors, themes).
 - ✅ Done: Session 21 — Résolution Strict-Type et Éradication ESLint Restante dans HistoryItemDisplay, slashCommandProcessor, atCommandProcessor, AskUserDialog, DetailedMessagesDisplay.
 - ✅ Done: Session 22 — Certification Finale (TSC & ESLint à 0 erreur, tous les 399 tests Jest au vert).
+- ✅ Done: Session 23 — Migration Client-Serveur WebSocket et reconnexion automatique résiliente avec écran d'attente animé et validation par capture d'écran.
+- ✅ Done: Migration Node.js LTS (v22+) complétée. Configuration d'engines Node >=22.0.0, installation propre et retrait d'undici, 0 erreur de compilation/build, 399/399 tests Jest validés à 100% verts.
+- ✅ Done: Durcissement et Refactorisation de Sécurité (Milestone 3 complète, logs d'API sécurisés, E/S asynchrones gérées, ESLint ok à 0 erreur/warning, 400/400 tests verts).
+- ✅ Done: Audit d'Intégrité Légiste Final (Verdict : CLEAN, 0 erreur de compilation/linter, 400/400 tests Jest réels validés).
 
 ## 👉 Next Session Direction
 
-Démarrer le plan de test d'automatisation de l'agent (agent-test-battery) ou explorer de nouvelles fonctionnalités d'intelligence.
+Poursuivre avec la batterie de tests d'automatisation (agent-test-battery) ou intégrer de nouvelles fonctionnalités de sécurité sur cette base saine et vérifiée.
+
