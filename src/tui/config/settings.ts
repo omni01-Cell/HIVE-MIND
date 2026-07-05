@@ -35,6 +35,8 @@ export interface AdminControlsSettings {
     cliFeatureSetting?: any;
 }
 
+export type MergeableObject = Record<string, any>;
+
 export function createCache<K, V>(_options: any): any {
     const map = new Map<K, V>();
     return {

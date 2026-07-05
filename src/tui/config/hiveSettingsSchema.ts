@@ -425,7 +425,7 @@ export interface MergedSettings {
     model: Required<ModelSettings>;
     experimental: Required<ExperimentalSettings>;
     ide: Required<IdeSettings>;
-    admin: unknown;
+    admin: any;
     mcp?: {
         excluded?: string[];
         allowed?: string[];
