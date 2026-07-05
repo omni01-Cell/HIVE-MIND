@@ -94,3 +94,4 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 ## 👉 Next Session Direction
 
 Poursuivre le plan de refactorisation de la TUI avec la Session 17 (Intégration de l'indicateur dynamique de contexte).
+- [$(date +%Y-%m-%d)] [JULES-TEST-FIX] Implémentation du test unitaire pour le path d'erreur de `graphMemory.upsertEntity` en mockant Supabase dans Jest.
