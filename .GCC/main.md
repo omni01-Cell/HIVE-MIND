@@ -62,6 +62,7 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - [2026-07-03] [GCC-AUTO-MERGE] Création de .gitattributes configurant le pilote de fusion 'union' pour .GCC/resume.md et .GCC/main.md, permettant à Git et à GitHub de résoudre automatiquement les conflits sur les fichiers de suivi de contexte.
 
 ## 🌿 Active Branches / Plans
+- `session-17-context-indicator` : Intégration de l'indicateur dynamique de contexte [plan_session_17.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_session_17.md)
 
 - `tui-refactoring` : Refonte et adaptation de la TUI au core HIVE-MIND [plan_tui_refactoring.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_tui_refactoring.md)
 - `ide-integration` : Réadaptation du module IDE [plan_ide_integration.md](file:///home/omni/Code/HIVE-MIND-RAILWAY/.GCC/branches/plan_ide_integration.md)
@@ -90,6 +91,8 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - ✅ Done: Session 15 — Nettoyage et Adaptation des Dialogues de Modèles (Réécriture de ModelDialog.tsx et VoiceModelDialog.tsx pour gérer les familles/modèles multi-providers de HIVE-MIND et la voix Minimax Persona/Gemini/gTTS/Groq/Gemini Live).
 - ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase (synchronisation asynchrone des sessions TUI sous context_id dynamique).
 - ⏳ Pending: Sessions 17 à 22 du plan d'adaptation de la TUI.
+
+- [2026-07-04] [TUI-SESSION-16-VERIFIED] Moi, Jules, j ai vérifié et validé que l implémentation de la Session 16 (Branchement du Navigateur d Historique sur Supabase via ChatRecordingService) est complète, correctement typée et testée.
 
 ## 👉 Next Session Direction
 
