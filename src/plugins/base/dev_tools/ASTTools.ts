@@ -13,8 +13,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import { permissionManager } from '../../../core/security/PermissionManager.js';
 import {
     getFileSkeleton,
@@ -23,8 +21,6 @@ import {
     LANGUAGE_MAP
 } from '../../../services/ast/index.js';
 import { hashLines } from '../../../services/anchor/index.js';
-
-const execFileAsync = promisify(execFile);
 
 // --- Type helpers ---
 
@@ -87,28 +83,35 @@ async function resolveFilePaths(searchPaths: string[]): Promise<string[]> {
 }
 
 async function expandDirectory(dirPath: string, filePaths: string[]): Promise<void> {
-    try {
-        const findArgs = [dirPath, '-maxdepth', '3', '-type', 'f', '('];
-        const extensions = Object.keys(LANGUAGE_MAP);
-        extensions.forEach((ext, index) => {
-            if (index > 0) findArgs.push('-o');
-            findArgs.push('-name', `*.${ext}`);
-        });
-        findArgs.push(')');
+    const maxDepth = 3;
+    const maxFiles = 100;
+    let addedCount = 0;
 
-        const { stdout } = await execFileAsync('find', findArgs, { timeout: 5000 });
-        const results = stdout.split('\n').filter(Boolean);
-        filePaths.push(...results.slice(0, 100));
-    } catch {
-        const entries = fs.readdirSync(dirPath);
-        for (const entry of entries) {
-            const fullPath = path.join(dirPath, entry);
-            const ext = path.extname(entry).toLowerCase().slice(1);
-            if (LANGUAGE_MAP[ext] && fs.statSync(fullPath).isFile()) {
-                filePaths.push(fullPath);
+    async function walk(currentPath: string, depth: number) {
+        if (depth > maxDepth || addedCount >= maxFiles) return;
+
+        try {
+            const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
+            for (const entry of entries) {
+                if (addedCount >= maxFiles) return;
+
+                const fullPath = path.join(currentPath, entry.name);
+                if (entry.isDirectory()) {
+                    await walk(fullPath, depth + 1);
+                } else if (entry.isFile()) {
+                    const ext = path.extname(entry.name).toLowerCase().slice(1);
+                    if (LANGUAGE_MAP[ext]) {
+                        filePaths.push(fullPath);
+                        addedCount++;
+                    }
+                }
             }
+        } catch {
+            // Ignore access errors
         }
     }
+
+    await walk(dirPath, 1);
 }
 
 function formatReferenceOutput(
