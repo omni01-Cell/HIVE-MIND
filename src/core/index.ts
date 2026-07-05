@@ -2,7 +2,7 @@
 // core/index.js
 // Orchestrateur principal du bot - Cerveau central
 
-import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'fs';
+import { readFileSync, existsSync, unlinkSync, promises as fsPromises } from 'fs';
 import { dirname, join, resolve } from 'path';
 
 import { fileURLToPath } from 'url';
@@ -913,7 +913,10 @@ export class BotCore {
         if (isGroup) {
             // Pas besoin d'attendre (fire and forget)
             const groupService = container.get('groupService');
-            groupService.trackActivity(chatId, sender).catch(console.error);
+            groupService.trackActivity(chatId, sender).catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`[Core] trackActivity failed for chatId=${chatId}:`, msg);
+            });
         }
 
         // 1. Mémoire de travail (Redis) avec identification speaker pour les groupes
@@ -928,7 +931,10 @@ export class BotCore {
         if (isStorable(text, 'user')) {
             // Mémoire Sémantique (RAG) via DI
             const memory = container.get('memory');
-            memory.store(chatId, text, 'user', { msgId: message.id }).catch(console.error);
+            memory.store(chatId, text, 'user', { msgId: message.id }).catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`[Core] memory.store (user) failed for chatId=${chatId}:`, msg);
+            });
         }
 
         // Indicateur de frappe
@@ -1102,15 +1108,13 @@ export class BotCore {
 
                     // Stockage temporaire structuré
                     const downloadDir = path.join(process.cwd(), 'hm_storage', 'tmp_download');
-                    if (!fs.existsSync(downloadDir)) {
-                        fs.mkdirSync(downloadDir, { recursive: true });
-                    }
+                    await fs.promises.mkdir(downloadDir, { recursive: true });
 
                     // Nettoyer le nom pour la sécurité système
                     const safeFileName = path.basename(originalFileName).replace(/[^a-zA-Z0-9.\-_ \(\)]/g, '_');
                     const filePath = path.join(downloadDir, safeFileName);
 
-                    fs.writeFileSync(filePath, buffer);
+                    await fs.promises.writeFile(filePath, buffer);
                     console.log(`[Core] ✅ Fichier téléchargé: ${filePath}`);
 
                     // Indexer le fichier dans MediaDB (fire-and-forget)
@@ -1842,7 +1846,10 @@ I need to write a file using write_to_file.
                             await workingMemory.addMessage(chatId, 'assistant', finalResponse);
                             if (isStorable(finalResponse, 'assistant')) {
                                 const memory = container.get('memory');
-                                memory.store(chatId, finalResponse, 'assistant', { msgId: message.id }).catch(console.error);
+                                memory.store(chatId, finalResponse, 'assistant', { msgId: message.id }).catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    console.error(`[Core] memory.store (assistant/voice) failed for chatId=${chatId}:`, msg);
+                });
                             }
                             return; // FIN TRAITEMENT
                         } else {
@@ -2001,7 +2008,10 @@ I need to write a file using write_to_file.
 
             if (isStorable(finalResponse, 'assistant')) {
                 const memory = container.get('memory');
-                memory.store(chatId, finalResponse, 'assistant', { msgId: message.id }).catch(console.error);
+                memory.store(chatId, finalResponse, 'assistant', { msgId: message.id }).catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    console.error(`[Core] memory.store (assistant) failed for chatId=${chatId}:`, msg);
+                });
             }
 
             // Option B: Extraction automatique de faits (asynchrone, ne bloque pas)
@@ -3023,7 +3033,7 @@ ${textToCompress}`
 
         // Créer le fichier de verrouillage si temporaire
         if (shutdownUntil) {
-            writeFileSync(join(__dirname, '..', '.shutdown_lock'), shutdownUntil.toString());
+            await fsPromises.writeFile(join(__dirname, '..', '.shutdown_lock'), shutdownUntil.toString());
         }
 
         // Laisser le temps au message de partir

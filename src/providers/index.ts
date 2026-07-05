@@ -917,6 +917,9 @@ export async function loadAdapters(): Promise<void> {
 }
 
 // Backward compatibility: auto-load when module is imported outside ServiceContainer
-loadAdapters().catch(console.error);
+loadAdapters().catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Providers] loadAdapters failed during module init:', msg);
+});
 
 export default providerRouter;
