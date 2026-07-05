@@ -20,10 +20,7 @@ export default {
         // URL Moonshot standard
         const baseUrl = familyConfig?.base_url || 'https://api.moonshot.cn/v1';
 
-        // Debug: vérifier la clé API (masquée)
-        const keyPreview = apiKey ? `${apiKey.substring(0, 8)}...${apiKey.substring(apiKey.length - 4)}` : 'UNDEFINED';
         console.log(`[Moonshot] Appel: ${baseUrl} avec modèle ${modelId}`);
-        console.log(`[Moonshot] Clé API: ${keyPreview} (longueur: ${apiKey?.length || 0})`);
 
         const body: any = {
             model: modelId,

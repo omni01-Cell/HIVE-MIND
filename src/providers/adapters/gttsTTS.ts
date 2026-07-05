@@ -66,16 +66,16 @@ export class GttsTTSAdapter {
 
             // Sauvegarder temporairement
             const tempMp3Path = path.join(this.cacheDir, `gtts_${Date.now()}.mp3`);
-            fs.writeFileSync(tempMp3Path, audioBuffer);
+            await fs.promises.writeFile(tempMp3Path, audioBuffer);
 
             // Convertir en OGG pour WhatsApp
             const outputOggPath = tempMp3Path.replace('.mp3', '.ogg');
             await this._convertToOgg(tempMp3Path, outputOggPath);
 
             // Cleanup
-            try { fs.unlinkSync(tempMp3Path); } catch (e: any) { }
+            try { await fs.promises.unlink(tempMp3Path); } catch (e: any) { }
 
-            const oggBuffer = fs.readFileSync(outputOggPath);
+            const oggBuffer = await fs.promises.readFile(outputOggPath);
 
             return {
                 audioBuffer: oggBuffer,
