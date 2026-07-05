@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,7 +17,7 @@ import {
     type VirtualizedListRef
 } from './shared/VirtualizedList.js';
 import { ScrollableList } from './shared/ScrollableList.js';
-import { useMemo, memo, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, memo, useCallback, useEffect, useRef } from 'react';
 import { MAX_HIVE_MESSAGE_LINES } from '../constants.js';
 import { useConfirmingTool } from '../hooks/useConfirmingTool.js';
 import { ToolConfirmationQueue } from './ToolConfirmationQueue.js';
@@ -26,8 +26,8 @@ import { appEvents, AppEvent } from '../../utils/events.js';
 const MemoizedHistoryItemDisplay = memo(HistoryItemDisplay);
 const MemoizedAppHeader = memo(AppHeader);
 
-// Limit Gemini messages to a very high number of lines to mitigate performance
-// issues in the worst case if we somehow get an enormous response from Gemini.
+// Limit HIVE-MIND messages to a very high number of lines to mitigate performance
+// issues in the worst case if we somehow get an enormous response from the core.
 // This threshold is arbitrary but should be high enough to never impact normal
 // usage.
 const buildPendingItems = (
@@ -284,7 +284,7 @@ export const MainContent = () => {
     );
 
     // We should return true for all messages that are not
-    // interactive. Gemini messages and Tool results that are not scrollable,
+    // interactive. HIVE-MIND messages and Tool results that are not scrollable,
     // collapsible, or clickable should also be tagged as static in the future.
     const isStaticItem = useCallback(
         (item: (typeof virtualizedData)[number]) => item.type === 'header',

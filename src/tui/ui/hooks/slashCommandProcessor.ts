@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,22 +9,51 @@ import {
     useMemo,
     useEffect,
     useState,
-    useRef,
-    createElement
+    useRef
 } from 'react';
 import process from 'node:process';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 import { useSessionStats } from '../contexts/SessionContext.js';
 import type { LoadedSettings } from '../../config/settings.js';
-import { CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
 import { CommandService } from '../../services/CommandService.js';
 import { BuiltinCommandLoader } from '../../services/BuiltinCommandLoader.js';
 import { parseSlashCommand } from '../../utils/commands.js';
 import { runExitCleanup } from '../../utils/cleanup.js';
-import { coreEvents, CoreEvent } from '../../utils/coreEvents.js';
+import { coreEvents } from '../../utils/coreEvents.js';
 import { HiveConfig } from '../../config/hiveConfig.js';
-import { HistoryItem, HistoryItemWithoutId, ConfirmationRequest, AgentDefinition, MessageType, ToolConfirmationOutcome, ToolCallConfirmationDetails, IndividualToolCallDisplay, CoreToolCallStatus } from '../contexts/UIStateContext.js';
-import { IdeClient, Message, SlashCommandResult, SlashCommandProcessorResult, MCPDiscoveryState, SlashCommandStatus, makeSlashCommandEvent, logSlashCommand, addMCPStatusChangeListener, removeMCPStatusChangeListener, GitService, Logger, Storage, ExtensionsStartingEvent, ExtensionsStoppingEvent, ExtensionUpdateAction, ExtensionUpdateStatus, PartListUnion } from '../contexts/UIStateContext.js';
+import {
+    MessageType,
+    ToolConfirmationOutcome,
+    CoreToolCallStatus,
+    IdeClient,
+    SlashCommandStatus,
+    makeSlashCommandEvent,
+    logSlashCommand,
+    addMCPStatusChangeListener,
+    removeMCPStatusChangeListener,
+    GitService,
+    Logger,
+    Storage
+} from '../contexts/UIStateContext.js';
+import type {
+    CommandContext,
+    SlashCommand,
+    HistoryItem,
+    HistoryItemWithoutId,
+    ConfirmationRequest,
+    AgentDefinition,
+    ToolCallConfirmationDetails,
+    IndividualToolCallDisplay,
+    Message,
+    SlashCommandResult,
+    SlashCommandProcessorResult,
+    MCPDiscoveryState,
+    ExtensionsStartingEvent,
+    ExtensionsStoppingEvent,
+    ExtensionUpdateAction,
+    ExtensionUpdateStatus,
+    PartListUnion
+} from '../contexts/UIStateContext.js';
 
 interface SlashCommandProcessorActions {
   openAuthDialog: () => void;

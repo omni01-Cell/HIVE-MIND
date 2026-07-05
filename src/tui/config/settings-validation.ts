@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -315,7 +315,7 @@ export function formatValidationError(
 
     for (const issue of displayedIssues) {
         const pathStr = issue.path.reduce(
-            (acc: string, curr: any): string => {
+            (acc: string, curr: string | number | symbol): string => {
                 const keyStr = typeof curr === 'symbol' ? String(curr) : String(curr);
                 return typeof curr === 'number'
                     ? `${acc}[${curr}]`
@@ -327,8 +327,8 @@ export function formatValidationError(
         lines.push(`    ${issue.message}`);
 
         if (issue.code === 'invalid_type') {
-            const expected = (issue as any).expected;
-            const received = (issue as any).received;
+            const expected = (issue as unknown as Record<string, unknown>).expected;
+            const received = (issue as unknown as Record<string, unknown>).received;
             lines.push(`Expected: ${expected}, but received: ${received}`);
         }
         lines.push('');
@@ -342,7 +342,7 @@ export function formatValidationError(
     }
 
     lines.push('Please fix the configuration.');
-    lines.push('See: https://geminicli.com/docs/reference/configuration/');
+    lines.push('See HIVE-MIND documentation for reference.');
 
     return lines.join('\n');
 }

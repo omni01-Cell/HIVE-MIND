@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useState } from 'react';
 import { SettingScope } from '../../config/settings.js';
 import { useSettingsStore } from './SettingsContext.js';
 

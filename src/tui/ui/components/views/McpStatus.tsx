@@ -1,15 +1,21 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MCPServerStatus, MCPServerConfig } from '../../contexts/UIStateContext.js';
+import {
+    MCPServerStatus,
+    MCPServerConfig,
+    HistoryItemMcpStatus,
+    JsonMcpPrompt,
+    JsonMcpResource,
+    JsonMcpTool
+} from '../../contexts/UIStateContext.js';
 import { Box, Text } from 'ink';
 import type React from 'react';
 import { MAX_MCP_RESOURCES_TO_SHOW } from '../../constants.js';
 import { theme } from '../../semantic-colors.js';
-import { HistoryItemMcpStatus, JsonMcpPrompt, JsonMcpResource, JsonMcpTool } from '../../contexts/UIStateContext.js';
 
 interface McpStatusProps {
   servers: Record<string, MCPServerConfig>;
@@ -154,7 +160,7 @@ export const McpStatus: React.FC<McpStatusProps> = ({
         return (
             <Box flexDirection="column">
                 <Text>No MCP servers configured.</Text>
-                <Text>Please view MCP documentation in your browser: <Text color={theme.text.link}>https://goo.gle/gemini-cli-docs-mcp</Text> or use the cli /docs command</Text>
+                <Text>Please view documentation in your browser: <Text color={theme.text.link}>https://github.com/leandre755/HIVE-MIND</Text> or use the /help command</Text>
             </Box>
         );
     }

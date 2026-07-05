@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import 'dotenv/config';
 import { Command } from 'commander';
 import { acquireLock, releaseLock } from '../utils/pidLock.js';
 import { botCore } from '../core/index.js';
