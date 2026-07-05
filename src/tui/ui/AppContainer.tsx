@@ -314,8 +314,8 @@ interface GlobalKeypressContext {
     stopRecording?: () => void;
     keyMatchers: Record<string, (key: Key) => boolean>;
     isHelpDismissKey: (key: Key) => boolean;
-    history: unknown[];
-    pendingHistoryItems: unknown[];
+    history: HistoryItem[];
+    pendingHistoryItems: HistoryItem[];
     TransientMessageType: typeof TransientMessageType;
     config: HiveConfig;
 }

@@ -28,10 +28,10 @@ export const aboutCommand: SlashCommand = {
             })`;
         }
         const modelVersion =
-      context.services.agentContext?.config.getModel() || 'Unknown';
+      context.services?.agentContext?.config.getModel() || 'Unknown';
         const cliVersion = await getVersion();
         const selectedAuthType =
-      context.services.settings?.merged?.security?.auth?.selectedType || '';
+      context.services?.settings?.merged?.security?.auth?.selectedType || '';
         const gcpProject = process.env['GOOGLE_CLOUD_PROJECT'] || '';
         const ideClient = await getIdeClientName(context);
 
@@ -42,7 +42,7 @@ export const aboutCommand: SlashCommand = {
         });
         const userEmail = cachedAccount ?? undefined;
 
-        const tier = context.services.agentContext?.config.getUserTierName();
+        const tier = context.services?.agentContext?.config.getUserTierName();
 
         const aboutItem: Omit<HistoryItemAbout, 'id'> = {
             type: MessageType.ABOUT,
@@ -57,12 +57,12 @@ export const aboutCommand: SlashCommand = {
             tier
         };
 
-        context.ui.addItem(aboutItem);
+        context.ui?.addItem(aboutItem);
     }
 };
 
 async function getIdeClientName(context: CommandContext) {
-    if (!context.services.agentContext?.config.getIdeMode()) {
+    if (!context.services?.agentContext?.config.getIdeMode()) {
         return '';
     }
     const ideClient = await IdeClient.getInstance();
