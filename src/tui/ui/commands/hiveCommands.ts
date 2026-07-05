@@ -505,7 +505,7 @@ export const hiveSearchCommand: SlashCommand = {
             if (!mediaSearch) {
                 addItem({
                     type: 'warning',
-                    text: '⚠️ Le service de recherche par embeddings n\'est pas disponible. Vérifiez que la clé GEMINI_API_KEY ou GOOGLE_API_KEY est bien configurée.'
+                    text: '⚠️ Le service de recherche par embeddings n\'est pas disponible. Vérifiez que vos clés API sont bien configurées.'
                 }, Date.now());
                 return;
             }

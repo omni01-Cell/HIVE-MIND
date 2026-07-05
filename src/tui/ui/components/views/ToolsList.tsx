@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,7 +23,7 @@ export const ToolsList: React.FC<ToolsListProps> = ({
 }) => (
     <Box flexDirection="column" marginBottom={1}>
         <Text bold color={theme.text.primary}>
-      Available Gemini CLI tools:
+      Available HIVE-MIND tools:
         </Text>
         <Box height={1} />
         {tools.length > 0 ? (

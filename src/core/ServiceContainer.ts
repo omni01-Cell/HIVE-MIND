@@ -184,12 +184,14 @@ export class ServiceContainer {
         const { GeminiLiveProvider } = await import('../services/audio/geminiLiveProvider.js');
         this.register('geminiLiveProvider', new GeminiLiveProvider({ apiKey: geminiKey || '' }));
 
-        const [dreamModule, runtimeModule] = await Promise.all([
+        const [dreamModule, runtimeModule, contextWindowModule] = await Promise.all([
             import('../services/dreamService.js'),
-            import('../services/runtime/RuntimeInfrastructure.js')
+            import('../services/runtime/RuntimeInfrastructure.js'),
+            import('../services/runtime/ContextWindowService.js')
         ]);
         this.register('dream', dreamModule.dreamService);
         this.register('runtime', () => new runtimeModule.AIRuntimeInfrastructure(), { singleton: true });
+        this.register('contextWindow', () => new contextWindowModule.ContextWindowService(), { singleton: true });
 
         const { factsMemory, workspaceMemory } = await import('../services/memory.js');
         this.register('facts', factsMemory);

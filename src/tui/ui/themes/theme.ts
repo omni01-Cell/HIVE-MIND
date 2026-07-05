@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -202,7 +202,7 @@ export const lightTheme: ColorsTheme = {
     InputBackground: '#E4E4E4',
     MessageBackground: '#FAFAFA',
     FocusBackground: '#D7FFD7',
-    GradientColors: ['#4796E4', '#847ACE', '#C3677F']
+    GradientColors: ['#8A2BE2', '#DA70D6', '#00FFFF']
 };
 
 export const darkTheme: ColorsTheme = {
@@ -224,7 +224,7 @@ export const darkTheme: ColorsTheme = {
     InputBackground: '#5F5F5F',
     MessageBackground: '#5F5F5F',
     FocusBackground: '#005F00',
-    GradientColors: ['#4796E4', '#847ACE', '#C3677F']
+    GradientColors: ['#8A2BE2', '#DA70D6', '#00FFFF']
 };
 
 export const ansiTheme: ColorsTheme = {

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -102,7 +102,7 @@ export function IdeIntegrationNudge({
             <Box marginBottom={1} flexDirection="column">
                 <Text>
                     <Text color={theme.status.warning}>{'> '}</Text>
-                    {`Do you want to connect ${ideName ?? 'your editor'} to HIVE-MIND CLI?`}
+                    {`Do you want to connect ${ideName ?? 'your editor'} to HIVE-MIND?`}
                 </Text>
                 <Text color={theme.text.secondary}>{installText}</Text>
             </Box>

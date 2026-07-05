@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,7 +36,7 @@ export const INFORMATIVE_TIPS = [
     'Expand your workspace with additional directories (/directory)…',
     'Control how /memory reload loads context files (/settings)…',
     'Toggle respect for .gitignore files in context (/settings)…',
-    'Toggle respect for .geminiignore files in context (/settings)…',
+    'Toggle respect for .hiveignore files in context (/settings)…',
     'Enable recursive file search for @-file completions (/settings)…',
     'Disable fuzzy search when searching for files (/settings)…',
     'Run tools in a secure sandbox environment (settings.json)…',
@@ -66,7 +66,7 @@ export const INFORMATIVE_TIPS = [
     'Enable AI-powered prompt completion while typing (/settings)…',
     'Enable debug logging of keystrokes to the console (/settings)…',
     'Enable automatic session cleanup of old conversations (/settings)…',
-    'Show Gemini CLI status in the terminal window title (/settings)…',
+    'Show HIVE-MIND TUI status in the terminal window title (/settings)…',
     'Use the entire width of the terminal for output (/settings)…',
     'Enable screen reader mode for better accessibility (/settings)…',
     'Skip the next speaker check for faster responses (/settings)…',
@@ -139,13 +139,13 @@ export const INFORMATIVE_TIPS = [
     'Update all or specific extensions with /extensions update',
     'Get help on commands with /help',
     'Manage IDE integration with /ide',
-    'Create a project-specific GEMINI.md file with /init',
+    'Create a project-specific HIVE.md file with /init',
     'List configured MCP servers and tools with /mcp list',
     'Authenticate with an OAuth-enabled MCP server with /mcp auth',
     'Reload MCP servers with /mcp reload',
     'See the current instructional context with /memory show',
-    'Reload instructional context from GEMINI.md files with /memory reload',
-    'List the paths of the GEMINI.md files in use with /memory list',
+    'Reload instructional context from HIVE.md files with /memory reload',
+    'List the paths of the HIVE.md files in use with /memory list',
     'Choose your Gemini model with /model',
     'Display the privacy notice with /privacy',
     'Restore project files to a previous state with /restore',
