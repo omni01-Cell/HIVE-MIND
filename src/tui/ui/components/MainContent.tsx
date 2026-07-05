@@ -17,7 +17,7 @@ import {
     type VirtualizedListRef
 } from './shared/VirtualizedList.js';
 import { ScrollableList } from './shared/ScrollableList.js';
-import { useMemo, memo, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, memo, useCallback, useEffect, useRef } from 'react';
 import { MAX_HIVE_MESSAGE_LINES } from '../constants.js';
 import { useConfirmingTool } from '../hooks/useConfirmingTool.js';
 import { ToolConfirmationQueue } from './ToolConfirmationQueue.js';

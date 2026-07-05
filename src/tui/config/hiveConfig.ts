@@ -145,6 +145,7 @@ export interface HiveConfig {
     getAgentRegistry(): AgentRegistry;
     getResourceRegistry(): ResourceRegistry;
     getMcpClientManager(): McpClientManager | null;
+    getSkillManager(): { getDisplayableSkills(): unknown[] };
     setShellExecutionConfig(config: unknown): void;
     getQuestion(): string | null;
     isPlanEnabled(): boolean;
@@ -155,6 +156,12 @@ export interface HiveConfig {
     injectionService: InjectionService;
     storage: Storage;
     getExperiments(): Experiments;
+    getUseBackgroundColor(): boolean;
+    getWorktreeSettings(): { enabled: boolean };
+    getSandboxEnabled(): boolean;
+    isYoloModeDisabled(): boolean;
+    getEnableInteractiveShell(): boolean;
+    setTerminalBackground(color: string): void;
 }
 
 function withTimeout<T>(promise: PromiseLike<T> | Promise<T> | T, ms: number, errMsg = 'Operation timed out'): Promise<T> {
@@ -356,6 +363,9 @@ export function createHiveConfig(): HiveConfig {
             findResourceByUri: (_uri: string) => undefined
         }),
         getMcpClientManager: () => null,
+        getSkillManager: () => ({
+            getDisplayableSkills: () => []
+        }),
         setShellExecutionConfig: () => {},
         getQuestion: () => null,
         isPlanEnabled: () => false,
@@ -367,7 +377,13 @@ export function createHiveConfig(): HiveConfig {
             addInjection: () => {}
         },
         storage: new Storage(),
-        getExperiments: () => ({ flags: {} })
+        getExperiments: () => ({ flags: {} }),
+        getUseBackgroundColor: () => false,
+        getWorktreeSettings: () => ({ enabled: false }),
+        getSandboxEnabled: () => false,
+        isYoloModeDisabled: () => true,
+        getEnableInteractiveShell: () => true,
+        setTerminalBackground: (_color: string) => {}
     };
 }
 

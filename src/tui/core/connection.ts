@@ -1,209 +1,195 @@
 /**
- * HiveCoreConnection — Pont entre la TUI et le core HIVE-MIND.
+ * HiveCoreConnection — Pont client WebSocket léger entre la TUI et le Core HIVE-MIND.
  *
- * Ce fichier initialise le vrai BotCore (ServiceContainer, plugins, transport TUI)
- * et expose un AgentProtocol que les composants React (via useAgentStream) peuvent
- * consommer comme n'importe quel agent.
+ * Se connecte au serveur WebSocket hébergé par le Core en tâche de fond,
+ * s'authentifie par token dynamique et relaie les événements.
  */
 
-import { openSync, writeSync, closeSync } from 'node:fs';
-import { botCore } from '../../core/index.js';
-import { hiveTransport } from '../transport/HiveTransport.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import WebSocket from 'ws';
 import { hiveConfig } from '../config/hiveConfig.js';
-import { eventBus, BotEvents } from '../../core/events.js';
+import { ToolConfirmationOutcome } from '../ui/contexts/UIStateContext.js';
 import type {
     AgentProtocol,
     AgentEvent,
     AgentContentPart,
-    ToolConfirmationOutcome,
     ToolConfirmationPayload,
     ToolCallConfirmationDetails
 } from '../ui/contexts/UIStateContext.js';
-import type { MessageData } from '../../core/types/BotTypes.js';
 
-
-const getTuiChatId = () => hiveConfig.getSessionId();
-const TUI_SENDER = 'owner@local';
-const TUI_SENDER_NAME = 'TUI Admin';
-
-/**
- * Garde globale anti-écrasement : si le core ne réagit pas du tout en 60s,
- * on force `agent_end` plutôt que de laisser la TUI bloquée en "thinking".
- */
-const AGENT_RESPONSE_HARD_TIMEOUT_MS = 60000;
-
-/**
- * Taille du ring buffer des logs TUI redirigés.
- */
-const TUI_LOG_RING_CAPACITY = 200;
-
-/**
- * Active la sortie de debug (logs dans stdout) — désactivé par défaut en TUI.
- */
-const TUI_DEBUG_MODE = process.env.HIVE_DEBUG === '1' || process.env.DEBUG === 'true';
-
-/**
- * Redirige `process.stdout.write` vers un ring buffer (et un fichier log optionnel)
- * sans toucher à l'objet `console` lui-même.
- *
- * **Pourquoi cette approche** : tous les `console.log(...)` finissent par appeler
- * `process.stdout.write(...)`. En interceptant l'API bas-niveau sans réassigner
- * `console`, les modules qui ont capturé une référence à `console.log` au chargement
- * conservent leur binding. C'est un hack temporaire en attendant une abstraction
- * `Logger` propre (cf. `.GCC/afaire.md`).
- *
- * Retourne un thunk de restauration (`disableTuiLogRedirect`) qui réinstalle le
- * stdout original et ferme le fichier log.
- *
- * Pour activer le diagnostic, poser `HIVE_TUI_LOG_FILE=/tmp/hive-tui.log` avant
- * de lancer ; tout `console.log` y sera copié en append.
- */
-function enableTuiLogRedirect(): () => void {
-    if (!process.stdout) {
-        return () => undefined;
-    }
-    const originalWrite = process.stdout.write.bind(process.stdout);
-    const ring: Array<{ type: 'log' | 'warn' | 'info'; message: string; timestamp: number }> = [];
-
-    const logFilePath = process.env.HIVE_TUI_LOG_FILE;
-    let logFileFd: number | null = null;
-    if (logFilePath) {
-        try {
-            logFileFd = openSync(logFilePath, 'a');
-        } catch {
-            logFileFd = null;
-        }
-    }
-
-    const write = (
-        chunk: string | Buffer | Uint8Array,
-        encoding?: BufferEncoding | ((err?: Error | null) => void),
-        cb?: (err?: Error | null) => void
-    ): boolean => {
-        let resolvedCb: ((err?: Error | null) => void) | undefined;
-        if (typeof encoding === 'function') {
-            resolvedCb = encoding;
-        } else if (typeof cb === 'function') {
-            resolvedCb = cb;
-        }
-
-        try {
-            if (typeof chunk === 'string') {
-                ring.push({ type: 'log', message: chunk, timestamp: Date.now() });
-                if (ring.length > TUI_LOG_RING_CAPACITY) ring.shift();
-                if (logFileFd !== null) {
-                    try { writeSync(logFileFd, chunk); } catch { /* ignore */ }
-                }
-            }
-        } catch {
-            // jamais laisser le logger tuer le caller
-        }
-
-        if (resolvedCb) {
-            resolvedCb();
-        }
-        // On "consomme" l'écriture : Ink contrôle stdout, on ne peut pas y toucher.
-        return true;
-    };
-
-    process.stdout.write = write as typeof process.stdout.write;
-
-    return () => {
-        process.stdout.write = originalWrite;
-        if (logFileFd !== null) {
-            try { closeSync(logFileFd); } catch { /* ignore */ }
-            logFileFd = null;
-        }
-    };
-}
-
-interface ServiceEvent {
-    service: string;
-    action?: string;
-    timestamp?: number;
-}
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
 export class HiveCoreConnection implements AgentProtocol {
     private listeners = new Set<(event: AgentEvent) => void>();
-    private messageListener: (message: MessageData) => void;
-    private presenceListener: (event: { chatId: string; presence: string }) => void;
-    private confirmationRequestListener: (event: { id: string; type: string; data: Record<string, unknown> & { questions?: unknown[] }; description: string }) => void;
-    private serviceStartListener: (event: ServiceEvent) => void;
-    private serviceEndListener: (event: ServiceEvent) => void;
-    private customEventListener: (event: { name: string; message: string; timestamp?: number }) => void;
+    private statusListeners = new Set<(status: ConnectionStatus) => void>();
+    
+    private ws: WebSocket | null = null;
+    private status: ConnectionStatus = 'disconnected';
+    private reconnectTimer: NodeJS.Timeout | null = null;
     private initialized = false;
-    private hardTimeoutTimer: NodeJS.Timeout | null = null;
-    private expectingResponse = false;
-    private logRestore: (() => void) | null = null;
-    private activeServices = new Map<string, { service: string; action: string; timestamp: number }>();
+    private token = '';
+    private port = 5001;
+    private host = 'localhost';
+    private configPath = join(process.cwd(), 'tui-connection.json');
+    private activeServices: Array<{ service: string; action: string; timestamp: number }> = [];
 
     public getActiveServices(): Array<{ service: string; action: string; timestamp: number }> {
-        return Array.from(this.activeServices.values());
+        return this.activeServices;
     }
 
-    constructor() {
-        this.serviceStartListener = (event: ServiceEvent) => {
-            if (event && event.service) {
-                this.activeServices.set(event.service, {
-                    service: event.service,
-                    action: event.action || 'thinking',
-                    timestamp: event.timestamp || Date.now()
-                });
-                this.emit({
-                    type: 'custom',
-                    name: 'service_start',
-                    message: event.service
-                });
-            }
-        };
+    public getConnectionStatus(): ConnectionStatus {
+        return this.status;
+    }
 
-        this.serviceEndListener = (event: ServiceEvent) => {
-            if (event && event.service) {
-                this.activeServices.delete(event.service);
-                this.emit({
-                    type: 'custom',
-                    name: 'service_end',
-                    message: event.service
-                });
-            }
+    public onStatusChange(listener: (status: ConnectionStatus) => void): () => void {
+        this.statusListeners.add(listener);
+        listener(this.status);
+        return () => {
+            this.statusListeners.delete(listener);
         };
+    }
 
-        this.customEventListener = (event: { name: string; message: string; timestamp?: number }) => {
-            if (event && event.name === 'context_usage_update') {
-                this.emit({
-                    type: 'custom',
-                    name: 'context_usage_update',
-                    message: event.message
-                });
+    private setStatus(newStatus: ConnectionStatus): void {
+        if (this.status !== newStatus) {
+            this.status = newStatus;
+            for (const listener of this.statusListeners) {
+                try { listener(newStatus); } catch { /* ignore */ }
             }
-        };
-
-        this.messageListener = (message: MessageData) => {
-            if (!message.text || message.text.trim().length === 0) return;
+            // Diffuser aussi un événement générique
             this.emit({
-                type: 'message',
-                role: 'agent',
-                content: [{ type: 'text', text: message.text }]
+                type: 'custom',
+                name: 'connection_status_change',
+                message: newStatus
             });
-        };
+        }
+    }
 
-        this.presenceListener = (event: { chatId: string; presence: string }) => {
-            if (event.chatId !== getTuiChatId()) return;
-            if (event.presence === 'composing' || event.presence === 'recording') {
-                if (!this.expectingResponse) {
-                    this.expectingResponse = true;
-                    this.emit({ type: 'agent_start' });
+    /**
+     * Tente de lire le fichier tui-connection.json et d'extraire les paramètres de connexion.
+     */
+    private loadConnectionConfig(): boolean {
+        try {
+            const raw = readFileSync(this.configPath, 'utf-8');
+            const data = JSON.parse(raw);
+            this.host = data.host || 'localhost';
+            this.port = data.port || 5001;
+            this.token = data.token || '';
+            return !!this.token;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Démarre la boucle de connexion résiliente.
+     */
+    async connect(): Promise<void> {
+        if (this.initialized) return;
+        this.initialized = true;
+        this.setStatus('connecting');
+        this.reconnectLoop();
+    }
+
+    /**
+     * Tente une connexion immédiate et replanifie en cas d'échec.
+     */
+    private reconnectLoop(): void {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        // Si la config n'est pas lisible (Core non démarré), on attend et on réessaye
+        if (!this.loadConnectionConfig()) {
+            this.setStatus('connecting');
+            this.reconnectTimer = setTimeout(() => this.reconnectLoop(), 2000);
+            return;
+        }
+
+        console.log(`[HiveCoreConnection] Connexion à ws://${this.host}:${this.port}...`);
+        
+        try {
+            this.ws = new WebSocket(`ws://${this.host}:${this.port}`);
+
+            this.ws.on('open', () => {
+                // Envoyer le token d'authentification en premier message
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'auth',
+                        token: this.token
+                    }));
                 }
-            } else if (event.presence === 'paused' || event.presence === 'available') {
-                if (this.expectingResponse) {
-                    this.expectingResponse = false;
-                    this.emit({ type: 'agent_end' });
-                    this.clearHardTimeout();
+            });
+
+            this.ws.on('message', (data) => {
+                try {
+                    const payload = JSON.parse(data.toString());
+
+                    if (payload.type === 'auth_success') {
+                        this.setStatus('connected');
+                        console.log('[HiveCoreConnection] ✅ Connecté et authentifié auprès du Core.');
+                        return;
+                    }
+
+                    // Une fois connecté, dispatcher les autres messages
+                    if (this.status === 'connected') {
+                        this.handleServerEvent(payload);
+                    }
+                } catch (err: any) {
+                    console.error('[HiveCoreConnection] Erreur parsing message serveur:', err.message);
                 }
+            });
+
+            this.ws.on('close', () => {
+                this.handleDisconnect();
+            });
+
+            this.ws.on('error', () => {
+                this.handleDisconnect();
+            });
+
+        } catch {
+            this.handleDisconnect();
+        }
+    }
+
+    private handleDisconnect(): void {
+        if (this.ws) {
+            try { this.ws.terminate(); } catch { /* ignore */ }
+            this.ws = null;
+        }
+        this.activeServices = [];
+        this.setStatus('connecting');
+        
+        if (this.reconnectTimer === null) {
+            this.reconnectTimer = setTimeout(() => this.reconnectLoop(), 2000);
+        }
+    }
+
+    /**
+     * Traite un événement envoyé par le serveur WebSocket.
+     */
+    private handleServerEvent(payload: { type: string; data: any }): void {
+        const { type, data } = payload;
+
+        // Suivi local des services actifs
+        if (type === 'custom') {
+            if (payload.data?.name === 'service_start') {
+                const sName = payload.data.message;
+                // éviter les doublons
+                if (!this.activeServices.some(s => s.service === sName)) {
+                    this.activeServices.push({ service: sName, action: 'thinking', timestamp: Date.now() });
+                }
+            } else if (payload.data?.name === 'service_end') {
+                const sName = payload.data.message;
+                this.activeServices = this.activeServices.filter(s => s.service !== sName);
             }
-        };
+        }
 
-        this.confirmationRequestListener = (event: { id: string; type: string; data: Record<string, unknown> & { questions?: unknown[] }; description: string }) => {
+        // Intercepter et enrichir les requêtes de confirmation HITL avec les handlers locaux
+        if (type === 'confirmation_request') {
+            const event = data;
             const resolvedType = event.type === 'ask_user' ? 'ask_user' : (event.type === 'permission_request' ? 'info' : 'exec');
             const confirmationDetails = {
                 type: resolvedType,
@@ -215,10 +201,17 @@ export class HiveCoreConnection implements AgentProtocol {
                 rootCommands: [event.description],
                 commands: [event.description],
                 questions: event.type === 'ask_user' ? (event.data.questions as unknown as Record<string, unknown>[]) : undefined,
-                onConfirm: async (outcome: ToolConfirmationOutcome, payload?: ToolConfirmationPayload) => {
+                onConfirm: async (outcome: ToolConfirmationOutcome, confirmPayload?: ToolConfirmationPayload) => {
                     const approved = outcome !== ToolConfirmationOutcome.Cancel;
-                    const feedback = payload?.feedback || (payload?.answers ? JSON.stringify(payload.answers) : undefined);
-                    hiveTransport.submitConfirmationResponse(event.id, approved, feedback);
+                    const feedback = confirmPayload?.feedback || ((confirmPayload as any)?.answers ? JSON.stringify((confirmPayload as any).answers) : undefined);
+                    
+                    // Renvoyer la réponse de confirmation via WebSocket
+                    this.sendPayload({
+                        type: 'confirmation_response',
+                        id: event.id,
+                        approved,
+                        feedback
+                    });
 
                     this.emit({
                         type: 'tool_response',
@@ -249,65 +242,32 @@ export class HiveCoreConnection implements AgentProtocol {
                 },
                 confirmationDetails: confirmationDetails as unknown as ToolCallConfirmationDetails
             });
-        };
-    }
-
-    /**
-     * Initialise le core HIVE-MIND avec le transport TUI comme canal actif.
-     * En mode TUI, intercepte stdout dès l'entrée dans connect() pour que ni le
-     * boot du core (logo, progress bar, etc.) ni l'exécution de l'agent (logs
-     * Router/FinOps/Agent) ne viennent écraser l'interface Ink.
-     */
-    async connect(): Promise<void> {
-        if (this.initialized) return;
-
-        // Forcer le mode local + transport TUI pour éviter d'activer WhatsApp/Discord.
-        process.env.ACTIVE_TRANSPORTS = 'ink-cli';
-        process.env.APP_ENV = 'local';
-
-        if (!TUI_DEBUG_MODE) {
-            this.logRestore = enableTuiLogRedirect();
+            return;
         }
 
-        await botCore.init();
-
-        // Écouter les messages et présences sortants du core pour les traduire en AgentEvents.
-        hiveTransport.on('message', this.messageListener);
-        hiveTransport.on('presence', this.presenceListener);
-        hiveTransport.on('confirmation_request', this.confirmationRequestListener);
-
-        // Écouter le eventBus du Core pour les services actifs
-        eventBus.on(BotEvents.SERVICE_START, this.serviceStartListener);
-        eventBus.on(BotEvents.SERVICE_END, this.serviceEndListener);
-        eventBus.on(BotEvents.CUSTOM, this.customEventListener);
-
-        this.initialized = true;
+        // Pour tous les autres événements (messages, présences, etc.), émettre directement
+        this.emit(data);
     }
 
     /**
-     * Restaure stdout et éteint proprement le transport.
+     * Ferme la connexion proprement.
      */
     async disconnect(): Promise<void> {
-        if (!this.initialized) return;
-        hiveTransport.off('message', this.messageListener);
-        hiveTransport.off('presence', this.presenceListener);
-        hiveTransport.off('confirmation_request', this.confirmationRequestListener);
-
-        eventBus.off(BotEvents.SERVICE_START, this.serviceStartListener);
-        eventBus.off(BotEvents.SERVICE_END, this.serviceEndListener);
-        eventBus.off(BotEvents.CUSTOM, this.customEventListener);
-
-        this.clearHardTimeout();
-        if (this.logRestore) {
-            this.logRestore();
-            this.logRestore = null;
-        }
         this.initialized = false;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        if (this.ws) {
+            try { this.ws.close(1000, 'TUI exiting'); } catch { /* ignore */ }
+            this.ws = null;
+        }
+        this.activeServices = [];
+        this.setStatus('disconnected');
     }
 
-
     /**
-     * Envoie un message utilisateur au core.
+     * Envoie un message utilisateur au Core via le WebSocket.
      */
     async send(request: { message: { content: AgentContentPart[] } }): Promise<{ streamId: string }> {
         const text = request.message.content.map((part) => part.text).join('');
@@ -315,31 +275,26 @@ export class HiveCoreConnection implements AgentProtocol {
             throw new Error('Cannot send an empty message to the core.');
         }
 
-        this.expectingResponse = true;
-        this.emit({ type: 'agent_start' });
+        if (this.status !== 'connected') {
+            throw new Error('Cannot send message: not connected to the HIVE-MIND Core.');
+        }
 
-        hiveTransport.submitUserMessage(text, {
-            chatId: getTuiChatId(),
-            sender: TUI_SENDER,
-            senderName: TUI_SENDER_NAME,
-            authorityLevel: 'DIVIN (SuperUser)',
-            sourceChannel: 'ink-cli',
-            systemContext: hiveConfig.getHiveMdContext()
+        this.sendPayload({
+            type: 'user_message',
+            text,
+            options: {
+                systemContext: hiveConfig.getHiveMdContext()
+            }
         });
 
-        this.clearHardTimeout();
-        this.hardTimeoutTimer = setTimeout(() => {
-            if (this.expectingResponse) {
-                this.expectingResponse = false;
-                this.emit({ type: 'agent_end' });
-            }
-        }, AGENT_RESPONSE_HARD_TIMEOUT_MS);
+        // Simuler un début de traitement immédiat
+        this.emit({ type: 'agent_start' });
 
         return { streamId: `tui-${Date.now()}` };
     }
 
     /**
-     * Abonne un listener aux événements agent (messages, tool calls, erreurs).
+     * Abonne un listener aux événements agent.
      */
     subscribe(listener: (event: AgentEvent) => void): () => void {
         this.listeners.add(listener);
@@ -352,17 +307,8 @@ export class HiveCoreConnection implements AgentProtocol {
      * Annule la requête en cours.
      */
     async abort(): Promise<void> {
-        this.clearHardTimeout();
-        this.expectingResponse = false;
         this.emit({ type: 'agent_end' });
         return Promise.resolve();
-    }
-
-    private clearHardTimeout(): void {
-        if (this.hardTimeoutTimer) {
-            clearTimeout(this.hardTimeoutTimer);
-            this.hardTimeoutTimer = null;
-        }
     }
 
     private emit(event: AgentEvent): void {
@@ -374,8 +320,17 @@ export class HiveCoreConnection implements AgentProtocol {
             }
         }
     }
+
+    private sendPayload(payload: any): void {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            try {
+                this.ws.send(JSON.stringify(payload));
+            } catch (err: any) {
+                console.error('[HiveCoreConnection] Erreur envoi payload WebSocket:', err.message);
+            }
+        }
+    }
 }
 
 export const hiveCoreConnection = new HiveCoreConnection();
-
 export default hiveCoreConnection;

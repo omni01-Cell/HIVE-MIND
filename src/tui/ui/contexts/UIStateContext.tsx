@@ -1918,6 +1918,12 @@ export interface MCPDiscoveryState {
     isDiscovering: boolean;
 }
 
+export const MCPDiscoveryState = {
+    NOT_STARTED: 'not_started',
+    IN_PROGRESS: 'in_progress',
+    COMPLETED: 'completed'
+} as const;
+
 /** Action de mise à jour d'extension (install/uninstall/reload). */
 export type ExtensionUpdateAction =
     | { type: 'install'; extensionId: string }
@@ -1979,11 +1985,75 @@ export interface ResumedSessionData {
 }
 
 /** Service Git (lecture de l'état du dépôt). */
-export interface GitService {
-    readonly projectRoot: string;
-    getCurrentBranch(): Promise<string | null>;
-    getStatus(): Promise<{ modified: string[]; staged: string[]; untracked: string[] }>;
-    getLog(limit?: number): Promise<Array<{ hash: string; message: string; author: string; date: Date }>>;
+export class GitService {
+    constructor(public readonly projectRoot: string, private storage: unknown) {}
+
+    async getCurrentBranch(): Promise<string | null> {
+        try {
+            const { exec } = await import('node:child_process');
+            const { promisify } = await import('node:util');
+            const execAsync = promisify(exec);
+            const { stdout } = await execAsync('git branch --show-current', { cwd: this.projectRoot });
+            return stdout.trim() || null;
+        } catch {
+            return null;
+        }
+    }
+
+    async getStatus(): Promise<{ modified: string[]; staged: string[]; untracked: string[] }> {
+        try {
+            const { exec } = await import('node:child_process');
+            const { promisify } = await import('node:util');
+            const execAsync = promisify(exec);
+            const { stdout } = await execAsync('git status --porcelain', { cwd: this.projectRoot });
+            const modified: string[] = [];
+            const staged: string[] = [];
+            const untracked: string[] = [];
+
+            const lines = stdout.split('\n');
+            for (const line of lines) {
+                if (!line) continue;
+                const status = line.slice(0, 2);
+                const file = line.slice(3).trim();
+                if (status === '??') {
+                    untracked.push(file);
+                } else if (status[0] === 'M' || status[0] === 'A' || status[0] === 'D') {
+                    staged.push(file);
+                } else if (status[1] === 'M' || status[1] === 'D') {
+                    modified.push(file);
+                }
+            }
+            return { modified, staged, untracked };
+        } catch {
+            return { modified: [], staged: [], untracked: [] };
+        }
+    }
+
+    async getLog(limit = 10): Promise<Array<{ hash: string; message: string; author: string; date: Date }>> {
+        try {
+            const { exec } = await import('node:child_process');
+            const { promisify } = await import('node:util');
+            const execAsync = promisify(exec);
+            const { stdout } = await execAsync(`git log -n ${limit} --pretty=format:"%H|%an|%ad|%s"`, { cwd: this.projectRoot });
+            const logs: Array<{ hash: string; message: string; author: string; date: Date }> = [];
+            const lines = stdout.split('\n');
+            for (const line of lines) {
+                if (!line) continue;
+                const parts = line.split('|');
+                if (parts.length >= 4) {
+                    logs.push({
+                        hash: parts[0],
+                        author: parts[1],
+                        date: new Date(parts[2]),
+                        message: parts.slice(3).join('|')
+                    });
+                }
+            }
+            return logs;
+        } catch {
+            return [];
+        }
+    }
 }
 
 /** Comportement de complétion du prompt utilisateur. */
