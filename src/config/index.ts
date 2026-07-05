@@ -7,7 +7,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import { envResolver } from '../services/envResolver.js';
 import {
     AppConfigSchema,
@@ -20,8 +19,7 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Load environment variables
-dotenv.config({ path: join(__dirname, '..', '..', '.env') });
+// Environment variables are loaded natively via --env-file
 
 /**
  * Validates and loads a JSON configuration file.
