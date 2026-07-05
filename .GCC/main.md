@@ -32,6 +32,7 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 
 ## 🧠 Decisions Made
 
+- [2026-07-05] [JULES-SESSION-INIT] Moi, Jules, j'ai initialisé la session de travail et créé le plan `plan_agent_test_battery.md` comme demandé.
 - [2026-07-03] [PR-8-INTEGRATION] Intégration de la PR #8. Analyse et application manuelle de la correction d'injection de commande dans la fonction expandDirectory d'ASTTools en utilisant execFileAsync au lieu d'execAsync.
 - [2026-07-03] [PR-INTEGRITY-RECOVERY] Récupération sélective des PRs fermées de force par Jules. Pour préserver la sécurité de la branche main et éviter les conflits obsolètes de workflows, les changements fonctionnels légitimes (indicateurs de présence et tests unitaires) ont été isolés et appliqués directement sur main.
 - [2026-07-03] [COMMIT-CO-AUTH] Co-authored-by commit message footers. Décidé d'ajouter systématiquement le pied de commit "Co-authored-by: Google Antigravity <242056456+google-antigravity@users.noreply.github.com>" à tous les futurs commits Git générés par l'assistant IA, pour assurer une attribution correcte sur GitHub.
