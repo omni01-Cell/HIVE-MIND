@@ -94,3 +94,6 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 ## 👉 Next Session Direction
 
 Poursuivre le plan de refactorisation de la TUI avec la Session 17 (Intégration de l'indicateur dynamique de contexte).
+
+## 🧑‍💻 Jules AI Contributions
+- [2026-07-06] Jules a corrigé et implémenté la méthode `deleteSession` dans le `ChatRecordingService` de `hiveConfig.ts` pour résoudre les erreurs de lint TS et s'assurer que l'historique TUI peut être supprimé localement sans erreur `any` (respect de la règle "exhaustiveness and strict validation"). De plus, Jules a vérifié les erreurs éventuelles dans les blocs try/catch pour qu'ils aient des types explicites (ex. `err: unknown`).

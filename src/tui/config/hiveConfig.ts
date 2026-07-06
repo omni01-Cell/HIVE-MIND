@@ -47,7 +47,7 @@ export interface AgentRegistry {
 export interface GeminiClient {
     isInitialized(): boolean;
     /** Optionnel — service d'enregistrement de session. */
-    getChatRecordingService?(): { deleteCurrentSessionAsync(): Promise<void> } | undefined;
+    getChatRecordingService?(): { deleteCurrentSessionAsync(): Promise<void>; deleteSession(sessionId: string): Promise<void> } | undefined;
     /** Optionnel — remplace l'historique de la conversation. */
     setHistory?(history: unknown[]): void;
 }
@@ -208,6 +208,28 @@ export function createHiveConfig(): HiveConfig {
             isInitialized: () => true,
             getChatRecordingService: () => ({
                 deleteCurrentSessionAsync: async () => {},
+                deleteSession: async (sessionId: string) => {
+                    const chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
+                    // Sanitize sessionId to prevent directory traversal
+                    const sanitizedId = path.basename(sessionId);
+                    const filePath = path.join(chatsDir, `hive_session_${sanitizedId}.jsonl`);
+                    try {
+                        let timeoutId: NodeJS.Timeout;
+                        await Promise.race([
+                            fsPromises.unlink(filePath),
+                            new Promise((_, reject) => {
+                                timeoutId = setTimeout(() => reject(new Error('Timeout deleting session file')), 5000);
+                            })
+                        ]).finally(() => {
+                            clearTimeout(timeoutId);
+                        });
+                    } catch (err: unknown) {
+                        const error = err as NodeJS.ErrnoException;
+                        if (error.code !== 'ENOENT') {
+                            coreEvents.emitFeedback('error', 'Failed to delete session file', err);
+                        }
+                    }
+                },
                 recordMessage: (msg: unknown) => {
                     const msgObj = msg as any; // eslint-disable-line @typescript-eslint/no-explicit-any
                     const role = msgObj?.type === 'user' ? 'user' : 'assistant';
