@@ -91,6 +91,8 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase (synchronisation asynchrone des sessions TUI sous context_id dynamique).
 - ⏳ Pending: Sessions 17 à 22 du plan d'adaptation de la TUI.
 
+- ✅ Done: Session 16 (re-impl) — **[JULES]** Remplacement du hardcoding "tui-local" par une récupération dynamique via hiveConfig.getSessionId() dans hiveCommands.ts et HiveTransport.ts pour assurer la persistance et synchronisation adéquate du context_id de la TUI avec Supabase.
+
 ## 👉 Next Session Direction
 
 Poursuivre le plan de refactorisation de la TUI avec la Session 17 (Intégration de l'indicateur dynamique de contexte).
