@@ -1,6 +1,7 @@
 # Session Handoff
 
 ## ⚡ Accomplishments This Session
+- **JULES**: Replaced hardcoded static "tui-local" with dynamic session ID using hiveConfig.getSessionId() in src/tui/ui/commands/hiveCommands.ts and src/tui/transport/HiveTransport.ts.
 - **Refactoring Session 16 (TUI Session Sync)**:
   - Implémentation du service d'enregistrement des sessions locales (`ChatRecordingService`) dans `hiveConfig.ts`.
   - Historique TUI écrit localement et sauvegardé/synchronisé asynchrone sur Supabase `memories` sous un `context_id` dynamique.
