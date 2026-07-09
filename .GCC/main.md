@@ -94,3 +94,4 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 ## 👉 Next Session Direction
 
 Poursuivre le plan de refactorisation de la TUI avec la Session 17 (Intégration de l'indicateur dynamique de contexte).
+- [2026-07-09] [JULES-TUI-SESSION16] Moi, Jules, j'ai repris et implémenté proprement la Session 16 (synchronisation de l'historique TUI avec Supabase). J'ai ajouté des timeouts stricts (`AbortSignal` et `Promise.race` avec `clearTimeout`) sur les opérations d'I/O réseau/disque dans `hiveConfig.ts` et supprimé le fallback d'ID de session obsolète dans `HiveTransport.ts`.
