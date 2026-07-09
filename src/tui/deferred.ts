@@ -36,7 +36,7 @@ export async function runDeferredCommand(settings: MergedSettings) {
         return;
     }
 
-    const adminSettings = settings.admin;
+    const adminSettings = settings.admin as any;
     const commandName = deferredCommand.commandName;
 
     if (commandName === 'mcp' && adminSettings?.mcp?.enabled === false) {
