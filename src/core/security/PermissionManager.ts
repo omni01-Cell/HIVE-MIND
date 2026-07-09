@@ -13,7 +13,7 @@
 //   10-minute timeout for each logic.
 // ============================================================================
 
-import { resolve, isAbsolute, basename } from 'path';
+import { resolve, isAbsolute, basename, sep } from 'path';
 import * as fs from 'fs';
 import { transportManager } from '../transport/TransportManager.js';
 import { adminService } from '../../services/adminService.js';
@@ -180,7 +180,7 @@ export class PermissionManager {
         });
 
         for (const allowedPath of resolvedAllowed) {
-            if (absoluteTarget === allowedPath || absoluteTarget.startsWith(allowedPath + '/') || absoluteTarget.startsWith(allowedPath + '\\')) {
+            if (absoluteTarget === allowedPath || absoluteTarget.startsWith(allowedPath + sep)) {
                 return true;
             }
         }
