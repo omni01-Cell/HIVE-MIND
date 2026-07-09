@@ -30,7 +30,7 @@ export const debugLogger = {
     log: (...args: any[]) => console.debug('[Debug]', ...args),
     info: (...args: any[]) => console.info('[Info]', ...args),
     warn: (...args: any[]) => console.warn('[Warn]', ...args),
-    error: (...args: any[]) => console.error('[Error]', ...args),
+    error: (...args: any[]) => console.error('[Error]', ...args)
 };
 
 export function parseAndFormatApiError(error: any, _authType?: any): string {

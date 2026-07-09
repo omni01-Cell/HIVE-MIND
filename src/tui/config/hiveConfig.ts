@@ -223,26 +223,35 @@ export function createHiveConfig(): HiveConfig {
                         role
                     }) + '\n';
 
+                    const localAbort = new AbortController();
+                    const localTimeout = setTimeout(() => localAbort.abort(), 5000);
+
                     fsPromises.mkdir(chatsDir, { recursive: true })
-                        .then(() => fsPromises.appendFile(filePath, record))
+                        .then(() => fsPromises.appendFile(filePath, record, { signal: localAbort.signal }))
+                        .finally(() => clearTimeout(localTimeout))
                         .catch(err => {
                             coreEvents.emitFeedback('error', 'Local sync failed', err);
-
                         });
 
                     import('../../services/memory.js')
                         .then(({ semanticMemory }) => {
                             if (semanticMemory && semanticMemory.store) {
-                                semanticMemory.store(currentSessionId, String(text), role)
+                                let timer: NodeJS.Timeout;
+                                const timeoutPromise = new Promise<void>((_, reject) => {
+                                    timer = setTimeout(() => reject(new Error('Supabase sync timeout')), 5000);
+                                });
+                                Promise.race([
+                                    semanticMemory.store(currentSessionId, String(text), role),
+                                    timeoutPromise
+                                ])
+                                    .finally(() => clearTimeout(timer))
                                     .catch((err: unknown) => {
                                         coreEvents.emitFeedback('error', 'Supabase sync failed', err);
-
                                     });
                             }
                         })
                         .catch((err: unknown) => {
                             coreEvents.emitFeedback('error', 'Memory module import failed', err);
-
                         });
                 }
             })
