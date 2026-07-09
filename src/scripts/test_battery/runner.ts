@@ -1,5 +1,3 @@
-import 'dotenv/config';
-
 // Set environment for CLI testing (battery mode: no interactive readline, full logs)
 process.env.ACTIVE_TRANSPORTS = 'cli';
 process.env.APP_ENV = 'battery';

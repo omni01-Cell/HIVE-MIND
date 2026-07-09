@@ -100,6 +100,9 @@ export const BotEvents = {
     SERVICE_START: 'service:start',
     SERVICE_END: 'service:end',
 
+    // Custom events for cross-module signaling
+    CUSTOM: 'custom:event',
+
     // Système (Kill Switch, erreurs critiques)
     SYSTEM_ERROR: 'system:error'
 };

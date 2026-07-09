@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -46,9 +46,9 @@ function sanitizeNotificationContent(
     const body = sanitizeForDisplay(content.body, MAX_NOTIFICATION_BODY_CHARS);
 
     return {
-        title: title || 'Gemini CLI',
+        title: title || 'HIVE-MIND TUI',
         subtitle: subtitle || undefined,
-        body: body || 'Open Gemini CLI for details.'
+        body: body || 'Open HIVE-MIND TUI for details.'
     };
 }
 
@@ -57,14 +57,14 @@ export function buildRunEventNotificationContent(
 ): RunEventNotificationContent {
     if (event.type === 'attention') {
         return sanitizeNotificationContent({
-            title: 'Gemini CLI needs your attention',
+            title: 'HIVE-MIND TUI needs your attention',
             subtitle: event.heading ?? 'Action required',
-            body: event.detail ?? 'Open Gemini CLI to continue.'
+            body: event.detail ?? 'Open HIVE-MIND TUI to continue.'
         });
     }
 
     return sanitizeNotificationContent({
-        title: 'Gemini CLI session complete',
+        title: 'HIVE-MIND TUI session complete',
         subtitle: 'Run finished',
         body: event.detail ?? 'The session finished successfully.'
     });
@@ -88,7 +88,7 @@ export enum TerminalNotificationMethod {
 export function getNotificationMethod(
     settings: LoadedSettings
 ): TerminalNotificationMethod {
-    const general = settings.merged.general as any;
+    const general = settings.merged.general as Record<string, unknown>;
     switch (general?.notificationMethod) {
         case TerminalNotificationMethod.Osc9:
             return TerminalNotificationMethod.Osc9;

@@ -30,6 +30,7 @@ interface ContainerLike {
 
 const adminCache = new Map<string, AdminRole>();
 const REFRESH_INTERVAL = 10 * 60 * 1000;
+let refreshIntervalId: ReturnType<typeof setInterval> | null = null;
 
 function extractErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -61,9 +62,20 @@ export const adminService = {
         };
         await initialRefresh();
 
-        setInterval(() => {
+        // Stocker la référence de l'intervalle pour permettre le nettoyage (prévention fuite mémoire)
+        if (refreshIntervalId !== null) {
+            clearInterval(refreshIntervalId);
+        }
+        refreshIntervalId = setInterval(() => {
             this.refresh().catch(console.error);
         }, REFRESH_INTERVAL);
+    },
+
+    destroy() {
+        if (refreshIntervalId !== null) {
+            clearInterval(refreshIntervalId);
+            refreshIntervalId = null;
+        }
     },
 
     async refresh(): Promise<boolean> {

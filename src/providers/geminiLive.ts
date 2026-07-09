@@ -4,7 +4,7 @@
 // Supporte: Transcription vocale, Réponses HD, Détection d'émotion, Tool calling
 
 import { GoogleGenAI, Modality } from '@google/genai';
-import { writeFileSync, unlinkSync } from 'fs';
+import fs from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
@@ -169,7 +169,7 @@ export class GeminiLiveProvider {
             if (response.audioBuffer) {
                 const filePath = join(tmpdir(), `gemini_tts_${randomUUID()}.wav`);
                 const wavBuffer = this._createWavBuffer(response.audioParts, 24000);
-                writeFileSync(filePath, wavBuffer);
+                await fs.promises.writeFile(filePath, wavBuffer);
                 response.filePath = filePath;
             }
 

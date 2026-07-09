@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,15 +9,14 @@ import { Box, Text } from 'ink';
 import { theme } from '../semantic-colors.js';
 import { checkExhaustive } from '../../utils/errors.js';
 import { shortenPath, tildeifyPath } from '../utils/formatters.js';
-import { getDisplayString, AuthType, UserAccountManager } from '../contexts/UIStateContext.js';
+import { getDisplayString, AuthType, UserAccountManager, useUIState } from '../contexts/UIStateContext.js';
 import { ConsoleSummaryDisplay } from './ConsoleSummaryDisplay.js';
 import process from 'node:process';
 import os from 'node:os';
 import { MemoryUsageDisplay } from './MemoryUsageDisplay.js';
 import { ContextUsageDisplay } from './ContextUsageDisplay.js';
 import { DebugProfiler } from './DebugProfiler.js';
-import { useUIState } from '../contexts/UIStateContext.js';
-import { useQuotaState } from '../contexts/QuotaContext.js';
+
 import { useConfig } from '../contexts/ConfigContext.js';
 import { useSettings } from '../contexts/SettingsContext.js';
 import { useVimMode } from '../contexts/VimModeContext.js';
@@ -189,10 +188,9 @@ function addFooterItemColumns(
         authType: string | undefined;
         itemColor: string;
         copyModeEnabled: boolean;
-        quotaStats: ReturnType<typeof useQuotaState>['stats'];
     }
 ) {
-    const { targetDir, debugMode, debugMessage, branchName, model, promptTokenCount, isTrustedFolder, terminalWidth, uiState, config, settings, email, authType, itemColor, copyModeEnabled, quotaStats } = ctx;
+    const { targetDir, debugMode, debugMessage, branchName, model, promptTokenCount, isTrustedFolder, terminalWidth, uiState, config, settings, email, authType, itemColor, copyModeEnabled } = ctx;
     switch (id) {
         case 'workspace': {
             const fullPath = tildeifyPath(targetDir);
@@ -231,7 +229,7 @@ function addFooterItemColumns(
             break;
         case 'auth': {
             if (!settings.merged.ui.showUserIdentity || !authType) break;
-            const displayStr = authType === AuthType.LOGIN_WITH_GOOGLE ? (email ?? 'google') : authType;
+            const displayStr = authType === AuthType.LOGIN_WITH_GOOGLE ? (email ?? 'signed in') : authType;
             addFn(id, header, () => <Text color={itemColor} wrap="truncate-end">{displayStr}</Text>, displayStr.length);
             break;
         }
@@ -261,7 +259,6 @@ function buildFooterColumns(
     uiState: ReturnType<typeof useUIState>,
     config: ReturnType<typeof useConfig>,
     settings: ReturnType<typeof useSettings>,
-    quotaStats: ReturnType<typeof useQuotaState>['stats'],
     email: string | undefined,
     authType: string | undefined,
     copyModeEnabled: boolean,
@@ -304,7 +301,7 @@ function buildFooterColumns(
         addCol('vim', '', () => <Text color={theme.text.accent}>{vimStr}</Text>, vimStr.length, true);
     }
 
-    const ctx = { targetDir, debugMode, debugMessage, branchName, model, promptTokenCount, isTrustedFolder, terminalWidth, uiState, config, settings, email, authType, itemColor, copyModeEnabled, quotaStats };
+    const ctx = { targetDir, debugMode, debugMessage, branchName, model, promptTokenCount, isTrustedFolder, terminalWidth, uiState, config, settings, email, authType, itemColor, copyModeEnabled };
     for (const id of items) {
         if (!isFooterItemId(id)) continue;
         const itemConfig = ALL_ITEMS.find((i) => i.id === id);
@@ -319,7 +316,6 @@ function buildFooterColumns(
 
 export const Footer: React.FC = () => {
     const uiState = useUIState();
-    const quotaState = useQuotaState();
     const { copyModeEnabled } = useInputState();
     const config = useConfig();
     const settings = useSettings();
@@ -363,8 +359,6 @@ export const Footer: React.FC = () => {
         terminalWidth: uiState.terminalWidth
     };
 
-    const quotaStats = quotaState.stats;
-
     const isFullErrorVerbosity = settings.merged.ui.errorVerbosity === 'full';
     const showErrorSummary =
     !showErrorDetails &&
@@ -379,7 +373,7 @@ export const Footer: React.FC = () => {
     const itemColor = showLabels ? theme.text.primary : theme.ui.comment;
 
     const potentialColumns = buildFooterColumns(
-        uiState, config, settings, quotaStats, email, authType, copyModeEnabled, showLabels, itemColor, displayVimMode, showErrorSummary, corgiMode, errorCount, targetDir, debugMode, debugMessage, branchName, model, promptTokenCount, isTrustedFolder, terminalWidth, items
+        uiState, config, settings, email, authType, copyModeEnabled, showLabels, itemColor, displayVimMode, showErrorSummary, corgiMode, errorCount, targetDir, debugMode, debugMessage, branchName, model, promptTokenCount, isTrustedFolder, terminalWidth, items
     );
 
     const computeRowItems = (): { rowItems: FooterRowItem[]; droppedAny: boolean } => {

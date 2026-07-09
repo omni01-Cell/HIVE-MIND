@@ -302,11 +302,11 @@ export function mergeSettings(
 
     return customDeepMerge(
         getMergeStrategyForPath,
-        schemaDefaults,
-        systemDefaults,
-        user,
-        safeWorkspace,
-        system
+        schemaDefaults as Record<string, any>,
+        systemDefaults as Record<string, any>,
+        user as Record<string, any>,
+        safeWorkspace as Record<string, any>,
+        system as Record<string, any>
     ) as unknown as MergedSettings;
 }
 
@@ -323,8 +323,8 @@ export function createTestMergedSettings(
 
     return customDeepMerge(
         getMergeStrategyForPath,
-        getDefaultsFromSchema(),
-        overrides
+        getDefaultsFromSchema() as Record<string, any>,
+        overrides as Record<string, any>
     ) as unknown as MergedSettings;
 }
 
@@ -433,8 +433,8 @@ export class LoadedSettings {
 
             merged.admin = customDeepMerge(
                 (settingsPath: string[]) => getMergeStrategyForPath(['admin', ...settingsPath]),
-                adminDefaults,
-                this._remoteAdminSettings?.admin ?? {}
+                adminDefaults as Record<string, any>,
+                (this._remoteAdminSettings?.admin ?? {}) as Record<string, any>
             ) as MergedSettings['admin'];
         }
         return merged;
@@ -525,20 +525,22 @@ export class LoadedSettings {
             return;
         }
 
-        admin.secureModeEnabled = !strictModeDisabled;
-        admin.mcp = {
+        const adminObj = admin as any;
+
+        adminObj.secureModeEnabled = !strictModeDisabled;
+        adminObj.mcp = {
             enabled: mcpSetting?.mcpEnabled,
             config: mcpSetting?.mcpConfig?.mcpServers,
             requiredConfig: mcpSetting?.requiredMcpConfig
         };
-        admin.extensions = {
+        adminObj.extensions = {
             enabled: cliFeatureSetting?.extensionsSetting?.extensionsEnabled
         };
-        admin.skills = {
+        adminObj.skills = {
             enabled: cliFeatureSetting?.unmanagedCapabilitiesEnabled
         };
 
-        this._remoteAdminSettings = { admin };
+        this._remoteAdminSettings = { admin: adminObj };
         this._merged = this.computeMergedSettings();
     }
 
@@ -921,10 +923,10 @@ function _doLoadSettings(workspaceDir: string): LoadedSettings {
     // For the initial trust check, we can only use user and system settings.
     const initialTrustCheckSettings = customDeepMerge(
         getMergeStrategyForPath,
-        getDefaultsFromSchema(),
-        systemDefaultSettings,
-        userSettings,
-        systemSettings
+        getDefaultsFromSchema() as Record<string, any>,
+        systemDefaultSettings as Record<string, any>,
+        userSettings as Record<string, any>,
+        systemSettings as Record<string, any>
     );
     const isTrusted =
     isWorkspaceTrusted(initialTrustCheckSettings as Settings, workspaceDir)

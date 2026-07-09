@@ -70,6 +70,10 @@ export class TransportManager {
                     const { hiveTransport } = await import('../../tui/transport/HiveTransport.js');
                     this.register(name, hiveTransport);
                     console.log(`[TransportManager] TUI HIVE-MIND chargé comme transport ${name}`);
+                    
+                    // Lancer le serveur WebSocket associé pour les clients distants
+                    const { tuiServerTransport } = await import('./TuiServerTransport.js');
+                    await tuiServerTransport.start();
                 } catch (e) {
                     console.error(`[TransportManager] Failed to load HIVE-MIND TUI for ${name}:`, e);
                 }
@@ -242,6 +246,15 @@ export class TransportManager {
             const transport = this.transports.get(name);
             if (transport && typeof transport.disconnect === 'function') {
                 await transport.disconnect();
+            }
+            // Arrêter le serveur WebSocket si c'est le canal TUI
+            if (name === 'ink-cli' || name === 'tui') {
+                try {
+                    const { tuiServerTransport } = await import('./TuiServerTransport.js');
+                    await tuiServerTransport.stop();
+                } catch (e: any) {
+                    console.error('[TransportManager] Erreur arrêt TuiServerTransport:', e.message);
+                }
             }
         });
         await Promise.all(disconnectPromises);

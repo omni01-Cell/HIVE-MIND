@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type React from 'react';
+import React from 'react';
 import { Box } from 'ink';
 import { Notifications } from '../components/Notifications.js';
 import { MainContent } from '../components/MainContent.js';

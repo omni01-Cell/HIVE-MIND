@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { providerRouter, loadAdapters } from '../providers/index.js';
 
 async function testCodex() {

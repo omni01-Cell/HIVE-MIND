@@ -13,7 +13,7 @@
 //   10-minute timeout for each logic.
 // ============================================================================
 
-import { resolve, isAbsolute, basename } from 'path';
+import { resolve, isAbsolute, basename, sep } from 'path';
 import * as fs from 'fs';
 import { transportManager } from '../transport/TransportManager.js';
 import { adminService } from '../../services/adminService.js';
@@ -137,9 +137,50 @@ export class PermissionManager {
     // =========================================================================
 
     isInSandbox(targetPath: string, currentCwd: string = this.originalCwd): boolean {
-        const absoluteTarget = isAbsolute(targetPath) ? targetPath : resolve(currentCwd, targetPath);
-        for (const allowedPath of this.allowedDirectories) {
-            if (absoluteTarget.startsWith(allowedPath)) {
+        let absoluteTarget = isAbsolute(targetPath) ? targetPath : resolve(currentCwd, targetPath);
+        try {
+            absoluteTarget = fs.realpathSync(absoluteTarget);
+        } catch {
+            const segments = absoluteTarget.split(/[/\\]/);
+            let current = '/';
+            if (process.platform === 'win32') {
+                current = segments[0] + '\\';
+            }
+
+            const startIdx = process.platform === 'win32' ? 1 : 0;
+            for (let i = startIdx; i < segments.length; i++) {
+                const segment = segments[i];
+                if (!segment || segment === '.') continue;
+
+                if (segment === '..') {
+                    try {
+                        current = fs.realpathSync(current);
+                    } catch {
+                        // ignore realpath errors on intermediate path resolution
+                    }
+                    current = resolve(current, '..');
+                } else {
+                    const nextPath = resolve(current, segment);
+                    try {
+                        current = fs.realpathSync(nextPath);
+                    } catch {
+                        current = nextPath;
+                    }
+                }
+            }
+            absoluteTarget = resolve(current);
+        }
+
+        const resolvedAllowed = Array.from(this.allowedDirectories).map(allowedPath => {
+            try {
+                return fs.realpathSync(allowedPath);
+            } catch {
+                return allowedPath;
+            }
+        });
+
+        for (const allowedPath of resolvedAllowed) {
+            if (absoluteTarget === allowedPath || absoluteTarget.startsWith(allowedPath + sep)) {
                 return true;
             }
         }
