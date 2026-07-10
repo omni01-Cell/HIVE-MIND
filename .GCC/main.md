@@ -94,3 +94,4 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 ## 👉 Next Session Direction
 
 Poursuivre le plan de refactorisation de la TUI avec la Session 17 (Intégration de l'indicateur dynamique de contexte).
+- [2024-07-10] [JULES-PR-FIX] Fixed useSessionBrowser.ts to correctly use `deleteCurrentSessionAsync` from the `ChatRecordingService`, completing the Session 16 TUI history browser integration with Supabase.
