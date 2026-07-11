@@ -65,65 +65,45 @@ function areMetricsEqual(a: SessionMetrics, b: SessionMetrics): boolean {
     if (a === b) return true;
     if (!a || !b) return false;
 
-    // Compare files
-    if (
-        a.files.totalLinesAdded !== b.files.totalLinesAdded ||
-    a.files.totalLinesRemoved !== b.files.totalLinesRemoved
-    ) {
-        return false;
-    }
+    try {
+        const anyA = a as any;
+        const anyB = b as any;
 
-    // Compare tools
-    const toolsA = a.tools;
-    const toolsB = b.tools;
-    if (
-        toolsA.totalCalls !== toolsB.totalCalls ||
-    toolsA.totalSuccess !== toolsB.totalSuccess ||
-    toolsA.totalFail !== toolsB.totalFail ||
-    toolsA.totalDurationMs !== toolsB.totalDurationMs
-    ) {
-        return false;
-    }
-
-    // Compare tool decisions
-    if (
-        toolsA.totalDecisions[ToolCallDecision.ACCEPT] !==
-      toolsB.totalDecisions[ToolCallDecision.ACCEPT] ||
-    toolsA.totalDecisions[ToolCallDecision.REJECT] !==
-      toolsB.totalDecisions[ToolCallDecision.REJECT] ||
-    toolsA.totalDecisions[ToolCallDecision.MODIFY] !==
-      toolsB.totalDecisions[ToolCallDecision.MODIFY] ||
-    toolsA.totalDecisions[ToolCallDecision.AUTO_ACCEPT] !==
-      toolsB.totalDecisions[ToolCallDecision.AUTO_ACCEPT]
-    ) {
-        return false;
-    }
-
-    // Compare tools.byName
-    const toolsByNameAKeys = Object.keys(toolsA.byName);
-    const toolsByNameBKeys = Object.keys(toolsB.byName);
-    if (toolsByNameAKeys.length !== toolsByNameBKeys.length) return false;
-
-    for (const key of toolsByNameAKeys) {
-        const toolA = toolsA.byName[key];
-        const toolB = toolsB.byName[key];
-        if (!toolB || !areToolCallStatsEqual(toolA, toolB)) {
+        if (anyA.totalTokens !== anyB.totalTokens || anyA.inputTokens !== anyB.inputTokens || anyA.outputTokens !== anyB.outputTokens) {
             return false;
         }
-    }
 
-    // Compare models
-    const modelsAKeys = Object.keys(a.models);
-    const modelsBKeys = Object.keys(b.models);
-    if (modelsAKeys.length !== modelsBKeys.length) return false;
-
-    for (const key of modelsAKeys) {
-        if (!b.models[key] || !areModelMetricsEqual(a.models[key], b.models[key])) {
+        // Safe files comparison
+        if (anyA.files && anyB.files) {
+            if (anyA.files.totalLinesAdded !== anyB.files.totalLinesAdded || anyA.files.totalLinesRemoved !== anyB.files.totalLinesRemoved) {
+                return false;
+            }
+        } else if (!!anyA.files !== !!anyB.files) {
             return false;
         }
-    }
 
-    return true;
+        // Safe tools comparison
+        const toolsA = anyA.tools || anyA.toolCalls;
+        const toolsB = anyB.tools || anyB.toolCalls;
+        if (toolsA && toolsB) {
+            const callsA = toolsA.totalCalls ?? toolsA.count ?? 0;
+            const callsB = toolsB.totalCalls ?? toolsB.count ?? 0;
+            const successA = toolsA.totalSuccess ?? toolsA.success ?? 0;
+            const successB = toolsB.totalSuccess ?? toolsB.success ?? 0;
+            const failA = toolsA.totalFail ?? toolsA.fail ?? 0;
+            const failB = toolsB.totalFail ?? toolsB.fail ?? 0;
+
+            if (callsA !== callsB || successA !== successB || failA !== failB) {
+                return false;
+            }
+        } else if (!!toolsA !== !!toolsB) {
+            return false;
+        }
+
+        return JSON.stringify(a) === JSON.stringify(b);
+    } catch {
+        return false;
+    }
 }
 
 export type { SessionMetrics, ModelMetrics, RoleMetrics };

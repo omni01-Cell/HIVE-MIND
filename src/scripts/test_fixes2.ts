@@ -38,4 +38,4 @@ async function testSendFile() {
     fs.unlinkSync('test.pdf');
 }
 
-testSendFile().catch(console.error);
+testSendFile().catch(e => { console.error(e); process.exit(1); });

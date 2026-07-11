@@ -69,7 +69,7 @@ if (projUrl && projUrl.startsWith('http') && projUrl !== 'https://VOTRE_PROJET.s
             persistSession: false
         },
         realtime: {
-            transport: ws as any
+            transport: ws as unknown as typeof globalThis.WebSocket
         }
     });
 }

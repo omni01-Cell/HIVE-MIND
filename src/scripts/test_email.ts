@@ -11,4 +11,4 @@ async function testRealEmail() {
     console.log('Result:', result);
 }
 
-testRealEmail().catch(console.error);
+testRealEmail().catch(e => { console.error(e); process.exit(1); });

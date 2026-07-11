@@ -103,15 +103,15 @@ export class MinimaxTTSAdapter {
 
         // Sauvegarder temporairement et convertir en OGG pour WhatsApp
         const tempMp3Path = path.join(this.cacheDir, `minimax_${Date.now()}.mp3`);
-        fs.writeFileSync(tempMp3Path, audioBuffer);
+        await fs.promises.writeFile(tempMp3Path, audioBuffer);
 
         const outputOggPath = tempMp3Path.replace('.mp3', '.ogg');
         await this._convertToOgg(tempMp3Path, outputOggPath);
 
         // Cleanup MP3
-        try { fs.unlinkSync(tempMp3Path); } catch (e: any) { }
+        try { await fs.promises.unlink(tempMp3Path); } catch (e: any) { }
 
-        const oggBuffer = fs.readFileSync(outputOggPath);
+        const oggBuffer = await fs.promises.readFile(outputOggPath);
 
         return {
             audioBuffer: oggBuffer,

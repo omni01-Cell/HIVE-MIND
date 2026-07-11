@@ -30,6 +30,7 @@ interface ContainerLike {
 
 const adminCache = new Map<string, AdminRole>();
 const REFRESH_INTERVAL = 10 * 60 * 1000;
+let refreshIntervalId: ReturnType<typeof setInterval> | null = null;
 
 function extractErrorMessage(error: unknown): string {
     if (error instanceof Error) return error.message;
@@ -61,9 +62,29 @@ export const adminService = {
         };
         await initialRefresh();
 
-        setInterval(() => {
-            this.refresh().catch(console.error);
+        // Stocker la référence de l'intervalle pour permettre le nettoyage (prévention fuite mémoire)
+        if (refreshIntervalId !== null) {
+            clearInterval(refreshIntervalId);
+        }
+        refreshIntervalId = setInterval(() => {
+            void (async () => {
+                try {
+                    const success = await this.refresh();
+                    if (!success) {
+                        console.warn('[AdminService] Background refresh failed. Next attempt in ' + REFRESH_INTERVAL + 'ms.');
+                    }
+                } catch (e: unknown) {
+                    console.warn('[AdminService] Unhandled error during background refresh:', e);
+                }
+            })();
         }, REFRESH_INTERVAL);
+    },
+
+    destroy() {
+        if (refreshIntervalId !== null) {
+            clearInterval(refreshIntervalId);
+            refreshIntervalId = null;
+        }
     },
 
     async refresh(): Promise<boolean> {

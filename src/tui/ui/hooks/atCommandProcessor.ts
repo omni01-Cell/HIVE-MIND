@@ -2,9 +2,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Buffer } from 'node:buffer';
 import { HiveConfig } from '../../config/hiveConfig.js';
-import { IndividualToolCallDisplay } from '../contexts/UIStateContext.js';
-import { HistoryItemToolGroup, PartListUnion, PartUnion, CoreToolCallStatus } from '../contexts/UIStateContext.js';
-import { REFERENCE_CONTENT_START, REFERENCE_CONTENT_END } from '../contexts/UIStateContext.js';
+import {
+    IndividualToolCallDisplay,
+    HistoryItemToolGroup,
+    PartListUnion,
+    PartUnion,
+    CoreToolCallStatus,
+    REFERENCE_CONTENT_START,
+    REFERENCE_CONTENT_END
+} from '../contexts/UIStateContext.js';
 import { debugLogger, getErrorMessage } from '../../utils/errors.js';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 
@@ -63,7 +69,7 @@ interface AnyToolInvocation {
     execute(opts: { abortSignal: AbortSignal }): Promise<ToolInvocationResult>;
 }
 
-/** Stub de ReadManyFilesTool — à remplacer par l'implémentation HIVE-MIND réelle. */
+/** Version locale de ReadManyFilesTool — à remplacer par l'implémentation HIVE-MIND réelle. */
 class ReadManyFilesTool {
     readonly displayName = 'read_many_files';
     constructor(_config: HiveConfig, _messageBus: unknown) {}
@@ -282,7 +288,7 @@ interface ResolvedFile {
 
 interface IgnoredFile {
   path: string;
-  reason: 'git' | 'gemini' | 'both';
+  reason: 'git' | 'hive' | 'both';
 }
 
 /**
@@ -314,25 +320,25 @@ async function resolveFilePaths(
       respectFileIgnore.respectGitIgnore &&
       fileDiscovery.shouldIgnoreFile(pathName, {
           respectGitIgnore: true,
-          respectGeminiIgnore: false
+          respectHiveIgnore: false
       });
-        const geminiIgnored =
-      respectFileIgnore.respectGeminiIgnore &&
+        const hiveIgnored =
+      (respectFileIgnore.respectHiveIgnore || respectFileIgnore.respectGeminiIgnore) &&
       fileDiscovery.shouldIgnoreFile(pathName, {
           respectGitIgnore: false,
-          respectGeminiIgnore: true
+          respectHiveIgnore: true
       });
 
-        if (gitIgnored || geminiIgnored) {
+        if (gitIgnored || hiveIgnored) {
             const reason =
-        gitIgnored && geminiIgnored ? 'both' : gitIgnored ? 'git' : 'gemini';
+        gitIgnored && hiveIgnored ? 'both' : gitIgnored ? 'git' : 'hive';
             ignoredFiles.push({ path: pathName, reason });
             const reasonText =
         reason === 'both'
-            ? 'ignored by both git and gemini'
+            ? 'ignored by both git and hive'
             : reason === 'git'
                 ? 'git-ignored'
-                : 'gemini-ignored';
+                : 'hive-ignored';
             onDebugMessage(`Path ${pathName} is ${reasonText} and will be skipped.`);
             continue;
         }
@@ -557,7 +563,7 @@ async function readLocalFiles(
         include: pathSpecsToRead,
         file_filtering_options: {
             respect_git_ignore: respectFileIgnore.respectGitIgnore,
-            respect_gemini_ignore: respectFileIgnore.respectGeminiIgnore
+            respect_gemini_ignore: respectFileIgnore.respectHiveIgnore || respectFileIgnore.respectGeminiIgnore
         }
     };
 
@@ -641,7 +647,7 @@ function reportIgnoredFiles(
 
     const ignoredByReason: Record<string, string[]> = {
         git: [],
-        gemini: [],
+        hive: [],
         both: []
     };
 
@@ -653,8 +659,8 @@ function reportIgnoredFiles(
     if (ignoredByReason['git'].length) {
         messages.push(`Git-ignored: ${ignoredByReason['git'].join(', ')}`);
     }
-    if (ignoredByReason['gemini'].length) {
-        messages.push(`Gemini-ignored: ${ignoredByReason['gemini'].join(', ')}`);
+    if (ignoredByReason['hive'].length) {
+        messages.push(`Hive-ignored: ${ignoredByReason['hive'].join(', ')}`);
     }
     if (ignoredByReason['both'].length) {
         messages.push(`Ignored by both: ${ignoredByReason['both'].join(', ')}`);

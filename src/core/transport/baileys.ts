@@ -25,12 +25,13 @@ import swarm from '../concurrency/SwarmDispatcher.js'; // [NEW] Module Swarm
 async function generateWaveformFromFile(audioPath: string): Promise<Uint8Array | null> {
     const WAVEFORM_SIZE = 64;
     try {
-        const { execSync } = await import('child_process');
+        const { execFileSync } = await import('child_process');
         const ffmpegInstaller = await import('@ffmpeg-installer/ffmpeg');
 
-        // Décoder l'audio en PCM 16-bit mono 8kHz (basse fréquence = moins de data, suffisant pour waveform)
-        const pcmBuffer = execSync(
-            `"${ffmpegInstaller.default.path}" -i "${audioPath}" -f s16le -ac 1 -ar 8000 -`,
+        // Décoder l'audio en PCM 16-bit mono 8kHz via execFileSync (args séparés = zéro injection shell)
+        const pcmBuffer = execFileSync(
+            ffmpegInstaller.default.path,
+            ['-i', audioPath, '-f', 's16le', '-ac', '1', '-ar', '8000', '-'],
             { maxBuffer: 2 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }
         );
 

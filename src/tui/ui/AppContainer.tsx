@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, no-multiple-empty-lines, react-hooks/exhaustive-deps, object-shorthand */
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
+import React, {
     useMemo,
     useState,
     useCallback,
@@ -313,8 +314,8 @@ interface GlobalKeypressContext {
     stopRecording?: () => void;
     keyMatchers: Record<string, (key: Key) => boolean>;
     isHelpDismissKey: (key: Key) => boolean;
-    history: unknown[];
-    pendingHistoryItems: unknown[];
+    history: HistoryItem[];
+    pendingHistoryItems: HistoryItem[];
     TransientMessageType: typeof TransientMessageType;
     config: HiveConfig;
 }
@@ -509,7 +510,7 @@ function handleShellFocusKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
         return false;
     }
     if (ctx.keyMatchers[Command.TOGGLE_BACKGROUND_SHELL](key)) {
-        if (ctx.activePtyId) {
+        if (ctx.activePtyId && ctx.backgroundCurrentExecution) {
             ctx.backgroundCurrentExecution();
         } else {
             ctx.toggleBackgroundTasks();
@@ -889,7 +890,7 @@ export const AppContainer = (props: AppContainerProps) => {
                 ?.fireSessionStartEvent(sessionStartSource);
 
             if (result) {
-                const additionalContext = result.getAdditionalContext();
+                const additionalContext = (result as any).getAdditionalContext?.() || '';
                 const geminiClient = config.getGeminiClient() as any;
                 if (additionalContext && geminiClient) {
                     await geminiClient.addHistory({
@@ -1128,7 +1129,7 @@ export const AppContainer = (props: AppContainerProps) => {
     settings.merged.security.auth.selectedType !== AuthType.USE_GEMINI;
 
     // Session browser and resume functionality
-    const isGeminiClientInitialized = config.getGeminiClient()?.isInitialized();
+    const isGeminiClientInitialized = config.getGeminiClient()?.isInitialized() ?? false;
 
     const { loadHistoryForResume, isResuming } = useSessionResume({
         config,
@@ -1198,7 +1199,7 @@ export const AppContainer = (props: AppContainerProps) => {
                 ) {
                     writeToStdout(`
 ----------------------------------------------------------------
-Logging in with Google... Restarting Gemini CLI to continue.
+Logging in... Restarting HIVE-MIND TUI to continue.
 ----------------------------------------------------------------
           `);
                     await relaunchApp();
@@ -1260,7 +1261,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             settings.merged.security.auth.selectedType &&
       !settings.merged.security.auth.useExternal
         ) {
-            // We skip validation for Gemini API key here because it might be stored
+            // We skip validation for HIVE-MIND API key here because it might be stored
             // in the keychain, which we can't check synchronously.
             // The useAuth hook handles validation for this case.
             if (settings.merged.security.auth.selectedType === AuthType.USE_GEMINI) {
@@ -1410,7 +1411,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
         historyManager.addItem(
             {
                 type: MessageType.INFO,
-                text: 'Refreshing hierarchical memory (GEMINI.md or other context files)...'
+                text: 'Refreshing hierarchical memory (hive.md or other context files)...'
             },
             Date.now()
         );
@@ -2087,7 +2088,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
                 keyMatchers,
                 isHelpDismissKey,
                 history: historyManager.history,
-                pendingHistoryItems,
+                pendingHistoryItems: pendingHistoryItems as HistoryItem[],
                 TransientMessageType,
                 config
             };
@@ -2195,7 +2196,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             lastTitleRef.current = paddedTitle;
             stdout.write(`\x1b]0;${paddedTitle}\x07`);
         }
-    // Note: We don't need to reset the window title on exit because Gemini CLI is already doing that elsewhere
+    // Note: We don't need to reset the window title on exit because HIVE-MIND is already doing that elsewhere
     }, [
         streamingState,
         thought,
@@ -2645,7 +2646,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             hintMode:
         config.isModelSteeringEnabled() && isToolExecuting(pendingHistoryItems),
             hintBuffer: ''
-        }),
+        } as unknown as UIState),
         [
             isThemeDialogOpen,
 

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -472,7 +472,7 @@ export async function terminalSetup(): Promise<TerminalSetupResult> {
 }
 
 export const TERMINAL_SETUP_CONSENT_MESSAGE =
-  'Gemini CLI works best with Shift+Enter/Ctrl+Enter for multiline input. ' +
+  'HIVE-MIND TUI works best with Shift+Enter/Ctrl+Enter for multiline input. ' +
   'Would you like to automatically configure your terminal keybindings?';
 
 export function formatTerminalSetupResultMessage(

@@ -112,12 +112,12 @@ export class MinimaxVoiceService {
             const audioBuffer = Buffer.from(audioHex, 'hex');
 
             const tempMp3Path = path.join(this.cacheDir, `temp_${Date.now()}.mp3`);
-            fs.writeFileSync(tempMp3Path, audioBuffer);
+            await fs.promises.writeFile(tempMp3Path, audioBuffer);
 
             const outputOggPath = tempMp3Path.replace('.mp3', '.ogg');
             await this.convertToOgg(tempMp3Path, outputOggPath);
 
-            try { fs.unlinkSync(tempMp3Path); } catch { /* Cleanup best-effort */ }
+            try { await fs.promises.unlink(tempMp3Path); } catch { /* Cleanup best-effort */ }
 
             return outputOggPath;
 

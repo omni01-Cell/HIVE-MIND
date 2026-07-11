@@ -2,7 +2,7 @@
 // core/index.js
 // Orchestrateur principal du bot - Cerveau central
 
-import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'fs';
+import { readFileSync, existsSync, unlinkSync, promises as fsPromises } from 'fs';
 import { dirname, join, resolve } from 'path';
 
 import { fileURLToPath } from 'url';
@@ -913,7 +913,10 @@ export class BotCore {
         if (isGroup) {
             // Pas besoin d'attendre (fire and forget)
             const groupService = container.get('groupService');
-            groupService.trackActivity(chatId, sender).catch(console.error);
+            groupService.trackActivity(chatId, sender).catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`[Core] trackActivity failed for chatId=${chatId}:`, msg);
+            });
         }
 
         // 1. Mémoire de travail (Redis) avec identification speaker pour les groupes
@@ -928,7 +931,10 @@ export class BotCore {
         if (isStorable(text, 'user')) {
             // Mémoire Sémantique (RAG) via DI
             const memory = container.get('memory');
-            memory.store(chatId, text, 'user', { msgId: message.id }).catch(console.error);
+            memory.store(chatId, text, 'user', { msgId: message.id }).catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`[Core] memory.store (user) failed for chatId=${chatId}:`, msg);
+            });
         }
 
         // Indicateur de frappe
@@ -1102,15 +1108,13 @@ export class BotCore {
 
                     // Stockage temporaire structuré
                     const downloadDir = path.join(process.cwd(), 'hm_storage', 'tmp_download');
-                    if (!fs.existsSync(downloadDir)) {
-                        fs.mkdirSync(downloadDir, { recursive: true });
-                    }
+                    await fs.promises.mkdir(downloadDir, { recursive: true });
 
                     // Nettoyer le nom pour la sécurité système
                     const safeFileName = path.basename(originalFileName).replace(/[^a-zA-Z0-9.\-_ \(\)]/g, '_');
                     const filePath = path.join(downloadDir, safeFileName);
 
-                    fs.writeFileSync(filePath, buffer);
+                    await fs.promises.writeFile(filePath, buffer);
                     console.log(`[Core] ✅ Fichier téléchargé: ${filePath}`);
 
                     // Indexer le fichier dans MediaDB (fire-and-forget)
@@ -1463,6 +1467,22 @@ RULES:
 
                 // Sauvegarder la famille utilisée au premier tour
                 if (!usedFamily) usedFamily = response.usedFamily;
+
+                // Mettre à jour le service de fenêtre de contexte avec le modèle actif
+                if (response.usedModel) {
+                    try {
+                        const contextWindow = container.get('contextWindow');
+                        contextWindow.setActiveModel(response.usedModel);
+                        const currentUsage = contextWindow.getUsage(chatId, history);
+                        eventBus.publish(BotEvents.CUSTOM, {
+                            name: 'context_usage_update',
+                            message: JSON.stringify(currentUsage),
+                            timestamp: Date.now()
+                        });
+                    } catch (e: any) {
+                        console.error('[ContextWindow] Error updating context window stats:', e.message);
+                    }
+                }
 
                 // [FALLBACK] Détecter les "hallucinations" de tool calls textuels (ex: Kimi qui écrit du code)
                 if ((!response.toolCalls || response.toolCalls.length === 0) && response.content) {
@@ -1826,7 +1846,10 @@ I need to write a file using write_to_file.
                             await workingMemory.addMessage(chatId, 'assistant', finalResponse);
                             if (isStorable(finalResponse, 'assistant')) {
                                 const memory = container.get('memory');
-                                memory.store(chatId, finalResponse, 'assistant', { msgId: message.id }).catch(console.error);
+                                memory.store(chatId, finalResponse, 'assistant', { msgId: message.id }).catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    console.error(`[Core] memory.store (assistant/voice) failed for chatId=${chatId}:`, msg);
+                });
                             }
                             return; // FIN TRAITEMENT
                         } else {
@@ -1985,7 +2008,10 @@ I need to write a file using write_to_file.
 
             if (isStorable(finalResponse, 'assistant')) {
                 const memory = container.get('memory');
-                memory.store(chatId, finalResponse, 'assistant', { msgId: message.id }).catch(console.error);
+                memory.store(chatId, finalResponse, 'assistant', { msgId: message.id }).catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    console.error(`[Core] memory.store (assistant) failed for chatId=${chatId}:`, msg);
+                });
             }
 
             // Option B: Extraction automatique de faits (asynchrone, ne bloque pas)
@@ -2276,12 +2302,28 @@ I need to write a file using write_to_file.
      * @returns L'historique compressé ou l'original si sous le seuil
      */
     async _compactHistory(history: any[], chatId: string): Promise<any[]> {
-        const TOTAL_CHAR_LIMIT = 25000;
-        const currentSize = JSON.stringify(history).length;
+        let isThresholdReached = false;
+        let usagePercent = 0;
+        let consumedTokens = 0;
+        let tokenLimitVal = 128000;
 
-        if (currentSize < TOTAL_CHAR_LIMIT) return history;
+        try {
+            const contextWindow = container.get('contextWindow');
+            const usage = contextWindow.getUsage(chatId, history);
+            isThresholdReached = usage.percentage >= 0.8;
+            usagePercent = Math.round(usage.percentage * 100);
+            consumedTokens = usage.consumed;
+            tokenLimitVal = usage.limit;
+        } catch (e: any) {
+            const TOTAL_CHAR_LIMIT = 25000;
+            const currentSize = JSON.stringify(history).length;
+            isThresholdReached = currentSize >= TOTAL_CHAR_LIMIT;
+            usagePercent = Math.round((currentSize / TOTAL_CHAR_LIMIT) * 100);
+        }
 
-        console.log(`[ContextManager] ⚠️ Saturation (${currentSize} chars). Déclenchement du Garbage Collector IA...`);
+        if (!isThresholdReached) return history;
+
+        console.log(`[ContextManager] ⚠️ Saturation (${usagePercent}%, ${consumedTokens}/${tokenLimitVal} tokens). Déclenchement du Garbage Collector IA...`);
 
         // Isoler le System Prompt (index 0) et les 2 derniers échanges
         const systemPrompt = history[0];
@@ -2352,7 +2394,7 @@ ${textToCompress}`
             });
 
             const summary = response.content;
-            console.log(`[ContextManager] ✅ Historique compressé (${currentSize} → résumé)`);
+            console.log(`[ContextManager] ✅ Historique compressé (${consumedTokens} tokens → résumé)`);
 
             // WHY: On injecte le résumé dans le system prompt (pas dans l'historique)
             // pour ne pas fabriquer de faux échanges que le LLM pourrait citer.
@@ -2991,7 +3033,7 @@ ${textToCompress}`
 
         // Créer le fichier de verrouillage si temporaire
         if (shutdownUntil) {
-            writeFileSync(join(__dirname, '..', '.shutdown_lock'), shutdownUntil.toString());
+            await fsPromises.writeFile(join(__dirname, '..', '.shutdown_lock'), shutdownUntil.toString());
         }
 
         // Laisser le temps au message de partir

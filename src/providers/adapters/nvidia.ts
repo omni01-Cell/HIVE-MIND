@@ -66,7 +66,6 @@ export default {
         console.log(`[NVIDIA] 📡 Appel ${model || 'default'} -> ${invokeUrl}`);
         console.log(`[NVIDIA] 📦 Payload size: ${JSON.stringify(body).length} chars`);
         if (tools?.length) console.log(`[NVIDIA] 🛠️ Tools detected: ${tools.map((t: any) => t.function?.name).join(', ')}`);
-        console.log(`[NVIDIA] 🔑 API Key (prefix): ${apiKey?.substring(0, 10)}...`);
 
         try {
             const response = await fetch(invokeUrl, {

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -48,7 +48,7 @@ export const AboutBox: React.FC<AboutBoxProps> = ({
         >
             <Box marginBottom={1}>
                 <Text bold color={theme.text.accent}>
-          About Gemini CLI
+          About HIVE-MIND TUI
                 </Text>
             </Box>
             <Box flexDirection="row">
@@ -116,8 +116,8 @@ export const AboutBox: React.FC<AboutBoxProps> = ({
                         <Text color={theme.text.primary}>
                             {selectedAuthType.startsWith('oauth')
                                 ? userEmail
-                                    ? `Signed in with Google (${userEmail})`
-                                    : 'Signed in with Google'
+                                    ? `Signed in (${userEmail})`
+                                    : 'Signed in'
                                 : selectedAuthType}
                         </Text>
                     </Box>

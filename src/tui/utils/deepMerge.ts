@@ -80,17 +80,17 @@ function mergeRecursively(
     return target;
 }
 
-export function customDeepMerge(
+export function customDeepMerge<T = MergeableObject>(
     getMergeStrategyForPath: (path: string[]) => MergeStrategy | undefined,
-    ...sources: MergeableObject[]
-): MergeableObject {
+    ...sources: (T | Partial<T> | undefined)[]
+): T {
     const result: MergeableObject = {};
 
     for (const source of sources) {
         if (source) {
-            mergeRecursively(result, source, getMergeStrategyForPath);
+            mergeRecursively(result, source as unknown as MergeableObject, getMergeStrategyForPath);
         }
     }
 
-    return result;
+    return result as unknown as T;
 }

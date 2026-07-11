@@ -337,10 +337,13 @@ const StatusRowRow2: React.FC<{
     lastPromptTokenCount: number;
     currentModel: string;
     terminalWidth: number;
+    showRow2Minimal: boolean;
+    contextUsage: { consumed: number; limit: number; percentage: number; model: string } | null;
 }> = ({
     showUiDetails, isNarrow, hideUiDetailsForSuggestions, shellModeActive,
     showApprovalModeIndicator, allowPlanMode, renderMarkdown, showMinimalContext,
-    modeContentObj, hideContextSummary, lastPromptTokenCount, currentModel, terminalWidth
+    modeContentObj, hideContextSummary, lastPromptTokenCount, currentModel, terminalWidth,
+    showRow2Minimal, contextUsage
 }) => (
     <Box
         width="100%"
@@ -378,11 +381,24 @@ const StatusRowRow2: React.FC<{
             )}
             {showMinimalContext && !showUiDetails && (
                 <Box marginLeft={LAYOUT.INDICATOR_LEFT_MARGIN}>
-                    <ContextUsageDisplay
-                        promptTokenCount={lastPromptTokenCount}
-                        model={typeof currentModel === 'string' ? currentModel : undefined}
-                        terminalWidth={terminalWidth}
-                    />
+                    {contextUsage ? (
+                        <Text color={contextUsage.percentage >= 0.8 ? theme.status.error : (contextUsage.percentage >= 0.6 ? theme.status.warning : theme.text.secondary)}>
+                            [Context: {(() => {
+                                const formatTokens = (tokens: number): string => {
+                                    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1).replace('.0', '')}M`;
+                                    if (tokens >= 1000) return `${(tokens / 1000).toFixed(1).replace('.0', '')}k`;
+                                    return String(tokens);
+                                };
+                                return `${formatTokens(contextUsage.consumed)}/${formatTokens(contextUsage.limit)} (${(contextUsage.percentage * 100).toFixed(0)}%)`;
+                            })()}]
+                        </Text>
+                    ) : (
+                        <ContextUsageDisplay
+                            promptTokenCount={lastPromptTokenCount}
+                            model={typeof currentModel === 'string' ? currentModel : undefined}
+                            terminalWidth={terminalWidth}
+                        />
+                    )}
                 </Box>
             )}
         </Box>
@@ -414,6 +430,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
     const tipObserverRef = useRef<ResizeObserver | null>(null);
     const [activeServices, setActiveServices] = useState<ActiveServiceInfo[]>([]);
     const [selectedService, setSelectedService] = useState<ActiveServiceInfo | null>(null);
+    const [contextUsage, setContextUsage] = useState<{ consumed: number; limit: number; percentage: number; model: string } | null>(null);
 
     useEffect(() => {
         setActiveServices(hiveCoreConnection.getActiveServices());
@@ -425,6 +442,13 @@ export const StatusRow: React.FC<StatusRowProps> = ({
                     setActiveServices(current);
                     if (event.name === 'service_end') {
                         setSelectedService((prev) => prev?.service === event.message ? null : prev);
+                    }
+                } else if (event.name === 'context_usage_update' && event.message) {
+                    try {
+                        const usage = JSON.parse(event.message);
+                        setContextUsage(usage);
+                    } catch {
+                        // ignore
                     }
                 }
             }
@@ -531,6 +555,8 @@ export const StatusRow: React.FC<StatusRowProps> = ({
                     lastPromptTokenCount={uiState.sessionStats.lastPromptTokenCount}
                     currentModel={typeof uiState.currentModel === 'string' ? uiState.currentModel : ''}
                     terminalWidth={terminalWidth}
+                    showRow2Minimal={showRow2Minimal}
+                    contextUsage={contextUsage}
                 />
             )}
         </Box>

@@ -108,4 +108,4 @@ async function testSendFile() {
     fs.unlinkSync('test_exists.txt');
 }
 
-testSendFile().catch(console.error);
+testSendFile().catch(e => { console.error(e); process.exit(1); });

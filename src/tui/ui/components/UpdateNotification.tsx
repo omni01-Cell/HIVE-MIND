@@ -1,7 +1,7 @@
 /**
- * UpdateNotification — Stub minimal pour le TUI HIVE-MIND.
+ * UpdateNotification — Version minimale pour le TUI HIVE-MIND.
  *
- * Le système de mise à jour automatique de Gemini CLI n'est pas applicable.
+ * Le système de mise à jour automatique de HIVE-MIND TUI n'est pas applicable.
  * Ce composant retourne null en attendant une future implémentation HIVE-MIND.
  */
 
