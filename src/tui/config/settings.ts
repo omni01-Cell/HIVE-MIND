@@ -431,11 +431,11 @@ export class LoadedSettings {
             // The final admin settings are the defaults overridden by remote settings.
             // Any admin settings from files are ignored.
 
-            merged.admin = customDeepMerge(
+            merged.admin = customDeepMerge<MergedSettings['admin']>(
                 (settingsPath: string[]) => getMergeStrategyForPath(['admin', ...settingsPath]),
-                adminDefaults,
+                adminDefaults as MergedSettings['admin'],
                 this._remoteAdminSettings?.admin ?? {}
-            ) as MergedSettings['admin'];
+            );
         }
         return merged;
     }

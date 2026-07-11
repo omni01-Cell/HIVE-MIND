@@ -425,7 +425,12 @@ export interface MergedSettings {
     model: Required<ModelSettings>;
     experimental: Required<ExperimentalSettings>;
     ide: Required<IdeSettings>;
-    admin: unknown;
+    admin?: {
+        secureModeEnabled?: boolean;
+        mcp?: { enabled?: boolean; config?: unknown; requiredConfig?: unknown };
+        extensions?: { enabled?: boolean };
+        skills?: { enabled?: boolean };
+    };
     mcp?: {
         excluded?: string[];
         allowed?: string[];

@@ -67,7 +67,16 @@ export const adminService = {
             clearInterval(refreshIntervalId);
         }
         refreshIntervalId = setInterval(() => {
-            this.refresh().catch((err: unknown) => console.error('[AdminService] Interval refresh error:', err));
+            void (async () => {
+                try {
+                    const success = await this.refresh();
+                    if (!success) {
+                        console.warn('[AdminService] Background refresh failed. Next attempt in ' + REFRESH_INTERVAL + 'ms.');
+                    }
+                } catch (e: unknown) {
+                    console.warn('[AdminService] Unhandled error during background refresh:', e);
+                }
+            })();
         }, REFRESH_INTERVAL);
     },
 
