@@ -16,8 +16,8 @@ export const clearCommand: SlashCommand = {
     kind: CommandKind.BUILT_IN,
     autoExecute: true,
     action: async (context, _args) => {
-        const geminiClient = context.services.agentContext?.geminiClient;
-        const config = context.services.agentContext?.config;
+        const geminiClient = context.services?.agentContext?.geminiClient;
+        const config = context.services?.agentContext?.config;
 
         // Fire SessionEnd hook before clearing
         const hookSystem = config?.getHookSystem();
@@ -38,7 +38,7 @@ export const clearCommand: SlashCommand = {
         }
 
         if (geminiClient) {
-            context.ui.setDebugMessage('Clearing terminal and resetting chat.');
+            context.ui?.setDebugMessage('Clearing terminal and resetting chat.');
 
             // Close persistent browser sessions before resetting chat
             await resetBrowserSession();
@@ -47,7 +47,7 @@ export const clearCommand: SlashCommand = {
             // which is the correct behavior to signal a failure to the user.
             await geminiClient.resetChat();
         } else {
-            context.ui.setDebugMessage('Clearing terminal.');
+            context.ui?.setDebugMessage('Clearing terminal.');
         }
 
         // Fire SessionStart hook after clearing
@@ -67,10 +67,10 @@ export const clearCommand: SlashCommand = {
         }
 
         uiTelemetryService.clear(newSessionId);
-        context.ui.clear();
+        context.ui?.clear();
 
         if (result?.systemMessage) {
-            context.ui.addItem(
+            context.ui?.addItem(
                 {
                     type: MessageType.INFO,
                     text: result.systemMessage

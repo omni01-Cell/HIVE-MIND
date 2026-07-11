@@ -1137,6 +1137,7 @@ export class FileCommandLoader implements ICommandLoader {
     constructor(config?: unknown) { this.config = config; }
     // Satisfies ICommandLoader.loadCommands — returns an empty command list.
     async loadCommands(_signal?: AbortSignal): Promise<SlashCommand[]> { return []; }
+    async listAvailableFiles(): Promise<any[]> { return []; }
 }
 
 /** Structure complète d'un thème personnalisé HIVE-MIND.

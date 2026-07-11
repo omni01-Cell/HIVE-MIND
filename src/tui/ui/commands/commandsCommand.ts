@@ -16,7 +16,7 @@ async function defaultAction(
     context: CommandContext,
     _args: string
 ): Promise<void | SlashCommandActionReturn> {
-    context.ui.addItem({
+    context.ui?.addItem({
         type: MessageType.INFO,
         text: 'Use "/commands list" to view available .toml files, or "/commands reload" to reload custom command definitions.'
     } as HistoryItemInfo, Date.now());
@@ -30,7 +30,7 @@ async function listSubcommandAction(
     context: CommandContext
 ): Promise<void | SlashCommandActionReturn> {
     try {
-        const config = context.services.agentContext?.config ?? null;
+        const config = context.services?.agentContext?.config ?? null;
         const loader = new FileCommandLoader(config);
         const groups = await loader.listAvailableFiles();
 
@@ -50,14 +50,14 @@ async function listSubcommandAction(
 
         if (results.length === 1) {
             // Only the note is present
-            context.ui.addItem({
+            context.ui?.addItem({
                 type: MessageType.INFO,
                 text: 'No custom command files (.toml) found.\n\n_Note: MCP prompts are dynamically loaded from configured MCP servers._'
             } as HistoryItemInfo, Date.now());
             return;
         }
 
-        context.ui.addItem(
+        context.ui?.addItem(
       {
           type: MessageType.INFO,
           text: results.join('\n')
@@ -65,7 +65,7 @@ async function listSubcommandAction(
       Date.now()
         );
     } catch (error) {
-        context.ui.addItem(
+        context.ui?.addItem(
       {
           type: MessageType.ERROR,
           text: `Failed to list commands: ${error instanceof Error ? error.message : String(error)}`
@@ -84,9 +84,9 @@ async function reloadAction(
     context: CommandContext
 ): Promise<void | SlashCommandActionReturn> {
     try {
-        context.ui.reloadCommands();
+        context.ui?.reloadCommands?.();
 
-        context.ui.addItem(
+        context.ui?.addItem(
       {
           type: MessageType.INFO,
           text: 'Custom commands reloaded successfully.'
@@ -94,7 +94,7 @@ async function reloadAction(
       Date.now()
         );
     } catch (error) {
-        context.ui.addItem(
+        context.ui?.addItem(
       {
           type: MessageType.ERROR,
           text: `Failed to reload commands: ${error instanceof Error ? error.message : String(error)}`
