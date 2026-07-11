@@ -314,8 +314,8 @@ interface GlobalKeypressContext {
     stopRecording?: () => void;
     keyMatchers: Record<string, (key: Key) => boolean>;
     isHelpDismissKey: (key: Key) => boolean;
-    history: unknown[];
-    pendingHistoryItems: unknown[];
+    history: HistoryItem[];
+    pendingHistoryItems: HistoryItem[];
     TransientMessageType: typeof TransientMessageType;
     config: HiveConfig;
 }
@@ -510,7 +510,7 @@ function handleShellFocusKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
         return false;
     }
     if (ctx.keyMatchers[Command.TOGGLE_BACKGROUND_SHELL](key)) {
-        if (ctx.activePtyId) {
+        if (ctx.activePtyId && ctx.backgroundCurrentExecution) {
             ctx.backgroundCurrentExecution();
         } else {
             ctx.toggleBackgroundTasks();
@@ -890,7 +890,7 @@ export const AppContainer = (props: AppContainerProps) => {
                 ?.fireSessionStartEvent(sessionStartSource);
 
             if (result) {
-                const additionalContext = result.getAdditionalContext();
+                const additionalContext = (result as any).getAdditionalContext?.() || '';
                 const geminiClient = config.getGeminiClient() as any;
                 if (additionalContext && geminiClient) {
                     await geminiClient.addHistory({
@@ -1129,7 +1129,7 @@ export const AppContainer = (props: AppContainerProps) => {
     settings.merged.security.auth.selectedType !== AuthType.USE_GEMINI;
 
     // Session browser and resume functionality
-    const isGeminiClientInitialized = config.getGeminiClient()?.isInitialized();
+    const isGeminiClientInitialized = config.getGeminiClient()?.isInitialized() ?? false;
 
     const { loadHistoryForResume, isResuming } = useSessionResume({
         config,
@@ -2088,7 +2088,7 @@ Logging in... Restarting HIVE-MIND TUI to continue.
                 keyMatchers,
                 isHelpDismissKey,
                 history: historyManager.history,
-                pendingHistoryItems,
+                pendingHistoryItems: pendingHistoryItems as HistoryItem[],
                 TransientMessageType,
                 config
             };
@@ -2646,7 +2646,7 @@ Logging in... Restarting HIVE-MIND TUI to continue.
             hintMode:
         config.isModelSteeringEnabled() && isToolExecuting(pendingHistoryItems),
             hintBuffer: ''
-        }),
+        } as unknown as UIState),
         [
             isThemeDialogOpen,
 
