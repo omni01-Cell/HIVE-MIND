@@ -47,7 +47,7 @@ export interface AgentRegistry {
 export interface GeminiClient {
     isInitialized(): boolean;
     /** Optionnel — service d'enregistrement de session. */
-    getChatRecordingService?(): { deleteCurrentSessionAsync(): Promise<void> } | undefined;
+    getChatRecordingService?(): { deleteCurrentSessionAsync(): Promise<void>; deleteSession(file: string): Promise<void> } | undefined;
     /** Optionnel — remplace l'historique de la conversation. */
     setHistory?(history: unknown[]): void;
 }
@@ -207,7 +207,34 @@ export function createHiveConfig(): HiveConfig {
         getGeminiClient: () => ({
             isInitialized: () => true,
             getChatRecordingService: () => ({
-                deleteCurrentSessionAsync: async () => {},
+                deleteCurrentSessionAsync: async () => {
+                    try {
+                        const chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
+                        const filePath = path.join(chatsDir, `hive_session_${currentSessionId}.jsonl`);
+                        await fsPromises.unlink(filePath);
+                    } catch (error: unknown) {
+                        coreEvents.emitFeedback('error', 'Error deleting current session', error);
+                        throw error;
+                    }
+                },
+                deleteSession: async (file: string) => {
+                    try {
+                        const safeFileName = path.basename(file);
+                        const chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
+                        // try .jsonl first
+                        try {
+                            const jsonlFilePath = path.join(chatsDir, `${safeFileName}.jsonl`);
+                            await fsPromises.unlink(jsonlFilePath);
+                        } catch {
+                            // try .json as fallback
+                            const jsonFilePath = path.join(chatsDir, `${safeFileName}.json`);
+                            await fsPromises.unlink(jsonFilePath);
+                        }
+                    } catch (error: unknown) {
+                        coreEvents.emitFeedback('error', `Error deleting session ${file}`, error);
+                        throw error;
+                    }
+                },
                 recordMessage: (msg: unknown) => {
                     const msgObj = msg as any; // eslint-disable-line @typescript-eslint/no-explicit-any
                     const role = msgObj?.type === 'user' ? 'user' : 'assistant';

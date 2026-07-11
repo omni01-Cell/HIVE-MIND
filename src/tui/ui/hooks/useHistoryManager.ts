@@ -9,6 +9,8 @@ import { HistoryItem } from '../contexts/UIStateContext.js';
 
 interface ChatRecordingService {
     recordMessage(_msg: unknown): void;
+    deleteSession(file: string): Promise<void>;
+    deleteCurrentSessionAsync(): Promise<void>;
 }
 
 // Type for the updater function passed to updateHistoryItem
