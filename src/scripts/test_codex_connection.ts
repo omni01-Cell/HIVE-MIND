@@ -186,4 +186,4 @@ async function main() {
     console.log('Fin du stream.');
 }
 
-main().catch(console.error);
+main().catch(e => { console.error(e); process.exit(1); });

@@ -67,7 +67,7 @@ export const adminService = {
             clearInterval(refreshIntervalId);
         }
         refreshIntervalId = setInterval(() => {
-            this.refresh().catch(console.error);
+            this.refresh().catch((err: unknown) => console.error('[AdminService] Interval refresh error:', err));
         }, REFRESH_INTERVAL);
     },
 

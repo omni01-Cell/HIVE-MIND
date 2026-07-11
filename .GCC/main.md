@@ -33,6 +33,7 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 
 ## 🧠 Decisions Made
 
+- [2026-07-05] [JULES-RELIABILITY-FIXES] Moi, Jules, j'ai corrigé les "fire-and-forget" promises `catch(console.error)` dans `adminService.ts` et plusieurs scripts (`test_fixes.ts`, `test_fixes2.ts`, `ingest_docs.js`, `test_codex_connection.ts`, `test_email.ts`) pour respecter la règle "absolute ban on fire-and-forget promises".
 - [2026-07-05] [JULES-SESSION-INIT] Moi, Jules, j'ai initialisé la session de travail et créé le plan `plan_agent_test_battery.md` comme demandé.
 - [2026-07-03] [PR-8-INTEGRATION] Intégration de la PR #8. Analyse et application manuelle de la correction d'injection de commande dans la fonction expandDirectory d'ASTTools en utilisant execFileAsync au lieu d'execAsync.
 - [2026-07-03] [PR-INTEGRITY-RECOVERY] Récupération sélective des PRs fermées de force par Jules. Pour préserver la sécurité de la branche main et éviter les conflits obsolètes de workflows, les changements fonctionnels légitimes (indicateurs de présence et tests unitaires) ont été isolés et appliqués directement sur main.

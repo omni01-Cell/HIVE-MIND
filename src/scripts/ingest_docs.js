@@ -155,4 +155,4 @@ async function run() {
     console.log(`\n\n✅ Terminé ! ${totalChunks} segments ingérés dans la mémoire globale.`);
 }
 
-run().catch(console.error);
+run().catch(e => { console.error(e); process.exit(1); });
