@@ -47,7 +47,7 @@ export interface AgentRegistry {
 export interface GeminiClient {
     isInitialized(): boolean;
     /** Optionnel — service d'enregistrement de session. */
-    getChatRecordingService?(): { deleteCurrentSessionAsync(): Promise<void> } | undefined;
+    getChatRecordingService?(): { deleteCurrentSessionAsync(): Promise<void>; recordMessage(msg: unknown): Promise<void> } | undefined;
     /** Optionnel — remplace l'historique de la conversation. */
     setHistory?(history: unknown[]): void;
 }
@@ -207,8 +207,8 @@ export function createHiveConfig(): HiveConfig {
         getGeminiClient: () => ({
             isInitialized: () => true,
             getChatRecordingService: () => ({
-                deleteCurrentSessionAsync: async () => {},
-                recordMessage: (msg: unknown) => {
+                deleteCurrentSessionAsync: async (): Promise<void> => {},
+                recordMessage: async (msg: unknown): Promise<void> => {
                     const msgObj = msg as any; // eslint-disable-line @typescript-eslint/no-explicit-any
                     const role = msgObj?.type === 'user' ? 'user' : 'assistant';
                     const text = msgObj?.content || msgObj?.text || '';
@@ -223,27 +223,25 @@ export function createHiveConfig(): HiveConfig {
                         role
                     }) + '\n';
 
-                    fsPromises.mkdir(chatsDir, { recursive: true })
-                        .then(() => fsPromises.appendFile(filePath, record))
-                        .catch(err => {
-                            coreEvents.emitFeedback('error', 'Local sync failed', err);
+                    try {
+                        await fsPromises.mkdir(chatsDir, { recursive: true });
+                        await fsPromises.appendFile(filePath, record);
+                    } catch (err) {
+                        coreEvents.emitFeedback('error', 'Local sync failed', err);
+                    }
 
-                        });
-
-                    import('../../services/memory.js')
-                        .then(({ semanticMemory }) => {
-                            if (semanticMemory && semanticMemory.store) {
-                                semanticMemory.store(currentSessionId, String(text), role)
-                                    .catch((err: unknown) => {
-                                        coreEvents.emitFeedback('error', 'Supabase sync failed', err);
-
-                                    });
+                    try {
+                        const { semanticMemory } = await import('../../services/memory.js');
+                        if (semanticMemory && semanticMemory.store) {
+                            try {
+                                await semanticMemory.store(currentSessionId, String(text), role);
+                            } catch (err: unknown) {
+                                coreEvents.emitFeedback('error', 'Supabase sync failed', err);
                             }
-                        })
-                        .catch((err: unknown) => {
-                            coreEvents.emitFeedback('error', 'Memory module import failed', err);
-
-                        });
+                        }
+                    } catch (err: unknown) {
+                        coreEvents.emitFeedback('error', 'Memory module import failed', err);
+                    }
                 }
             })
         }),
