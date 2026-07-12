@@ -1,3 +1,4 @@
+import { hiveConfig } from '../config/hiveConfig.js';
 /**
  * HiveTransport — Pont entre TUI et core HIVE-MIND
  *
@@ -30,7 +31,7 @@ class HiveTransportImpl extends EventEmitter {
 
     /** Retrieve the TUI session ID */
     getSessionId(): string {
-        return this.sessionId || 'tui-local';
+        return this.sessionId || hiveConfig.getSessionId();
     }
 
     /**

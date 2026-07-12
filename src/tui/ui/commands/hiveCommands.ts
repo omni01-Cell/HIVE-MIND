@@ -1,3 +1,4 @@
+import { hiveConfig } from '../../config/hiveConfig.js';
 /**
  * Commandes slash spécifiques à HIVE-MIND
  *
@@ -515,7 +516,7 @@ export const hiveSearchCommand: SlashCommand = {
                 text: `🔍 Recherche sémantique pour : "${query}"...`
             }, Date.now());
 
-            const results = await mediaSearch.searchByText('tui-local', query, 5, 0.3);
+            const results = await mediaSearch.searchByText(hiveConfig.getSessionId(), query, 5, 0.3);
 
             if (!results || results.length === 0) {
                 addItem({

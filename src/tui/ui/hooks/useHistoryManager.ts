@@ -8,7 +8,7 @@ import { useState, useRef, useCallback, useMemo } from 'react';
 import { HistoryItem } from '../contexts/UIStateContext.js';
 
 interface ChatRecordingService {
-    recordMessage(_msg: unknown): void;
+    recordMessage(_msg: unknown): Promise<void>;
 }
 
 // Type for the updater function passed to updateHistoryItem
