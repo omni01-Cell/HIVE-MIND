@@ -223,27 +223,23 @@ export function createHiveConfig(): HiveConfig {
                         role
                     }) + '\n';
 
-                    fsPromises.mkdir(chatsDir, { recursive: true })
-                        .then(() => fsPromises.appendFile(filePath, record))
-                        .catch(err => {
+                    void (async () => {
+                        try {
+                            await fsPromises.mkdir(chatsDir, { recursive: true });
+                            await fsPromises.appendFile(filePath, record);
+                        } catch (err) {
                             coreEvents.emitFeedback('error', 'Local sync failed', err);
+                        }
 
-                        });
-
-                    import('../../services/memory.js')
-                        .then(({ semanticMemory }) => {
+                        try {
+                            const { semanticMemory } = await import('../../services/memory.js');
                             if (semanticMemory && semanticMemory.store) {
-                                semanticMemory.store(currentSessionId, String(text), role)
-                                    .catch((err: unknown) => {
-                                        coreEvents.emitFeedback('error', 'Supabase sync failed', err);
-
-                                    });
+                                await semanticMemory.store(currentSessionId, String(text), role);
                             }
-                        })
-                        .catch((err: unknown) => {
-                            coreEvents.emitFeedback('error', 'Memory module import failed', err);
-
-                        });
+                        } catch (err: unknown) {
+                            coreEvents.emitFeedback('error', 'Supabase sync/Memory module failed', err);
+                        }
+                    })();
                 }
             })
         }),
