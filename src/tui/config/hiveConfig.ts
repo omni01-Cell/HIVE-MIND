@@ -209,7 +209,7 @@ export function createHiveConfig(): HiveConfig {
             getChatRecordingService: () => ({
                 deleteCurrentSessionAsync: async () => {},
                 recordMessage: (msg: unknown) => {
-                    const msgObj = msg as Record<string, unknown>;
+                    const msgObj = msg as any; // eslint-disable-line @typescript-eslint/no-explicit-any
                     const role = msgObj?.type === 'user' ? 'user' : 'assistant';
                     const text = msgObj?.content || msgObj?.text || '';
                     if (!text) return;

@@ -114,6 +114,7 @@ const setUpdateHandler = (..._args: any[]) => {};
 const relaunchApp = () => {};
 
 
+
 // IdeClient est importé de UIStateContext.js
 
 export const ideContextStore = {
@@ -2569,7 +2570,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
             hiveMdFileCount,
             streamingState,
             initError,
-            pendingAssistantHistoryItems,
+            pendingAssistantHistoryItems: pendingAssistantHistoryItems,
             thought,
             isInputActive,
             isVoiceModeEnabled,

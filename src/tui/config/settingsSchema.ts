@@ -4,7 +4,7 @@ export type {
     SettingDefinition,
     SettingsSchema,
     SettingsType,
-    SettingsValue
+    SettingsValue,
 } from './hiveSettingsSchema.js';
 
 export interface SettingEnumOption {
