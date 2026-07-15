@@ -30,7 +30,7 @@ export function findHiveMdFilesSync(
 
     // Si currentDir n'est pas dans le workspaceRoot, on se limite à currentDir
     const isUnderRoot = dir.startsWith(root);
-    
+
     const pathsToSearch: string[] = [];
     let current = dir;
 
