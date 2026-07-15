@@ -94,3 +94,6 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 ## 👉 Next Session Direction
 
 Poursuivre le plan de refactorisation de la TUI avec la Session 17 (Intégration de l'indicateur dynamique de contexte).
+
+## 🌿 Jules Updates
+- [2026-07-04] [JULES] Fixed ESLint `any` errors in `src/tui/config/hiveConfig.ts` by replacing `any` with `Record<string, unknown>`.
