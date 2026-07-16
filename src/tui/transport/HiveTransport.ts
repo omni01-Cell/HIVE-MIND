@@ -7,6 +7,7 @@
 
 import { EventEmitter } from 'events';
 import type { MessageData, BotEvent } from '../../core/types/BotTypes.js';
+import { hiveConfig } from '../config/hiveConfig.js';
 
 type MessageCallback = (message: MessageData) => void;
 type GroupEventCallback = (event: BotEvent) => void;
@@ -30,7 +31,7 @@ class HiveTransportImpl extends EventEmitter {
 
     /** Retrieve the TUI session ID */
     getSessionId(): string {
-        return this.sessionId || 'tui-local';
+        return this.sessionId || hiveConfig.getSessionId();
     }
 
     /**
