@@ -47,7 +47,11 @@ export interface AgentRegistry {
 export interface GeminiClient {
     isInitialized(): boolean;
     /** Optionnel — service d'enregistrement de session. */
-    getChatRecordingService?(): { deleteCurrentSessionAsync(): Promise<void> } | undefined;
+    getChatRecordingService?(): {
+        deleteCurrentSessionAsync(): Promise<void>;
+        deleteSession(sessionId: string): Promise<void>;
+        recordMessage(msg: unknown): void;
+    } | undefined;
     /** Optionnel — remplace l'historique de la conversation. */
     setHistory?(history: unknown[]): void;
 }
@@ -208,6 +212,25 @@ export function createHiveConfig(): HiveConfig {
             isInitialized: () => true,
             getChatRecordingService: () => ({
                 deleteCurrentSessionAsync: async () => {},
+                deleteSession: async (sessionId: string) => {
+                    const chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
+                    try {
+                        const files = await fsPromises.readdir(chatsDir);
+                        const targetFile = files.find(f => f.includes(sessionId));
+                        if (targetFile) {
+                            await fsPromises.unlink(path.join(chatsDir, targetFile));
+                        }
+                        const { supabase } = await import('../../services/supabase.js');
+                        if (supabase) {
+                            const { error } = await supabase.from('memories').delete().eq('chat_id', sessionId);
+                            if (error) {
+                                coreEvents.emitFeedback('error', 'Supabase deletion failed', error);
+                            }
+                        }
+                    } catch (error) {
+                        coreEvents.emitFeedback('error', 'Error deleting session in ChatRecordingService:', error);
+                    }
+                },
                 recordMessage: (msg: unknown) => {
                     const msgObj = msg as any; // eslint-disable-line @typescript-eslint/no-explicit-any
                     const role = msgObj?.type === 'user' ? 'user' : 'assistant';
