@@ -1,0 +1,621 @@
+
+> hive-mind@1.0.0 lint
+> eslint . --ext .js,.ts
+
+
+/app/src/core/transport/baileys.ts
+  208:44  error  React Hook "useMultiFileAuthState" cannot be called in a class component. React Hooks must be called in a React function component or a custom React Hook function  react-hooks/rules-of-hooks
+
+/app/src/scripts/audit-group.ts
+  28:40  error  React Hook "useMultiFileAuthState" is called in function "main" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+/app/src/scripts/debug-wa-metadata.js
+  16:40  error  React Hook "useMultiFileAuthState" is called in function "main" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+/app/src/scripts/ping_bot.ts
+  11:40  error  React Hook "useMultiFileAuthState" is called in function "run" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+/app/src/scripts/ping_bot_user.ts
+  11:40  error  React Hook "useMultiFileAuthState" is called in function "run" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+/app/src/scripts/test_plugins_e2e.ts
+  55:40  error  React Hook "useMultiFileAuthState" is called in function "connectToWhatsApp" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+/app/src/scripts/test_wa_e2e.ts
+  107:40  error  React Hook "useMultiFileAuthState" is called in function "connectToWhatsApp" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+/app/src/services/supabase.ts
+  72:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/config/extensions/consent.ts
+   1:1  error  Unexpected 'stub' comment: '* * consent — Gestion du consentement...'     no-warning-comments
+  11:1  error  Unexpected 'stub' comment: '* * Demande un consentement interactif à...'  no-warning-comments
+
+/app/src/tui/config/settings-validation.ts
+  318:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  330:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  331:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/config/settings.ts
+  27:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  34:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  35:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/config/settingsSchema.ts
+  7:18  warning  Unexpected trailing comma  comma-dangle
+
+/app/src/tui/config/trustedFolders.ts
+  26:52  error  Unexpected any. Specify a different type                                                 @typescript-eslint/no-explicit-any
+  66:5   error  'settings' is defined but never used. Allowed unused args must match /^_/u               @typescript-eslint/no-unused-vars
+  67:5   error  'workspaceDir' is assigned a value but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+  68:5   error  'headlessOptions' is defined but never used. Allowed unused args must match /^_/u        @typescript-eslint/no-unused-vars
+
+/app/src/tui/deferred.ts
+  12:5   error  Duplicate enum member value 1             @typescript-eslint/no-duplicate-enum-values
+  15:62  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/services/BuiltinCommandLoader.ts
+  9:1  error  '../ui/contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/services/CommandService.ts
+  10:1  error  '../ui/contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/services/SlashCommandResolver.ts
+  8:1  error  '../ui/contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/AppContainer.tsx
+    31:5   error    'HistoryItemInfo' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+    48:5   error    'TuiEventEmitter' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+    50:5   error    'Part' is defined but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+   101:40  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   109:25  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   110:46  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   111:34  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   112:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   113:37  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   117:1   warning  More than 2 blank lines not allowed                                                                                                                                                                                                                                                  no-multiple-empty-lines
+   121:17  error    'callback' is defined but never used. Allowed unused args must match /^_/u                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+   121:35  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   130:34  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   131:42  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   138:36  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   149:23  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   168:37  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   169:39  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   175:43  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   178:27  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   180:62  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   308:33  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   552:26  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   552:41  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   555:45  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   630:60  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   708:12  error    'modelSwitchedFromQuotaError' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                               @typescript-eslint/no-unused-vars
+   708:41  error    'setModelSwitchedFromQuotaError' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                            @typescript-eslint/no-unused-vars
+   714:29  error    'setIsTrustedFolder' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+   766:54  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+   845:12  error    'paidTier' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+   893:66  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  1108:47  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  1112:58  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  1243:49  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  1409:11  error    'performMemoryRefresh' is assigned a value but never used. Allowed unused vars must match /^_/u                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  1474:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  1599:83  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  1942:52  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  1981:49  warning  The ref value 'tabFocusTimeoutRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'tabFocusTimeoutRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+  2254:14  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  2573:13  warning  Expected property shorthand                                                                                                                                                                                                                                                          object-shorthand
+  2873:15  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+
+/app/src/tui/ui/commands/aboutCommand.ts
+   9:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  10:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  12:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/commands/clearCommand.ts
+  8:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  9:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/commands/commandsCommand.ts
+  8:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  9:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/commands/helpCommand.ts
+  8:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  9:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/commands/memoryCommand.ts
+   7:8   error  'React' is defined but never used. Allowed unused vars must match /^_/u                         @typescript-eslint/no-unused-vars
+  10:1   error  '../contexts/UIStateContext.js' import is duplicated                                            no-duplicate-imports
+  11:1   error  '../contexts/UIStateContext.js' import is duplicated                                            no-duplicate-imports
+  11:23  error  'OpenCustomDialogActionReturn' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  11:67  error  'SlashCommandActionReturn' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+
+/app/src/tui/ui/commands/modelCommand.ts
+  8:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  9:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/commands/types.ts
+  40:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/ui/components/AlternateBufferQuittingDisplay.tsx
+  54:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  65:67  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  70:67  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/ui/components/ApprovalModeIndicator.tsx
+  21:5   error  'allowPlanMode' is defined but never used. Allowed unused args must match /^_/u      @typescript-eslint/no-unused-vars
+  28:11  error  'yoloHint' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/app/src/tui/ui/components/BackgroundTaskDisplay.tsx
+  13:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/ConfigInitDisplay.tsx
+  11:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/ExitPlanModeDialog.tsx
+  12:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/Footer.tsx
+   19:1    error  '../contexts/UIStateContext.js' import is duplicated                                   no-duplicate-imports
+  195:190  error  'quotaStats' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/app/src/tui/ui/components/HistoryItemDisplay.tsx
+  29:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  31:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/HiveSpinner.tsx
+  60:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/ui/components/LoadingIndicator.tsx
+  14:1  error  '../utils/formatters.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/ModelStatsDisplay.tsx
+  23:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/Notifications.tsx
+  12:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  19:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/StatsDisplay.tsx
+  27:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/UpdateNotification.tsx
+  1:1  error  Unexpected 'stub' comment: '* * UpdateNotification — Stub minimal...'  no-warning-comments
+
+/app/src/tui/ui/components/messages/CompressionMessage.tsx
+  12:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/DenseToolMessage.tsx
+  10:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  11:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  12:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/ShellToolMessage.tsx
+  28:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  30:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/SubagentGroupDisplay.tsx
+  12:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/Todo.tsx
+   9:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  10:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/ToolConfirmationMessage.tsx
+  14:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/ToolGroupDisplay.tsx
+  10:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  11:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/ToolGroupMessage.tsx
+  18:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  20:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/ToolMessage.tsx
+  24:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/ToolResultDisplay.tsx
+  16:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  17:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/ToolShared.tsx
+  18:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  19:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  21:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/messages/TopicMessage.tsx
+  10:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/shared/HalfLinePaddedBox.tsx
+  12:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/components/shared/VirtualizedList.tsx
+  641:34  warning  React Hook useCallback received a function whose dependencies are unknown. Pass an inline function instead             react-hooks/exhaustive-deps
+  707:8   warning  React Hook useLayoutEffect has a missing dependency: 'scrollAnchor'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/app/src/tui/ui/components/shared/text-buffer.ts
+  2787:9    warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2789:116  warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2790:87   warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2791:78   warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2792:109  warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2793:77   warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2794:77   warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2795:176  warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2796:99   warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2797:101  warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2798:97   warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2799:95   warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2800:257  warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2802:130  warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2804:174  warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2854:9    warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2889:9    warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  2948:8    warning  React Hook useCallback has a missing dependency: 'd'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/app/src/tui/ui/components/shared/vim-buffer-actions.ts
+  8:10  error  'assumeExhaustive' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/app/src/tui/ui/components/views/McpStatus.tsx
+  12:1  error  '../../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/contexts/AskUserActionsContext.tsx
+  8:1   error  'react' import is duplicated                                                   no-duplicate-imports
+  8:37  error  'useState' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+  8:47  error  'useCallback' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/app/src/tui/ui/contexts/QuotaContext.tsx
+   9:1  error  './UIStateContext.js' import is duplicated  no-duplicate-imports
+  10:1  error  './UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/contexts/ToolActionsContext.tsx
+  11:1  error  './UIStateContext.js' import is duplicated  no-duplicate-imports
+  12:1  error  './UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/contexts/UIActionsContext.tsx
+  11:1   error  './UIStateContext.js' import is duplicated  no-duplicate-imports
+  13:1   error  './UIStateContext.js' import is duplicated  no-duplicate-imports
+  15:1   error  './UIStateContext.js' import is duplicated  no-duplicate-imports
+  46:35  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+
+/app/src/tui/ui/hooks/atCommandProcessor.ts
+   6:1  error  '../contexts/UIStateContext.js' import is duplicated             no-duplicate-imports
+   7:1  error  '../contexts/UIStateContext.js' import is duplicated             no-duplicate-imports
+  66:1  error  Unexpected 'stub' comment: '* Stub de ReadManyFilesTool — à...'  no-warning-comments
+
+/app/src/tui/ui/hooks/slashCommandProcessor.ts
+  13:5   error  'createElement' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  24:22  error  'CoreEvent' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  26:1   error  '../contexts/UIStateContext.js' import is duplicated                             no-duplicate-imports
+  27:1   error  '../contexts/UIStateContext.js' import is duplicated                             no-duplicate-imports
+
+/app/src/tui/ui/hooks/useAgentStream.ts
+   35:1   error  Function 'handleAgentEvent' has a complexity of 33. Maximum allowed is 30  complexity
+  153:13  error  Unexpected lexical declaration in case block                               no-case-declarations
+
+/app/src/tui/ui/hooks/useAtCompletion.ts
+  16:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/useComposerStatus.ts
+  11:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  12:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  13:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  14:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/useConsoleMessages.ts
+  10:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/useExecutionLifecycle.ts
+   9:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  11:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  15:1  error  '../utils/formatters.js' import is duplicated         no-duplicate-imports
+
+/app/src/tui/ui/hooks/useFlickerDetector.ts
+  12:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/useHookDisplayState.ts
+  10:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/useLoadingIndicator.ts
+  11:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  12:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/usePrivacySettings.ts
+  11:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/useSessionResume.ts
+  10:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  12:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/useToolScheduler.ts
+  10:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/useTurnActivityMonitor.ts
+  9:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/hooks/vim.ts
+  871:9  warning  React Hook useCallback has a missing dependency: 'state'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/app/src/tui/ui/layouts/DefaultAppLayout.tsx
+  19:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/utils/borderStyles.ts
+  10:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  11:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/utils/confirmingTool.ts
+  8:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+  9:1  error  '../contexts/UIStateContext.js' import is duplicated  no-duplicate-imports
+
+/app/src/tui/ui/utils/formatters.ts
+  47:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/ui/utils/rewindFileOps.ts
+  9:22  error  'CoreEvent' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/app/src/tui/utils/cleanup.ts
+  12:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/utils/coreEvents.ts
+  38:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/utils/errors.ts
+  29:22  error    Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  30:20  error    Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  31:21  error    Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  32:21  error    Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  33:22  error    Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  33:65  warning  Unexpected trailing comma                                                 comma-dangle
+  36:47  error    Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  36:64  error    Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  45:40  error    Unexpected any. Specify a different type                                  @typescript-eslint/no-explicit-any
+  87:5   error    'config' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/app/src/tui/utils/hiveMd.ts
+  33:1   warning  Trailing spaces not allowed               no-trailing-spaces
+  61:27  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/utils/installationInfo.ts
+  1:1  error  Unexpected 'stub' comment: '* * installationInfo — Informations...'  no-warning-comments
+
+/app/src/tui/utils/sessionUtils.ts
+    7:10  error  'CoreToolCallStatus' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   10:1   error  '../ui/contexts/UIStateContext.js' import is duplicated                               no-duplicate-imports
+   18:14  error  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   19:22  error  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   20:16  error  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   21:17  error  Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  445:19  error  'root' is assigned a value but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+
+/app/src/tui/utils/settingsUtils.ts
+  97:77  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/tui/utils/terminalNotifications.ts
+  91:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/src/types/tui-globals.d.ts
+    1:15  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+    2:18  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+    3:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+    4:20  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+    5:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+    6:22  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+    7:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+    8:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+    9:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   10:22  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   11:35  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   13:1   warning  Expected indentation of 0 spaces but found 2  indent
+   13:34  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   14:1   warning  Expected indentation of 0 spaces but found 2  indent
+   14:36  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   15:1   warning  Expected indentation of 0 spaces but found 2  indent
+   15:37  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   16:1   warning  Expected indentation of 0 spaces but found 2  indent
+   16:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   17:1   warning  Expected indentation of 0 spaces but found 2  indent
+   17:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   18:1   warning  Expected indentation of 0 spaces but found 2  indent
+   18:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   19:1   warning  Expected indentation of 0 spaces but found 2  indent
+   19:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   20:1   warning  Expected indentation of 0 spaces but found 2  indent
+   20:34  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   21:1   warning  Expected indentation of 0 spaces but found 2  indent
+   21:33  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   22:1   warning  Expected indentation of 0 spaces but found 2  indent
+   22:22  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   23:1   warning  Expected indentation of 0 spaces but found 2  indent
+   23:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   24:1   warning  Expected indentation of 0 spaces but found 2  indent
+   24:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   25:1   warning  Expected indentation of 0 spaces but found 2  indent
+   25:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   26:1   warning  Expected indentation of 0 spaces but found 2  indent
+   26:15  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   27:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   28:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   29:18  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   30:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   31:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   32:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   33:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   34:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   35:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   36:34  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   37:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   38:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   39:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   40:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   41:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   42:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   43:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   44:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   45:34  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   46:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   47:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   48:20  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   49:37  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   50:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   51:31  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   52:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   53:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   54:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   55:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   56:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   57:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   58:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   59:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   60:22  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   61:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   62:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   63:35  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   64:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   65:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   66:31  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   67:15  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   68:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   69:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   70:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   71:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   72:33  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   73:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   74:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   75:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   76:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   77:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   78:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   79:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   80:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   81:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   82:35  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   83:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   84:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   85:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   86:18  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   87:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   88:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   89:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   90:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   91:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   92:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   93:31  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   94:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   95:20  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   96:31  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   97:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   98:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   99:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  100:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  101:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  102:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  103:15  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  104:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  105:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  106:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  107:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  108:42  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  109:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  110:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  111:34  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  112:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  113:35  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  114:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  115:36  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  116:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  117:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  118:24  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  119:42  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  120:20  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  121:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  122:31  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  123:39  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  124:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  125:31  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  126:34  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  127:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  128:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  129:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  130:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  131:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  132:38  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  133:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  134:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  135:33  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  136:34  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  137:34  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  138:22  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  139:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  140:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  141:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  142:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  143:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  144:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  145:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  146:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  147:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  148:31  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  149:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  150:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  151:27  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  153:1   warning  Expected indentation of 0 spaces but found 2  indent
+  154:1   warning  Expected indentation of 0 spaces but found 2  indent
+  154:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  155:1   warning  Expected indentation of 0 spaces but found 2  indent
+  155:36  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  156:1   warning  Expected indentation of 0 spaces but found 2  indent
+  156:28  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  157:1   warning  Expected indentation of 0 spaces but found 2  indent
+  157:20  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  158:1   warning  Expected indentation of 0 spaces but found 2  indent
+  158:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  159:1   warning  Expected indentation of 0 spaces but found 2  indent
+  159:22  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  160:1   warning  Expected indentation of 0 spaces but found 2  indent
+  160:18  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  161:1   warning  Expected indentation of 0 spaces but found 2  indent
+  161:17  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  162:1   warning  Expected indentation of 0 spaces but found 2  indent
+  162:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  163:1   warning  Expected indentation of 0 spaces but found 2  indent
+  163:23  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  164:1   warning  Expected indentation of 0 spaces but found 2  indent
+  164:20  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  165:1   warning  Expected indentation of 0 spaces but found 2  indent
+  165:18  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  166:1   warning  Expected indentation of 0 spaces but found 2  indent
+  166:26  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  167:1   warning  Expected indentation of 0 spaces but found 2  indent
+  167:39  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  168:1   warning  Expected indentation of 0 spaces but found 2  indent
+  168:43  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  169:1   warning  Expected indentation of 0 spaces but found 2  indent
+  169:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  170:1   warning  Expected indentation of 0 spaces but found 2  indent
+  170:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  171:1   warning  Expected indentation of 0 spaces but found 2  indent
+  171:29  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  173:22  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  174:31  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  175:18  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  176:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  177:20  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  178:18  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  179:25  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  180:30  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  181:40  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  182:43  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  183:21  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  184:19  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  185:14  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  186:16  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+
+✖ 438 problems (378 errors, 60 warnings)
+  0 errors and 38 warnings potentially fixable with the `--fix` option.
