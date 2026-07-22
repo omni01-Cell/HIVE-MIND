@@ -89,6 +89,7 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - ✅ Done: Session 14 — Conservation et Réadaptation du Module IDE (Réimplémentation de l'IdeClient branché par WebSocket sur le service local HIVE-MIND et restauration de l'invite interactive IdeIntegrationNudge).
 - ✅ Done: Session 15 — Nettoyage et Adaptation des Dialogues de Modèles (Réécriture de ModelDialog.tsx et VoiceModelDialog.tsx pour gérer les familles/modèles multi-providers de HIVE-MIND et la voix Minimax Persona/Gemini/gTTS/Groq/Gemini Live).
 - ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase (synchronisation asynchrone des sessions TUI sous context_id dynamique).
+- ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase. [Par Jules : synchronisation asynchrone fixée avec await, et typage corrigé pour éliminer les erreurs fire-and-forget et les 'any', garantissant la règle des check de retours exhaustifs].
 - ⏳ Pending: Sessions 17 à 22 du plan d'adaptation de la TUI.
 
 ## 👉 Next Session Direction
