@@ -94,3 +94,5 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 ## 👉 Next Session Direction
 
 Poursuivre le plan de refactorisation de la TUI avec la Session 17 (Intégration de l'indicateur dynamique de contexte).
+
+* [2026-07-23] Jules: Completed true implementation for Session 16 (TUI Session Sync), fixing the missing logic and types in `hiveConfig.ts` while verifying `connection.ts` and `HiveTransport.ts`.
