@@ -207,15 +207,39 @@ export function createHiveConfig(): HiveConfig {
         getGeminiClient: () => ({
             isInitialized: () => true,
             getChatRecordingService: () => ({
-                deleteCurrentSessionAsync: async () => {},
-                recordMessage: (msg: unknown) => {
-                    const msgObj = msg as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+                deleteCurrentSessionAsync: async () => {
+                    const sessionId = currentSessionId;
+                    const chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
+                    const filePath = path.join(chatsDir, `hive_session_${sessionId}.jsonl`);
+                    try {
+                        await fsPromises.unlink(filePath);
+                    } catch (err: unknown) {
+                        const error = err as NodeJS.ErrnoException;
+                        if (error.code !== 'ENOENT') {
+                            coreEvents.emitFeedback('error', 'Local sync deletion failed', err);
+                            throw err; // Fail closed
+                        }
+                    }
+
+                    try {
+                        const { semanticMemory } = await import('../../services/memory.js');
+                        if (semanticMemory && semanticMemory.cleanup) {
+                            await semanticMemory.cleanup(sessionId, 0); // Cleanup deletes all except keepLast
+                        }
+                    } catch (err: unknown) {
+                        coreEvents.emitFeedback('error', 'Supabase sync deletion failed', err);
+                        throw err; // Fail closed
+                    }
+                },
+                recordMessage: async (msg: unknown) => {
+                    const msgObj = msg as { type?: string; content?: string; text?: string; };
                     const role = msgObj?.type === 'user' ? 'user' : 'assistant';
                     const text = msgObj?.content || msgObj?.text || '';
                     if (!text) return;
 
+                    const sessionId = currentSessionId;
                     const chatsDir = path.join(homedir(), '.hivemind', 'temp', 'chats');
-                    const filePath = path.join(chatsDir, `hive_session_${currentSessionId}.jsonl`);
+                    const filePath = path.join(chatsDir, `hive_session_${sessionId}.jsonl`);
 
                     const record = JSON.stringify({
                         type: msgObj?.type || 'assistant',
@@ -223,27 +247,23 @@ export function createHiveConfig(): HiveConfig {
                         role
                     }) + '\n';
 
-                    fsPromises.mkdir(chatsDir, { recursive: true })
-                        .then(() => fsPromises.appendFile(filePath, record))
-                        .catch(err => {
-                            coreEvents.emitFeedback('error', 'Local sync failed', err);
+                    try {
+                        await fsPromises.mkdir(chatsDir, { recursive: true });
+                        await fsPromises.appendFile(filePath, record);
+                    } catch (err) {
+                        coreEvents.emitFeedback('error', 'Local sync failed', err);
+                        throw err; // Fail closed
+                    }
 
-                        });
-
-                    import('../../services/memory.js')
-                        .then(({ semanticMemory }) => {
-                            if (semanticMemory && semanticMemory.store) {
-                                semanticMemory.store(currentSessionId, String(text), role)
-                                    .catch((err: unknown) => {
-                                        coreEvents.emitFeedback('error', 'Supabase sync failed', err);
-
-                                    });
-                            }
-                        })
-                        .catch((err: unknown) => {
-                            coreEvents.emitFeedback('error', 'Memory module import failed', err);
-
-                        });
+                    try {
+                        const { semanticMemory } = await import('../../services/memory.js');
+                        if (semanticMemory && semanticMemory.store) {
+                            await semanticMemory.store(sessionId, String(text), role);
+                        }
+                    } catch (err: unknown) {
+                        coreEvents.emitFeedback('error', 'Supabase sync failed', err);
+                        throw err; // Fail closed
+                    }
                 }
             })
         }),
