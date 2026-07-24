@@ -4,12 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CommandKind, CommandContext, SlashCommand } from '../contexts/UIStateContext.js';
+import {
+    CommandKind,
+    CommandContext,
+    SlashCommand,
+    MessageType,
+    HistoryItemAbout,
+    IdeClient,
+    UserAccountManager,
+    getVersion
+} from '../contexts/UIStateContext.js';
 import process from 'node:process';
-import { MessageType } from '../contexts/UIStateContext.js';
-import { HistoryItemAbout } from '../contexts/UIStateContext.js';
 import { debugLogger } from '../../utils/errors.js';
-import { IdeClient, UserAccountManager, getVersion } from '../contexts/UIStateContext.js';
 
 export const aboutCommand: SlashCommand = {
     name: 'about',
