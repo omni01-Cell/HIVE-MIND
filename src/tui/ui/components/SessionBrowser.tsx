@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2025 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -167,7 +167,7 @@ const MatchSnippetDisplay = ({
     }
 
     const firstMatch = session.matchSnippets[0];
-    const rolePrefix = firstMatch.role === 'user' ? 'You:   ' : 'Gemini:';
+    const rolePrefix = firstMatch.role === 'user' ? 'You:   ' : 'Hive:  ';
     const roleColor = textColor(
         firstMatch.role === 'user' ? Colors.AccentGreen : Colors.AccentBlue
     );

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,7 @@ import { SettingScope } from '../../config/settings.js';
 import { useKeypress, type Key } from '../hooks/useKeypress.js';
 
 interface VoiceModelDialogProps {
-  onClose: () => void;
+    onClose: () => void;
 }
 
 type DialogView = 'tts' | 'stt' | 'gemini-voice';

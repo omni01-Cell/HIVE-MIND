@@ -2,7 +2,7 @@ import { downloadMediaMessage } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { writeFileSync, unlinkSync, mkdirSync, existsSync } from 'fs';
+import { unlinkSync, mkdirSync, existsSync, promises as fsPromises } from 'fs';
 import { workingMemory } from '../../../services/workingMemory.js';
 import { botIdentity } from '../../../utils/botIdentity.js';
 import { config as globalConfig } from '../../../config/index.js';
@@ -141,11 +141,11 @@ export class AudioHandler {
 
     async _transcribeFromBuffer(buffer: any, fileName: any) {
         const tempDir = join(process.cwd(), 'temp', 'stt');
-        if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+        await fsPromises.mkdir(tempDir, { recursive: true });
         const tempPath = join(tempDir, fileName);
 
         try {
-            writeFileSync(tempPath, buffer);
+            await fsPromises.writeFile(tempPath, buffer);
             const transcriptionService = this.transport.container.get('transcriptionService');
             const text = await transcriptionService.transcribe(tempPath);
             return text;
@@ -153,7 +153,7 @@ export class AudioHandler {
             this.logger.error(`[AudioHandler] Erreur STT: ${err.message}`);
             return null;
         } finally {
-            try { if (existsSync(tempPath)) unlinkSync(tempPath); } catch (e: any) {}
+            try { await fsPromises.unlink(tempPath); } catch (e: any) {}
         }
     }
 

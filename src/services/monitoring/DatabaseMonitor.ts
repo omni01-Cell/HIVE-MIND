@@ -121,6 +121,8 @@ export class DatabaseMonitor {
     alertedTables: Set<string>;
     monitoringActive: boolean;
     supabase: typeof supabaseClient;
+    private hourlyIntervalId: ReturnType<typeof setInterval> | null = null;
+    private dailyIntervalId: ReturnType<typeof setInterval> | null = null;
 
     constructor() {
         this.thresholds = {
@@ -163,8 +165,12 @@ export class DatabaseMonitor {
      * @private
      */
     startPeriodicMonitoring(): void {
+        // Stocker les références pour éviter les fuites mémoire
+        if (this.hourlyIntervalId !== null) clearInterval(this.hourlyIntervalId);
+        if (this.dailyIntervalId !== null) clearInterval(this.dailyIntervalId);
+
         // Vérifier toutes les heures
-        setInterval(async () => {
+        this.hourlyIntervalId = setInterval(async () => {
             if (!this.monitoringActive) return;
 
             try {
@@ -175,7 +181,7 @@ export class DatabaseMonitor {
         }, 60 * 60 * 1000); // Toutes les heures
 
         // Vérification complète tous les jours à 6h
-        setInterval(async () => {
+        this.dailyIntervalId = setInterval(async () => {
             if (!this.monitoringActive) return;
 
             try {
@@ -187,6 +193,21 @@ export class DatabaseMonitor {
         }, this.getNextDailyCheck());
 
         console.log('[DatabaseMonitor] ⏰ Monitoring démarré');
+    }
+
+    /**
+     * Arrête le monitoring et nettoie les intervalles
+     */
+    stop(): void {
+        this.monitoringActive = false;
+        if (this.hourlyIntervalId !== null) {
+            clearInterval(this.hourlyIntervalId);
+            this.hourlyIntervalId = null;
+        }
+        if (this.dailyIntervalId !== null) {
+            clearInterval(this.dailyIntervalId);
+            this.dailyIntervalId = null;
+        }
     }
 
     /**

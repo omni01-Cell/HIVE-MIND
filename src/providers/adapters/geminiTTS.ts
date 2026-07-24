@@ -147,7 +147,7 @@ export class GeminiTTSAdapter {
 
         const ext = isWav ? 'wav' : (isPcm ? 'pcm' : 'mp3');
         const tempPath = path.join(this.cacheDir, `gemini_${Date.now()}.${ext}`);
-        fs.writeFileSync(tempPath, audioBuffer);
+        await fs.promises.writeFile(tempPath, audioBuffer);
 
         console.log(`[GeminiTTS] Saved raw file to: ${tempPath} (Detected ext: ${ext}, isPcm: ${isPcm})`);
 
@@ -167,9 +167,9 @@ export class GeminiTTSAdapter {
         }
 
         // Cleanup original
-        try { fs.unlinkSync(tempPath); } catch (e: any) { }
+        try { await fs.promises.unlink(tempPath); } catch (e: any) { }
 
-        const oggBuffer = fs.readFileSync(outputOggPath);
+        const oggBuffer = await fs.promises.readFile(outputOggPath);
 
         return {
             audioBuffer: oggBuffer,

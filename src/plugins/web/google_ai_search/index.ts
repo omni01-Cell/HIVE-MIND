@@ -141,7 +141,7 @@ export default {
             const token = loadConversationToken();
             if (token) {
                 params.set('subsequent_request_token', token);
-                console.log(`[GoogleAI] 💬 Continuation de conversation (token: ${token.substring(0, 15)}...)`);
+                console.log('[GoogleAI] 💬 Continuation de conversation (token de session présent)');
             }
         }
 

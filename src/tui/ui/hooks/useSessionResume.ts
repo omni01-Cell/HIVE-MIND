@@ -17,7 +17,7 @@ interface UseSessionResumeParams {
   config: HiveConfig;
   historyManager: UseHistoryManagerReturn;
   refreshStatic: () => void;
-  isGeminiClientInitialized: boolean;
+  isGeminiClientInitialized?: boolean;
   setQuittingMessages: (messages: null) => void;
   resumedSessionData?: ResumedSessionData;
   isAuthenticating: boolean;

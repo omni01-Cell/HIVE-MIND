@@ -291,6 +291,16 @@ const hiveSchema: Record<string, SettingDefinition> = {
                 stopGracePeriodMs: 500
             }
         }
+    },
+    context: {
+        type: 'object',
+        description: 'Context settings',
+        properties: {
+            fileName: { type: 'string', description: 'Context file name', default: 'hive.md' }
+        },
+        default: {
+            fileName: 'hive.md'
+        }
     }
 };
 
@@ -415,7 +425,7 @@ export interface MergedSettings {
     model: Required<ModelSettings>;
     experimental: Required<ExperimentalSettings>;
     ide: Required<IdeSettings>;
-    admin: unknown;
+    admin: any;
     mcp?: {
         excluded?: string[];
         allowed?: string[];

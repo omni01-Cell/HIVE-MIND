@@ -3,7 +3,7 @@
 // Support: Audio streaming, Function calling, Émotions préservées
 
 import WebSocket from 'ws';
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import { join } from 'path';
 import { convertOggToPcm } from './audioConverter.js';
 import { envResolver } from '../envResolver.js';
@@ -388,9 +388,9 @@ export class GeminiLiveProvider {
         if (isOgg) {
             console.log('[GeminiLive] 🔄 Conversion OGG→PCM...');
             const tempDir = join(process.cwd(), 'temp', 'stt');
-            if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+            await fsPromises.mkdir(tempDir, { recursive: true });
             const tempOgg = join(tempDir, `live_input_${Date.now()}.ogg`);
-            writeFileSync(tempOgg, audioBuffer);
+            await fsPromises.writeFile(tempOgg, audioBuffer);
 
             try {
                 pcmBuffer = await convertOggToPcm(tempOgg) as Buffer;
@@ -605,9 +605,9 @@ export class GeminiLiveProvider {
         this.audioQueue = [];
 
         const tempDir = join(process.cwd(), 'temp', 'stt');
-        if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+        await fsPromises.mkdir(tempDir, { recursive: true });
         const tempPath = join(tempDir, `gemini_live_${Date.now()}.pcm`);
-        writeFileSync(tempPath, totalBuffer);
+        await fsPromises.writeFile(tempPath, totalBuffer);
 
         console.log(`[GeminiLive] 💾 Audio saved: ${tempPath} (${totalBuffer.length} bytes)`);
         return tempPath;

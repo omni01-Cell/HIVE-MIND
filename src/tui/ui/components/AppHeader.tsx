@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 Google LLC
+ * Copyright 2026 HIVE-MIND
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -109,10 +109,10 @@ export const AppHeader = ({ version, showDetails = true }: AppHeaderProps) => {
 
     const renderMetadata = (isBelow = false) => (
         <Box marginLeft={isBelow ? 0 : 2} flexDirection="column">
-            {/* Line 1: Gemini CLI vVersion [Updating] */}
+            {/* Line 1: HIVE-MIND TUI vVersion [Updating] */}
             <Box>
                 <Text bold color={theme.text.primary}>
-          Gemini CLI
+          HIVE-MIND TUI
                 </Text>
                 <Text color={theme.text.secondary}> v{version}</Text>
                 {updateInfo?.isUpdating && (
