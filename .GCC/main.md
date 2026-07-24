@@ -27,6 +27,7 @@
 Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 
 ## 🧠 Decisions Made
+- [2026-07-03] [TUI-SESSION-16] Implémentation du branchement Supabase et de la synchronisation asynchrone pour la Session 16 de la TUI, en corrigeant l'erreur de type any dans hiveConfig.ts, action effectuée par Jules.
 
 - [2026-06-11] [TUI-ANALYSIS] Analyse complète de la TUI (82k lignes, 250 fichiers) et du core HIVE-MIND (5k lignes, 14 fichiers). La TUI est un fork Gemini CLI non connecté au vrai core. Le stub `@tui/core` (1035 lignes) est utilisé par 100+ fichiers. La couche transport (`src/tui/transport/`, 1045 lignes) existe mais n'est jamais branchée.
 - [2026-06-11] [TUI-STRICT-ANY] Détection d'erreurs implicites 'any' suite à la réactivation de `noImplicitAny: true`. Décidé d'explorer et d'appliquer des types stricts ou de déclarer les modules non-typés (`semver`, `ansi-regex`).
@@ -88,7 +89,7 @@ Adapter la TUI (fork Gemini CLI) au core HIVE-MIND existant.
 - ✅ Done: Session 13 — Commande `/session` (Gestionnaire de Sessions Hybride).
 - ✅ Done: Session 14 — Conservation et Réadaptation du Module IDE (Réimplémentation de l'IdeClient branché par WebSocket sur le service local HIVE-MIND et restauration de l'invite interactive IdeIntegrationNudge).
 - ✅ Done: Session 15 — Nettoyage et Adaptation des Dialogues de Modèles (Réécriture de ModelDialog.tsx et VoiceModelDialog.tsx pour gérer les familles/modèles multi-providers de HIVE-MIND et la voix Minimax Persona/Gemini/gTTS/Groq/Gemini Live).
-- ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase (synchronisation asynchrone des sessions TUI sous context_id dynamique).
+- ✅ Done: Session 16 — Branchement du Navigateur d'Historique sur Supabase (synchronisation asynchrone des sessions TUI sous context_id dynamique) implémenté par Jules.
 - ⏳ Pending: Sessions 17 à 22 du plan d'adaptation de la TUI.
 
 ## 👉 Next Session Direction
