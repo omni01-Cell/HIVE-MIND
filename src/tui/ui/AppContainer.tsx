@@ -511,7 +511,7 @@ function handleShellFocusKeys(ctx: GlobalKeypressContext, key: Key): boolean | n
     }
     if (ctx.keyMatchers[Command.TOGGLE_BACKGROUND_SHELL](key)) {
         if (ctx.activePtyId) {
-            ctx.backgroundCurrentExecution();
+            ctx.backgroundCurrentExecution?.();
         } else {
             ctx.toggleBackgroundTasks();
             if (!ctx.isBackgroundTaskVisible && ctx.backgroundTasks.size > 0) {
@@ -889,7 +889,7 @@ export const AppContainer = (props: AppContainerProps) => {
                 .getHookSystem()
                 ?.fireSessionStartEvent(sessionStartSource);
 
-            if (result) {
+            if (result && 'getAdditionalContext' in result && typeof result.getAdditionalContext === 'function') {
                 const additionalContext = result.getAdditionalContext();
                 const geminiClient = config.getGeminiClient() as any;
                 if (additionalContext && geminiClient) {

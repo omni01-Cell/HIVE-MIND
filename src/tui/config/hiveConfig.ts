@@ -25,7 +25,7 @@ export interface WorkspaceContext {
 }
 
 export interface HookSystem {
-    fireSessionStartEvent(source: string): Promise<unknown> | unknown;
+    fireSessionStartEvent(source: string): Promise<{ getAdditionalContext?: () => string | undefined; systemMessage?: string } | void> | { getAdditionalContext?: () => string | undefined; systemMessage?: string } | void;
     fireSessionEndEvent(reason: string): Promise<unknown> | unknown;
 }
 
